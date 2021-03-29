@@ -1,3 +1,24 @@
+/*
+ * -------------------------------------------------------------------
+ * CircuitSetup.us Time Circuits Display
+ * Code adapted from Marmoset Electronics 
+ * https://www.marmosetelectronics.com/time-circuits-clock
+ * by John Monaco
+ * -------------------------------------------------------------------
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "tc_time.h"
 
 bool autoTrack = false;
@@ -130,7 +151,7 @@ void time_setup() {
         // Show message
         destinationTime.showOnlySettingVal("RE", -1, true);
         presentTime.showOnlySettingVal("SET", -1, true);
-        delay(2000);
+        delay(1000);
         allOff();
         delay(1000);
     }
@@ -227,6 +248,29 @@ void time_loop() {
     departedTime.show();
 
     delay(10);
+}
+
+void timeTravel() {
+    play_file("/timetravel.mp3");
+    allOff();
+
+    //copy present time to last time departed
+    departedTime.setMonth(presentTime.getMonth()); //not right
+    departedTime.setDay(presentTime.getDay());
+    departedTime.setYear(presentTime.getYear());
+    departedTime.setHour(presentTime.getHour());
+    departedTime.setMinute(presentTime.getMinute());
+    departedTime.save();
+
+    //copy destination time to present time
+    presentTime.setMonth(destinationTime.getMonth());
+    presentTime.setDay(destinationTime.getDay());
+    presentTime.setYear(destinationTime.getYear());
+    presentTime.setHour(destinationTime.getHour());
+    presentTime.setMinute(destinationTime.getMinute());
+    presentTime.save();
+
+    animate();    
 }
 
 bool getNTPTime() {

@@ -1,3 +1,24 @@
+/*
+ * -------------------------------------------------------------------
+ * CircuitSetup.us Time Circuits Display
+ * Code adapted from Marmoset Electronics 
+ * https://www.marmosetelectronics.com/time-circuits-clock
+ * by John Monaco
+ * -------------------------------------------------------------------
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "tc_menus.h"
 
 int displayNum;                                           // selected display
@@ -9,14 +30,14 @@ uint8_t timeout = 0;  // for tracking idle time in menus, reset to 0 on each but
 clockDisplay* displaySet;  // the display being updated during setting
 
 void menu_setup() {
-  pinMode(buttonDown, INPUT_PULLDOWN);
-  pinMode(buttonUp, INPUT_PULLDOWN);
-  //pinMode(ENTER_BUTTON, INPUT_PULLDOWN);
+    //pinMode(buttonDown, INPUT_PULLDOWN);
+    //pinMode(buttonUp, INPUT_PULLDOWN);
+    //pinMode(ENTER_BUTTON, INPUT_PULLDOWN);
 }
 
 void enter_menu() {
-  Serial.print("Menu");
-    // Set button pressed, get display
+    Serial.print("Menu");
+    // Enter button held, get display
     displayNum = 0;  // this is really setting function number
 
     // Load the times
@@ -26,12 +47,12 @@ void enter_menu() {
 
     displayHighlight(displayNum);
 
-    waitForButtonSetRelease();
+    //waitForButtonSetRelease();
 
     timeout = 0;  // Reset on each press
 
-    while (!checkTimeOut() && get_key() != '0') {
-        // Keep looking for up down button presses until set is pressed again
+    while (!checkTimeOut() && isEnterKeyPressed && menuFlag) {
+        // in menu mode enter key will now go to next field
         displaySelect(displayNum);
         delay(50);
 
@@ -44,7 +65,7 @@ void enter_menu() {
             uint16_t minSet;
             uint16_t hourSet;
 
-            if (displaySet->isRTC() == 1) { // this is the RTC, get the current time.
+            if (displaySet->isRTC() == 1) {  // this is the RTC, get the current time.
                 DateTime currentTime = rtc.now();
 
                 yearSet = currentTime.year();
@@ -71,49 +92,49 @@ void enter_menu() {
             4 - min
             */
             setUpdate(yearSet, 2);  // show only the year field - value,display field
-            waitForButtonSetRelease();
-            while (!checkTimeOut() && (get_key() != '0')) {
-                buttonUpDown(yearSet, 2, 0, 0);  // number to adjust, field
+            //waitForButtonSetRelease();
+            while (!checkTimeOut() && isEnterKeyPressed && menuFlag) {
+                enterNext(yearSet, 2, 0, 0);  // number to adjust, field
                 delay(100);
             }
 
             // Get month
             setUpdate(monthSet, 0);
-            waitForButtonSetRelease();
-            while (!checkTimeOut() && get_key() != '0') {
-                buttonUpDown(monthSet, 0, 0, 0);  // setting, which display, whcih field, starting from left
+            //waitForButtonSetRelease();
+            while (!checkTimeOut() && isEnterKeyPressed && menuFlag) {
+                enterNext(monthSet, 0, 0, 0);  // setting, which display, whcih field, starting from left
                 delay(100);
             }
 
             // Get day
             setUpdate(daySet, 1);
-            waitForButtonSetRelease();
-            while (!checkTimeOut() && get_key() != '0') {
-                buttonUpDown(daySet, 1, yearSet, monthSet);  // this depends on the month and year
+            //waitForButtonSetRelease();
+            while (!checkTimeOut() && isEnterKeyPressed && menuFlag) {
+                enterNext(daySet, 1, yearSet, monthSet);  // this depends on the month and year
                 delay(100);
             }
 
             // Get hour
             setUpdate(hourSet, 3);
-            waitForButtonSetRelease();
-            while (!checkTimeOut() && get_key() != '0') {
-                buttonUpDown(hourSet, 3, 0, 0);
+            //waitForButtonSetRelease();
+            while (!checkTimeOut() && isEnterKeyPressed && menuFlag) {
+                enterNext(hourSet, 3, 0, 0);
                 delay(100);
             }
 
             // Get minute
             setUpdate(minSet, 4);
-            waitForButtonSetRelease();
-            while (!checkTimeOut() && get_key() != '0') {
+            //waitForButtonSetRelease();
+            while (!checkTimeOut() && isEnterKeyPressed && menuFlag) {
                 delay(100);
-                buttonUpDown(minSet, 4, 0, 0);
+                enterNext(minSet, 4, 0, 0);
             }
 
             // Have new date & time
-            if (!checkTimeOut()) {  // Do nothing if there was a timeout waiting for
-                                    // button presses
-                if (displaySet->isRTC() == 1) { // this is the RTC display, set the RTC as quickly as
-                                                // possible, as soon as set button pressed
+            if (!checkTimeOut()) {               // Do nothing if there was a timeout waiting for
+                                                 // button presses
+                if (displaySet->isRTC() == 1) {  // this is the RTC display, set the RTC as quickly as
+                                                 // possible, as soon as set button pressed
                     rtc.adjust(DateTime(yearSet, monthSet, daySet, hourSet, minSet, 0));
                 } else {                 // Not rtc, setting a static display, turn off auto changing
                     autoInterval = 0;    // set to the 0 interval, disables auto
@@ -182,7 +203,7 @@ void enter_menu() {
 }
 
 void displayHighlight(int& number) {
-  Serial.println("Display Highlight");
+    Serial.println("Display Highlight");
     // Turns on the currently selected display during setting
     // Also sets the displaySet pointer to the display being updated
 
@@ -251,15 +272,15 @@ void displayHighlight(int& number) {
 }
 
 void displaySelect(int& number) {
-  Serial.println("Display Select");
+    Serial.println("Display Select");
     // Selects which display to update using Up/Down buttons after inital Set
     // button press
-    if (get_key() == '2') {
+    if (isEnterKeyPressed && menuFlag) {
+        isEnterKeyPressed = false;
         number++;
         timeout = 0;  // button pressed, reset timeout
         if (number == (6)) number = 0;
-        displayHighlight(
-            number);                     // Show only the selected display and set pointer to it
+        displayHighlight(number);   // Show only the selected display and set pointer to it
         while (get_key() == '2') {  // still pressed? hold until release
             timeout = 0;
             delay(10);
@@ -279,7 +300,7 @@ void displaySelect(int& number) {
 }  // displaySelect
 
 void setUpdate(uint16_t& number, int field) {
-  Serial.println("Set Update");
+    Serial.println("Set Update");
     // Shows only the field being updated
     switch (field) {
         case 0:
@@ -301,11 +322,12 @@ void setUpdate(uint16_t& number, int field) {
 }
 
 void brtButtonUpDown(clockDisplay* displaySet) {
-  Serial.println("Bright button up/down");
+    Serial.println("Bright button up/down");
     int8_t number = displaySet->getBrightness();
     // Store actual brightness as 0 to 15, but only show 5 levels, starting at 3
     // Update the clockDisplay and show the value
-    if (get_key() == '2') {
+    if (isEnterKeyPressed && menuFlag) {
+        isEnterKeyPressed = false;
         number = number + 3;
         timeout = 0;  // button pressed, reset timeout
         if (number > 15) number = 3;
@@ -330,8 +352,7 @@ void brtButtonUpDown(clockDisplay* displaySet) {
     }
 }
 
-void buttonUpDown(uint16_t& number, uint8_t field, int year = 0,
-                  int month = 0) {
+void enterNext(uint16_t& number, uint8_t field, int year = 0, int month = 0) {
     //Serial.println("Button Up/Down");
     // number - a value we're updating
     // displayNum - the display number being modified
@@ -357,8 +378,7 @@ void buttonUpDown(uint16_t& number, uint8_t field, int year = 0,
             lowerLimit = 1;
             break;
         case 2:  // year
-            if (displaySet->isRTC() ==
-                1) {  // year is limited for RTC, RTC is on display 1
+            if (displaySet->isRTC() == 1) {  // year is limited for RTC, RTC is on display 1
                 upperLimit = 2099;
                 lowerLimit = 2020;
             } else {
@@ -379,9 +399,10 @@ void buttonUpDown(uint16_t& number, uint8_t field, int year = 0,
     uint16_t bCount = 0;
     unsigned long start = millis();
 
-    if (get_key() == '2' || get_key() == '8') {
-      Serial.println("Up/Down Pressed");
-        while (isKeyHeld('2')) {
+    if (isEnterKeyPressed && menuFlag) {
+        isEnterKeyPressed = false;
+        Serial.println("Up/Down Pressed");
+        while (isEnterKeyHeld) {
             timeout = 0;
             if (bCount == 0) {  // millis() - start < 500 &&
                 // Instantly respond to first press
@@ -462,7 +483,7 @@ void buttonUpDown(uint16_t& number, uint8_t field, int year = 0,
 }  // updown
 
 bool loadAutoInterval() {
-  Serial.println("Load Auto Interval");
+    Serial.println("Load Auto Interval");
     // loads the autoInterval
     autoInterval =
         EEPROM.read(AUTOINTERVAL_ADDR);  // first location has autoInterval
@@ -475,20 +496,19 @@ bool loadAutoInterval() {
 }
 
 void saveAutoInterval() {
-  Serial.println("Save Auto Interval");
+    Serial.println("Save Auto Interval");
     // saves autoInterval
     EEPROM.write(AUTOINTERVAL_ADDR, autoInterval);
 }
 
 void autoTimesButtonUpDown() {
-  Serial.println("Auto Times Button");
+    Serial.println("Auto Times Button");
     if (get_key() == '2') {
         autoInterval++;
         timeout = 0;  // button pressed, reset timeout
         if (autoInterval > 4) autoInterval = 0;
 
-        destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval],
-                                           true);
+        destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval], true);
 
         if (autoTimeIntervals[autoInterval] == 0) {
             presentTime.showOnlySettingVal("CUS", -1, true);
@@ -533,12 +553,12 @@ void autoTimesButtonUpDown() {
 }
 
 void doGetBrightness(clockDisplay* displaySet) {
-  Serial.println("Get Brightness");
+    Serial.println("Get Brightness");
     // Adjust the brightness of the selected displaySet and save
     allLampTest();  // turn on all the segments
     displaySet->showOnlySettingVal("LVL", displaySet->getBrightness() / 3, false);
 
-    while (!checkTimeOut() && get_key() != '0') {
+    while (!checkTimeOut() && isEnterKeyPressed && menuFlag) {
         brtButtonUpDown(displaySet);
         delay(100);
     }
@@ -547,14 +567,14 @@ void doGetBrightness(clockDisplay* displaySet) {
         displaySet->save();
         displaySet->showOnlySave();
         delay(1000);
-        waitForButtonSetRelease();
+        //waitForButtonSetRelease();
         allLampTest();  // turn on all the segments
     }
 }
 
 void waitForButtonSetRelease() {
     // Do nothing and wait for ENTER_BUTTON to be released
-    while (!isEnterKeyHeld()) {
+    while (!isEnterKeyHeld) {
         timeout = 0;  // a button was pressed
         delay(100);   // wait for release
     }
@@ -580,7 +600,6 @@ void allLampTest() {
     destinationTime.lampTest();
     presentTime.lampTest();
     departedTime.lampTest();
-
 }
 
 void allOff() {
