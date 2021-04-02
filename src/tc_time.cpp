@@ -62,7 +62,7 @@ int8_t autoTime = 0;  // selects the above array time
 const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 const char* ssid = "linksys";
-const char* password = "jhn003021";
+const char* password = "";
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;
