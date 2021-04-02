@@ -23,7 +23,8 @@
 #define CLOCKDISPLAY_h
 
 #include <Arduino.h>
-#include <EEPROM.h>
+//#include <EEPROM.h>
+#include <Preferences.h>
 #include <RTClib.h>
 #include <Wire.h>
 
@@ -184,9 +185,18 @@ struct dateStruct {
     uint8_t minute;
 };
 
+typedef struct {
+    uint16_t year;
+    uint8_t month;
+    uint8_t day;
+    uint8_t hour;
+    uint8_t minute;
+    uint8_t brightness;
+} saveDateStruct;
+
 class clockDisplay {
    public:
-    clockDisplay(uint8_t address, int saveAddress = -1);
+    clockDisplay(uint8_t address, const char* saveAddress);
     void begin();
     void lampTest();
     void on();
@@ -198,6 +208,7 @@ class clockDisplay {
     void setMonth(int monthNum);
     void setDay(int dayNum);
     void setYear(uint16_t yearNum);
+    void setYearDirect(uint16_t yearNum);
     void setHour(uint16_t hourNum);
     void setMinute(int minNum);
     void setColon(bool col);
@@ -236,10 +247,12 @@ class clockDisplay {
 
     bool save();
     bool load();
+    bool resetClocks();
+    bool isPrefData(const char* address);
 
    private:
     uint8_t _address;
-    int _saveAddress = -1;
+    const char* _saveAddress;
     uint16_t _displayBuffer[8];  // Segments to make current time.
 
     uint16_t _year = 2019;  // keep track of these

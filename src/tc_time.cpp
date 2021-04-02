@@ -28,11 +28,10 @@ bool x;               // for tracking second change
 bool y;               // for tracking second change
 
 struct tm _timeinfo; //for NTP
-
 RTC_DS3231 rtc; //for RTC IC
 
 // The displays
-clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_EEPROM);  // i2c address, eeprom save location, 8 bytes are needed
+clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_EEPROM);  // i2c address, preferences namespace
 clockDisplay presentTime(PRES_TIME_ADDR, PRES_TIME_EEPROM);
 clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_EEPROM);
 
@@ -63,7 +62,7 @@ int8_t autoTime = 0;  // selects the above array time
 const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 const char* ssid = "linksys";
-const char* password = "";
+const char* password = "jhn003021";
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;
@@ -72,9 +71,6 @@ const int daylightOffset_sec = 3600;
 void time_setup() {
     pinMode(SECONDS_IN, INPUT_PULLDOWN);  // for monitoring seconds
     pinMode(STATUS_LED, OUTPUT);  // Status LED
-
-    // initialize EEPROM with predefined size
-    EEPROM.begin(EEPROM_SIZE);
 
     // RTC setup
     if (!rtc.begin()) {
@@ -103,7 +99,6 @@ void time_setup() {
         //set RTC with NTP time
     }
      
-
     if (!destinationTime.load()) {
         validLoad = false;
         // Set valid time and set if invalid load
@@ -139,7 +134,7 @@ void time_setup() {
     if (!loadAutoInterval()) {  // load saved settings
         validLoad = false;
         Serial.println("BAD AUTO INT");
-        EEPROM.write(AUTOINTERVAL_ADDR, 1);  // default to first option
+        putAutoInt(1); // default to first option
     }
 
     if (autoTimeIntervals[autoInterval]) {                    // non zero interval, use auto times
@@ -255,7 +250,7 @@ void timeTravel() {
     allOff();
 
     //copy present time to last time departed
-    departedTime.setMonth(presentTime.getMonth()); //not right
+    departedTime.setMonth(presentTime.getMonth() + 1);
     departedTime.setDay(presentTime.getDay());
     departedTime.setYear(presentTime.getYear());
     departedTime.setHour(presentTime.getHour());
@@ -263,13 +258,18 @@ void timeTravel() {
     departedTime.save();
 
     //copy destination time to present time
-    presentTime.setMonth(destinationTime.getMonth());
-    presentTime.setDay(destinationTime.getDay());
-    presentTime.setYear(destinationTime.getYear());
-    presentTime.setHour(destinationTime.getHour());
-    presentTime.setMinute(destinationTime.getMinute());
-    presentTime.save();
+    //set this to RTC time since presentTime is not in preferences storage
+    rtc.adjust(DateTime(
+        0000, //destinationTime.getYear(), does not work for years < 2000
+        destinationTime.getMonth() - 1, 
+        destinationTime.getDay(), 
+        destinationTime.getHour(), 
+        destinationTime.getMinute(), 
+        0));
 
+    presentTime.setYear(destinationTime.getYear());
+    presentTime.save();
+   
     animate();    
 }
 
@@ -278,10 +278,17 @@ bool getNTPTime() {
     if (connectToWifi()) {
         // if connected to wifi, get NTP time and set RTC
         configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+        int ntpRetries = 0;
         if (!getLocalTime(&_timeinfo)) {
-            Serial.println("Couldn't get NTP time");
-            //TODO: Timeout after x amount of retries, default to RTC
-            return false;
+            while (!getLocalTime(&_timeinfo)) {
+                if (ntpRetries >= 5) { //retry up to 5 times then quit
+                    Serial.println("Couldn't get NTP time");
+                    return false;
+                } else {
+                    ntpRetries++;
+                }
+                delay(500);
+            }
         } else {
             Serial.println(&_timeinfo, "%A, %B %d %Y %H:%M:%S");
             byte byteYear = (_timeinfo.tm_year + 1900) % 100;   // adding to get full YYYY from NTP year format
@@ -289,7 +296,7 @@ bool getNTPTime() {
             presentTime.setDS3232time(_timeinfo.tm_sec, _timeinfo.tm_min,
                                         _timeinfo.tm_hour, 0, _timeinfo.tm_mday,
                                         _timeinfo.tm_mon, byteYear);
-            Serial.println("Set Time with NTP");
+            Serial.println("Time Set with NTP");
             return true;
         }
     } else {
@@ -305,10 +312,17 @@ bool connectToWifi() {
         WiFi.begin(ssid, password);
         WiFi.enableSTA(true);
         delay(100);
+
+        int wifiRetries = 0;
         while (WiFi.status() != WL_CONNECTED) {
+            if (wifiRetries >= 20) {
+                Serial.println("Could not connect to WiFi");
+                return false;
+            } else {
+                wifiRetries++;
+            }
             delay(500);
             Serial.print(".");
-            //TODO: Timeout after x amount of retries, default to RTC
         }
         Serial.println(" CONNECTED");
         return true;
@@ -333,7 +347,6 @@ void doGetAutoTimes() {
     }
 
     while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-        autoTimesButtonUpDown();
         delay(100);
     }
 
@@ -343,7 +356,6 @@ void doGetAutoTimes() {
         destinationTime.showOnlySave();
         saveAutoInterval();
         delay(1000);
-        waitForButtonSetRelease();
     }
 }
 

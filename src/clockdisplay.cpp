@@ -21,7 +21,9 @@
 
 #include "clockdisplay.h"
 
-clockDisplay::clockDisplay(uint8_t address, int saveAddress) {
+Preferences pref; //to save preferences in namespaces
+
+clockDisplay::clockDisplay(uint8_t address, const char* saveAddress) {
     // Gets the i2c address and eeprom save location, default saveAddress is -1 if not provided to disable saving
     // call begin() to start
     _address = address;
@@ -148,47 +150,23 @@ uint8_t clockDisplay::getBrightness() {
 }
 
 bool clockDisplay::save() {
-    // save date/time to eeprom
-    Serial.println("save date/time in memory");
-    uint16_t sum = 0;  //add them up for simple checksum
+    // save date/time to preferences
+
+    uint16_t dates[] = {_year, _month, _day, _hour, _minute, 15/*_brightness*/};
+
+    Serial.printf("%d %d %d %d %d %d\n",
+        dates[0], dates[1], _day, _hour, _minute, _brightness);
 
     if (!isRTC() && _saveAddress >= 0) {  // rtc can't save, save address was not set and can't save if negative
-        Serial.println("save in EEPROM - NOT rtc");
-        EEPROM.write(_saveAddress, _year & 0x00FF);
-        sum = sum + _year & 0x00FF;
-
-        EEPROM.write(_saveAddress + 1, (_year >> 8) & 0x00FF);
-        sum = sum + (_year >> 8) & 0x00FF;
-
-        EEPROM.write(_saveAddress + 2, _month);
-        sum = sum + _month;
-
-        EEPROM.write(_saveAddress + 3, _day);
-        sum = sum + _day;
-
-        EEPROM.write(_saveAddress + 4, _hour);
-        sum = sum + _hour;
-
-        EEPROM.write(_saveAddress + 5, _minute);
-        sum = sum + _minute;
-
-        EEPROM.write(_saveAddress + 6, _brightness);
-        sum = sum + _brightness;
-
-        sum = sum & 0x00FF;  // 8 bit checksum
-        EEPROM.write(_saveAddress + 7, sum);
+        Serial.println(" Save in Preferences - NOT rtc");
+        pref.begin(_saveAddress, false);
+        pref.putBytes(_saveAddress, dates, sizeof(dates));
+        pref.end();
     } else if (isRTC() && _saveAddress >= 0) {
-        Serial.println("save RTC in EEPROM");
-        for (uint8_t c = 0; c < 6; c++) {
-            EEPROM.write(_saveAddress + c, 0x00);  // rtc has it's time in the RTC chip
-        }
-
-        EEPROM.write(_saveAddress + 6, _brightness);
-        sum = sum + _brightness;
-
-        sum = sum & 0x00FF;  // 8 bit checksum
-        EEPROM.write(_saveAddress + 7, sum);
-
+        Serial.println("Save RTC in Prof");
+        pref.begin(_saveAddress, false);
+        pref.putUChar(_saveAddress, _brightness);
+        pref.end();
     } else {
         return false;
     }
@@ -196,40 +174,65 @@ bool clockDisplay::save() {
 }
 
 bool clockDisplay::load() {
-    // Load saved date/time from eeprom
-    uint16_t sum = 0;
-    if (_saveAddress >= 0) {
-        for (int c = 0; c <= 6; c++) {
-            sum = sum + EEPROM.read(_saveAddress + c);
-        }
-        Serial.println(sum);
-        sum = sum & 0x00FF;  // 8 bit checksum
-        Serial.println(sum);
-        Serial.println(EEPROM.read(_saveAddress + 7)); //change from +7 to 0?
-        if (sum == EEPROM.read(_saveAddress + 7)) {  // saved checksum matches
-            if (!isRTC()) {                          // not a rtc, load saved values
-                Serial.println(">>>>>>>>>>>>>>>>>>> LOADING SAVED SETTINGS <<<<<<<<<<<<<<<<<<<");
-                setYear(EEPROM.read(_saveAddress + 1) << 8 | EEPROM.read(_saveAddress));
-                setMonth(EEPROM.read(_saveAddress + 2));
-                setDay(EEPROM.read(_saveAddress + 3));
-                setHour(EEPROM.read(_saveAddress + 4));
-                setMinute(EEPROM.read(_saveAddress + 5));
-                setBrightness(EEPROM.read(_saveAddress + 6));
-                return true;
-            } else if (isRTC()) {
-                // rtc doesnt save any time
-                setBrightness(EEPROM.read(_saveAddress + 6));
-            }
+    // Load saved date/time from preferences
 
-        } else {
-            Serial.println("Invalid Checksum!");
-            return false;
-        }
-    } else {
-        Serial.println("Invalid EEPROM address!");
-        return false;  // a valid eeprom address is not set, can't load anything or is RTC
+    Serial.println(">>>>>>>>>>>>>>>>>>> LOADING SAVED SETTINGS <<<<<<<<<<<<<<<<<<<");
+    Serial.println(_saveAddress);
+    if (isPrefData(_saveAddress) && !isRTC()) {                          // not a rtc, load saved values
+        pref.begin(_saveAddress, false);
+
+        //pref.clear(); //clears all data
+
+        size_t dateSize = pref.getBytesLength(_saveAddress);
+        char buffer[dateSize]; // prepare a buffer for the data
+
+        pref.getBytes(_saveAddress, buffer, dateSize);
+        saveDateStruct *_saveAddress = (saveDateStruct *) buffer; // cast the bytes into a struct ptr
+
+        Serial.printf("%d %d %d %d %d %d\n", 
+            _saveAddress[0].year, _saveAddress[0].month,
+            _saveAddress[0].day, _saveAddress[0].hour,
+            _saveAddress[0].minute, _saveAddress[0].brightness);
+        
+        setYear(_saveAddress[0].year);
+        setMonth(_saveAddress[0].month);
+        setDay(_saveAddress[0].day);
+        setHour(_saveAddress[0].hour);
+        setMinute(_saveAddress[0].minute);
+        setBrightness(_saveAddress[0].brightness);
+        
+        pref.end();
+        return true;
     }
-    return true;
+    else if (isPrefData(_saveAddress) && isRTC()) {
+        // rtc doesnt save any time
+        pref.begin(_saveAddress, false);
+        setBrightness(pref.getUChar(_saveAddress, _brightness));
+        pref.end();
+        return true;
+    }
+    else {
+        return false;
+    }
+return true;
+}
+
+bool clockDisplay::resetClocks() {
+    // removes all data from preferences
+    if (pref.remove(_saveAddress)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool clockDisplay::isPrefData(const char* address) {
+    //is there data stored in Preferences?
+    if (pref.getBytesLength(address) > 0) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 void clockDisplay::show() {
@@ -321,6 +324,14 @@ void clockDisplay::setYear(uint16_t yearNum) {
     _year = yearNum;
     _displayBuffer[4] = makeNum(yearNum / 100);
     _displayBuffer[5] = makeNum(yearNum % 100);
+}
+
+void clockDisplay::setYearDirect(uint16_t yearNum) {
+    // Place LED pattern in year position directly, which is 4 and 5.
+    //useful for setting the year to the present time
+    _year = yearNum;
+    directCol(4, makeNum(yearNum / 100));
+    directCol(5, makeNum(yearNum % 100));
 }
 
 void clockDisplay::setHour(uint16_t hourNum) {
@@ -513,7 +524,6 @@ void clockDisplay::setDS3232time(byte second, byte minute, byte hour, byte dayOf
     Wire.write(decToBcd(month));       // set month
     Wire.write(decToBcd(year));        // set year (0~99)
     Wire.endTransmission();
-    
 }
 
 // Convert normal decimal numbers to binary coded decimal

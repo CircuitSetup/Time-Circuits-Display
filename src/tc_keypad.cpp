@@ -43,11 +43,15 @@ int enterVal = 0;
 long timeNow = 0;
 boolean enterWasPressed = false;
 
-static unsigned int dateIndex = 0;
+int dateIndex = 0;
 const int maxDateLength = 12;  //month, day, year, hour, min
 const int minDateLength = 8;   //month, day, year
 char dateBuffer[maxDateLength + 1];
 boolean dateComplete = false;
+char timeBuffer[1]; // 2 characters to accomodate date and time settings
+char yearBuffer[3]; // 4 characters to accomodate year setting
+int timeIndex = 0;
+int yearIndex = 0;
 
 byte prevKeyState = HIGH;
 
@@ -87,7 +91,11 @@ void keypadEvent(KeypadEvent key) {
         case PRESSED:
             if (key != '#' || key != '*') {
                 play_keypad_sound(key);
-                recordKey(key);
+                if (menuFlag) {
+                    recordSetTimeKey(key);
+                } else {
+                    recordKey(key);
+                }
                 break;
             }
             break;
@@ -121,15 +129,28 @@ void enterKeyDouble() {
 
 void recordKey(char key) {
     dateBuffer[dateIndex++] = key;
-    dateBuffer[dateIndex] = '\0';                                   // to maintain a c-string style
+    Serial.println(dateIndex);
     if (dateIndex >= maxDateLength) dateIndex = maxDateLength - 1;  // don't overflow, will overwrite end of date next time
 }
 
-void keypadLoop() {
+void recordSetTimeKey(char key) {
+    if (timeIndex == 0) timeBuffer[0] = key;
+    if (timeIndex == 1) timeBuffer[1] = key;
+    timeIndex++;
+    if (timeIndex == 2) timeIndex = 0; // don't overflow, and return to start after buffer has 2 chars in it
+}
 
+void recordSetYearKey(char key) {
+    yearBuffer[yearIndex++] = key;
+    Serial.println(yearIndex);
+    if (yearIndex >= 4) yearIndex = 0;  // don't overflow
+}
+
+void keypadLoop() {
     enterKey.tick(); //manages the enter key
 
     if (isEnterKeyHeld && !menuFlag) {
+        //if enter key is held go into settings menu
         isEnterKeyHeld = false; //reset
         isEnterKeyPressed = false;
         menuFlag = true;
@@ -169,6 +190,7 @@ void keypadLoop() {
             if (_setDay > daysInMonth(_setMonth, _setYear)) {
                 _setDay = daysInMonth(_setMonth, _setYear);
             }
+
             //set date to destination time
             destinationTime.setMonth(_setMonth);
             destinationTime.setDay(_setDay);
@@ -180,14 +202,20 @@ void keypadLoop() {
             dateIndex = 0;  // prepare for next time
         }
     }
+    if (isEnterKeyPressed && menuFlag) {
+        //isEnterKeyPressed = false;
+        //select what to edit in menu
+        fieldSelect();
+    }
+    if (isEnterKeyHeld && menuFlag) {
+        isEnterKeyHeld = false; //reset
+        isEnterKeyPressed = false;
+        //save current setting and exit to full display
+    }
     //turn everything back on after entering date
     if ((millis() > timeNow + ENTER_DELAY) && enterWasPressed) {
         animate();                     
         digitalWrite(WHITE_LED, LOW);  //turn off white LEDs
         enterWasPressed = false;       //reset flag
-    }
-
-    if (isEnterKeyDouble && !menuFlag) {
-        isEnterKeyDouble = false;
     }
 }

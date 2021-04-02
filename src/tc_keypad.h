@@ -43,13 +43,15 @@ void keypadEvent(KeypadEvent key);
 extern void keypad_setup();
 extern char get_key();
 extern void recordKey(char key);
+extern void recordSetTimeKey(char key);
+extern void recordSetYearKey(char key);
 
 void enterKeyPressed();
 void enterKeyHeld();
 void enterKeyDouble();
-extern boolean isEnterKeyPressed;
-extern boolean isEnterKeyHeld;
-extern boolean isEnterKeyDouble;
+extern bool isEnterKeyPressed;
+extern bool isEnterKeyHeld;
+extern bool isEnterKeyDouble;
 extern void keypadLoop();
 
 //extern byte hold;

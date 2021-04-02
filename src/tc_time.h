@@ -26,7 +26,8 @@
 #include <RTClib.h>
 #include <WiFi.h>
 #include <Wire.h>
-#include <EEPROM.h>
+#include <Preferences.h>
+//#include <EEPROM.h>
 
 #include "clockdisplay.h"
 #include "tc_keypad.h"
@@ -34,18 +35,18 @@
 #include "tc_audio.h"
 #include "time.h"
 
-#define EEPROM_SIZE 128 //for stored settings
+#define EEPROM_SIZE 512 //for stored settings
 #define SECONDS_IN 0   // SQW Monitor 1Hz from the DS3231
 #define STATUS_LED 2  // Status LED
 
 #define DEST_TIME_ADDR 0x71
-#define DEST_TIME_EEPROM 0x20  
+#define DEST_TIME_EEPROM "dest_time_pref" //0x20  
 #define PRES_TIME_ADDR 0x72
-#define PRES_TIME_EEPROM 0x28
+#define PRES_TIME_EEPROM "pres_time_pref" //0x28
 #define DEPT_TIME_ADDR 0x74
-#define DEPT_TIME_EEPROM 0x30
+#define DEPT_TIME_EEPROM "dept_time_pref" //0x30
 
-#define AUTOINTERVAL_ADDR 0x38  // eeprom autoInterval save location
+#define AUTOINTERVAL_ADDR "autoint_pref" //0x38  // eeprom autoInterval save location
 extern uint8_t autoInterval;
 extern const uint8_t autoTimeIntervals[5];
 

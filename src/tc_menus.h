@@ -24,6 +24,7 @@
 
 #include <Arduino.h>
 #include <Wire.h>
+#include <Preferences.h>
 
 #include "clockdisplay.h"
 #include "tc_keypad.h"
@@ -38,16 +39,17 @@ extern uint8_t timeout;
 
 extern void menu_setup();
 extern void enter_menu();
+extern void fieldSelect();
 void displayHighlight(int& number);
 void displaySelect(int& number);
 void setUpdate(uint16_t& number, int field);
-void brtButtonUpDown(clockDisplay* displaySet);
-void enterNext(uint16_t& number, uint8_t field, int year, int month);
+void adjustBrightness(clockDisplay* displaySet);
+void setField(uint16_t& number, uint8_t field, int year, int month);
 bool loadAutoInterval();
 void saveAutoInterval();
-void autoTimesButtonUpDown();
+extern void putAutoInt(int position);
+void autoTimesButton();
 void doGetBrightness(clockDisplay* displaySet);
-void waitForButtonSetRelease();
 
 extern void animate();
 extern void allLampTest();
