@@ -48,7 +48,7 @@ const int maxDateLength = 12;  //month, day, year, hour, min
 const int minDateLength = 8;   //month, day, year
 char dateBuffer[maxDateLength + 1];
 boolean dateComplete = false;
-char timeBuffer[1]; // 2 characters to accomodate date and time settings
+char timeBuffer[2]; // 2 characters to accomodate date and time settings
 char yearBuffer[3]; // 4 characters to accomodate year setting
 int timeIndex = 0;
 int yearIndex = 0;
@@ -161,7 +161,7 @@ void keypadLoop() {
         isEnterKeyPressed = false; //reset
         play_file("/enter.mp3");
         digitalWrite(WHITE_LED, HIGH);  //turn on white LEDs
-        allOff();
+        destinationTime.off(); //turn off destination time only
         timeNow = millis();
         enterWasPressed = true;
 
@@ -214,7 +214,13 @@ void keypadLoop() {
     }
     //turn everything back on after entering date
     if ((millis() > timeNow + ENTER_DELAY) && enterWasPressed) {
-        animate();                     
+        destinationTime.showAnimate1();
+        timeNow = millis();
+        while (millis() < timeNow + 80){
+            //wait 80ms
+        }
+        destinationTime.showAnimate2(); //turn on month
+        
         digitalWrite(WHITE_LED, LOW);  //turn off white LEDs
         enterWasPressed = false;       //reset flag
     }

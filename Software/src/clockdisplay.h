@@ -29,7 +29,7 @@
 
 #define DS3232_I2CADDR 0x68
 
-static const uint16_t alphaChars[] PROGMEM = {
+static const uint16_t alphaChars[] = {
     0b0000000000000001,
     0b0000000000000010,
     0b0000000000000100,

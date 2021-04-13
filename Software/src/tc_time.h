@@ -27,7 +27,6 @@
 #include <WiFi.h>
 #include <Wire.h>
 #include <Preferences.h>
-//#include <EEPROM.h>
 
 #include "clockdisplay.h"
 #include "tc_keypad.h"
