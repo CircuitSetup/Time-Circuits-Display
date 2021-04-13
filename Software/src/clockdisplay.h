@@ -23,7 +23,6 @@
 #define CLOCKDISPLAY_h
 
 #include <Arduino.h>
-//#include <EEPROM.h>
 #include <Preferences.h>
 #include <RTClib.h>
 #include <Wire.h>

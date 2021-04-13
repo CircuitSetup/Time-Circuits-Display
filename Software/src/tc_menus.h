@@ -30,9 +30,6 @@
 #include "tc_keypad.h"
 #include "tc_time.h"
 
-#define buttonDown 16          // Button SET MENU'
-#define buttonUp 17            // Button +
-//#define ENTER_BUTTON 15           // Button -
 #define maxTime 240            // maximum time in seconds before timout during setting and no button pressed, max 255 seconds
 
 extern uint8_t timeout;

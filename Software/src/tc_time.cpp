@@ -202,8 +202,7 @@ void time_loop() {
                     allOff();
 
                     // Blank on second 59, display when new minute begins
-                    while (digitalRead(SECONDS_IN) ==
-                           0) {  // wait for the complete of this half second
+                    while (digitalRead(SECONDS_IN) == 0) {  // wait for the complete of this half second
                                  // Wait for this half second to end
                     }
                     while (digitalRead(SECONDS_IN) == 1) {  // second on next low
@@ -260,6 +259,7 @@ void timeTravel() {
     //copy destination time to present time
     //set this to RTC time since presentTime is not in preferences storage
     rtc.adjust(DateTime(
+        //TODO: Fix the year
         0000, //destinationTime.getYear(), does not work for years < 2000
         destinationTime.getMonth() - 1, 
         destinationTime.getDay(), 

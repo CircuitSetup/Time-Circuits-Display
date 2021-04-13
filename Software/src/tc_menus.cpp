@@ -31,9 +31,6 @@ clockDisplay* displaySet;  // the display being updated during setting
 Preferences prefAutoInt; //to save preferences in namespaces
 
 void menu_setup() {
-    //pinMode(buttonDown, INPUT_PULLDOWN);
-    //pinMode(buttonUp, INPUT_PULLDOWN);
-    //pinMode(ENTER_BUTTON, INPUT_PULLDOWN);
     
     //Set up namespace
     prefAutoInt.begin("autoint_pref", false);
