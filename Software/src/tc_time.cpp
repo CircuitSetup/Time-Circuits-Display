@@ -167,6 +167,7 @@ void time_loop() {
     // turns display back on after time traveling
     if ((millis() > timetravelNow + 1500) && timeTraveled) {
         timeTraveled = false;
+        beepOn = true;
         animate();
     }
 
@@ -239,7 +240,8 @@ void time_loop() {
             presentTime.setColon(true);
             departedTime.setColon(true);
 
-            play_file("/beep.mp3");
+            //if (beepOn) play_file("/beep.mp3", 0.03);
+
         } else {  // colon
             destinationTime.setColon(false);
             presentTime.setColon(false);
@@ -261,7 +263,8 @@ void time_loop() {
 void timeTravel() {
     timetravelNow = millis();
     timeTraveled = true;
-    play_file("/timetravel.mp3");
+    beepOn = false;
+    play_file("/timetravel.mp3", 0.06);
     allOff();
 
     //copy present time to last time departed

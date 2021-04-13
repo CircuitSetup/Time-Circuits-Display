@@ -26,6 +26,8 @@ AudioGeneratorMP3 *mp3 = new AudioGeneratorMP3();
 AudioFileSourceSPIFFS *file = NULL;
 AudioOutputI2S *out = new AudioOutputI2S(0, 0, 32, 0);
 
+bool beepOn;
+
 void audio_setup() {
     // for SD card
     pinMode(SD_CS, OUTPUT);
@@ -48,16 +50,14 @@ void audio_setup() {
     SPIFFS.begin();
     audioLogger = &Serial;
 
-    //file = new AudioFileSourceSPIFFS("/startup.mp3");
     out->SetGain(0.06);  //Set the volume
     out->SetOutputModeMono(true);
     out->SetPinout(I2S_BCLK, I2S_LRCLK, I2S_DIN);
-    //mp3->begin(file, out);  //Start playing the track loaded
-
 }
 
 void play_keypad_sound(char key) {
     if (key) {
+        beepOn = false;
         if (key == '0') file = new AudioFileSourceSPIFFS("/Dtmf-0.mp3");
         if (key == '1') file = new AudioFileSourceSPIFFS("/Dtmf-1.mp3");
         if (key == '2') file = new AudioFileSourceSPIFFS("/Dtmf-2.mp3");
@@ -69,12 +69,9 @@ void play_keypad_sound(char key) {
         if (key == '8') file = new AudioFileSourceSPIFFS("/Dtmf-8.mp3");
         if (key == '9') file = new AudioFileSourceSPIFFS("/Dtmf-9.mp3");
 
-        /*out = new AudioOutputI2S(0, 0, 8, 0);
-        mp3 = new AudioGeneratorMP3();
-        out->SetGain(0.06);  //Set the volume
-        */
         mp3->begin(file, out);  //Start playing the track loaded
         out->flush(); 
+        beepOn = true;
     }
 }
 
@@ -84,17 +81,13 @@ void audio_loop() {
             mp3->stop();
             out->stop();
             delete file;
-            //delete out;
-            //delete mp3;
         }
     }
 }
 
-void play_file(const char *audio_file) {
+void play_file(const char *audio_file, float volume) {
     file = new AudioFileSourceSPIFFS(audio_file);
-    //out->SetGain(0.06);  //Set the volume
-    //out->SetOutputModeMono(true);
-    //out->SetPinout(I2S_BCLK, I2S_LRCLK, I2S_DIN);
+    out->SetGain(volume);  //Set the volume
     mp3->begin(file, out);  //Start playing the track loaded
     out->flush(); 
 }
