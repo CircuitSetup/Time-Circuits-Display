@@ -186,10 +186,19 @@ void keypadLoop() {
             int _setHour = dateBufferString.substring(8, 10).toInt();
             int _setMin = dateBufferString.substring(10, 12).toInt();
 
-            //check if day makes sense for the month entered. Also checks if it is a leap year.
+            //do this first in case the month entered is wrong
+            if (_setMonth > 12) _setMonth = 12;
+            if (_setMonth == 0) _setMonth = 1;
+
+            Serial.println(daysInMonth(_setMonth, _setYear));
+            //check if day makes sense for the month entered accounting for a leap year.
             if (_setDay > daysInMonth(_setMonth, _setYear)) {
-                _setDay = daysInMonth(_setMonth, _setYear);
+                _setDay = daysInMonth(_setMonth, _setYear); //set to max day in that month
+                Serial.print("Set Day: ");
+                Serial.println(_setDay);
             }
+
+            //hour and min are checked in clockdisplay
 
             //set date to destination time
             destinationTime.setMonth(_setMonth);

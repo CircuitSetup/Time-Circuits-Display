@@ -305,11 +305,14 @@ void clockDisplay::setMonth(int monthNum) {
     // Makes characters for 3 char month, valid months 1-12
     if (monthNum < 13) {
         _month = monthNum;         // keep track
-        if (!isRTC()) monthNum--;  //array starts at 0 - TODO: fix for NTP
-        _displayBuffer[0] = makeAlpha(months[monthNum][0]);
-        _displayBuffer[1] = makeAlpha(months[monthNum][1]);
-        _displayBuffer[2] = makeAlpha(months[monthNum][2]);
-    }  // else invalid
+    } else {
+        _month = 12; // set month to the max otherwise month isn't displayed at all
+        monthNum = 12;
+    }
+    if (!isRTC()) monthNum--;  //array starts at 0
+    _displayBuffer[0] = makeAlpha(months[monthNum][0]);
+    _displayBuffer[1] = makeAlpha(months[monthNum][1]);
+    _displayBuffer[2] = makeAlpha(months[monthNum][2]);
 }
 
 void clockDisplay::setDay(int dayNum) {
