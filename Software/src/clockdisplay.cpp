@@ -165,7 +165,7 @@ bool clockDisplay::save() {
     } else if (isRTC() && _saveAddress >= 0) {
         Serial.println("Save RTC in Prof");
         pref.begin(_saveAddress, false);
-        pref.putUChar(_saveAddress, _brightness);
+        pref.putUChar(_saveAddress, _brightness); //only save brightness
         pref.end();
     } else {
         return false;

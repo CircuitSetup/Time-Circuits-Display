@@ -30,6 +30,9 @@ bool y;               // for tracking second change
 struct tm _timeinfo; //for NTP
 RTC_DS3231 rtc; //for RTC IC
 
+long timetravelNow = 0;
+bool timeTraveled = false;
+
 // The displays
 clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_EEPROM);  // i2c address, preferences namespace
 clockDisplay presentTime(PRES_TIME_ADDR, PRES_TIME_EEPROM);
@@ -160,7 +163,16 @@ void time_setup() {
 void time_loop() {
 // time display update
     DateTime dt = rtc.now();
-    presentTime.setDateTime(dt);  // Set the current time in the display
+
+    // turns display back on after time traveling
+    if ((millis() > timetravelNow + 1500) && timeTraveled) {
+        timeTraveled = false;
+        animate();
+    }
+
+    if (presentTime.isRTC()) { //only set real time if present time is RTC
+        presentTime.setDateTime(dt);  
+    }
 
     y = digitalRead(SECONDS_IN);
     if (y != x) {      // different on half second
@@ -210,8 +222,10 @@ void time_loop() {
                     }
 
                     Serial.println("Update Present Time 2");
-                    dt = rtc.now();               // New time by now
-                    presentTime.setDateTime(dt);  // will be at next minute
+                    if (presentTime.isRTC()) {
+                        dt = rtc.now();               // New time by now
+                        presentTime.setDateTime(dt);  // will be at next minute
+                    }
                     animate();                    // show all with month showing last
 
                     // end auto times
@@ -224,6 +238,8 @@ void time_loop() {
             destinationTime.setColon(true);
             presentTime.setColon(true);
             departedTime.setColon(true);
+
+            play_file("/beep.mp3");
         } else {  // colon
             destinationTime.setColon(false);
             presentTime.setColon(false);
@@ -240,16 +256,21 @@ void time_loop() {
     // destinationTime.showOnlySettingVal("SEC", dt.second(), true); // display
     // end, no numbers, clear rest of screen
     departedTime.show();
-
-    delay(10);
 }
 
 void timeTravel() {
+    timetravelNow = millis();
+    timeTraveled = true;
     play_file("/timetravel.mp3");
     allOff();
 
     //copy present time to last time departed
-    departedTime.setMonth(presentTime.getMonth() + 1);
+    if (presentTime.isRTC()) {
+        //has to be +1 since presentTime is currently RTC
+        departedTime.setMonth(presentTime.getMonth() + 1);
+    } else {
+        departedTime.setMonth(presentTime.getMonth());
+    }
     departedTime.setDay(presentTime.getDay());
     departedTime.setYear(presentTime.getYear());
     departedTime.setHour(presentTime.getHour());
@@ -257,20 +278,13 @@ void timeTravel() {
     departedTime.save();
 
     //copy destination time to present time
-    //set this to RTC time since presentTime is not in preferences storage
-    rtc.adjust(DateTime(
-        //TODO: Fix the year
-        0000, //destinationTime.getYear(), does not work for years < 2000
-        destinationTime.getMonth() - 1, 
-        destinationTime.getDay(), 
-        destinationTime.getHour(), 
-        destinationTime.getMinute(), 
-        0));
-
+    presentTime.setRTC(false); //presentTime is no longer 'actual' time
+    presentTime.setMonth(destinationTime.getMonth());
+    presentTime.setDay(destinationTime.getDay());
     presentTime.setYear(destinationTime.getYear());
+    presentTime.setHour(destinationTime.getHour());
+    presentTime.setMinute(destinationTime.getMinute());
     presentTime.save();
-   
-    animate();    
 }
 
 bool getNTPTime() {

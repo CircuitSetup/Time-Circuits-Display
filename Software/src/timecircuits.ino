@@ -36,6 +36,7 @@ void setup() {
     Serial.println();
     
     audio_setup();
+    delay(1000);
     play_file("/startup.mp3");
 
     //allLampTest();
