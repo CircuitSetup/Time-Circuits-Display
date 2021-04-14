@@ -151,12 +151,13 @@ void time_setup() {
         presentTime.showOnlySettingVal("SET", -1, true);
         delay(1000);
         allOff();
-        delay(1000);
     }
 
     Serial.println("Update Present Time - Setup");
     presentTime.setDateTime(rtc.now());                 // Load the time for initial animation show
     presentTime.setBrightness(15);  // added
+    
+    delay(3000); //to sync up with startup sound
     animate();
 }
 
@@ -240,7 +241,7 @@ void time_loop() {
             presentTime.setColon(true);
             departedTime.setColon(true);
 
-            //if (beepOn) play_file("/beep.mp3", 0.03);
+            //play_file("/beep.mp3", 0.3, 1, false); //TODO: fix - currently causing crash
 
         } else {  // colon
             destinationTime.setColon(false);

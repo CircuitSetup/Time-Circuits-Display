@@ -36,10 +36,6 @@ void setup() {
     Serial.println();
     
     audio_setup();
-    delay(1000);
-    beepOn = false;
-    play_file("/startup.mp3");
-    beepOn = true;
 
     //allLampTest();
     //delay(5000);

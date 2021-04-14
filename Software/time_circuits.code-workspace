@@ -16,7 +16,8 @@
 			"iomanip": "cpp",
 			"limits": "cpp",
 			"sstream": "cpp",
-			"system_error": "cpp"
+			"system_error": "cpp",
+			"new": "cpp"
 		}
 	}
 }

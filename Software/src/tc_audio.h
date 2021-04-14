@@ -28,6 +28,7 @@
 #include <AudioFileSourceSPIFFS.h>
 #include <AudioFileSourceSD.h>
 #include <AudioGeneratorMP3.h>
+#include <AudioOutputMixer.h>
 
 #include <FS.h>
 #include <SD.h>
@@ -50,7 +51,7 @@
 extern void audio_setup();
 extern void play_keypad_sound(char key);
 extern void audio_loop();
-extern void play_file(const char *audio_file, float volume = 0.06);
+extern void play_file(const char *audio_file, float volume = 0.6, int channel = 0, bool firstStart = false);
 extern bool beepOn;
 
 #endif

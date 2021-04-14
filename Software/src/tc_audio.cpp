@@ -23,8 +23,11 @@
 
 //Initialize ESP32 Audio Library classes
 AudioGeneratorMP3 *mp3 = new AudioGeneratorMP3();
-AudioFileSourceSPIFFS *file = NULL;
+AudioGeneratorMP3 *beep = new AudioGeneratorMP3();
+AudioFileSourceSPIFFS *file[2];
 AudioOutputI2S *out = new AudioOutputI2S(0, 0, 32, 0);
+AudioOutputMixer *mixer;
+AudioOutputMixerStub *stub[2];
 
 bool beepOn;
 
@@ -42,36 +45,33 @@ void audio_setup() {
     delay(1000);
     if (!SD.begin(SD_CS)) {
         Serial.println("Error talking to SD card!");
-        // return; //while(true);  // end program
     } else {
         Serial.println("SD card initialized");
     }
 
     SPIFFS.begin();
-    audioLogger = &Serial;
 
-    out->SetGain(0.06);  //Set the volume
+    audioLogger = &Serial;
     out->SetOutputModeMono(true);
     out->SetPinout(I2S_BCLK, I2S_LRCLK, I2S_DIN);
+    mixer = new AudioOutputMixer(32, out);
+
+    play_file("/startup.mp3", 0.5, 0, true);
 }
 
 void play_keypad_sound(char key) {
     if (key) {
         beepOn = false;
-        if (key == '0') file = new AudioFileSourceSPIFFS("/Dtmf-0.mp3");
-        if (key == '1') file = new AudioFileSourceSPIFFS("/Dtmf-1.mp3");
-        if (key == '2') file = new AudioFileSourceSPIFFS("/Dtmf-2.mp3");
-        if (key == '3') file = new AudioFileSourceSPIFFS("/Dtmf-3.mp3");
-        if (key == '4') file = new AudioFileSourceSPIFFS("/Dtmf-4.mp3");
-        if (key == '5') file = new AudioFileSourceSPIFFS("/Dtmf-5.mp3");
-        if (key == '6') file = new AudioFileSourceSPIFFS("/Dtmf-6.mp3");
-        if (key == '7') file = new AudioFileSourceSPIFFS("/Dtmf-7.mp3");
-        if (key == '8') file = new AudioFileSourceSPIFFS("/Dtmf-8.mp3");
-        if (key == '9') file = new AudioFileSourceSPIFFS("/Dtmf-9.mp3");
-
-        mp3->begin(file, out);  //Start playing the track loaded
-        out->flush(); 
-        beepOn = true;
+        if (key == '0') play_file("/Dtmf-0.mp3", 0.5, 0, false);
+        if (key == '1') play_file("/Dtmf-1.mp3", 0.5, 0, false);
+        if (key == '2') play_file("/Dtmf-2.mp3", 0.5, 0, false);
+        if (key == '3') play_file("/Dtmf-3.mp3", 0.5, 0, false);
+        if (key == '4') play_file("/Dtmf-4.mp3", 0.5, 0, false);
+        if (key == '5') play_file("/Dtmf-5.mp3", 0.5, 0, false);
+        if (key == '6') play_file("/Dtmf-6.mp3", 0.5, 0, false);
+        if (key == '7') play_file("/Dtmf-7.mp3", 0.5, 0, false);
+        if (key == '8') play_file("/Dtmf-8.mp3", 0.5, 0, false);
+        if (key == '9') play_file("/Dtmf-9.mp3", 0.5, 0, false);
     }
 }
 
@@ -79,15 +79,47 @@ void audio_loop() {
     if (mp3->isRunning()) {
         if (!mp3->loop()) {
             mp3->stop();
-            out->stop();
-            delete file;
+            stub[0]->stop();
+            stub[0]->flush();
+            out->flush();
+        }
+    }
+    if (beep->isRunning()) {
+        if (!beep->loop()) {
+            beep->stop();
+            stub[1]->stop();
+            stub[1]->flush();
+            out->flush();
         }
     }
 }
 
-void play_file(const char *audio_file, float volume) {
-    file = new AudioFileSourceSPIFFS(audio_file);
-    out->SetGain(volume);  //Set the volume
-    mp3->begin(file, out);  //Start playing the track loaded
-    out->flush(); 
+void play_file(const char *audio_file, float volume, int channel, bool firstStart) {
+    Serial.printf("CH:");
+    Serial.print(channel);
+    Serial.printf("  Playing <");
+    Serial.print(audio_file);
+    Serial.printf("> at volume :");
+    Serial.println(volume);
+
+    if (!firstStart) {
+        //cant do this if playing the first file after startup
+        delete stub[channel];
+        delete file[channel];
+        if (channel == 0) delete mp3;
+        if (channel == 1) delete beep;
+        firstStart = false;
+    }
+    stub[channel] = mixer->NewInput();
+    stub[channel]->SetGain(volume);
+
+    file[channel] = new AudioFileSourceSPIFFS(audio_file);
+
+    if (channel == 0) {
+        mp3 = new AudioGeneratorMP3();
+        mp3->begin(file[0], stub[0]);
+    } else {
+        beep = new AudioGeneratorMP3();
+        beep->begin(file[1], stub[1]);
+    }
 }
