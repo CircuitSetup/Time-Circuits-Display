@@ -282,6 +282,7 @@ void timeTravel() {
     departedTime.save();
 
     //copy destination time to present time
+    //TODO: figure out way to set MMMDDYYYY, but keep HH:MM as a clock
     presentTime.setRTC(false); //presentTime is no longer 'actual' time
     presentTime.setMonth(destinationTime.getMonth());
     presentTime.setDay(destinationTime.getDay());
