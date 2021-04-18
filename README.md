@@ -11,7 +11,7 @@ The displays are connected via I2C and will opperate on 0x71, 0x72, or 0x74, dep
 
 [Displays can be purchased here.](https://circuitsetup.us/index.php/product/time-circuits-display-assembled-pcb-with-i2c-interface-red-green-or-yellow/)
 
-The pins used on the ESP32 by default:
+In the software and on the control board (which will be released shortly), the pins used on the ESP32 by default are as follows:
 - I2C:
   - SCL - 22
   - SDA - 21
@@ -20,17 +20,17 @@ The pins used on the ESP32 by default:
   - MOSI - 23
   - MISO - 19
   - SCK - 19
-- RTC DS3231M (I2C addr: 0x68):
+- Real Time Clock DS3231M (I2C addr: 0x68):
   - SQW - 15 (used to blink LEDs every second)
 - Keypad PCF8574T (I2C addr: 0x20):
   - INT - 4 (can be used as an interrupt, but is not currently)
-- I2S / MAX98357 Mono sound output
+- Mono sound output I2S / MAX98357
   - DIN - 33
   - BCLK - 26
   - LRCLK - 25
 - Other:
-  - White LED - 17
-  - Enter button - 16
+  - Keypad White LED - 17
+  - keypad Enter Button - 16
   - Status LED - 2 (nodeMCU)
 
 
