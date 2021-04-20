@@ -54,24 +54,24 @@ void audio_setup() {
     audioLogger = &Serial;
     out->SetOutputModeMono(true);
     out->SetPinout(I2S_BCLK, I2S_LRCLK, I2S_DIN);
-    mixer = new AudioOutputMixer(32, out);
+    mixer = new AudioOutputMixer(8, out);
 
-    play_file("/startup.mp3", 0.5, 0, true);
+    play_file("/startup.mp3", 0.1, 0, true);
 }
 
 void play_keypad_sound(char key) {
     if (key) {
         beepOn = false;
-        if (key == '0') play_file("/Dtmf-0.mp3", 0.5, 0, false);
-        if (key == '1') play_file("/Dtmf-1.mp3", 0.5, 0, false);
-        if (key == '2') play_file("/Dtmf-2.mp3", 0.5, 0, false);
-        if (key == '3') play_file("/Dtmf-3.mp3", 0.5, 0, false);
-        if (key == '4') play_file("/Dtmf-4.mp3", 0.5, 0, false);
-        if (key == '5') play_file("/Dtmf-5.mp3", 0.5, 0, false);
-        if (key == '6') play_file("/Dtmf-6.mp3", 0.5, 0, false);
-        if (key == '7') play_file("/Dtmf-7.mp3", 0.5, 0, false);
-        if (key == '8') play_file("/Dtmf-8.mp3", 0.5, 0, false);
-        if (key == '9') play_file("/Dtmf-9.mp3", 0.5, 0, false);
+        if (key == '0') play_file("/Dtmf-0.mp3", 0.1, 0, false);
+        if (key == '1') play_file("/Dtmf-1.mp3", 0.1, 0, false);
+        if (key == '2') play_file("/Dtmf-2.mp3", 0.1, 0, false);
+        if (key == '3') play_file("/Dtmf-3.mp3", 0.1, 0, false);
+        if (key == '4') play_file("/Dtmf-4.mp3", 0.1, 0, false);
+        if (key == '5') play_file("/Dtmf-5.mp3", 0.1, 0, false);
+        if (key == '6') play_file("/Dtmf-6.mp3", 0.1, 0, false);
+        if (key == '7') play_file("/Dtmf-7.mp3", 0.1, 0, false);
+        if (key == '8') play_file("/Dtmf-8.mp3", 0.1, 0, false);
+        if (key == '9') play_file("/Dtmf-9.mp3", 0.1, 0, false);
     }
 }
 
@@ -106,7 +106,7 @@ void play_file(const char *audio_file, float volume, int channel, bool firstStar
         //cant do this if playing the first file after startup
         delete stub[channel];
         delete file[channel];
-        if (channel == 0) delete mp3;
+        //if (channel == 0) delete mp3;
         if (channel == 1) delete beep;
         firstStart = false;
     }
@@ -115,6 +115,9 @@ void play_file(const char *audio_file, float volume, int channel, bool firstStar
 
     file[channel] = new AudioFileSourceSPIFFS(audio_file);
 
+    mp3 = new AudioGeneratorMP3();
+    mp3->begin(file[channel], stub[channel]);
+    /*
     if (channel == 0) {
         mp3 = new AudioGeneratorMP3();
         mp3->begin(file[0], stub[0]);
@@ -122,4 +125,5 @@ void play_file(const char *audio_file, float volume, int channel, bool firstStar
         beep = new AudioGeneratorMP3();
         beep->begin(file[1], stub[1]);
     }
+    */
 }

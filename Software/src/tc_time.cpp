@@ -241,7 +241,7 @@ void time_loop() {
             presentTime.setColon(true);
             departedTime.setColon(true);
 
-            //play_file("/beep.mp3", 0.3, 1, false); //TODO: fix - currently causing crash
+            //play_file("/beep.mp3", 0.03, 1, false); //TODO: fix - currently causing crash
 
         } else {  // colon
             destinationTime.setColon(false);
@@ -265,7 +265,7 @@ void timeTravel() {
     timetravelNow = millis();
     timeTraveled = true;
     beepOn = false;
-    play_file("/timetravel.mp3", 0.06);
+    play_file("/timetravel.mp3", 0.1);
     allOff();
 
     //copy present time to last time departed
@@ -282,14 +282,29 @@ void timeTravel() {
     departedTime.save();
 
     //copy destination time to present time
-    //TODO: figure out way to set MMMDDYYYY, but keep HH:MM as a clock
-    presentTime.setRTC(false); //presentTime is no longer 'actual' time
-    presentTime.setMonth(destinationTime.getMonth());
-    presentTime.setDay(destinationTime.getDay());
-    presentTime.setYear(destinationTime.getYear());
-    presentTime.setHour(destinationTime.getHour());
-    presentTime.setMinute(destinationTime.getMinute());
-    presentTime.save();
+    //DateTime does not work before 2000
+    if (destinationTime.getYear() < 2000) {
+        presentTime.setRTC(false); //presentTime is no longer 'actual' time
+        presentTime.setMonth(destinationTime.getMonth());
+        presentTime.setDay(destinationTime.getDay());
+        presentTime.setYear(destinationTime.getYear());
+        presentTime.setHour(destinationTime.getHour());
+        presentTime.setMinute(destinationTime.getMinute());
+        presentTime.save();
+    } else if (destinationTime.getYear() > 2000) {
+        //TODO: figure out way to set MMMDDYYYY, but keep HH:MM as a clock
+        rtc.adjust(DateTime(
+            destinationTime.getYear(),
+            destinationTime.getMonth() - 1, 
+            destinationTime.getDay(), 
+            destinationTime.getHour(),
+            destinationTime.getMinute()
+        ));
+    } else {
+        if (getNTPTime()) {
+            //if nothing or the same exact date try to get NTP time
+        }
+    }
 }
 
 bool getNTPTime() {
