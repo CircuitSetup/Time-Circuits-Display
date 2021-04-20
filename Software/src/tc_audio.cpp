@@ -116,8 +116,7 @@ void play_file(const char *audio_file, float volume, int channel, bool firstStar
     file[channel] = new AudioFileSourceSPIFFS(audio_file);
 
     mp3 = new AudioGeneratorMP3();
-    mp3->begin(file[channel], stub[channel]);
-    /*
+
     if (channel == 0) {
         mp3 = new AudioGeneratorMP3();
         mp3->begin(file[0], stub[0]);
@@ -125,5 +124,4 @@ void play_file(const char *audio_file, float volume, int channel, bool firstStar
         beep = new AudioGeneratorMP3();
         beep->begin(file[1], stub[1]);
     }
-    */
 }
