@@ -405,9 +405,7 @@ void clockDisplay::showOnlySave() {
     directCol(0, makeAlpha('S'));
     directCol(1, makeAlpha('A'));
     directCol(2, makeAlpha('V'));
-    directCol(3, numDigs[10]);  // 10 is an E
-                                /*    }
-  */
+    directCol(3, numDigs[14]);  // 14 is an E
 }
 
 void clockDisplay::showOnlySettingVal(const char* setting, int8_t val, bool clear) {
