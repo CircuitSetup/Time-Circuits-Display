@@ -45,8 +45,9 @@ void setField(uint16_t& number, uint8_t field, int year, int month);
 bool loadAutoInterval();
 void saveAutoInterval();
 extern void putAutoInt(int position);
-void autoTimesButton();
+extern void autoTimesEnter();
 void doGetBrightness(clockDisplay* displaySet);
+void waitForEnterRelease();
 
 extern void animate();
 extern void allLampTest();
