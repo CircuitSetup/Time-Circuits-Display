@@ -33,6 +33,13 @@ RTC_DS3231 rtc; //for RTC IC
 long timetravelNow = 0;
 bool timeTraveled = false;
 
+const char* ssid = "linksys";
+const char* password = "";
+
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = -18000;
+const int daylightOffset_sec = 3600;
+
 // The displays
 clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_EEPROM);  // i2c address, preferences namespace
 clockDisplay presentTime(PRES_TIME_ADDR, PRES_TIME_EEPROM);
@@ -63,13 +70,6 @@ dateStruct departedTimes[8] = {
 int8_t autoTime = 0;  // selects the above array time
 
 const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-
-const char* ssid = "linksys";
-const char* password = "";
-
-const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = -18000;
-const int daylightOffset_sec = 3600;
 
 void time_setup() {
     pinMode(SECONDS_IN, INPUT_PULLDOWN);  // for monitoring seconds
@@ -291,7 +291,7 @@ void timeTravel() {
         presentTime.setHour(destinationTime.getHour());
         presentTime.setMinute(destinationTime.getMinute());
         presentTime.save();
-    } else if (destinationTime.getYear() > 2000) {
+    } else if (destinationTime.getYear() >= 2000) {
         //TODO: figure out way to set MMMDDYYYY, but keep HH:MM as a clock
         rtc.adjust(DateTime(
             destinationTime.getYear(),
@@ -367,7 +367,6 @@ bool connectToWifi() {
 }
 
 void doGetAutoTimes() {
-    // Set the auto times setting
     destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval], true);
 
     presentTime.on();
@@ -381,6 +380,7 @@ void doGetAutoTimes() {
     }
 
     while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
+        autoTimesEnter();
         delay(100);
     }
 
