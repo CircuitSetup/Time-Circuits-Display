@@ -34,7 +34,8 @@ void setup() {
     Wire.begin();
     //scan();
     Serial.println();
-    
+
+    //wifi_setup();
     audio_setup();
 
     //allLampTest();
@@ -42,12 +43,14 @@ void setup() {
 
     menu_setup();
     keypad_setup();
+    delay(4000);
     time_setup();
 }
 
 ///////////////////////////////////////////////////////
 
 void loop() {
+    //wifi_loop(); //for wifi
     keypadLoop();
     get_key();
     time_loop();
