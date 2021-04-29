@@ -31,31 +31,31 @@ byte rowPins[4] = {1, 6, 5, 3};  //connect to the row pinouts of the keypad
 byte colPins[3] = {2, 0, 4};     //connect to the column pinouts of the keypad
 Keypad_I2C keypad(makeKeymap(keys), rowPins, colPins, 4, 3, KEYPAD_ADDR, PCF8574);
 
-OneButton enterKey = OneButton(ENTER_BUTTON,
-  false,        // Button is active HIGH
-  false         // Enable internal pull-up resistor
-);
-boolean isEnterKeyPressed = false;
-boolean isEnterKeyHeld = false;
-boolean isEnterKeyDouble = false;
+bool isEnterKeyPressed = false;
+bool isEnterKeyHeld = false;
+bool isEnterKeyDouble = false;
 
 int enterVal = 0;
 long timeNow = 0;
-boolean enterWasPressed = false;
+bool enterWasPressed = false;
 
 int dateIndex = 0;
 const int maxDateLength = 12;  //month, day, year, hour, min
 const int minDateLength = 8;   //month, day, year
 char dateBuffer[maxDateLength + 1];
-boolean dateComplete = false;
+bool dateComplete = false;
+bool menuFlag = false;
+
 char timeBuffer[2]; // 2 characters to accomodate date and time settings
 char yearBuffer[3]; // 4 characters to accomodate year setting
 int timeIndex = 0;
 int yearIndex = 0;
-
 byte prevKeyState = HIGH;
 
-boolean menuFlag = false;
+OneButton enterKey = OneButton(ENTER_BUTTON,
+  false,        // Button is active HIGH
+  false         // Enable internal pull-up resistor
+);
 
 void keypad_setup() {
     keypad.begin(makeKeymap(keys));
@@ -114,11 +114,15 @@ void keypadEvent(KeypadEvent key) {
 
 void enterKeyPressed() {
     Serial.println("Enter Key Pressed");
+    Serial.print("menuFlag: ");
+    Serial.println(menuFlag);
     isEnterKeyPressed = true;
 }
 
 void enterKeyHeld() {
     Serial.println("Enter Key held");
+    Serial.print("menuFlag: ");
+    Serial.println(menuFlag);
     isEnterKeyHeld = true;
 }
 
@@ -207,11 +211,6 @@ void keypadLoop() {
 
             dateIndex = 0;  // prepare for next time
         }
-    }
-    if (isEnterKeyPressed && menuFlag) {
-        //isEnterKeyPressed = false;
-        //select what to edit in menu
-        fieldSelect();
     }
     if (isEnterKeyHeld && menuFlag) {
         isEnterKeyHeld = false; //reset

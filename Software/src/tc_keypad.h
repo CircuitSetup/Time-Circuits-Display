@@ -34,7 +34,7 @@
 #define KEYPAD_ADDR 0x20
 #define WHITE_LED 17 //GPIO that white led is connected to
 #define ENTER_BUTTON 16 //GPIO that enter key is connected to
-#define ENTER_DELAY 700 //when enter key is pressed, turn off display for this many ms
+#define ENTER_DELAY 400 //when enter key is pressed, turn off display for this many ms
 #define DEBOUNCE 50 //button debounce time in ms
 #define ENTER_HOLD_TIME 2000 //time in ms holding the enter key will count as a hold
 #define ENTER_DOUBLE_TIME 200 //enter key will register a double click if pressed twice within this time
@@ -53,11 +53,9 @@ extern bool isEnterKeyPressed;
 extern bool isEnterKeyHeld;
 extern bool isEnterKeyDouble;
 extern void keypadLoop();
-
 //extern byte hold;
 extern char key;
-
-extern boolean keyPressed;
-extern boolean menuFlag;
+extern bool keyPressed;
+extern bool menuFlag;
 
 #endif
