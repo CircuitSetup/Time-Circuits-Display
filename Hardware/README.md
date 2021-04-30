@@ -6,7 +6,7 @@ Changes between v1.1 (unreleased) & v1.2
 - Changed volume to connect to GPIO32 on ESP32 instead of amp GAIN_SLOT
 - Updated schematic to include some notes
 
-[OctoPart BOM] (https://octopart.com/bom-tool/zCnlEeUa)
+(OctoPart BOM)[https://octopart.com/bom-tool/zCnlEeUa]
 
 # Time Circuits Display
 
