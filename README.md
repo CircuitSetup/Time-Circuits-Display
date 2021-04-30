@@ -1,6 +1,6 @@
 # Time Circuits Display
 
-![![TCD Front](https://raw.githubusercontent.com/CircuitSetup/Time-Circuits-Display/master/Images/tcd_front.jpg)
+![TCD Front](https://raw.githubusercontent.com/CircuitSetup/Time-Circuits-Display/master/Images/tcd_front.jpg)
 
 
 This Time Circuits Display has been meticulously reproduced to be as accurate as possible to the movie. The LED displays are custom made to the correct size for CircuitSetup. This includes the month 14 segment/3 character displays being closer together, and both the 7 & 14 segment displays being 0.6" high by 0.35" wide.
