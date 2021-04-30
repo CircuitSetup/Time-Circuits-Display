@@ -33,7 +33,8 @@ In the software and on the control board (which will be released shortly), the p
   - LRCLK - 25
 - Other:
   - Keypad White LED - 17
-  - keypad Enter Button - 16
+  - Keypad Enter Button - 16
+  - Volume - 32
   - Status LED - 2 (nodeMCU)
 
 
