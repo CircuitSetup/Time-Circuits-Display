@@ -1,5 +1,8 @@
 # Time Circuits Display
 
+![![TCD Front](https://raw.githubusercontent.com/CircuitSetup/Time-Circuits-Display/master/Images/tcd_front.jpg)
+
+
 This Time Circuits Display has been meticulously reproduced to be as accurate as possible to the movie. The LED displays are custom made to the correct size for CircuitSetup. This includes the month 14 segment/3 character displays being closer together, and both the 7 & 14 segment displays being 0.6" high by 0.35" wide.
 
 The current code for the ESP32 is not yet complete. The Destination Time can be entered via keypad, and the Present Time can keep time via NTP. There is also a time travel mode, which moves the Destination Time to Present Time, and Present Time to Last Time Departed. The startup, keypad dial sounds, and time travel sounds are played using I2S. 
