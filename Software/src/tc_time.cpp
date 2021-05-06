@@ -265,7 +265,7 @@ void timeTravel() {
     timetravelNow = millis();
     timeTraveled = true;
     beepOn = false;
-    play_file("/timetravel.mp3", 0.1);
+    play_file("/timetravel.mp3", getVolume());
     allOff();
 
     //copy present time to last time departed

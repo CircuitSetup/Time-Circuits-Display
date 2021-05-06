@@ -163,7 +163,7 @@ void keypadLoop() {
 
     if (isEnterKeyPressed && !menuFlag) {
         isEnterKeyPressed = false; //reset
-        play_file("/enter.mp3");
+        play_file("/enter.mp3", getVolume());
         digitalWrite(WHITE_LED, HIGH);  //turn on white LEDs
         destinationTime.off(); //turn off destination time only
         timeNow = millis();

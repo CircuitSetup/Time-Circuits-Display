@@ -48,10 +48,13 @@
 #define I2S_LRCLK 25
 #define I2S_DIN 33
 
+#define VOLUME 32
+
 extern void audio_setup();
 extern void play_keypad_sound(char key);
 extern void audio_loop();
-extern void play_file(const char *audio_file, float volume = 0.1, int channel = 0, bool firstStart = false);
+extern void play_file(const char *audio_file, double volume = 0.1, int channel = 0, bool firstStart = false);
+extern double getVolume();
 extern bool beepOn;
 
 #endif

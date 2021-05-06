@@ -39,6 +39,8 @@ void audio_setup() {
     pinMode(SPI_MISO, INPUT_PULLUP);
     pinMode(SPI_MOSI, INPUT_PULLUP);
 
+    //pinMode(VOLUME, INPUT);
+
     // set up SD card
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     SPI.setFrequency(1000000);
@@ -56,22 +58,22 @@ void audio_setup() {
     out->SetPinout(I2S_BCLK, I2S_LRCLK, I2S_DIN);
     mixer = new AudioOutputMixer(8, out);
 
-    play_file("/startup.mp3", 0.1, 0, true);
+    play_file("/startup.mp3", getVolume(), 0, true);
 }
 
 void play_keypad_sound(char key) {
     if (key) {
         beepOn = false;
-        if (key == '0') play_file("/Dtmf-0.mp3", 0.1, 0, false);
-        if (key == '1') play_file("/Dtmf-1.mp3", 0.1, 0, false);
-        if (key == '2') play_file("/Dtmf-2.mp3", 0.1, 0, false);
-        if (key == '3') play_file("/Dtmf-3.mp3", 0.1, 0, false);
-        if (key == '4') play_file("/Dtmf-4.mp3", 0.1, 0, false);
-        if (key == '5') play_file("/Dtmf-5.mp3", 0.1, 0, false);
-        if (key == '6') play_file("/Dtmf-6.mp3", 0.1, 0, false);
-        if (key == '7') play_file("/Dtmf-7.mp3", 0.1, 0, false);
-        if (key == '8') play_file("/Dtmf-8.mp3", 0.1, 0, false);
-        if (key == '9') play_file("/Dtmf-9.mp3", 0.1, 0, false);
+        if (key == '0') play_file("/Dtmf-0.mp3", getVolume(), 0, false);
+        if (key == '1') play_file("/Dtmf-1.mp3", getVolume(), 0, false);
+        if (key == '2') play_file("/Dtmf-2.mp3", getVolume(), 0, false);
+        if (key == '3') play_file("/Dtmf-3.mp3", getVolume(), 0, false);
+        if (key == '4') play_file("/Dtmf-4.mp3", getVolume(), 0, false);
+        if (key == '5') play_file("/Dtmf-5.mp3", getVolume(), 0, false);
+        if (key == '6') play_file("/Dtmf-6.mp3", getVolume(), 0, false);
+        if (key == '7') play_file("/Dtmf-7.mp3", getVolume(), 0, false);
+        if (key == '8') play_file("/Dtmf-8.mp3", getVolume(), 0, false);
+        if (key == '9') play_file("/Dtmf-9.mp3", getVolume(), 0, false);
     }
 }
 
@@ -94,7 +96,7 @@ void audio_loop() {
     }
 }
 
-void play_file(const char *audio_file, float volume, int channel, bool firstStart) {
+void play_file(const char *audio_file, double volume, int channel, bool firstStart) {
     Serial.printf("CH:");
     Serial.print(channel);
     Serial.printf("  Playing <");
@@ -124,4 +126,13 @@ void play_file(const char *audio_file, float volume, int channel, bool firstStar
         beep = new AudioGeneratorMP3();
         beep->begin(file[1], stub[1]);
     }
+}
+
+double getVolume() {
+    //returns value for volume based on the position of the pot
+    double vol_ana, vol_val;
+    vol_ana = analogRead(VOLUME);
+    vol_val = vol_ana * 1/4095;
+
+    return vol_val;
 }
