@@ -130,9 +130,8 @@ void play_file(const char *audio_file, double volume, int channel, bool firstSta
 
 double getVolume() {
     //returns value for volume based on the position of the pot
-    double vol_ana, vol_val;
-    vol_ana = analogRead(VOLUME);
-    vol_val = vol_ana * 1/4095;
+    double vol_val = analogRead(VOLUME);
+    vol_val = vol_val * 1/4095;
 
     return vol_val;
 }
