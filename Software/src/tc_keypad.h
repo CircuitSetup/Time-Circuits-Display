@@ -45,6 +45,11 @@ extern char get_key();
 extern void recordKey(char key);
 extern void recordSetTimeKey(char key);
 extern void recordSetYearKey(char key);
+extern void recordSetMonthKey(char key);
+
+extern char timeBuffer[]; 
+extern char yearBuffer[]; 
+extern char monthBuffer[];
 
 void enterKeyPressed();
 void enterKeyHeld();

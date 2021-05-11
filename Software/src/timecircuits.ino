@@ -35,7 +35,7 @@ void setup() {
     //scan();
     Serial.println();
 
-    //wifi_setup();
+    //wifi_setup(); //for future wifi settings 
     audio_setup();
 
     //allLampTest();

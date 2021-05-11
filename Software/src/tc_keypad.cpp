@@ -34,22 +34,25 @@ Keypad_I2C keypad(makeKeymap(keys), rowPins, colPins, 4, 3, KEYPAD_ADDR, PCF8574
 bool isEnterKeyPressed = false;
 bool isEnterKeyHeld = false;
 bool isEnterKeyDouble = false;
-
-int enterVal = 0;
-long timeNow = 0;
 bool enterWasPressed = false;
-
-int dateIndex = 0;
-const int maxDateLength = 12;  //month, day, year, hour, min
-const int minDateLength = 8;   //month, day, year
-char dateBuffer[maxDateLength + 1];
 bool dateComplete = false;
 bool menuFlag = false;
 
+int enterVal = 0;
+long timeNow = 0;
+
+const int maxDateLength = 12;  //month, day, year, hour, min
+const int minDateLength = 8;   //month, day, year
+
+char dateBuffer[maxDateLength + 1];
 char timeBuffer[2]; // 2 characters to accomodate date and time settings
 char yearBuffer[3]; // 4 characters to accomodate year setting
+char monthBuffer[2];
+int dateIndex = 0;
 int timeIndex = 0;
 int yearIndex = 0;
+int monthIndex = 0;
+
 byte prevKeyState = HIGH;
 
 OneButton enterKey = OneButton(ENTER_BUTTON,
@@ -91,7 +94,7 @@ void keypadEvent(KeypadEvent key) {
         case PRESSED:
             if (key != '#' || key != '*') {
                 play_keypad_sound(key);
-                if (menuFlag) {
+                if (isSetUpdate) {
                     recordSetTimeKey(key);
                 } else {
                     recordKey(key);
@@ -141,6 +144,7 @@ void recordSetTimeKey(char key) {
     if (timeIndex == 0) timeBuffer[0] = key;
     if (timeIndex == 1) timeBuffer[1] = key;
     timeIndex++;
+    Serial.println(timeIndex);
     if (timeIndex == 2) timeIndex = 0; // don't overflow, and return to start after buffer has 2 chars in it
 }
 
@@ -148,6 +152,12 @@ void recordSetYearKey(char key) {
     yearBuffer[yearIndex++] = key;
     Serial.println(yearIndex);
     if (yearIndex >= 4) yearIndex = 0;  // don't overflow
+}
+
+void recordSetMonthKey(char key) {
+    monthBuffer[monthIndex++] = key;
+    Serial.println(monthIndex);
+    if (monthIndex >= 3) monthIndex = 0;  // don't overflow
 }
 
 void keypadLoop() {
@@ -210,6 +220,7 @@ void keypadLoop() {
             destinationTime.save();
 
             dateIndex = 0;  // prepare for next time
+            dateBufferString[0] = '\0';
         }
     }
     if (isEnterKeyHeld && menuFlag) {

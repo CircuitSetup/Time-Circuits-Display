@@ -103,11 +103,10 @@ void enter_menu() {
        Serial.print("isSetUpdate: ");
         Serial.println(isSetUpdate);
 
-        setUpdate(yearSet, 2);  // show only the year field - value,display field
         waitForEnterRelease();
         while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) { // && isSetUpdate) {
-            Serial.println("Year Set");
-            isSetUpdate = false;
+            //Serial.println("Year Set");
+            get_key();
             setField(yearSet, 2, 0, 0);  // number to adjust, field
         }
 
@@ -115,8 +114,8 @@ void enter_menu() {
         setUpdate(monthSet, 0);
         waitForEnterRelease();
         while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-            Serial.println("Month Set");
-            isSetUpdate = false;
+            //Serial.println("Month Set");
+            get_key();
             setField(monthSet, 0, 0, 0);  // setting, which display, which field, starting from left
         }
 
@@ -124,8 +123,8 @@ void enter_menu() {
         setUpdate(daySet, 1);
         waitForEnterRelease();
         while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-            Serial.println("Day Set");
-            isSetUpdate = false;
+            //Serial.println("Day Set");
+            get_key();
             setField(daySet, 1, yearSet, monthSet);  // this depends on the month and year
         }
 
@@ -133,8 +132,8 @@ void enter_menu() {
         setUpdate(hourSet, 3);
         waitForEnterRelease();
         while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-            Serial.println("Hour Set");
-            isSetUpdate = false;
+            //Serial.println("Hour Set");
+            get_key();
             setField(hourSet, 3, 0, 0);
         }
 
@@ -142,8 +141,8 @@ void enter_menu() {
         setUpdate(minSet, 4);
         waitForEnterRelease();
         while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-            Serial.println("Minute Set");
-            isSetUpdate = false;
+            //Serial.println("Minute Set");
+            get_key();
             setField(minSet, 4, 0, 0);
         }
 
@@ -151,6 +150,8 @@ void enter_menu() {
         if (!checkTimeOut()) {  // Do nothing if there was a timeout waiting for button presses
                                                   // save if Enter Key is held
             Serial.println("Enter Held Save");
+
+            isSetUpdate = false;
             if (displaySet->isRTC() == 1) {  // this is the RTC display, set the RTC as quickly as
                                                 // possible, as soon as set button pressed
                 rtc.adjust(DateTime(yearSet, monthSet, daySet, hourSet, minSet, 0));
@@ -176,7 +177,7 @@ void enter_menu() {
     } else if (displayNum == 4) {
         // Get brightness settings
         waitForEnterRelease();
-
+        isSetUpdate = true;
         if (!checkTimeOut()) doGetBrightness(&destinationTime);
         if (!checkTimeOut()) doGetBrightness(&presentTime);
         if (!checkTimeOut()) doGetBrightness(&departedTime);
@@ -239,7 +240,6 @@ void displayHighlight(int& number) {
             presentTime.off();
             departedTime.off();
             displaySet = &destinationTime;
-            isSetUpdate = true;
             break;
         case 1:  // Presetnt Time
             destinationTime.off();
@@ -248,7 +248,6 @@ void displayHighlight(int& number) {
             presentTime.show();
             departedTime.off();
             displaySet = &presentTime;
-            isSetUpdate = true;
             break;
         case 2:  // Last Time Departed
             destinationTime.off();
@@ -257,7 +256,6 @@ void displayHighlight(int& number) {
             departedTime.setColon(false);
             departedTime.show();
             displaySet = &departedTime;
-            isSetUpdate = true;
             break;
         case 3:  // auto enable
             destinationTime.showOnlySettingVal("PRE", -1, true);  // display end, no numbers, clear rest of screen
@@ -295,6 +293,7 @@ void displayHighlight(int& number) {
 
 void setUpdate(uint16_t& number, int field) {
     Serial.println("Set Update");
+    isSetUpdate = true;
     // Shows only the field being updated
     switch (field) {
         case 0:
@@ -376,66 +375,26 @@ void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0) {
             break;
     }
 
-    uint16_t bCount = 0;
-    unsigned long start = millis();
-
     if (digitalRead(ENTER_BUTTON)) {
+        uint16_t setNum = 0;
+        uint16_t numVal = 0;
         Serial.println("Enter Next...");
-        while (digitalRead(ENTER_BUTTON)) {
-            timeout = 0;
+        while (!checkTimeOut() && !digitalRead(ENTER_BUTTON) && numVal < 2) {
+            timeout = 0;   
+            get_key();
 
-            if (bCount == 0) {  //millis() - start < 500 &&
-                                // Instantly respond to first press
-                start = millis();
-                bCount++;
-
-                number++;
-
-                if (number == (upperLimit + 1))
-                    number = lowerLimit;
-
-                setUpdate(number, field);
-                delay(10);  //debounce
+            if (strlen(timeBuffer) < 2) {
+                if (timeBuffer[numVal] == (upperLimit + 1))
+                    timeBuffer[numVal] = lowerLimit;
+                setNum = timeBuffer[numVal];
+                setUpdate(setNum, field);
+                numVal++;
+                        
+                Serial.print("Time Buffer: ");
+                Serial.println(timeBuffer);
             }
-
-            if (bCount < 7 && abs(millis() - start) > 500) {
-                // Go slow if held
-                start = millis();
-                bCount++;
-
-                number++;
-
-                if (number == (upperLimit + 1))
-                    number = lowerLimit;
-
-                setUpdate(number, field);
-            }
-
-            if (bCount >= 7 && bCount < 60 && abs(millis() - start) > 100) {
-                //Go faster if held longer
-                bCount++;
-                start = millis();
-
-                number++;
-
-                if (number == (upperLimit + 1))
-                    number = lowerLimit;
-
-                setUpdate(number, field);
-            }
-
-            if (bCount >= 60 && abs(millis() - start) > 10) {
-                // Go very fast
-                //bCount++; // no need to count any more
-                start = millis();
-
-                number++;
-
-                if (number == (upperLimit + 1))
-                    number = lowerLimit;
-
-                setUpdate(number, field);
-            }
+            Serial.print("numVal: ");
+            Serial.println(numVal);
         }
     }
 }  

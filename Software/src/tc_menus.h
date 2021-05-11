@@ -29,6 +29,7 @@
 #include "clockdisplay.h"
 #include "tc_keypad.h"
 #include "tc_time.h"
+#include "tc_audio.h"
 
 #define maxTime 240            // maximum time in seconds before timout during setting and no button pressed, max 255 seconds
 
@@ -53,4 +54,5 @@ extern void animate();
 extern void allLampTest();
 extern void allOff();
 
+extern bool isSetUpdate;
 #endif
