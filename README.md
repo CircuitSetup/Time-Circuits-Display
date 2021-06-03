@@ -7,11 +7,12 @@ This Time Circuits Display has been meticulously reproduced to be as accurate as
 
 The Destination Time can be entered via keypad, and the Present Time can keep time via NTP. There is also a time travel mode, which moves the Destination Time to Present Time, and Present Time to Last Time Departed. The startup, keypad dial sounds, and time travel sounds are played using I2S. 
 
-[To see some things in the code that could use some work, please see here.](/Time-Circuits-Display/issues)
+[To see some things in the code that could use some work, please see here.](/CircuitSetup/Time-Circuits-Display/issues)
 
 ## Kits
 [Time Circuits Display kits can be purchased here with or without 3d printed parts.](https://circuitsetup.us/product/complete-time-circuits-display-kit/)
-[View the instructions for assembling your CircuitSetup.us TCD Kit](/Time-Circuits-Display/wiki)
+
+[View the instructions for assembling your CircuitSetup.us TCD Kit](/CircuitSetup/Time-Circuits-Display/wiki)
 
 ### Kit Parts
 - 3x Displays in (Red, Green, Yellow)
