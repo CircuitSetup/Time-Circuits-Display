@@ -25,6 +25,7 @@
 #include "tc_keypad.h"
 #include "tc_menus.h"
 #include "tc_time.h"
+#include "tc_wifi.h"
 
 ///////////////////////////////////////////////////////
 void setup() {
@@ -35,7 +36,7 @@ void setup() {
     //scan();
     Serial.println();
 
-    //wifi_setup(); //for future wifi settings 
+    wifi_setup();
     audio_setup();
 
     //allLampTest();
@@ -50,10 +51,10 @@ void setup() {
 ///////////////////////////////////////////////////////
 
 void loop() {
-    //wifi_loop(); //for wifi
     keypadLoop();
     get_key();
     time_loop();
+    wifi_loop();
     audio_loop();
 }
 

@@ -33,10 +33,7 @@ RTC_DS3231 rtc; //for RTC IC
 long timetravelNow = 0;
 bool timeTraveled = false;
 
-const char* ssid = "linksys";
-const char* password = "";
-
-const char* ntpServer = "pool.ntp.org";
+const char* ntpServer = getNTPServer(); //"pool.ntp.org";
 const long gmtOffset_sec = -18000;
 const int daylightOffset_sec = 3600;
 
@@ -111,7 +108,7 @@ void time_setup() {
         destinationTime.setYear(1985);
         destinationTime.setHour(1);
         destinationTime.setMinute(21);
-        destinationTime.setBrightness(15);
+        destinationTime.setBrightness((uint8_t)atoi(getBrightness("dest")));
         destinationTime.save();
     }
 
@@ -124,13 +121,13 @@ void time_setup() {
         departedTime.setYear(1985);
         departedTime.setHour(1);
         departedTime.setMinute(20);
-        departedTime.setBrightness(15);
+        departedTime.setBrightness((uint8_t)atoi(getBrightness("last")));
         departedTime.save();
     }
 
     if (!presentTime.load()) {  // Time isn't saved here, but other settings are
         validLoad = false;
-        presentTime.setBrightness(15);
+        presentTime.setBrightness((uint8_t)atoi(getBrightness("pres")));
         presentTime.save();
     }
 
@@ -284,15 +281,17 @@ void timeTravel() {
     //copy destination time to present time
     //DateTime does not work before 2000
     if (destinationTime.getYear() < 2000) {
-        presentTime.setRTC(false); //presentTime is no longer 'actual' time
+        if (presentTime.isRTC()) presentTime.setRTC(false); //presentTime is no longer 'actual' time
         presentTime.setMonth(destinationTime.getMonth());
         presentTime.setDay(destinationTime.getDay());
         presentTime.setYear(destinationTime.getYear());
+        //TODO: figure out way to set MMMDDYYYY, but keep HH:MM incrementing every min like a clock
         presentTime.setHour(destinationTime.getHour());
         presentTime.setMinute(destinationTime.getMinute());
         presentTime.save();
     } else if (destinationTime.getYear() >= 2000) {
-        //TODO: figure out way to set MMMDDYYYY, but keep HH:MM as a clock
+        //present time still works as a clock, the time is just set differently
+        if (!presentTime.isRTC()) presentTime.setRTC(true);
         rtc.adjust(DateTime(
             destinationTime.getYear(),
             destinationTime.getMonth() - 1, 
@@ -302,14 +301,14 @@ void timeTravel() {
         ));
     } else {
         if (getNTPTime()) {
-            //if nothing or the same exact date try to get NTP time
+            //if nothing or the same exact date try to get NTP time again
         }
     }
 }
 
 bool getNTPTime() {
     // connect to WiFi if available
-    if (connectToWifi()) {
+    if (WiFi.status() == WL_CONNECTED) { //connectToWifi()) {
         // if connected to wifi, get NTP time and set RTC
         configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
         int ntpRetries = 0;
@@ -334,34 +333,6 @@ bool getNTPTime() {
             return true;
         }
     } else {
-        return false;
-    }
-}
-
-bool connectToWifi() {
-    if (ssid != 0 && password != 0) {
-        Serial.printf("Connecting to %s ", ssid);
-        WiFi.config(WiFi.localIP(), WiFi.gatewayIP(), WiFi.subnetMask(),
-                    IPAddress(8, 8, 8, 8));
-        WiFi.begin(ssid, password);
-        WiFi.enableSTA(true);
-        delay(100);
-
-        int wifiRetries = 0;
-        while (WiFi.status() != WL_CONNECTED) {
-            if (wifiRetries >= 20) {
-                Serial.println("Could not connect to WiFi");
-                return false;
-            } else {
-                wifiRetries++;
-            }
-            delay(500);
-            Serial.print(".");
-        }
-        Serial.println(" CONNECTED");
-        return true;
-    } else {
-        Serial.println("No WiFi credentials set");
         return false;
     }
 }

@@ -199,7 +199,7 @@ bool clockDisplay::load() {
         setDay(_saveAddress[0].day);
         setHour(_saveAddress[0].hour);
         setMinute(_saveAddress[0].minute);
-        setBrightness(_saveAddress[0].brightness);
+        //setBrightness(_saveAddress[0].brightness);
         
         pref.end();
         return true;
@@ -207,7 +207,7 @@ bool clockDisplay::load() {
     else if (isPrefData(_saveAddress) && isRTC()) {
         // rtc doesnt save any time
         pref.begin(_saveAddress, false);
-        setBrightness(pref.getUChar(_saveAddress, _brightness));
+        //setBrightness(pref.getUChar(_saveAddress, _brightness));
         pref.end();
         return true;
     }

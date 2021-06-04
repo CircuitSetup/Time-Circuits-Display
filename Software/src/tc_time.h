@@ -32,6 +32,7 @@
 #include "tc_keypad.h"
 #include "tc_menus.h"
 #include "tc_audio.h"
+#include "tc_wifi.h"
 #include "time.h"
 
 #define SECONDS_IN 15   // SQW Monitor 1Hz from the DS3231
@@ -62,7 +63,6 @@ extern void time_setup();
 extern void time_loop();
 extern void timeTravel();
 extern bool getNTPTime();
-extern bool connectToWifi();
 extern void doGetAutoTimes();
 extern bool checkTimeOut();
 extern void RTCClockOutEnable();
