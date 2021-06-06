@@ -108,7 +108,7 @@ void time_setup() {
         destinationTime.setYear(1985);
         destinationTime.setHour(1);
         destinationTime.setMinute(21);
-        destinationTime.setBrightness((uint8_t)atoi(getBrightness("dest")));
+        destinationTime.setBrightness(15);//(uint8_t)atoi(getBrightness("dest")));
         destinationTime.save();
     }
 
@@ -121,13 +121,13 @@ void time_setup() {
         departedTime.setYear(1985);
         departedTime.setHour(1);
         departedTime.setMinute(20);
-        departedTime.setBrightness((uint8_t)atoi(getBrightness("last")));
+        departedTime.setBrightness(15);//(uint8_t)atoi(getBrightness("last")));
         departedTime.save();
     }
 
     if (!presentTime.load()) {  // Time isn't saved here, but other settings are
         validLoad = false;
-        presentTime.setBrightness((uint8_t)atoi(getBrightness("pres")));
+        presentTime.setBrightness(15);//(uint8_t)atoi(getBrightness("pres")));
         presentTime.save();
     }
 
