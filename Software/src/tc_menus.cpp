@@ -29,12 +29,12 @@ bool isSetUpdate = false;
 
 clockDisplay* displaySet;  // the display being updated during setting
 
-Preferences prefAutoInt; //to save preferences in namespaces
+//Preferences prefAutoInt; //to save preferences in namespaces
 
 void menu_setup() {
     
     //Set up namespace
-    prefAutoInt.begin("autoint_pref", false);
+    //prefAutoInt.begin("autoint_pref", false);
 }
 
 void enter_menu() {
@@ -403,7 +403,7 @@ bool loadAutoInterval() {
     Serial.println("Load Auto Interval");
     // loads the autoInterval
     // first location has autoInterval
-    autoInterval = prefAutoInt.getUChar(AUTOINTERVAL_ADDR);
+    autoInterval = EEPROM.read(AUTOINTERVAL_PREF);//prefAutoInt.getUChar(AUTOINTERVAL_PREF);
     if (autoInterval > 5) {
         autoInterval = 1;  // default to first valid option if invalid read
         Serial.println("BAD AUTO INT");
@@ -415,12 +415,15 @@ bool loadAutoInterval() {
 void saveAutoInterval() {
     Serial.println("Save Auto Interval");
     // saves autoInterval
-    prefAutoInt.putUChar(AUTOINTERVAL_ADDR, autoInterval);
+    //prefAutoInt.putUChar
+    EEPROM.write(AUTOINTERVAL_PREF, autoInterval);
+    EEPROM.commit();
 }
-
+/*
 void putAutoInt(int position) {
-    prefAutoInt.putUChar(AUTOINTERVAL_ADDR, position);
+    prefAutoInt.putUChar(AUTOINTERVAL_PREF, position);
 }
+*/
 
 void autoTimesEnter() {
     Serial.println("Auto Times Button");

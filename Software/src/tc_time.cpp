@@ -33,14 +33,14 @@ RTC_DS3231 rtc; //for RTC IC
 long timetravelNow = 0;
 bool timeTraveled = false;
 
-const char* ntpServer = getNTPServer(); //"pool.ntp.org";
+const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;
 const int daylightOffset_sec = 3600;
 
 // The displays
-clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_EEPROM);  // i2c address, preferences namespace
-clockDisplay presentTime(PRES_TIME_ADDR, PRES_TIME_EEPROM);
-clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_EEPROM);
+clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_PREF);  // i2c address, preferences namespace
+clockDisplay presentTime(PRES_TIME_ADDR, PRES_TIME_PREF);
+clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 
 // Automatic times
 dateStruct destinationTimes[8] = {
@@ -71,6 +71,8 @@ const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 void time_setup() {
     pinMode(SECONDS_IN, INPUT_PULLDOWN);  // for monitoring seconds
     pinMode(STATUS_LED, OUTPUT);  // Status LED
+
+    EEPROM.begin(128);
 
     // RTC setup
     if (!rtc.begin()) {
@@ -108,7 +110,7 @@ void time_setup() {
         destinationTime.setYear(1985);
         destinationTime.setHour(1);
         destinationTime.setMinute(21);
-        destinationTime.setBrightness(15);//(uint8_t)atoi(getBrightness("dest")));
+        destinationTime.setBrightness(15);
         destinationTime.save();
     }
 
@@ -121,20 +123,22 @@ void time_setup() {
         departedTime.setYear(1985);
         departedTime.setHour(1);
         departedTime.setMinute(20);
-        departedTime.setBrightness(15);//(uint8_t)atoi(getBrightness("last")));
+        departedTime.setBrightness(15);
         departedTime.save();
     }
 
     if (!presentTime.load()) {  // Time isn't saved here, but other settings are
         validLoad = false;
-        presentTime.setBrightness(15);//(uint8_t)atoi(getBrightness("pres")));
+        presentTime.setBrightness(15);
         presentTime.save();
     }
 
     if (!loadAutoInterval()) {  // load saved settings
         validLoad = false;
         Serial.println("BAD AUTO INT");
-        putAutoInt(1); // default to first option
+        EEPROM.write(AUTOINTERVAL_PREF, 1);  // default to first option
+        EEPROM.commit();
+        //putAutoInt(1); // default to first option
     }
 
     if (autoTimeIntervals[autoInterval]) {                    // non zero interval, use auto times
@@ -152,7 +156,6 @@ void time_setup() {
 
     Serial.println("Update Present Time - Setup");
     presentTime.setDateTime(rtc.now());                 // Load the time for initial animation show
-    presentTime.setBrightness(15);  // added
     
     delay(3000); //to sync up with startup sound
     animate();

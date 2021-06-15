@@ -21,9 +21,9 @@
 
 #include "clockdisplay.h"
 
-Preferences pref; //to save preferences in namespaces
+//Preferences pref;  //to save preferences in namespaces
 
-clockDisplay::clockDisplay(uint8_t address, const char* saveAddress) {
+clockDisplay::clockDisplay(uint8_t address, /*const char* */ int saveAddress) {
     // Gets the i2c address and eeprom save location, default saveAddress is -1 if not provided to disable saving
     // call begin() to start
     _address = address;
@@ -150,73 +150,163 @@ uint8_t clockDisplay::getBrightness() {
 }
 
 bool clockDisplay::save() {
-    // save date/time to preferences
-
-    uint16_t dates[] = {_year, _month, _day, _hour, _minute, 15/*_brightness*/};
-
-    Serial.printf("%d %d %d %d %d %d\n",
-        dates[0], dates[1], _day, _hour, _minute, _brightness);
+    // save date/time to eeprom
+    uint16_t sum = 0;  //add them up for simple checksum
 
     if (!isRTC() && _saveAddress >= 0) {  // rtc can't save, save address was not set and can't save if negative
-        Serial.println(" Save in Preferences - NOT rtc");
-        pref.begin(_saveAddress, false);
-        pref.putBytes(_saveAddress, dates, sizeof(dates));
-        pref.end();
+        Serial.println("Saving Dates");
+        EEPROM.write(_saveAddress, _year & 0x00FF);
+        sum = sum + _year & 0x00FF;
+
+        EEPROM.write(_saveAddress + 1, (_year >> 8) & 0x00FF);
+        sum = sum + (_year >> 8) & 0x00FF;
+
+        EEPROM.write(_saveAddress + 2, _month);
+        sum = sum + _month;
+
+        EEPROM.write(_saveAddress + 3, _day);
+        sum = sum + _day;
+
+        EEPROM.write(_saveAddress + 4, _hour);
+        sum = sum + _hour;
+
+        EEPROM.write(_saveAddress + 5, _minute);
+        sum = sum + _minute;
+
+        EEPROM.write(_saveAddress + 6, _brightness);
+        sum = sum + _brightness;
+
+        sum = sum & 0x00FF;  // 8 bit checksum
+        EEPROM.write(_saveAddress + 7, sum);
+        EEPROM.commit();
     } else if (isRTC() && _saveAddress >= 0) {
-        Serial.println("Save RTC in Prof");
-        pref.begin(_saveAddress, false);
-        pref.putUChar(_saveAddress, _brightness); //only save brightness
-        pref.end();
+        Serial.println("Saving RTC Brightness");
+        for (uint8_t c = 0; c < 6; c++) {
+            EEPROM.write(_saveAddress + c, 0x00);  // rtc has it's time in the RTC chip
+        }
+
+        EEPROM.write(_saveAddress + 6, _brightness);
+        sum = sum + _brightness;
+
+        sum = sum & 0x00FF;  // 8 bit checksum
+        EEPROM.write(_saveAddress + 7, sum);
+        EEPROM.commit();
     } else {
         return false;
     }
+
     return true;
+    /*
+    // save date/time to preferences
+    if (_saveAddress >= 0) {
+        pref.begin(_saveAddress, false);
+
+        if (!isRTC()) {  // rtc can't save, save address was not set and can't save if negative
+            saveDateStruct dates[] = {_year, _month, _day, _hour, _minute, _brightness};
+            Serial.printf("Saving in Preferences: %d %d %d %d %d %d\n", _year, _month, _day, _hour, _minute, _brightness);
+
+            pref.putBytes("saveDateStruct", &dates, sizeof(dates));
+            return true;
+        } else if (isRTC()) {
+            Serial.printf("Save RTC Brightness in Preferences: ");
+            Serial.println(_brightness);
+
+            pref.putUChar("saveDateStruct", _brightness); //only save brightness
+            return true;
+        } else {
+            return false;
+        }
+        pref.end();
+    }
+    */
 }
 
 bool clockDisplay::load() {
-    // Load saved date/time from preferences
+    // Load saved date/time from eeprom
 
+    uint16_t sum = 0;
+
+    if (_saveAddress >= 0) {
+        for (int c = 0; c <= 6; c++) {
+            sum = sum + EEPROM.read(_saveAddress + c);
+        }
+
+        sum = sum & 0x00FF;  // 8 bit checksum
+
+        if (sum == EEPROM.read(_saveAddress + 7)) {  // saved checksum matches
+            if (!isRTC()) {  // not a rtc, load saved values
+                Serial.println(">>>>>>>>>>>>>>>>>>> LOADING SAVED SETTINGS <<<<<<<<<<<<<<<<<<<");
+                Serial.println(_saveAddress);
+                setYear(EEPROM.read(_saveAddress + 1) << 8 | EEPROM.read(_saveAddress));
+                setMonth(EEPROM.read(_saveAddress + 2));
+                setDay(EEPROM.read(_saveAddress + 3));
+                setHour(EEPROM.read(_saveAddress + 4));
+                setMinute(EEPROM.read(_saveAddress + 5));
+                setBrightness(EEPROM.read(_saveAddress + 6));
+                return true;
+            } else if (isRTC()) {
+                // rtc doesnt save any time
+                setBrightness(EEPROM.read(_saveAddress + 6));
+            }
+
+        } else {
+            //  Serial.println("Invalid!");
+            return false;
+        }
+
+    } else {
+        return false;  // a valid eeprom address is not set, can't load anything or is RTC
+    }
+
+    return true;
+    /*
+    // Load saved date/time from preferences
     Serial.println(">>>>>>>>>>>>>>>>>>> LOADING SAVED SETTINGS <<<<<<<<<<<<<<<<<<<");
     Serial.println(_saveAddress);
-    if (isPrefData(_saveAddress) && !isRTC()) {                          // not a rtc, load saved values
-        pref.begin(_saveAddress, false);
+    pref.begin(_saveAddress, true);
 
-        //pref.clear(); //clears all data
+    pref.clear();  //clears all data
 
-        size_t dateSize = pref.getBytesLength(_saveAddress);
-        char buffer[dateSize]; // prepare a buffer for the data
+    if (isPrefData("saveDateStruct") && !isRTC()) {  // not rtc, load saved values
 
-        pref.getBytes(_saveAddress, buffer, dateSize);
-        saveDateStruct *_saveAddress = (saveDateStruct *) buffer; // cast the bytes into a struct ptr
+        size_t dateSize = pref.getBytesLength("saveDateStruct");
+        char buffer[dateSize];  // prepare a buffer for the data
 
-        Serial.printf("%d %d %d %d %d %d\n", 
-            _saveAddress[0].year, _saveAddress[0].month,
-            _saveAddress[0].day, _saveAddress[0].hour,
-            _saveAddress[0].minute, _saveAddress[0].brightness);
-        
+        pref.getBytes("saveDateStruct", buffer, dateSize);
+
+        if (dateSize % sizeof(saveDateStruct)) {  // simple check that data fits
+            Serial.printf("dateSize: %d saveDateStruct: %d\n", dateSize, sizeof(saveDateStruct));
+            Serial.println("Data is not the correct size!");
+            return false;
+        }
+        saveDateStruct* _saveAddress = (saveDateStruct*)buffer;  // cast the bytes into a struct ptr
+
+        Serial.printf("Loading: %d/%d/%d %02d:%02d %d\n",
+                      _saveAddress[0].month, _saveAddress[0].day, _saveAddress[0].year,
+                      _saveAddress[0].hour, _saveAddress[0].minute, _saveAddress[0].brightness);
+
         setYear(_saveAddress[0].year);
         setMonth(_saveAddress[0].month);
         setDay(_saveAddress[0].day);
         setHour(_saveAddress[0].hour);
         setMinute(_saveAddress[0].minute);
-        //setBrightness(_saveAddress[0].brightness);
-        
-        pref.end();
+        setBrightness(_saveAddress[0].brightness);
+
+        buffer[0] = '\0';
+        dateSize = 0;
+
         return true;
-    }
-    else if (isPrefData(_saveAddress) && isRTC()) {
-        // rtc doesnt save any time
-        pref.begin(_saveAddress, false);
-        //setBrightness(pref.getUChar(_saveAddress, _brightness));
-        pref.end();
+    } else if (isPrefData("saveDateStruct") && isRTC()) {
+        // rtc doesnt save time
+        setBrightness(pref.getUChar("saveDateStruct"));
         return true;
-    }
-    else {
+    } else {
         return false;
     }
-return true;
+    pref.end();
+    */
 }
-
+/*
 bool clockDisplay::resetClocks() {
     // removes all data from preferences
     if (pref.remove(_saveAddress)) {
@@ -226,14 +316,19 @@ bool clockDisplay::resetClocks() {
     }
 }
 
-bool clockDisplay::isPrefData(const char* address) {
+bool clockDisplay::isPrefData(const char* key) {
     //is there data stored in Preferences?
-    if (pref.getBytesLength(address) > 0) {
+    if (pref.getBytesLength(key) > 0) {
+        Serial.printf("Bytes Length: ");
+        Serial.println(pref.getBytesLength(key));
+        Serial.println("There is Pref data...");
         return true;
     } else {
+        Serial.println("There is NOT Pref data...");
         return false;
     }
 }
+*/
 
 void clockDisplay::show() {
     // Show the buffer
@@ -304,9 +399,9 @@ void clockDisplay::showAnimate2() {
 void clockDisplay::setMonth(int monthNum) {
     // Makes characters for 3 char month, valid months 1-12
     if (monthNum < 13) {
-        _month = monthNum;         // keep track
+        _month = monthNum;  // keep track
     } else {
-        _month = 12; // set month to the max otherwise month isn't displayed at all
+        _month = 12;  // set month to the max otherwise month isn't displayed at all
         monthNum = 12;
     }
     if (!isRTC()) monthNum--;  //array starts at 0
@@ -360,7 +455,7 @@ void clockDisplay::setMinute(int minNum) {
     //Serial.println("Setting min");
     _minute = minNum;
 
-    if (minNum < 60 ) {
+    if (minNum < 60) {
         _displayBuffer[7] = makeNum(minNum);
     } else if (minNum >= 60) {
         _displayBuffer[7] = makeNum(0);
@@ -567,6 +662,7 @@ uint8_t clockDisplay::getHour() {
 uint8_t clockDisplay::getMinute() {
     return _minute;
 }
+
 void clockDisplay::setColon(bool col) {
     // set true to turn it on
     _colon = col;

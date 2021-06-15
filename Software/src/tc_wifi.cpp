@@ -25,6 +25,7 @@ WiFiManagerParameter dest_time_bright("dt_bright", "Destination Time Brightness"
 WiFiManagerParameter pres_time_bright("pt_bright", "Present Time Brightness", "", 15);
 WiFiManagerParameter last_time_bright("lt_bright", "Last Time Departed Brightness", "", 15);
 
+bool shouldSaveParams = false;
 
 void wifi_setup() {
     WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
@@ -73,6 +74,7 @@ void saveParamsCallback() {
     Serial.print(beep_sound.getID());
     Serial.print(" : ");
     Serial.println(beep_sound.getValue());
+    shouldSaveParams = true;
 }
 
 String getParam(String name){
@@ -82,14 +84,4 @@ String getParam(String name){
     value = wm.server->arg(name);
   }
   return value;
-}
-
-const char* getNTPServer() {
-    return ntp_server.getValue();
-}
-
-const char* getBrightness(const char* display) {
-    if (display == "dest") return dest_time_bright.getValue();
-    if (display == "pres") return pres_time_bright.getValue();
-    if (display == "last") return last_time_bright.getValue();
 }

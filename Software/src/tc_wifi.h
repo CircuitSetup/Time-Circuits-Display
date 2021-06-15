@@ -20,14 +20,16 @@
 #define _TC_WIFI_H
 
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
+#include <clockdisplay.h>
+#include <tc_menus.h>
 
 extern void wifi_setup();
 extern void wifi_loop();
 
 void saveParamsCallback();
 
-extern const char* getNTPServer();
-extern const char* getBrightness(const char* display);
+char* getBrightnessChar(clockDisplay* displaySet);
+
 extern String getParam(String name);
 
 #endif

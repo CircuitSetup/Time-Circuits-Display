@@ -39,13 +39,13 @@
 #define STATUS_LED 2  // Status LED
 
 #define DEST_TIME_ADDR 0x71
-#define DEST_TIME_EEPROM "dest_time_pref" 
+#define DEST_TIME_PREF 0x10//"dest_time_pref" 
 #define PRES_TIME_ADDR 0x72
-#define PRES_TIME_EEPROM "pres_time_pref" 
+#define PRES_TIME_PREF 0x18//"pres_time_pref" 
 #define DEPT_TIME_ADDR 0x74
-#define DEPT_TIME_EEPROM "dept_time_pref" 
+#define DEPT_TIME_PREF 0x20//"dept_time_pref" 
 
-#define AUTOINTERVAL_ADDR "autoint_pref" // autoInterval save location
+#define AUTOINTERVAL_PREF 0x00 //"autoint_pref" // autoInterval save location
 extern uint8_t autoInterval;
 extern const uint8_t autoTimeIntervals[5];
 
