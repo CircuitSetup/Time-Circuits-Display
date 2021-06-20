@@ -22,6 +22,7 @@
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <clockdisplay.h>
 #include <tc_menus.h>
+#include <tc_time.h>
 
 extern void wifi_setup();
 extern void wifi_loop();

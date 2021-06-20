@@ -26,7 +26,8 @@
 #include <RTClib.h>
 #include <WiFi.h>
 #include <Wire.h>
-#include <Preferences.h>
+//#include <Preferences.h>
+#include <EEPROM.h>
 
 #include "clockdisplay.h"
 #include "tc_keypad.h"
@@ -44,6 +45,8 @@
 #define PRES_TIME_PREF 0x18//"pres_time_pref" 
 #define DEPT_TIME_ADDR 0x74
 #define DEPT_TIME_PREF 0x20//"dept_time_pref" 
+
+#define NTP_SETTINGS_PREF 0x28
 
 #define AUTOINTERVAL_PREF 0x00 //"autoint_pref" // autoInterval save location
 extern uint8_t autoInterval;
@@ -68,5 +71,8 @@ extern bool checkTimeOut();
 extern void RTCClockOutEnable();
 extern bool isLeapYear(int year);
 extern int daysInMonth(int month, int year);
+
+extern void saveNTPSettings(const char* ntpServer, const long gmtOffset_sec, const int daylightOffset_sec);
+extern char * getSettings(int start, int count);
 
 #endif

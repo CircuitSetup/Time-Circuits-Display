@@ -24,11 +24,11 @@
 bool autoTrack = false;
 int8_t minPrev;  // track previous minute
 
-bool x;               // for tracking second change
-bool y;               // for tracking second change
+bool x;  // for tracking second change
+bool y;  // for tracking second change
 
-struct tm _timeinfo; //for NTP
-RTC_DS3231 rtc; //for RTC IC
+struct tm _timeinfo;  //for NTP
+RTC_DS3231 rtc;       //for RTC IC
 
 long timetravelNow = 0;
 bool timeTraveled = false;
@@ -70,15 +70,16 @@ const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 void time_setup() {
     pinMode(SECONDS_IN, INPUT_PULLDOWN);  // for monitoring seconds
-    pinMode(STATUS_LED, OUTPUT);  // Status LED
+    pinMode(STATUS_LED, OUTPUT);          // Status LED
 
-    EEPROM.begin(128);
+    EEPROM.begin(512);
 
     // RTC setup
     if (!rtc.begin()) {
         //something went wrong with RTC IC
         Serial.println("Couldn't find RTC");
-        while (1);
+        while (1)
+            ;
     }
 
     if (rtc.lostPower() && WiFi.status() != WL_CONNECTED) {
@@ -100,7 +101,7 @@ void time_setup() {
     if (getNTPTime()) {
         //set RTC with NTP time
     }
-     
+
     if (!destinationTime.load()) {
         validLoad = false;
         // Set valid time and set if invalid load
@@ -155,14 +156,24 @@ void time_setup() {
     }
 
     Serial.println("Update Present Time - Setup");
-    presentTime.setDateTime(rtc.now());                 // Load the time for initial animation show
-    
-    delay(3000); //to sync up with startup sound
+    presentTime.setDateTime(rtc.now());  // Load the time for initial animation show
+
+    if (NTP_SETTINGS_PREF >= 0) {
+        if (EEPROM.readChar(NTP_SETTINGS_PREF) > 0) {  //
+            //there's something already there - don't need to write anything
+            Serial.println(EEPROM.readChar(NTP_SETTINGS_PREF));
+        } else {
+            // nothing is there, write the NTP address to memory
+            saveNTPSettings(ntpServer, gmtOffset_sec, daylightOffset_sec);
+        }
+    }
+
+    delay(3000);  //to sync up with startup sound
     animate();
 }
 
 void time_loop() {
-// time display update
+    // time display update
     DateTime dt = rtc.now();
 
     // turns display back on after time traveling
@@ -172,8 +183,8 @@ void time_loop() {
         animate();
     }
 
-    if (presentTime.isRTC()) { //only set real time if present time is RTC
-        presentTime.setDateTime(dt);  
+    if (presentTime.isRTC()) {  //only set real time if present time is RTC
+        presentTime.setDateTime(dt);
     }
 
     y = digitalRead(SECONDS_IN);
@@ -217,10 +228,10 @@ void time_loop() {
 
                     // Blank on second 59, display when new minute begins
                     while (digitalRead(SECONDS_IN) == 0) {  // wait for the complete of this half second
-                                 // Wait for this half second to end
+                                                            // Wait for this half second to end
                     }
                     while (digitalRead(SECONDS_IN) == 1) {  // second on next low
-                                                          // Wait for the other half to end
+                                                            // Wait for the other half to end
                     }
 
                     Serial.println("Update Present Time 2");
@@ -228,7 +239,7 @@ void time_loop() {
                         dt = rtc.now();               // New time by now
                         presentTime.setDateTime(dt);  // will be at next minute
                     }
-                    animate();                    // show all with month showing last
+                    animate();  // show all with month showing last
 
                     // end auto times
                 }
@@ -250,8 +261,8 @@ void time_loop() {
         }  // colon
 
         digitalWrite(STATUS_LED, !y);  // built-in LED shows system is alive, invert
-                                      // to light on start of new second
-        x = y;                        // remember it
+                                       // to light on start of new second
+        x = y;                         // remember it
     }
 
     presentTime.show();  // update display with object's time
@@ -284,7 +295,7 @@ void timeTravel() {
     //copy destination time to present time
     //DateTime does not work before 2000
     if (destinationTime.getYear() < 2000) {
-        if (presentTime.isRTC()) presentTime.setRTC(false); //presentTime is no longer 'actual' time
+        if (presentTime.isRTC()) presentTime.setRTC(false);  //presentTime is no longer 'actual' time
         presentTime.setMonth(destinationTime.getMonth());
         presentTime.setDay(destinationTime.getDay());
         presentTime.setYear(destinationTime.getYear());
@@ -297,11 +308,10 @@ void timeTravel() {
         if (!presentTime.isRTC()) presentTime.setRTC(true);
         rtc.adjust(DateTime(
             destinationTime.getYear(),
-            destinationTime.getMonth() - 1, 
-            destinationTime.getDay(), 
+            destinationTime.getMonth() - 1,
+            destinationTime.getDay(),
             destinationTime.getHour(),
-            destinationTime.getMinute()
-        ));
+            destinationTime.getMinute()));
     } else {
         if (getNTPTime()) {
             //if nothing or the same exact date try to get NTP time again
@@ -311,13 +321,13 @@ void timeTravel() {
 
 bool getNTPTime() {
     // connect to WiFi if available
-    if (WiFi.status() == WL_CONNECTED) { //connectToWifi()) {
+    if (WiFi.status() == WL_CONNECTED) {  //connectToWifi()) {
         // if connected to wifi, get NTP time and set RTC
         configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
         int ntpRetries = 0;
         if (!getLocalTime(&_timeinfo)) {
             while (!getLocalTime(&_timeinfo)) {
-                if (ntpRetries >= 5) { //retry up to 5 times then quit
+                if (ntpRetries >= 5) {  //retry up to 5 times then quit
                     Serial.println("Couldn't get NTP time");
                     return false;
                 } else {
@@ -327,11 +337,11 @@ bool getNTPTime() {
             }
         } else {
             Serial.println(&_timeinfo, "%A, %B %d %Y %H:%M:%S");
-            byte byteYear = (_timeinfo.tm_year + 1900) % 100;   // adding to get full YYYY from NTP year format
-                                                                // and keeping YY to set DS3232
+            byte byteYear = (_timeinfo.tm_year + 1900) % 100;  // adding to get full YYYY from NTP year format
+                                                               // and keeping YY to set DS3232
             presentTime.setDS3232time(_timeinfo.tm_sec, _timeinfo.tm_min,
-                                        _timeinfo.tm_hour, 0, _timeinfo.tm_mday,
-                                        _timeinfo.tm_mon, byteYear);
+                                      _timeinfo.tm_hour, 0, _timeinfo.tm_mday,
+                                      _timeinfo.tm_mon, byteYear);
             Serial.println("Time Set with NTP");
             return true;
         }
@@ -428,3 +438,26 @@ int daysInMonth(int month, int year) {
     }
     return monthDays[month - 1];
 }  // daysInMonth
+
+void saveNTPSettings(const char* ntpServer, const long gmtOffset_sec, const int daylightOffset_sec) {
+    EEPROM.writeString(NTP_SETTINGS_PREF, ntpServer);
+    EEPROM.write(NTP_SETTINGS_PREF + 32, gmtOffset_sec);
+    EEPROM.write(NTP_SETTINGS_PREF + 38, daylightOffset_sec);
+    EEPROM.commit();
+}
+
+char* getSettings(int start, int count) {
+    char* settingsVal;
+    if (EEPROM.readChar(start) > 0) {  //only read if there is data available
+        for (int i = 0; i < count; ++i) {
+            byte c = EEPROM.read(start + i);
+            if (c != 0 && c != 255)
+                settingsVal += (char)c;
+        }
+
+        Serial.println(settingsVal);
+        return settingsVal;
+    } else {
+        return 0;
+    }
+}
