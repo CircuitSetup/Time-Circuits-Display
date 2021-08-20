@@ -27,6 +27,11 @@ int8_t minPrev;  // track previous minute
 bool x;  // for tracking second change
 bool y;  // for tracking second change
 
+bool startup = false;
+bool startupSound = false;
+long startupNow = 0;
+int startupDelay = 4000; //the time between startup sound being played and the display coming on
+
 struct tm _timeinfo;  //for NTP
 RTC_DS3231 rtc;       //for RTC IC
 
@@ -168,11 +173,24 @@ void time_setup() {
         }
     }
 
-    delay(3000);  //to sync up with startup sound
-    animate();
+    startup = true;
+    startupSound = true;
 }
 
 void time_loop() {
+    if (startupSound) {
+        play_startup();
+        startupSound = false;
+    }
+    if (startup) {
+        startupNow = millis();
+        if(millis() >= startupNow + startupDelay) {
+            startupNow += startupDelay;
+            animate();
+            startup = false;
+        }
+    }
+
     // time display update
     DateTime dt = rtc.now();
 

@@ -57,7 +57,9 @@ void audio_setup() {
     out->SetOutputModeMono(true);
     out->SetPinout(I2S_BCLK, I2S_LRCLK, I2S_DIN);
     mixer = new AudioOutputMixer(8, out);
+}
 
+void play_startup() {
     play_file("/startup.mp3", getVolume(), 0, true);
 }
 

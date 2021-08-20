@@ -44,7 +44,6 @@ void setup() {
 
     menu_setup();
     keypad_setup();
-    delay(4000);
     time_setup();
 }
 
@@ -58,6 +57,7 @@ void loop() {
     audio_loop();
 }
 
+//for testing I2C connections and addresses
 void scan() {
     Serial.println(" Scanning I2C Addresses");
     uint8_t cnt = 0;
