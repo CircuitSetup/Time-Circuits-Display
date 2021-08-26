@@ -30,7 +30,7 @@ bool y;  // for tracking second change
 bool startup = false;
 bool startupSound = false;
 long startupNow = 0;
-int startupDelay = 4000; //the time between startup sound being played and the display coming on
+int startupDelay = 4500; //the time between startup sound being played and the display coming on
 
 struct tm _timeinfo;  //for NTP
 RTC_DS3231 rtc;       //for RTC IC
@@ -90,6 +90,7 @@ void time_setup() {
     if (rtc.lostPower() && WiFi.status() != WL_CONNECTED) {
         // Lost power and battery didn't keep time, so set current time to compile time
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+        Serial.println("RTC Lost Power - set compile time");
     }
 
     RTCClockOutEnable();  // Turn on the 1Hz second output
@@ -105,6 +106,7 @@ void time_setup() {
 
     if (getNTPTime()) {
         //set RTC with NTP time
+        Serial.println("RTC Set with NTP");
     }
 
     if (!destinationTime.load()) {
@@ -150,6 +152,7 @@ void time_setup() {
     if (autoTimeIntervals[autoInterval]) {                    // non zero interval, use auto times
         destinationTime.setFromStruct(&destinationTimes[0]);  // load the first one
         departedTime.setFromStruct(&departedTimes[0]);
+        Serial.println("SetFromStruct");
     }
 
     if (!validLoad) {
@@ -166,6 +169,7 @@ void time_setup() {
     if (NTP_SETTINGS_PREF >= 0) {
         if (EEPROM.readChar(NTP_SETTINGS_PREF) > 0) {  //
             //there's something already there - don't need to write anything
+            Serial.println("NTP Settings: ");
             Serial.println(EEPROM.readChar(NTP_SETTINGS_PREF));
         } else {
             // nothing is there, write the NTP address to memory
@@ -182,13 +186,12 @@ void time_loop() {
         play_startup();
         startupSound = false;
     }
-    if (startup) {
-        startupNow = millis();
-        if(millis() >= startupNow + startupDelay) {
-            startupNow += startupDelay;
-            animate();
-            startup = false;
-        }
+
+    if(startup && (millis() >= (startupNow + startupDelay))) {
+        startupNow += startupDelay;
+        animate();
+        startup = false;
+        Serial.println("Startup animate triggered");
     }
 
     // time display update
@@ -199,6 +202,7 @@ void time_loop() {
         timeTraveled = false;
         beepOn = true;
         animate();
+        Serial.println("Display on after time travel");
     }
 
     if (presentTime.isRTC()) {  //only set real time if present time is RTC
@@ -283,11 +287,13 @@ void time_loop() {
         x = y;                         // remember it
     }
 
-    presentTime.show();  // update display with object's time
-    destinationTime.show();
-    // destinationTime.showOnlySettingVal("SEC", dt.second(), true); // display
-    // end, no numbers, clear rest of screen
-    departedTime.show();
+    if (startup == false) {
+        presentTime.show();  // update display with object's time
+        destinationTime.show();
+        // destinationTime.showOnlySettingVal("SEC", dt.second(), true); // display
+        // end, no numbers, clear rest of screen
+        departedTime.show();
+    }
 }
 
 void timeTravel() {
