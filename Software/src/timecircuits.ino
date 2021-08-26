@@ -30,7 +30,7 @@
 ///////////////////////////////////////////////////////
 void setup() {
     Serial.begin(115200);
-    delay(1000);  // wait for console opening
+    //delay(1000);  // wait for console opening
 
     Wire.begin();
     //scan();

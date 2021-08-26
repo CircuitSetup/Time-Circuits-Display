@@ -30,7 +30,7 @@ bool y;  // for tracking second change
 bool startup = false;
 bool startupSound = false;
 long startupNow = 0;
-int startupDelay = 4500; //the time between startup sound being played and the display coming on
+int startupDelay = 1700; //the time between startup sound being played and the display coming on
 
 struct tm _timeinfo;  //for NTP
 RTC_DS3231 rtc;       //for RTC IC

@@ -44,13 +44,15 @@ void audio_setup() {
     // set up SD card
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     SPI.setFrequency(1000000);
-    delay(1000);
+    //delay(1000);
+    /*
     if (!SD.begin(SD_CS)) {
         Serial.println("Error talking to SD card!");
     } else {
         Serial.println("SD card initialized");
     }
-
+    */
+   
     SPIFFS.begin();
 
     audioLogger = &Serial;
