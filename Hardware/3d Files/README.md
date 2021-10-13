@@ -7,3 +7,22 @@
 - _last_time_bottom.stl_ and _present_dest_enclosure.stl_ should be printed face down. You will need 2 of present_dest_enclosure.stl since Destination Time and Present Time are the same. Neither should need supports.
 - _display_faceplate.stl_ should be printed face down so the face is as smooth as possible. You will need 3 of these.
 - 3mf files are the same as the stl files, but contain more detailed data
+
+# Revision History
+### V2
+#### Keypad:
+- updated to more closely match TRW keypad
+- moved side buttons and keypad down slightly
+- moved the slope of the top and bottom down, so the top is more flat when compared to the bottom
+- flattened the 'clear' lettering a bit
+- removed lip on the inside of the lens/button cutout
+- lens holder: made lens holes larger, body slimmer, and easier to snap into body
+
+#### Outer Enclosure:
+- Increased rear opening from about 9.75 to 10.25" (width of a Delorean upper center console)
+- depth increased a tiny bit - left side 3", right side 4"
+- Height increased from 4.5" to 5"
+- Angles on left and right side going front to back are now about even
+- Bends on sides moved forward a bit
+- Rounded the corner on the lower left side
+- Notch for keypad on left side, and reformed in the front
