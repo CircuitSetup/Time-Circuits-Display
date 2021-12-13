@@ -18,49 +18,66 @@
 
 #include "tc_wifi.h"
 
+Settings settings;
+
 WiFiManager wm;
-WiFiManagerParameter beepSound;
-WiFiManagerParameter ntpServerN("ntp_server", "NTP Time Server", "pool.ntp.org", 32);
-WiFiManagerParameter gmtOffset("gmt_offset", "GMT Offset (seconds)", "-18000", 6);
-WiFiManagerParameter daylightOffset("daylight_offset", "Daylight Savings Offset (seconds)", "3600", 6);
-WiFiManagerParameter destTimeBright("dt_bright", "Destination Time Brightness", "15", 15);
-WiFiManagerParameter presTimeBright("pt_bright", "Present Time Brightness", "15", 15);
-WiFiManagerParameter lastTimeBright("lt_bright", "Last Time Departed Brightness", "15", 15);
 
-bool shouldSaveParams = false;
+WiFiManagerParameter custom_ntpServer("ntp_server", "NTP Time Server (i.e. pool.ntp.org)", settings.ntpServer, 32);
+WiFiManagerParameter custom_gmtOffset("gmt_offset", "GMT Offset (seconds - 1hr=3600)", settings.gmtOffset, 7);
+WiFiManagerParameter custom_daylightOffset("daylight_offset", "Daylight Savings Offset (seconds)", settings.daylightOffset, 7);
+WiFiManagerParameter custom_autoRotateTimes("rotate_times", "Auto Rotate Times (0=off, 1-5 = 5-60min)",settings.autoRotateTimes, 3);
+WiFiManagerParameter custom_destTimeBright("dt_bright", "Destination Time Brightness (1-15)", settings.destTimeBright, 3);
+WiFiManagerParameter custom_presTimeBright("pt_bright", "Present Time Brightness (1-15)", settings.presTimeBright, 3);
+WiFiManagerParameter custom_lastTimeBright("lt_bright", "Last Time Departed Brightness (1-15)", settings.lastTimeBright, 3);
+WiFiManagerParameter custom_beepSound;
 
-char* ntpServerVal;
-char* gmtOffsetVal;
-char* daylightOffsetVal;
+bool shouldSaveConfig = false;
 
 void wifi_setup() {
+
     WiFi.mode(WIFI_STA);  // explicitly set mode, esp defaults to STA+AP
 
     wm.setCountry("US");
     wm.setParamsPage(true);
+    wm.setBreakAfterConfig(true);
+    wm.setConfigPortalBlocking(false);
+    wm.setSaveConfigCallback(saveConfigCallback);
+    wm.setSaveParamsCallback(saveParamsCallback);
+    wm.setHostname("TCD-Settings");
 
-    const char* beep_sound_radio_str =
-        "<p>Beep Sound</p>"
-        "<input style='width: auto; margin: 0 10px 10px 10px;' type='radio' id='bs_yes' name='beep_sound' value='2'>"
+/*
+    const char* beepSound_radio_str =
+        "<p>Seconds Beep Sound (not yet implemented)</p>"
+        "<input style='width: auto; margin: 0 10px 10px 10px;' type='radio' id='bs_yes' name='beepSound' value='1'>"
         "<label for='bs_yes'>Yes</label><br>"
-        "<input style='width: auto; margin: 0 10px 10px 10px;' type='radio' id='bs_no' name='beep_sound' value='1' checked>"
+        "<input style='width: auto; margin: 0 10px 10px 10px;' type='radio' id='bs_no' name='beepSound' value='0' checked>"
         "<label for='bs_no'>No</label><br><br>";
-    new (&beepSound) WiFiManagerParameter(beep_sound_radio_str);
+    new (&custom_beepSound) WiFiManagerParameter(beepSound_radio_str);
+*/
 
     std::vector<const char*> menu = {"wifi", "info", "param", "sep", "restart", "exit", "update"};
     wm.setMenu(menu);
 
     //reset settings - wipe credentials for testing
     //wm.resetSettings();
-    wm.addParameter(&beepSound);
-    wm.addParameter(&ntpServerN);
-    wm.addParameter(&gmtOffset);
-    wm.addParameter(&daylightOffset);
-    wm.addParameter(&destTimeBright);
-    wm.addParameter(&presTimeBright);
-    wm.addParameter(&lastTimeBright);
-    wm.setConfigPortalBlocking(false);
-    wm.setSaveParamsCallback(saveParamsCallback);
+    wm.addParameter(&custom_ntpServer);
+    wm.addParameter(&custom_gmtOffset);
+    wm.addParameter(&custom_daylightOffset);
+    wm.addParameter(&custom_autoRotateTimes);
+    wm.addParameter(&custom_destTimeBright);
+    wm.addParameter(&custom_presTimeBright);
+    wm.addParameter(&custom_lastTimeBright);
+    wm.addParameter(&custom_beepSound);
+
+    //make sure the settings form has the correct values
+    custom_ntpServer.setValue(settings.ntpServer, 32);
+    custom_gmtOffset.setValue(settings.gmtOffset, 7);
+    custom_daylightOffset.setValue(settings.daylightOffset, 7);
+    custom_autoRotateTimes.setValue(settings.autoRotateTimes, 3);
+    custom_destTimeBright.setValue(settings.destTimeBright, 3);
+    custom_presTimeBright.setValue(settings.presTimeBright, 3);
+    custom_lastTimeBright.setValue(settings.lastTimeBright, 3);
+    custom_beepSound.setValue(settings.beepSound, 3);
 
     //automatically connect using saved credentials if they exist
     //If connection fails it starts an access point with the specified name
@@ -70,43 +87,55 @@ void wifi_setup() {
     } else {
         Serial.println("Config portal running");
     }
-
-    //put NTP settings into local variables
-    //strcpy(ntpServerVal, getSettings(NTP_SETTINGS_PREF, 32));
-    //strcpy(gmtOffsetVal, getSettings(NTP_SETTINGS_PREF + 32, 6));
-    //strcpy(daylightOffsetVal, getSettings(NTP_SETTINGS_PREF + 38, 6));
-
-    //strcpy((char*)ntpServerVal, ntpServerN.getValue());
-    //strcpy((char*)gmtOffsetVal, gmtOffset.getValue());
-    //strcpy((char*)daylightOffsetVal, daylightOffset.getValue());
-    /*
-    ntpServerN.getValue() = ntpServerVal;
-    (char*)gmtOffsetVal = gmtOffset.getValue();
-    (char*)daylightOffsetVal = daylightOffset.getValue();
-*/
-    if (shouldSaveParams) {
-        saveNTPSettings((char*)ntpServerVal, (long)gmtOffsetVal, (int)daylightOffsetVal);
-    }
 }
 
 void wifi_loop() {
     wm.process();
-    // put your main code here, to run repeatedly:
+    
+    if (shouldSaveConfig) {
+        //save settings to config.json file and restart esp32
+        Serial.println("saving config");
+        StaticJsonDocument<1024> json;
+
+        json["ntpServer"] = custom_ntpServer.getValue();
+        json["gmtOffset"] = custom_gmtOffset.getValue();
+        json["daylightOffset"] = custom_daylightOffset.getValue();
+        json["autoRotateTimes"] = custom_autoRotateTimes.getValue();
+        json["destTimeBright"] = custom_destTimeBright.getValue();
+        json["presTimeBright"] = custom_presTimeBright.getValue();
+        json["lastTimeBright"] = custom_lastTimeBright.getValue();
+        json["beepSound"] = getParam("custom_beepSound");
+
+        File configFile = SPIFFS.open("/config.json", "w");
+
+        serializeJson(json, Serial);
+        serializeJson(json, configFile);
+
+        configFile.close();
+
+        shouldSaveConfig = false;
+
+        //reset esp32 to load new settings
+        esp_restart();
+    }
+}
+
+void saveConfigCallback() {
+    Serial.println("Should save config");
+    shouldSaveConfig = true;
 }
 
 void saveParamsCallback() {
-    Serial.println("Get Params:");
-    Serial.print(beepSound.getID());
-    Serial.print(" : ");
-    Serial.println(beepSound.getValue());
-    shouldSaveParams = true;
+    Serial.println("Should save params config");
+    shouldSaveConfig = true;
+    wm.stopConfigPortal();
 }
 
-String getParam(String name) {
-    //read parameter from
-    String value;
-    if (wm.server->hasArg(name)) {
-        value = wm.server->arg(name);
-    }
-    return value;
+String getParam(String name){
+  //read parameter from server, for customhmtl input
+  String value;
+  if(wm.server->hasArg(name)) {
+    value = wm.server->arg(name);
+  }
+  return value;
 }

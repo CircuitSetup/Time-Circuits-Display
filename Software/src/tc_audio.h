@@ -29,6 +29,8 @@
 #include <AudioFileSourceSD.h>
 #include <AudioGeneratorMP3.h>
 #include <AudioOutputMixer.h>
+//#include <AudioFileSourceFunction.h>
+//#include <AudioGeneratorWAV.h>
 
 #include <FS.h>
 #include <SD.h>
@@ -55,6 +57,7 @@ extern void play_keypad_sound(char key);
 extern void play_startup();
 extern void audio_loop();
 extern void play_file(const char *audio_file, double volume = 0.1, int channel = 0, bool firstStart = false);
+//extern void play_DTMF(float hz1, float hz2, double volume = 0.1);
 extern double getVolume();
 extern bool beepOn;
 

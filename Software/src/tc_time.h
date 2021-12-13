@@ -26,7 +26,6 @@
 #include <RTClib.h>
 #include <WiFi.h>
 #include <Wire.h>
-//#include <Preferences.h>
 #include <EEPROM.h>
 
 #include "clockdisplay.h"
@@ -35,20 +34,20 @@
 #include "tc_audio.h"
 #include "tc_wifi.h"
 #include "time.h"
+#include "tc_settings.h"
 
 #define SECONDS_IN 15   // SQW Monitor 1Hz from the DS3231
 #define STATUS_LED 2  // Status LED
 
 #define DEST_TIME_ADDR 0x71
-#define DEST_TIME_PREF 0x10//"dest_time_pref" 
+#define DEST_TIME_PREF 0x10 
 #define PRES_TIME_ADDR 0x72
-#define PRES_TIME_PREF 0x18//"pres_time_pref" 
+#define PRES_TIME_PREF 0x18
 #define DEPT_TIME_ADDR 0x74
-#define DEPT_TIME_PREF 0x20//"dept_time_pref" 
+#define DEPT_TIME_PREF 0x20 
 
-#define NTP_SETTINGS_PREF 0x28
+#define AUTOINTERVAL_PREF 0x00 // autoInterval save location
 
-#define AUTOINTERVAL_PREF 0x00 //"autoint_pref" // autoInterval save location
 extern uint8_t autoInterval;
 extern const uint8_t autoTimeIntervals[5];
 
@@ -71,8 +70,5 @@ extern bool checkTimeOut();
 extern void RTCClockOutEnable();
 extern bool isLeapYear(int year);
 extern int daysInMonth(int month, int year);
-
-extern void saveNTPSettings(const char* ntpServer, const long gmtOffset_sec, const int daylightOffset_sec);
-extern char * getSettings(int start, int count);
 
 #endif

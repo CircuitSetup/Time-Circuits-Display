@@ -38,12 +38,8 @@ RTC_DS3231 rtc;       //for RTC IC
 long timetravelNow = 0;
 bool timeTraveled = false;
 
-const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = -18000;
-const int daylightOffset_sec = 3600;
-
 // The displays
-clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_PREF);  // i2c address, preferences namespace
+clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_PREF);
 clockDisplay presentTime(PRES_TIME_ADDR, PRES_TIME_PREF);
 clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 
@@ -78,7 +74,7 @@ void time_setup() {
     pinMode(STATUS_LED, OUTPUT);          // Status LED
 
     EEPROM.begin(512);
-
+    
     // RTC setup
     if (!rtc.begin()) {
         //something went wrong with RTC IC
@@ -106,7 +102,8 @@ void time_setup() {
 
     if (getNTPTime()) {
         //set RTC with NTP time
-        Serial.println("RTC Set with NTP");
+        Serial.print("RTC Set with NTP: ");
+        Serial.println(settings.ntpServer);
     }
 
     if (!destinationTime.load()) {
@@ -118,7 +115,7 @@ void time_setup() {
         destinationTime.setYear(1985);
         destinationTime.setHour(1);
         destinationTime.setMinute(21);
-        destinationTime.setBrightness(15);
+        destinationTime.setBrightness((int)atoi(settings.destTimeBright));
         destinationTime.save();
     }
 
@@ -131,13 +128,13 @@ void time_setup() {
         departedTime.setYear(1985);
         departedTime.setHour(1);
         departedTime.setMinute(20);
-        departedTime.setBrightness(15);
+        departedTime.setBrightness((int)atoi(settings.lastTimeBright));
         departedTime.save();
     }
 
     if (!presentTime.load()) {  // Time isn't saved here, but other settings are
         validLoad = false;
-        presentTime.setBrightness(15);
+        presentTime.setBrightness((int)atoi(settings.presTimeBright));
         presentTime.save();
     }
 
@@ -146,7 +143,6 @@ void time_setup() {
         Serial.println("BAD AUTO INT");
         EEPROM.write(AUTOINTERVAL_PREF, 1);  // default to first option
         EEPROM.commit();
-        //putAutoInt(1); // default to first option
     }
 
     if (autoTimeIntervals[autoInterval]) {                    // non zero interval, use auto times
@@ -165,17 +161,6 @@ void time_setup() {
 
     Serial.println("Update Present Time - Setup");
     presentTime.setDateTime(rtc.now());  // Load the time for initial animation show
-
-    if (NTP_SETTINGS_PREF >= 0) {
-        if (EEPROM.readChar(NTP_SETTINGS_PREF) > 0) {  //
-            //there's something already there - don't need to write anything
-            Serial.println("NTP Settings: ");
-            Serial.println(EEPROM.readChar(NTP_SETTINGS_PREF));
-        } else {
-            // nothing is there, write the NTP address to memory
-            saveNTPSettings(ntpServer, gmtOffset_sec, daylightOffset_sec);
-        }
-    }
 
     startup = true;
     startupSound = true;
@@ -317,8 +302,8 @@ void timeTravel() {
     departedTime.save();
 
     //copy destination time to present time
-    //DateTime does not work before 2000
-    if (destinationTime.getYear() < 2000) {
+    //DateTime does not work before 2000 or after 2159
+    if (destinationTime.getYear() < 2000 || destinationTime.getYear() > 2159) {
         if (presentTime.isRTC()) presentTime.setRTC(false);  //presentTime is no longer 'actual' time
         presentTime.setMonth(destinationTime.getMonth());
         presentTime.setDay(destinationTime.getDay());
@@ -327,7 +312,7 @@ void timeTravel() {
         presentTime.setHour(destinationTime.getHour());
         presentTime.setMinute(destinationTime.getMinute());
         presentTime.save();
-    } else if (destinationTime.getYear() >= 2000) {
+    } else if (destinationTime.getYear() >= 2000 || destinationTime.getYear() <= 2159) {
         //present time still works as a clock, the time is just set differently
         if (!presentTime.isRTC()) presentTime.setRTC(true);
         rtc.adjust(DateTime(
@@ -347,7 +332,7 @@ bool getNTPTime() {
     // connect to WiFi if available
     if (WiFi.status() == WL_CONNECTED) {  //connectToWifi()) {
         // if connected to wifi, get NTP time and set RTC
-        configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+        configTime((long)atoi(settings.gmtOffset), (int)atoi(settings.daylightOffset), settings.ntpServer);
         int ntpRetries = 0;
         if (!getLocalTime(&_timeinfo)) {
             while (!getLocalTime(&_timeinfo)) {
@@ -422,17 +407,17 @@ bool checkTimeOut() {
 void RTCClockOutEnable() {
     // enable the 1Hz RTC output
     uint8_t readValue = 0;
-    Wire.beginTransmission(DS3232_I2CADDR);
+    Wire.beginTransmission(DS3231_I2CADDR);
     Wire.write((byte)0x0E);  // select control register
     Wire.endTransmission();
 
-    Wire.requestFrom(DS3232_I2CADDR, 1);
+    Wire.requestFrom(DS3231_I2CADDR, 1);
     readValue = Wire.read();
     readValue = readValue & B11100011;  // enable squarewave and set to 1Hz,
     // Bit 2 INTCN - 0 enables OSC
     // Bit 3 and 4 - 0 0 sets 1Hz
 
-    Wire.beginTransmission(DS3232_I2CADDR);
+    Wire.beginTransmission(DS3231_I2CADDR);
     Wire.write((byte)0x0E);  // select control register
     Wire.write(readValue);
     Wire.endTransmission();
@@ -462,26 +447,3 @@ int daysInMonth(int month, int year) {
     }
     return monthDays[month - 1];
 }  // daysInMonth
-
-void saveNTPSettings(const char* ntpServer, const long gmtOffset_sec, const int daylightOffset_sec) {
-    EEPROM.writeString(NTP_SETTINGS_PREF, ntpServer);
-    EEPROM.write(NTP_SETTINGS_PREF + 32, gmtOffset_sec);
-    EEPROM.write(NTP_SETTINGS_PREF + 38, daylightOffset_sec);
-    EEPROM.commit();
-}
-
-char* getSettings(int start, int count) {
-    char* settingsVal;
-    if (EEPROM.readChar(start) > 0) {  //only read if there is data available
-        for (int i = 0; i < count; ++i) {
-            byte c = EEPROM.read(start + i);
-            if (c != 0 && c != 255)
-                settingsVal += (char)c;
-        }
-
-        Serial.println(settingsVal);
-        return settingsVal;
-    } else {
-        return 0;
-    }
-}

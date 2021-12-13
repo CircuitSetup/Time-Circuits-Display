@@ -22,10 +22,14 @@
 #include "tc_audio.h"
 
 //Initialize ESP32 Audio Library classes
-AudioGeneratorMP3 *mp3 = new AudioGeneratorMP3();
-AudioGeneratorMP3 *beep = new AudioGeneratorMP3();
+AudioGeneratorMP3 *mp3;
+AudioGeneratorMP3 *beep;
+/*
+AudioGeneratorWAV *wav = new AudioGeneratorWAV();
+AudioFileSourceFunction *genFile;
+*/
 AudioFileSourceSPIFFS *file[2];
-AudioOutputI2S *out = new AudioOutputI2S(0, 0, 32, 0);
+AudioOutputI2S *out;
 AudioOutputMixer *mixer;
 AudioOutputMixerStub *stub[2];
 
@@ -56,9 +60,13 @@ void audio_setup() {
     SPIFFS.begin();
 
     audioLogger = &Serial;
+
+    out = new AudioOutputI2S(0, 0, 32, 0);
     out->SetOutputModeMono(true);
     out->SetPinout(I2S_BCLK, I2S_LRCLK, I2S_DIN);
     mixer = new AudioOutputMixer(8, out);
+    mp3 = new AudioGeneratorMP3();
+    beep = new AudioGeneratorMP3();
 }
 
 void play_startup() {
@@ -78,6 +86,18 @@ void play_keypad_sound(char key) {
         if (key == '7') play_file("/Dtmf-7.mp3", getVolume(), 0, false);
         if (key == '8') play_file("/Dtmf-8.mp3", getVolume(), 0, false);
         if (key == '9') play_file("/Dtmf-9.mp3", getVolume(), 0, false);
+        /*
+        if (key == '0') play_DTMF(1336.f, 941.f, getVolume());
+        if (key == '1') play_DTMF(1209.f, 697.f, getVolume());
+        if (key == '2') play_DTMF(1336.f, 697.f, getVolume());
+        if (key == '3') play_DTMF(1477.f, 697.f, getVolume());
+        if (key == '4') play_DTMF(1209.f, 770.f, getVolume());
+        if (key == '5') play_DTMF(1336.f, 770.f, getVolume());
+        if (key == '6') play_DTMF(1477.f, 770.f, getVolume());
+        if (key == '7') play_DTMF(1209.f, 852.f, getVolume());
+        if (key == '8') play_DTMF(1336.f, 852.f, getVolume());
+        if (key == '9') play_DTMF(1477.f, 852.f, getVolume());
+        */
     }
 }
 
@@ -98,6 +118,16 @@ void audio_loop() {
             out->flush();
         }
     }
+    /*
+    if (wav->isRunning()) {
+        if (!wav->loop()) {
+            wav->stop();
+            out->flush();
+            //delete genFile;
+        }
+    }
+    */
+    
 }
 
 void play_file(const char *audio_file, double volume, int channel, bool firstStart) {
@@ -131,6 +161,23 @@ void play_file(const char *audio_file, double volume, int channel, bool firstSta
         beep->begin(file[1], stub[1]);
     }
 }
+
+/*
+void play_DTMF(float hz1, float hz2, double volume) {
+    if (genFile) delete genFile;
+    
+    genFile = new AudioFileSourceFunction(8., 1, 16000, 16);
+    genFile->addAudioGenerators([&](const float time) {
+        float v = sin(TWO_PI * hz1 * time);  // generate sine wave
+        v *= fmod(time, 1.f);               // change linear
+        v *= 0.5;                           // scale
+        return v;
+    });
+
+    wav = new AudioGeneratorWAV();
+    wav->begin(genFile, out);
+}
+*/
 
 double getVolume() {
     //returns value for volume based on the position of the pot

@@ -27,8 +27,12 @@ const char keys[4][3] = {
     {'7', '8', '9'},
     {'*', '0', '#'}};
 
-byte rowPins[4] = {1, 6, 5, 3};  //connect to the row pinouts of the keypad
-byte colPins[3] = {2, 0, 4};     //connect to the column pinouts of the keypad
+//byte rowPins[4] = {5, 0, 1, 3}; //{1, 6, 5, 3};  //connect to the row pinouts of the keypad
+//byte colPins[3] = {4, 6, 2};    //{2, 0, 4}; //connect to the column pinouts of the keypad
+
+byte rowPins[4] = {1, 6, 5, 3}; //connect to the row pinouts of the keypad
+byte colPins[3] = {2, 0, 4};    //connect to the column pinouts of the keypad
+
 Keypad_I2C keypad(makeKeymap(keys), rowPins, colPins, 4, 3, KEYPAD_ADDR, PCF8574);
 
 bool isEnterKeyPressed = false;

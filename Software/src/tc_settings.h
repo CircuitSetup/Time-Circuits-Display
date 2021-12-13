@@ -16,24 +16,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef _TC_WIFI_H
-#define _TC_WIFI_H
+#ifndef _TC_SETTINGS_H
+#define _TC_SETTINGS_H
 
-#include <FS.h> 
-#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
+#include <ArduinoJson.h>  //https://github.com/bblanchon/ArduinoJson
+#include <FS.h>
 #include <SPIFFS.h>
-#include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
-#include <clockdisplay.h>
-#include <tc_menus.h>
-#include <tc_time.h>
-#include <tc_settings.h>
 
-extern void wifi_setup();
-extern void wifi_loop();
+extern void settings_setup();
 
-void saveParamsCallback();
-void saveConfigCallback();
+//default settings - change settings in the web interface 192.168.4.1
+struct Settings{
+    char ntpServer[32] = "pool.ntp.org";
+    char gmtOffset[7] = "-18000"; //US EST
+    char daylightOffset[7] = "3600";
+    char autoRotateTimes[3] = "1";
+    char destTimeBright[3] = "15";
+    char presTimeBright[3] = "15";
+    char lastTimeBright[3] = "15";
+    char beepSound[3] = "0";
+};
 
-extern String getParam(String name);
+extern struct Settings settings;
 
 #endif

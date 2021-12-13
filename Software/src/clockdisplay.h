@@ -23,12 +23,12 @@
 #define CLOCKDISPLAY_h
 
 #include <Arduino.h>
-//#include <Preferences.h>
 #include <RTClib.h>
 #include <Wire.h>
 #include <EEPROM.h>
+#include "tc_settings.h"
 
-#define DS3232_I2CADDR 0x68
+#define DS3231_I2CADDR 0x68
 
 static const uint16_t alphaChars[] = {
     0b0000000000000001,
@@ -209,19 +209,9 @@ struct dateStruct {
     uint8_t hour;
     uint8_t minute;
 };
-/*
-typedef struct {
-    uint16_t year;
-    uint8_t month;
-    uint8_t day;
-    uint8_t hour;
-    uint8_t minute;
-    uint8_t brightness;
-} saveDateStruct;
-*/
 class clockDisplay {
    public:
-    clockDisplay(uint8_t address, /*const char* */ int saveAddress);
+    clockDisplay(uint8_t address, int saveAddress);
     void begin();
     void lampTest();
     void on();
@@ -277,7 +267,7 @@ class clockDisplay {
 
    private:
     uint8_t _address;
-    /*const char* */ int _saveAddress;
+    int _saveAddress;
     uint16_t _displayBuffer[8];  // Segments to make current time.
 
     uint16_t _year = 2021;  // keep track of these

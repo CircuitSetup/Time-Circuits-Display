@@ -26,6 +26,7 @@
 #include "tc_menus.h"
 #include "tc_time.h"
 #include "tc_wifi.h"
+#include "tc_settings.h"
 
 ///////////////////////////////////////////////////////
 void setup() {
@@ -36,6 +37,7 @@ void setup() {
     //scan();
     Serial.println();
 
+    settings_setup();
     wifi_setup();
     audio_setup();
 

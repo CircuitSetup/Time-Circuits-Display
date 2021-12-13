@@ -196,29 +196,6 @@ bool clockDisplay::save() {
     }
 
     return true;
-    /*
-    // save date/time to preferences
-    if (_saveAddress >= 0) {
-        pref.begin(_saveAddress, false);
-
-        if (!isRTC()) {  // rtc can't save, save address was not set and can't save if negative
-            saveDateStruct dates[] = {_year, _month, _day, _hour, _minute, _brightness};
-            Serial.printf("Saving in Preferences: %d %d %d %d %d %d\n", _year, _month, _day, _hour, _minute, _brightness);
-
-            pref.putBytes("saveDateStruct", &dates, sizeof(dates));
-            return true;
-        } else if (isRTC()) {
-            Serial.printf("Save RTC Brightness in Preferences: ");
-            Serial.println(_brightness);
-
-            pref.putUChar("saveDateStruct", _brightness); //only save brightness
-            return true;
-        } else {
-            return false;
-        }
-        pref.end();
-    }
-    */
 }
 
 bool clockDisplay::load() {
@@ -242,11 +219,15 @@ bool clockDisplay::load() {
                 setDay(EEPROM.read(_saveAddress + 3));
                 setHour(EEPROM.read(_saveAddress + 4));
                 setMinute(EEPROM.read(_saveAddress + 5));
-                setBrightness(EEPROM.read(_saveAddress + 6));
+                if (_saveAddress == 0x10) { 
+                    setBrightness((int)atoi(settings.destTimeBright));//(EEPROM.read(_saveAddress + 6));
+                } else if (_saveAddress == 0x20) {
+                    setBrightness((int)atoi(settings.lastTimeBright));
+                }
                 return true;
             } else if (isRTC()) {
                 // rtc doesnt save any time
-                setBrightness(EEPROM.read(_saveAddress + 6));
+                setBrightness((int)atoi(settings.presTimeBright));//(EEPROM.read(_saveAddress + 6));
             }
 
         } else {
@@ -259,76 +240,7 @@ bool clockDisplay::load() {
     }
 
     return true;
-    /*
-    // Load saved date/time from preferences
-    Serial.println(">>>>>>>>>>>>>>>>>>> LOADING SAVED SETTINGS <<<<<<<<<<<<<<<<<<<");
-    Serial.println(_saveAddress);
-    pref.begin(_saveAddress, true);
-
-    pref.clear();  //clears all data
-
-    if (isPrefData("saveDateStruct") && !isRTC()) {  // not rtc, load saved values
-
-        size_t dateSize = pref.getBytesLength("saveDateStruct");
-        char buffer[dateSize];  // prepare a buffer for the data
-
-        pref.getBytes("saveDateStruct", buffer, dateSize);
-
-        if (dateSize % sizeof(saveDateStruct)) {  // simple check that data fits
-            Serial.printf("dateSize: %d saveDateStruct: %d\n", dateSize, sizeof(saveDateStruct));
-            Serial.println("Data is not the correct size!");
-            return false;
-        }
-        saveDateStruct* _saveAddress = (saveDateStruct*)buffer;  // cast the bytes into a struct ptr
-
-        Serial.printf("Loading: %d/%d/%d %02d:%02d %d\n",
-                      _saveAddress[0].month, _saveAddress[0].day, _saveAddress[0].year,
-                      _saveAddress[0].hour, _saveAddress[0].minute, _saveAddress[0].brightness);
-
-        setYear(_saveAddress[0].year);
-        setMonth(_saveAddress[0].month);
-        setDay(_saveAddress[0].day);
-        setHour(_saveAddress[0].hour);
-        setMinute(_saveAddress[0].minute);
-        setBrightness(_saveAddress[0].brightness);
-
-        buffer[0] = '\0';
-        dateSize = 0;
-
-        return true;
-    } else if (isPrefData("saveDateStruct") && isRTC()) {
-        // rtc doesnt save time
-        setBrightness(pref.getUChar("saveDateStruct"));
-        return true;
-    } else {
-        return false;
-    }
-    pref.end();
-    */
 }
-/*
-bool clockDisplay::resetClocks() {
-    // removes all data from preferences
-    if (pref.remove(_saveAddress)) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-bool clockDisplay::isPrefData(const char* key) {
-    //is there data stored in Preferences?
-    if (pref.getBytesLength(key) > 0) {
-        Serial.printf("Bytes Length: ");
-        Serial.println(pref.getBytesLength(key));
-        Serial.println("There is Pref data...");
-        return true;
-    } else {
-        Serial.println("There is NOT Pref data...");
-        return false;
-    }
-}
-*/
 
 void clockDisplay::show() {
     // Show the buffer
@@ -610,7 +522,7 @@ void clockDisplay::setDateTime(DateTime dt) {
 }
 
 void clockDisplay::setDS3232time(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year) {
-    Wire.beginTransmission(DS3232_I2CADDR);
+    Wire.beginTransmission(DS3231_I2CADDR);
     Wire.write(0);                     // sends 00h - seconds register
     Wire.write(decToBcd(second));      // set seconds
     Wire.write(decToBcd(minute));      // set minutes

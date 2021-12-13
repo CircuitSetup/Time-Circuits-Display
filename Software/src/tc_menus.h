@@ -24,13 +24,13 @@
 
 #include <Arduino.h>
 #include <Wire.h>
-//#include <Preferences.h>
 #include <EEPROM.h>
 
 #include "clockdisplay.h"
 #include "tc_keypad.h"
 #include "tc_time.h"
 #include "tc_audio.h"
+#include "tc_settings.h"
 
 #define maxTime 240            // maximum time in seconds before timout during setting and no button pressed, max 255 seconds
 
