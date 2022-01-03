@@ -31,6 +31,8 @@
 #include "tc_audio.h"
 #include "tc_time.h"
 
+//#define GTE_KEYPAD //uncomment if using real GTE/TRW keypad control board
+
 #define KEYPAD_ADDR 0x20
 #define WHITE_LED 17 //GPIO that white led is connected to
 #define ENTER_BUTTON 16 //GPIO that enter key is connected to
@@ -58,7 +60,7 @@ extern bool isEnterKeyPressed;
 extern bool isEnterKeyHeld;
 extern bool isEnterKeyDouble;
 extern void keypadLoop();
-//extern byte hold;
+
 extern char key;
 extern bool keyPressed;
 extern bool menuFlag;

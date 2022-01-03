@@ -213,7 +213,6 @@ bool clockDisplay::load() {
         if (sum == EEPROM.read(_saveAddress + 7)) {  // saved checksum matches
             if (!isRTC()) {  // not a rtc, load saved values
                 Serial.println(">>>>>>>>>>>>>>>>>>> LOADING SAVED SETTINGS <<<<<<<<<<<<<<<<<<<");
-                Serial.println(_saveAddress);
                 setYear(EEPROM.read(_saveAddress + 1) << 8 | EEPROM.read(_saveAddress));
                 setMonth(EEPROM.read(_saveAddress + 2));
                 setDay(EEPROM.read(_saveAddress + 3));
@@ -316,10 +315,14 @@ void clockDisplay::setMonth(int monthNum) {
         _month = 12;  // set month to the max otherwise month isn't displayed at all
         monthNum = 12;
     }
+    #ifdef IS_ACAR_DISPLAY
+    _displayBuffer[0] = makeNum(monthNum);
+    #else
     if (!isRTC()) monthNum--;  //array starts at 0
     _displayBuffer[0] = makeAlpha(months[monthNum][0]);
     _displayBuffer[1] = makeAlpha(months[monthNum][1]);
     _displayBuffer[2] = makeAlpha(months[monthNum][2]);
+    #endif
 }
 
 void clockDisplay::setDay(int dayNum) {

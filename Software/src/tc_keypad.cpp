@@ -27,11 +27,13 @@ const char keys[4][3] = {
     {'7', '8', '9'},
     {'*', '0', '#'}};
 
-//byte rowPins[4] = {5, 0, 1, 3}; //{1, 6, 5, 3};  //connect to the row pinouts of the keypad
-//byte colPins[3] = {4, 6, 2};    //{2, 0, 4}; //connect to the column pinouts of the keypad
-
+#ifdef GTE_KEYPAD
+byte rowPins[4] = {5, 0, 1, 3};
+byte colPins[3] = {4, 6, 2};
+#else
 byte rowPins[4] = {1, 6, 5, 3}; //connect to the row pinouts of the keypad
 byte colPins[3] = {2, 0, 4};    //connect to the column pinouts of the keypad
+#endif
 
 Keypad_I2C keypad(makeKeymap(keys), rowPins, colPins, 4, 3, KEYPAD_ADDR, PCF8574);
 
@@ -140,8 +142,8 @@ void enterKeyDouble() {
 
 void recordKey(char key) {
     dateBuffer[dateIndex++] = key;
-    Serial.println(dateIndex);
     if (dateIndex >= maxDateLength) dateIndex = maxDateLength - 1;  // don't overflow, will overwrite end of date next time
+    Serial.println(dateIndex);
 }
 
 void recordSetTimeKey(char key) {

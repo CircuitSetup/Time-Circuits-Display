@@ -329,7 +329,6 @@ void timeTravel() {
 }
 
 bool getNTPTime() {
-    // connect to WiFi if available
     if (WiFi.status() == WL_CONNECTED) {  //connectToWifi()) {
         // if connected to wifi, get NTP time and set RTC
         configTime((long)atoi(settings.gmtOffset), (int)atoi(settings.daylightOffset), settings.ntpServer);
