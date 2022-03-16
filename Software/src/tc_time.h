@@ -37,7 +37,7 @@
 #include "tc_settings.h"
 
 #define SECONDS_IN 15   // SQW Monitor 1Hz from the DS3231
-#define STATUS_LED 2  // Status LED
+//#define STATUS_LED 2  // Status LED
 
 #define DEST_TIME_ADDR 0x71
 #define DEST_TIME_PREF 0x10 

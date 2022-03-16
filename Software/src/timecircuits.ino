@@ -31,7 +31,6 @@
 ///////////////////////////////////////////////////////
 void setup() {
     Serial.begin(115200);
-    //delay(1000);  // wait for console opening
 
     Wire.begin();
     //scan();
@@ -41,8 +40,10 @@ void setup() {
     wifi_setup();
     audio_setup();
 
-    //allLampTest();
-    //delay(5000);
+    #ifdef TEST_MODE
+    allLampTest();
+    delay(5000);
+    #endif
 
     menu_setup();
     keypad_setup();

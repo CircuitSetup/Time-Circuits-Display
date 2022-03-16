@@ -71,7 +71,7 @@ const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 void time_setup() {
     pinMode(SECONDS_IN, INPUT_PULLDOWN);  // for monitoring seconds
-    pinMode(STATUS_LED, OUTPUT);          // Status LED
+    //pinMode(STATUS_LED, OUTPUT);          // Status LED
 
     EEPROM.begin(512);
     
@@ -267,7 +267,7 @@ void time_loop() {
             departedTime.setColon(false);
         }  // colon
 
-        digitalWrite(STATUS_LED, !y);  // built-in LED shows system is alive, invert
+        //digitalWrite(STATUS_LED, !y);  // built-in LED shows system is alive, invert
                                        // to light on start of new second
         x = y;                         // remember it
     }
@@ -391,7 +391,7 @@ bool checkTimeOut() {
     y = digitalRead(SECONDS_IN);
     if (x != y) {
         x = y;
-        digitalWrite(STATUS_LED, !y);  // update status LED
+        //digitalWrite(STATUS_LED, !y);  // update status LED
         if (y == 0) {
             timeout++;
         }

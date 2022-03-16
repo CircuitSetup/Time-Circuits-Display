@@ -31,6 +31,7 @@
 #define DS3231_I2CADDR 0x68
 
 //define IS_ACAR_DISPLAY //uncomment to the month output to 2 numbers, per the original A Car display
+//define TEST_MODE //uncomment to turn on all LEDs on startup
 
 static const uint16_t alphaChars[] = {
     0b0000000000000001,
