@@ -15,12 +15,12 @@ The Destination Time can be entered via keypad, and the Present Time can keep ti
 [View the instructions for assembling your CircuitSetup.us TCD Kit](https://github.com/CircuitSetup/Time-Circuits-Display/wiki)
 
 ### Kit Parts
-- 3x Displays in (Red, Green, Yellow)
+- 3x Segment displays in (Red, Green, Yellow)
 - Gels for displays (Red, Green, Yellow)
 - Mounting hardware (37x screws for display enclosure to outer enclosure, display PCB to enclosures, speaker mount, keypad mount, 4x small screws for keypad PCB to bezel mount)
 - Connection wiring (3x 4p JST-XH for display I2C, 1 7p JST-XH for keypad)
 - ESP32 powered control board
-- ESP32 dev board (not programmed - must be flashed with Platformio or Arduino IDF with software here)
+- Programmed ESP32 dev board
 - TRW style number keypad (must be disassembled to use number keys, pcb and rubber backing)
 - Square LED lenses (2x white, 1x red/amber/green)
 - RTC battery
@@ -52,7 +52,7 @@ The Destination Time can be entered via keypad, and the Present Time can keep ti
 - 1 SPI output
 - On board power supply which can take input from 6-20V DC
 - ESD filtering to prevent interference
-Can be powered by ESP32 micro USB port
+- Can be powered by ESP32 micro USB port
 
 #### Control board pinout
 - I2C:
@@ -76,6 +76,3 @@ Can be powered by ESP32 micro USB port
   - Keypad Enter Button - 16
   - Volume - 32
   - Status LED - 2 (nodeMCU)
-
-
-More to come!
