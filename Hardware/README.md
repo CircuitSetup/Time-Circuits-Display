@@ -9,5 +9,6 @@ Changes between v1.1 (unreleased) & v1.2
 [OctoPart BOM](https://octopart.com/bom-tool/zCnlEeUa)
 
 # Time Circuits Display
-
-OctoPart BOM
+Changes between v1.3 & v1.31
+- Made mounting holes slightly larger
+- Moved some traces so they are not as close to pins
