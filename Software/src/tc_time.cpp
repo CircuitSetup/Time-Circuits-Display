@@ -343,16 +343,15 @@ bool getNTPTime() {
                 }
                 delay(500);
             }
-        } else {
-            Serial.println(&_timeinfo, "%A, %B %d %Y %H:%M:%S");
-            byte byteYear = (_timeinfo.tm_year + 1900) % 100;  // adding to get full YYYY from NTP year format
-                                                               // and keeping YY to set DS3232
-            presentTime.setDS3232time(_timeinfo.tm_sec, _timeinfo.tm_min,
-                                      _timeinfo.tm_hour, 0, _timeinfo.tm_mday,
-                                      _timeinfo.tm_mon, byteYear);
-            Serial.println("Time Set with NTP");
-            return true;
         }
+        Serial.println(&_timeinfo, "%A, %B %d %Y %H:%M:%S");
+        byte byteYear = (_timeinfo.tm_year + 1900) % 100;  // adding to get full YYYY from NTP year format
+                                                            // and keeping YY to set DS3232
+        presentTime.setDS3232time(_timeinfo.tm_sec, _timeinfo.tm_min,
+                                    _timeinfo.tm_hour, 0, _timeinfo.tm_mday,
+                                    _timeinfo.tm_mon, byteYear);
+        Serial.println("Time Set with NTP");
+        return true;
     } else {
         return false;
     }
