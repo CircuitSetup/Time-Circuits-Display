@@ -37,7 +37,7 @@ void wifi_setup() {
 
     WiFi.mode(WIFI_STA);  // explicitly set mode, esp defaults to STA+AP
 
-    wm.setCountry("US");
+    //wm.setCountry("US"); //causes crash in arduino 2
     wm.setParamsPage(true);
     wm.setBreakAfterConfig(true);
     wm.setConfigPortalBlocking(false);
