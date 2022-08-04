@@ -4,6 +4,7 @@
  * Code adapted from Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
+ * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,151 +18,219 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
  */
+
+/* 
+ * The keypad menu
+ * 
+ * The menu is controlled by "pressing" or "holding" the ENTER key on the keypad.
+ * Note: A "press" is shorter than 2 seconds, a "hold" is 2 seconds or longer.
+ * Data entry is done via the keypad's number keys.
+ * 
+ * The menu is involked by holding the ENTER button.
+ * First step is to choose a menu item. The available "items" are
+ *    - enter custom dates/times for the three displays
+ *    - select the autoInterval ("PRE-SET")
+ *    - select the brightness for the three displays ("BRI-GHT")
+ *    - quit the menu ("END")
+ *  Pressing ENTER cycles through the list, holding ENTER selects an item, ie a mode.
+ *  If mode is "enter custom dates/times":
+ *      - the field to enter data into is shown (exclusively)
+ *      - 2 or 4 digits can be entered, or ENTER can be pressed, upon which the next field is activated.
+ *        (Note that the month needs to be entered numerically, and the hour needs to be entered in 24
+ *        hour mode, which is then internally converted to 12 hour mode.)
+ *      - After entering data into all fields, the data is saved and the menu is left automatically.
+ *      - Note that after entering dates/times into the "destination" or "last departure" displays,
+ *        autoInterval is set to 0 and your entered date/time(s) are shown permanently (see below).
+ *      - If you entered a custom date/time into the "present" time display, this time is then
+ *        used as actual the present time, and continues to run like a clock. (As opposed to the 
+ *        "destination" and "last departure" times, which are stale.)
+ *  If mode is "select AutoInterval" (display shows "INT")
+ *      - Press ENTER to cycle through the possible autoInverval settings.
+ *      - Hold ENTER for 2 seconds to select the shown value and exit the menu ("SAVE" is displayed briefly)
+ *      - 0 makes your custom "destination" and "last departure" times to be shown permanently.
+ *        (CUS-TOM is displayed as a reminder)
+ *      - Non-zero values make the clock cycle through a number of pre-programmed times, your
+ *        custom times are ignored. The value means "minutes" (hence "MIN-UTES")               
+ *  If mode is "select brightness" (display shows "LVL")
+ *      - Press ENTER to cycle through the possible levels (1-5)
+ *      - Hold ENTER for 2 seconds to use current value and jump to next display
+ *      - After the third display, "SAVE" is displayed briefly and the menu is left automatically.
+ *  If mode is "end"
+ *      - Hold ENTER to quit the menu
+ */
+
 
 #include "tc_menus.h"
 
 int displayNum;                                           // selected display
 uint8_t autoInterval = 1;                                 // array element of autoTimeIntervals[], set's time between automatically displayed times
 const uint8_t autoTimeIntervals[5] = {0, 5, 15, 30, 60};  // time options, first must be 0, this is the off option.
-uint8_t timeout = 0;  // for tracking idle time in menus, reset to 0 on each button press
+
 bool isSetUpdate = false;
+bool isYearUpdate = false;
 
-clockDisplay* displaySet;  // the display being updated during setting
+clockDisplay* displaySet;  // the current display
 
-
+/*
+ * menu_setup()
+ * 
+ */
 void menu_setup() {
-
+    /* nada */
 }
 
+/*
+ * enter_menu() - the real thing
+ * 
+ */
 void enter_menu() {
-    Serial.print("Menu");
-    // Enter button held, get display
 
-    isEnterKeyPressed = false; // reset enter flag
+    #ifdef TC_DBG
+    Serial.println("Menu: enter_menu() invoked");
+    #endif
+    
+    isEnterKeyHeld = false;     
+    isEnterKeyPressed = false; 
+    
     menuFlag = false;
-    displayNum = 1;  // start with present
+
+    // start with destination time in main menu
+    displayNum = MODE_DEST;     
 
     // Load the times
-    destinationTime.load();  // this wipes out currently displayed times if on auto, brightness may do a save, so need stored times any
+    destinationTime.load();     
     departedTime.load();
 
+    // Highlight current display
     displayHighlight(displayNum);
 
     waitForEnterRelease();
 
-    timeout = 0;  // Reset on each press
+    timeout = 0;  
+
+    // DisplaySelect: 
+    // Wait for ENTER to cycle through main menu (displays and modes), 
+    // HOLDing ENTER selects current menu "item"
+    // (Also sets displaySet to selected display)    
+    displaySelect(displayNum);        
+
+    #ifdef TC_DBG
+    Serial.println("Menu: Display/mode selected");    
+    #endif
     
-    while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) { //  {
-        // Keep looking for enter until it is pressed again
-        displaySelect(displayNum);
-        delay(50);
-    }
+    if(displayNum <= MODE_DEPT) {  
 
-    Serial.println("<<Field Select>>");
+        // Enter display times
 
-    // Have a selected display pointed to by displaySet if displayNum 0-2
-    if (displayNum <= 2) {  // Doing display times
-        uint16_t yearSet;   // hold new times that will be set, all need to be same type since they're passed by ref
-        uint16_t monthSet;
+        // Generate pre-set values, which the user may keep (or overwrite)
+         
+        uint16_t yearSet;  
+        uint16_t monthSet;  
         uint16_t daySet;
         uint16_t minSet;
         uint16_t hourSet;
+        // all need to be same type since they're passed by ref
 
-        if (displaySet->isRTC() == 1) {  // this is the RTC, get the current time.
+        if(displaySet->isRTC()) {  
+          
+            // This is the RTC, get the current time, corrected by yearOffset         
             DateTime currentTime = rtc.now();
-
-            yearSet = currentTime.year();
+            yearSet = currentTime.year() - displaySet->getYearOffset();            
             monthSet = currentTime.month();
             daySet = currentTime.day();
             minSet = currentTime.minute();
             hourSet = currentTime.hour();
+            
         } else {
+          
             // non RTC, get the time info from the object
             yearSet = displaySet->getYear();
             monthSet = displaySet->getMonth();
             daySet = displaySet->getDay();
             minSet = displaySet->getMinute();
             hourSet = displaySet->getHour();
+            
         }
-
-        Serial.print("menuFlag: ");
-        Serial.println(menuFlag);
+ 
+        timeout = 0;  
 
         // Get year
-        /*
-        Fields
-        0 - month
-        1 - day
-        2 - year
-        3 - hour
-        4 - min
-        */
-       Serial.print("isSetUpdate: ");
-        Serial.println(isSetUpdate);
-
-        waitForEnterRelease();
-        while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) { // && isSetUpdate) {
-            //Serial.println("Year Set");
-            get_key();
-            setField(yearSet, 2, 0, 0);  // number to adjust, field
-        }
+        isYearUpdate = true;    // Allow 4 digits instead of 2
+        setUpdate(yearSet, FIELD_YEAR);  
+        prepareInput(yearSet);
+        waitForEnterRelease();      
+        setField(yearSet, FIELD_YEAR, 0, 0);         
+        isYearUpdate = false;
 
         // Get month
-        setUpdate(monthSet, 0);
+        setUpdate(monthSet, FIELD_MONTH);
+        prepareInput(monthSet);
         waitForEnterRelease();
-        while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-            //Serial.println("Month Set");
-            get_key();
-            setField(monthSet, 0, 0, 0);  // setting, which display, which field, starting from left
-        }
+        setField(monthSet, FIELD_MONTH, 0, 0);          
 
         // Get day
-        setUpdate(daySet, 1);
-        waitForEnterRelease();
-        while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-            //Serial.println("Day Set");
-            get_key();
-            setField(daySet, 1, yearSet, monthSet);  // this depends on the month and year
-        }
+        setUpdate(daySet, FIELD_DAY);
+        prepareInput(daySet);
+        waitForEnterRelease();        
+        setField(daySet, FIELD_DAY, yearSet, monthSet);  // this depends on the month and year        
 
         // Get hour
-        setUpdate(hourSet, 3);
-        waitForEnterRelease();
-        while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-            //Serial.println("Hour Set");
-            get_key();
-            setField(hourSet, 3, 0, 0);
-        }
+        setUpdate(hourSet, FIELD_HOUR);
+        prepareInput(hourSet);
+        waitForEnterRelease();       
+        setField(hourSet, FIELD_HOUR, 0, 0);       
 
         // Get minute
-        setUpdate(minSet, 4);
-        waitForEnterRelease();
-        while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-            //Serial.println("Minute Set");
-            get_key();
-            setField(minSet, 4, 0, 0);
-        }
+        setUpdate(minSet, FIELD_MINUTE);
+        prepareInput(minSet);
+        waitForEnterRelease();        
+        setField(minSet, FIELD_MINUTE, 0, 0); 
 
-        // Have new date & time
-        if (!checkTimeOut()) {  // Do nothing if there was a timeout waiting for button presses
-                                                  // save if Enter Key is held
-            Serial.println("Enter Held Save");
+        isSetUpdate = false;
 
-            isSetUpdate = false;
-            if (displaySet->isRTC() == 1) {  // this is the RTC display, set the RTC as quickly as
-                                                // possible, as soon as set button pressed
-                rtc.adjust(DateTime(yearSet, monthSet, daySet, hourSet, minSet, 0));
-            } else {                 // Not rtc, setting a static display, turn off auto changing
-                autoInterval = 0;    // set to the 0 interval, disables auto
-                saveAutoInterval();  // save it
+        // Have new date & time at this point
+
+        // Do nothing if there was a timeout waiting for button presses                                                  
+        if(!checkTimeOut()) {  
+
+            #ifdef TC_DBG
+            Serial.println("Menu: Fields all set");
+            #endif
+    
+            if(displaySet->isRTC()) {  // this is the RTC display, set the RTC 
+                
+                // Update RTC and fake year if neccessary
+                // see comments in tc_time.cpp
+
+                int tyr = yearSet, tyroffs = 0;
+                if(tyr < 2000) {
+                    while(tyr < 2000) {
+                        tyr += 28;
+                        tyroffs += 28;
+                    }
+                } else if(tyr > 2050) {
+                    while(tyr > 2050) {
+                        tyr -= 28;
+                        tyroffs -= 28;
+                    }
+                }
+    
+                displaySet->setYearOffset(tyroffs);
+                presentTimeBogus = true;  // Avoid overwriting this time by NTP time in loop
+    
+                rtc.adjust(DateTime(tyr, monthSet, daySet, hourSet, minSet, 0));
+                
+            } else {                 
+                // Not rtc, setting a static display, turn off autoInverval
+                autoInterval = 0;    
+                saveAutoInterval();  
             }
-            ///////////////////////////////////}
-            displaySet->showOnlySave();  // Show a save message
 
-            waitForEnterRelease();
-
-            // wait to do this, update rtc as fast as possible
+            // Show a save message for a brief moment
+            displaySet->showOnlySave();  
+            
             // update the object
             displaySet->setMonth(monthSet);
             displaySet->setDay(daySet);
@@ -169,27 +238,49 @@ void enter_menu() {
             displaySet->setHour(hourSet);
             displaySet->setMinute(minSet);
             displaySet->save();  // save to eeprom
-            delay(1000);
-        }  // checktimeout
-    } else if (displayNum == 4) {
-        // Get brightness settings
-        waitForEnterRelease();
-        isSetUpdate = true;
-        if (!checkTimeOut()) doGetBrightness(&destinationTime);
-        if (!checkTimeOut()) doGetBrightness(&presentTime);
-        if (!checkTimeOut()) doGetBrightness(&departedTime);
+            
+            mydelay(1000);
+
+            allOff();
+            waitForEnterRelease();
+            
+        }  
+        
+    } else if(displayNum == 4) {    // Adjust brightness
+
         allOff();
-    } else if (displayNum == 3) {  // auto times
         waitForEnterRelease();
-        int8_t number = 0;
-        doGetAutoTimes();
-    } else {  // if(displayNum < 3)
-        // END option, turn off displays, do nothing.
+      
+        // Set brightness settings    
+        if(!checkTimeOut()) doSetBrightness(&destinationTime);
+        if(!checkTimeOut()) doSetBrightness(&presentTime);
+        if(!checkTimeOut()) doSetBrightness(&departedTime);
+        
         allOff();
+        waitForEnterRelease();  
+        
+        
+    } else if(displayNum == 3) {  // Select autoInterval
+
+        allOff();
+        waitForEnterRelease();
+
+        // Set autoInterval              
+        doSetAutoInterval();
+        
+        allOff();
+        waitForEnterRelease();  
+        
+    } else {                      // END: Bail out
+      
+        allOff();
+        waitForEnterRelease();  
+        
     }
+    
     // Return dest/dept displays to where they should be
-    // Menuing system wipes out auto times
-    if (autoTimeIntervals[autoInterval] == 0) {
+    // Menu system wipes out auto times
+    if(autoTimeIntervals[autoInterval] == 0) {
         destinationTime.load();
         departedTime.load();
     } else {
@@ -197,40 +288,86 @@ void enter_menu() {
         departedTime.setFromStruct(&departedTimes[autoTime]);
     }
 
-    // Done, turn off displays, then turn on
+    // Done, turn off displays
     allOff();
 
-    delay(1000);
-    Serial.println("Update Present Time 3");
-    presentTime.setDateTime(rtc.now());  // Set the current time in the display,
-                                            // set times are 2+ seconds old
+    mydelay(1000);
+
+    #ifdef TC_DBG
+    Serial.println("Menu: Update Present Time");
+    #endif
+    presentTime.setDateTime(rtc.now());  // Set the current time in the display, 2+ seconds gone
+    
     // all displays on and show
     animate();  // show all with month showing last
                 // then = millis(); // start count to prevent double animate if it's been too long
+
+    myloop();
+    
+    waitForEnterRelease();
+
+    #ifdef TC_DBG
+    Serial.println("Menu: Exiting....");
+    #endif
 }
 
-void displaySelect(int& number) {
-    // Serial.println("Display Select");
-    // Selects which display to update 
-    if (digitalRead(ENTER_BUTTON)) {
-        number++;
-        timeout = 0;  // button pressed, reset timeout
-        if (number == (6)) number = 0;
-        displayHighlight(number);   // Show only the selected display and set pointer to it
-        while (digitalRead(ENTER_BUTTON)) {  // still pressed? hold until release
-            timeout = 0;
-            delay(10);
-        }
+/* 
+ *  Cycle through main menu:
+ *  Select display to update or mode (bri, autoInt, End)
+ *  
+ */
+void displaySelect(int& number) 
+{   
+    isEnterKeyHeld = false;
+
+    // Wait for enter
+    while(!checkTimeOut()) {
+      
+      // If pressed
+      if(digitalRead(ENTER_BUTTON)) {
+        
+          // wait for release
+          while(!checkTimeOut() && digitalRead(ENTER_BUTTON)) {
+              
+              myloop();
+
+              // If hold threshold is passed, return false */
+              if(isEnterKeyHeld) {
+                  isEnterKeyHeld = false;
+                  return;              
+              }
+              delay(100); 
+          }
+
+          if(checkTimeOut()) return;
+              
+          timeout = 0;  // button pressed, reset timeout
+          
+          number++;
+          if(number > MODE_MAX) number = MODE_MIN;
+
+          // Show only the selected display and set pointer to it
+          displayHighlight(number);   
+        
+      } else {
+
+          myloop();
+          delay(100);
+          
+      }
+      
     }
-}  // displaySelect
+}  
 
-void displayHighlight(int& number) {
-    Serial.println("Display Highlight");
-    // Turns on the currently selected display during setting
-    // Also sets the displaySet pointer to the display being updated
-
+/* 
+ *  Turns on the currently selected display during setting
+ *  Also sets the displaySet pointer to the display being updated
+ *  
+ */ 
+void displayHighlight(int& number) 
+{   
     switch (number) {
-        case 0:  // Destination Time
+        case MODE_DEST:  // Destination Time
             destinationTime.on();
             destinationTime.setColon(false);
             destinationTime.show();
@@ -238,7 +375,7 @@ void displayHighlight(int& number) {
             departedTime.off();
             displaySet = &destinationTime;
             break;
-        case 1:  // Presetnt Time
+        case MODE_PRES:  // Present Time
             destinationTime.off();
             presentTime.on();
             presentTime.setColon(false);
@@ -246,7 +383,7 @@ void displayHighlight(int& number) {
             departedTime.off();
             displaySet = &presentTime;
             break;
-        case 2:  // Last Time Departed
+        case MODE_DEPT:  // Last Time Departed
             destinationTime.off();
             presentTime.off();
             departedTime.on();
@@ -254,33 +391,26 @@ void displayHighlight(int& number) {
             departedTime.show();
             displaySet = &departedTime;
             break;
-        case 3:  // auto enable
-            destinationTime.showOnlySettingVal("PRE", -1, true);  // display end, no numbers, clear rest of screen
-            presentTime.showOnlySettingVal("SET", -1, true);  // display end, no numbers, clear rest of screen
+        case MODE_AINT:  // auto enable
+            destinationTime.showOnlySettingVal("PRE", -1, true);  // display PRESET, no numbers, clear rest of screen
+            presentTime.showOnlySettingVal("SET", -1, true);  
             destinationTime.on();
-            presentTime.on();
-            // destinationTime.setColon(false);
-            // destinationTime.show();
-            // presentTime.off();
+            presentTime.on();            
             departedTime.off();
             displaySet = NULL;
             break;
-        case 4:  // Brt
-            destinationTime.showOnlySettingVal("BRI", -1, true);  // display end, no numbers, clear rest of screen
-            presentTime.showOnlySettingVal("GHT", -1, true);  // display end, no numbers, clear rest of screen
+        case MODE_BRI:  // Brightness
+            destinationTime.showOnlySettingVal("BRI", -1, true);  // display BRIGHT, no numbers, clear rest of screen
+            presentTime.showOnlySettingVal("GHT", -1, true);  
             destinationTime.on();
-            presentTime.on();
-            // destinationTime.setColon(false);
-            // destinationTime.show();
-            // presentTime.off();
+            presentTime.on();            
             departedTime.off();
             displaySet = NULL;
             break;
-        case 5:  // end
+        case MODE_END:  // end
             destinationTime.showOnlySettingVal("END", -1, true);  // display end, no numbers, clear rest of screen
             destinationTime.on();
-            destinationTime.setColon(false);
-            // destinationTime.show();
+            destinationTime.setColon(false);            
             presentTime.off();
             departedTime.off();
             displaySet = NULL;
@@ -288,183 +418,358 @@ void displayHighlight(int& number) {
     }
 }
 
-void setUpdate(uint16_t& number, int field) {
-    Serial.println("Set Update");
-    isSetUpdate = true;
-    // Shows only the field being updated
+/*  
+ * Show only the field being updated
+ * and setup pre-set contents
+ * 
+ * number = number to show
+ * field = field to show it in
+ * 
+ */ 
+void setUpdate(uint16_t& number, int field) 
+{        
     switch (field) {
-        case 0:
+        case FIELD_MONTH:
             displaySet->showOnlyMonth(number);
             break;
-        case 1:
+        case FIELD_DAY:
             displaySet->showOnlyDay(number);
             break;
-        case 2:
+        case FIELD_YEAR:
             displaySet->showOnlyYear(number);
             break;
-        case 3:
+        case FIELD_HOUR:
             displaySet->showOnlyHour(number);
             break;
-        case 4:
+        case FIELD_MINUTE:
             displaySet->showOnlyMinute(number);
             break;
-    }
+    }    
 }
 
-void adjustBrightness(clockDisplay* displaySet) {
-    Serial.println("Bright button");
-    int8_t number = displaySet->getBrightness();
-    // Store actual brightness as 0 to 15, but only show 5 levels, starting at 3
-    // Update the clockDisplay and show the value
-    if (digitalRead(ENTER_BUTTON)) {
-        number = number + 3;
-        timeout = 0;  // button pressed, reset timeout
-        if (number > 15) number = 3;
-        displaySet->setBrightness(number);
-        displaySet->showOnlySettingVal("LVL", number / 3, false);
-        while (digitalRead(ENTER_BUTTON)) {  // still pressed? hold until release
-            timeout = 0;
-            delay(10);
-        }
-    }
+// Prepare timeBuffer
+void prepareInput(uint16_t& number) 
+{
+    // Write pre-set into buffer, reset index to 0
+    // Upon first key input, the pre-set will be overwritten
+    // This allows the user to keep the pre-set by pressing
+    // enter
+    sprintf(timeBuffer, "%d", number);
+    resetTimebufIndices(); 
 }
 
-void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0) {
-    // number - a value we're updating
-    // displayNum - the display number being modified
-    // field - field being modified, this will be displayed on displayNum as it
-    // is updated
-
-    // displayNum:
-    //  0 Destination Time
-    //  1 Present Time
-    //  2 Last Time Departed
-
-    // field: 0 month, 1 day, 2 year, 3 hour, 4 minute
+/*
+ * Update a field of a display using user input
+ * 
+ * number - a value we're updating (pre-set and result of input)
+ * displayNum - the display number being modified
+ * field - field being modified, this will be displayed on displayNum as it is updated
+ *          0 Destination Time, 1 Present Time, 2 Last Time Departed
+ */
+void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0) 
+{    
     int upperLimit;
     int lowerLimit;
+    int i;
+    uint16_t setNum = 0, prevNum = number;
+    int16_t numVal = 0;
+
+    int numChars = 2;
+
+    bool someupddone = false;
+
+    //timeBuffer[0] = '\0';  // No, timeBuffer is pre-set with previous value
 
     switch (field) {
-        case 0:  // month
+        case FIELD_MONTH:
             upperLimit = 12;
             lowerLimit = 1;
             break;
-        case 1:  // day
+        case FIELD_DAY:
             upperLimit = daysInMonth(month, year);
             lowerLimit = 1;
             break;
-        case 2:  // year
-            if (displaySet->isRTC() == 1) {  // year is limited for RTC, RTC is on display 1
-                upperLimit = 2099;
-                lowerLimit = 2020;
-            } else {
-                upperLimit = 9999;
-                lowerLimit = 0;
-            }
+        case FIELD_YEAR:
+            upperLimit = 9999;
+            lowerLimit = 0;           
+            numChars = 4;
             break;
-        case 3:  // hour
+        case FIELD_HOUR: 
             upperLimit = 23;
             lowerLimit = 0;
             break;
-        case 4:  // minute
+        case FIELD_MINUTE:  
             upperLimit = 59;
             lowerLimit = 0;
             break;
-    }
+    }    
 
-    if (digitalRead(ENTER_BUTTON)) {
-        uint16_t setNum = 0;
-        uint16_t numVal = 0;
-        Serial.println("Enter Next...");
-        while (!checkTimeOut() && !digitalRead(ENTER_BUTTON) && numVal < 2) {
-            timeout = 0;   
-            get_key();
+    #ifdef TC_DBG        
+    Serial.println("setField: Awaiting digits or ENTER...");
+    #endif
 
-            if (strlen(timeBuffer) < 2) {
-                if (timeBuffer[numVal] == (upperLimit + 1))
-                    timeBuffer[numVal] = lowerLimit;
-                setNum = timeBuffer[numVal];
-                setUpdate(setNum, field);
-                numVal++;
-                        
-                Serial.print("Time Buffer: ");
-                Serial.println(timeBuffer);
-            }
-            Serial.print("numVal: ");
-            Serial.println(numVal);
+    // Force keypad to send keys to our buffer
+    isSetUpdate = true; 
+    
+    while( !checkTimeOut() && !digitalRead(ENTER_BUTTON) &&     
+              ( (!someupddone && number == prevNum) || strlen(timeBuffer) < numChars) ) {
+        
+        get_key();      // Why???
+
+        /* Using strlen here means that we always need to start a new number at timebuffer[0]. 
+         * This is therefore NOT a ringbuffer!
+         */
+        setNum = 0;
+        for(i = 0; i < strlen(timeBuffer); i++) {
+            setNum *= 10;
+            setNum += (timeBuffer[i] - '0');             
         }
+
+        // Show setNum in field
+        if(prevNum != setNum) {
+            someupddone = true;
+            setUpdate(setNum, field);                   
+            prevNum = setNum;            
+        } 
+
+        myloop();    
+        delay(50);
+                    
+        //Serial.print("Setfield: setNum: ");
+        //Serial.println(setNum);                 
     }
+
+    // Force keypad to send keys somewhere else but our buffer
+    isSetUpdate = false; 
+    
+    numVal = 0;
+    for(i = 0; i < strlen(timeBuffer); i++) {
+       numVal *= 10;
+       numVal += (timeBuffer[i] - '0');             
+    }
+    if(numVal < lowerLimit) numVal = lowerLimit;
+    if(numVal > upperLimit) numVal = upperLimit;
+    number = numVal;
+    setNum = numVal;
+    
+    setUpdate(setNum, field);  
+
+    #ifdef TC_DBG 
+    Serial.print("Setfield: number: ");
+    Serial.println(number);
+    #endif
 }  
 
-bool loadAutoInterval() {
+/* 
+ *  Load the autoInterval from Settings in memory (config file is not reloaded)
+ *  
+ *  Note: The autoInterval is no longer saved to the EEPROM.
+ *  It is written to the config file, which is updated accordingly.
+ */
+bool loadAutoInterval() 
+{
+    #ifdef TC_DBG
     Serial.println("Load Auto Interval");
-    // loads the autoInterval
-    // first location has autoInterval
-    autoInterval = (uint8_t)atoi(settings.autoRotateTimes);//EEPROM.read(AUTOINTERVAL_PREF);
-    if (autoInterval > 5) {
-        autoInterval = 1;  // default to first valid option if invalid read
-        Serial.println("BAD AUTO INT");
+    #endif
+    
+    autoInterval = (uint8_t)atoi(settings.autoRotateTimes);   //EEPROM.read(AUTOINTERVAL_PREF);
+    if(autoInterval > 5) {
+        autoInterval = 1;  
+        Serial.println("loadAutoInterval: Bad autoInterval, resetting to 1");
         return false;
     }
     return true;
 }
 
-void saveAutoInterval() {
-    Serial.println("Save Auto Interval");
-    // saves autoInterval
-    EEPROM.write(AUTOINTERVAL_PREF, autoInterval);
-    EEPROM.commit();
+/* 
+ *  Save the autoInterval 
+ *  
+ *  Note: The autoInterval is no longer saved to the EEPROM.
+ *  It is written to the config file, which is updated accordingly.
+ */
+void saveAutoInterval() 
+{
+    // Convert 'autoInterval' to string, write to settings, write settings file
+    sprintf(settings.autoRotateTimes, "%d", autoInterval);   
+    write_settings();
+    
+    // Obsolete    
+    //EEPROM.write(AUTOINTERVAL_PREF, autoInterval);
+    //EEPROM.commit();
 }
 
-void autoTimesEnter() {
-    Serial.println("Auto Times Button");
-    if (digitalRead(ENTER_BUTTON)) {
-        autoInterval++;
+/*
+ * Adjust the autoInverval and save
+ */
+void doSetAutoInterval() 
+{
+    bool autoDone = false;
 
-        timeout = 0;  //button pressed, reset timeout
-        if (autoInterval > 4)
-            autoInterval = 0;
+    #ifdef TC_DBG
+    Serial.println("doSetAutoInterval() involked");
+    #endif
+    
+    destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval], true);
+    destinationTime.on();
 
-        destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval], true);
+    presentTime.on();
+    departedTime.on();
+    if(autoTimeIntervals[autoInterval] == 0) {
+        presentTime.showOnlySettingVal("CUS", -1, true);    // Custom times to be shown
+        departedTime.showOnlySettingVal("TOM", -1, true);   
+    } else {       
+        presentTime.showOnlySettingVal("MIN", -1, true);    // Times cycled in xx minutes
+        departedTime.showOnlyUtes();        
+    }
 
-        if (autoTimeIntervals[autoInterval] == 0) {
-            presentTime.showOnlySettingVal("CUS", -1, true);
-            departedTime.showOnlySettingVal("TOM", -1, true);
-            departedTime.on();
-        } else {
-            departedTime.off();
-            presentTime.showOnlySettingVal("MIN", -1, true);
-        }
+    isEnterKeyHeld = false;
 
-        while (digitalRead(ENTER_BUTTON)) {  // still pressed? hold until release
-            timeout = 0;
-            delay(10);
-        }
+    timeout = 0;  // reset timeout
+
+    // Wait for enter
+    while(!checkTimeOut() && !autoDone) {
+      
+      // If pressed
+      if(digitalRead(ENTER_BUTTON)) {
+        
+          // wait for release
+          while(!checkTimeOut() && digitalRead(ENTER_BUTTON)) {
+              // If hold threshold is passed, return false */
+              myloop();
+              if(isEnterKeyHeld) {
+                  isEnterKeyHeld = false;
+                  autoDone = true;
+                  break;              
+              }
+              delay(10); 
+          }
+
+          if(!checkTimeOut() && !autoDone) {
+              
+              timeout = 0;  // button pressed, reset timeout
+
+              autoInterval++;       
+              if(autoInterval > 4)
+                  autoInterval = 0;
+
+              destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval], true);
+
+              if(autoTimeIntervals[autoInterval] == 0) {
+                  presentTime.showOnlySettingVal("CUS", -1, true);
+                  departedTime.showOnlySettingVal("TOM", -1, true);                  
+              } else {                  
+                  presentTime.showOnlySettingVal("MIN", -1, true);
+                  departedTime.showOnlyUtes();  
+              }
+          }
+          
+      } else {
+
+          myloop();
+          delay(100);
+          
+      }
+          
+    }
+
+    if(!checkTimeOut()) {  // only if there wasn't a timeout
+      
+        presentTime.off();
+        departedTime.off();
+
+        destinationTime.showOnlySave();
+
+        // Save it
+        saveAutoInterval();
+        
+        mydelay(1000);
+                
     }
 }
 
-void doGetBrightness(clockDisplay* displaySet) {
-    Serial.println("Get Brightness");
-    // Adjust the brightness of the selected displaySet and save
-    allLampTest();  // turn on all the segments
+/*
+ * Adjust the brightness of the selected displaySet and save
+ */
+void doSetBrightness(clockDisplay* displaySet) {
+  
+    int8_t number = displaySet->getBrightness();
+    bool briDone = false;
+
+    #ifdef TC_DBG
+    Serial.println("Set Brightness");
+    #endif
+
+    // turn on all the segments
+    allLampTest();  
+
+    // Display "LVL"
     displaySet->showOnlySettingVal("LVL", displaySet->getBrightness() / 3, false);
+  
+    isEnterKeyHeld = false;
 
-    while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-        adjustBrightness(displaySet);
-        delay(100);
+    timeout = 0;  // reset timeout
+
+    // Wait for enter
+    while(!checkTimeOut() && !briDone) {     
+      
+      // If pressed
+      if(digitalRead(ENTER_BUTTON)) {
+        
+          // wait for release
+          while(!checkTimeOut() && digitalRead(ENTER_BUTTON)) {
+              // If hold threshold is passed, return false */
+              myloop();
+              if(isEnterKeyHeld) {
+                  isEnterKeyHeld = false;
+                  briDone = true;
+                  break;              
+              }
+              delay(10); 
+          }
+
+          if(!checkTimeOut() && !briDone) {
+              
+              timeout = 0;  // button pressed, reset timeout
+
+              number = number + 3;
+              if(number > 15) number = 3;
+              displaySet->setBrightness(number);
+              displaySet->showOnlySettingVal("LVL", number / 3, false);
+              
+          }
+          
+      } else {
+        
+          myloop();
+          delay(100);
+          
+      }
+          
     }
 
-    if (!checkTimeOut()) {  // only if there wasn't a timeout and Enter key is held
-        displaySet->save();
+    if(!checkTimeOut()) {  // only if there wasn't a timeout 
+                
         displaySet->showOnlySave();
-        delay(1000);
-        waitForEnterRelease();
+
+        displaySet->save();
+        
+        mydelay(1000);        
+        
         allLampTest();  // turn on all the segments
+
+        // Convert bri values to strings, write to settings, write settings file
+        sprintf(settings.destTimeBright, "%d", destinationTime.getBrightness());           
+        sprintf(settings.presTimeBright, "%d", presentTime.getBrightness());
+        sprintf(settings.lastTimeBright, "%d", departedTime.getBrightness());        
+        write_settings();
     }
+
+    waitForEnterRelease();
 }
 
-void animate() {
-    // Show month after a short delay
+// Show all, month after a short delay
+void animate() 
+{    
     destinationTime.showAnimate1();
     presentTime.showAnimate1();
     departedTime.showAnimate1();
@@ -474,8 +779,9 @@ void animate() {
     departedTime.showAnimate2();
 }
 
-void allLampTest() {
-    // Activate lamp test on all displays and turn on
+// Activate lamp test on all displays and turn on
+void allLampTest() 
+{    
     destinationTime.on();
     presentTime.on();
     departedTime.on();
@@ -484,17 +790,56 @@ void allLampTest() {
     departedTime.lampTest();
 }
 
-void allOff() {
+void allOff() 
+{
     destinationTime.off();
     presentTime.off();
     departedTime.off();
 }
 
-void waitForEnterRelease() {
-    // Do nothing and wait for buttonSet to be released
-    while (digitalRead(ENTER_BUTTON)) {
-        timeout = 0;  // a button was pressed
-        delay(100);   //wait for release
+/* 
+ * Wait for ENTER to be released 
+ * Call myloop() to allow other stuff to proceed
+ * 
+ */
+void waitForEnterRelease() 
+{    
+    // Would be nice to activate eg the green LED here
+    // to signal the user to release the button....
+    
+    while(digitalRead(ENTER_BUTTON)) {
+        myloop();        
+        delay(100);   // wait for release
     }
+    isEnterKeyPressed = false;
+    isEnterKeyHeld = false;
+    isEnterKeyDouble = false;
     return;
+}
+
+/*
+ * MyDelay: For delays > 150ms
+ * Calls myloop() periodically
+ */
+void mydelay(int mydel) 
+{  
+    while(mydel >= 150) {
+        delay(100);
+        mydel -= 120;
+        myloop();
+    }  
+    delay(mydel);   
+}
+
+/*
+ *  Do this during enter_menu whenever we are cought in a while() loop
+ *  This allows other stuff to proceed
+ */
+void myloop() 
+{
+    //keypadLoop();   No, interferes with our menu
+    enterkeytick();    
+    //time_loop();    No, interferes with our menu
+    wifi_loop();
+    audio_loop();     
 }

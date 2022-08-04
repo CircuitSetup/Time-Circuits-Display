@@ -4,6 +4,7 @@
  * Code adapted from Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
+ * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +18,7 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
  */
 
 #ifndef _TC_AUDIO_H
@@ -29,14 +31,14 @@
 #include <AudioFileSourceSD.h>
 #include <AudioGeneratorMP3.h>
 #include <AudioOutputMixer.h>
-//#include <AudioFileSourceFunction.h>
-//#include <AudioGeneratorWAV.h>
 
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
 
 #include "driver/i2s.h"
+
+#include "tc_global.h"
 #include "tc_keypad.h"
 
 // SD Card
@@ -57,8 +59,9 @@ extern void play_keypad_sound(char key);
 extern void play_startup();
 extern void audio_loop();
 extern void play_file(const char *audio_file, double volume = 0.1, int channel = 0, bool firstStart = false);
-//extern void play_DTMF(float hz1, float hz2, double volume = 0.1);
 extern double getVolume();
 extern bool beepOn;
+
+extern bool audioMute;
 
 #endif

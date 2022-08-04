@@ -1,6 +1,10 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * Code adapted from Marmoset Electronics 
+ * https://www.marmosetelectronics.com/time-circuits-clock
+ * by John Monaco
+ * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,66 +18,146 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
  */
 
 #include "tc_settings.h"
 
-void settings_setup() {
-    //read configuration from FS json
-    Serial.println("mounting FS...");
+/*
+ * Read configuration from JSON config file
+ * If config file not found, create one with default settings
+ */
 
-    if (SPIFFS.begin()) {
-        Serial.println("mounted file system");
-        if (SPIFFS.exists("/config.json")) {
-            //file exists, reading and loading
-            Serial.println("reading config file");
-            File configFile = SPIFFS.open("/config.json", "r");
-            if (configFile) {
-                Serial.println("opened config file");
+bool haveFS = false;
 
-                StaticJsonDocument<1024> json;
-                DeserializationError error = deserializeJson(json, configFile);
+/*
+ * settings_setup()
+ * 
+ */
+void settings_setup() 
+{
+  bool writedefault = false;
 
-                serializeJson(json, Serial);
-                if (!error) {
-                    Serial.println("\nparsed json");
-                    strcpy(settings.ntpServer, json["ntpServer"]);
-                    strcpy(settings.gmtOffset, json["gmtOffset"]);
-                    strcpy(settings.daylightOffset, json["daylightOffset"]);
-                    strcpy(settings.autoRotateTimes, json["autoRotateTimes"]);
-                    strcpy(settings.destTimeBright, json["destTimeBright"]);
-                    strcpy(settings.presTimeBright, json["presTimeBright"]);
-                    strcpy(settings.lastTimeBright, json["lastTimeBright"]);
-                    //strcpy(settings.beepSound, json["beepSound"]);
-                } else {
-                    Serial.println("failed to load json config");
-                }
-                configFile.close();
-            }
+  #ifdef TC_DBG
+  Serial.println("settings_setup: Mounting FS...");
+  #endif
+
+  if(SPIFFS.begin()) {
+
+    #ifdef TC_DBG
+    Serial.println("settings_setup: Mounted file system");
+    #endif
+    
+    haveFS = true;
+    
+    if(SPIFFS.exists("/config.json")) {
+      
+      //file exists, load and parse it     
+      File configFile = SPIFFS.open("/config.json", "r");
+      
+      if (configFile) {
+
+        #ifdef TC_DBG
+        Serial.println("settings_setup: Opened config file");
+        #endif
+
+        StaticJsonDocument<1024> json;
+        DeserializationError error = deserializeJson(json, configFile);
+
+        #ifdef TC_DBG
+        serializeJson(json, Serial);
+        #endif
+        
+        if (!error) {
+
+          #ifdef TC_DBG
+          Serial.println("\nsettings_setup: Parsed json");
+          #endif
+          
+          if(json["ntpServer"]) {
+              strcpy(settings.ntpServer, json["ntpServer"]);
+          } else writedefault = true;          
+          if(json["timeZone"]) {
+              strcpy(settings.timeZone, json["timeZone"]);
+          } else writedefault = true;
+          if(json["autoRotateTimes"]) {
+              strcpy(settings.autoRotateTimes, json["autoRotateTimes"]);
+          } else writedefault = true;
+          if(json["destTimeBright"]) {
+              strcpy(settings.destTimeBright, json["destTimeBright"]);
+          } else writedefault = true;
+          if(json["presTimeBright"]) {
+              strcpy(settings.presTimeBright, json["presTimeBright"]);
+          } else writedefault = true;
+          if(json["lastTimeBright"]) {
+              strcpy(settings.lastTimeBright, json["lastTimeBright"]);
+          } else writedefault = true;
+          //if(json["beepSound"]) {
+          //  strcpy(settings.beepSound, json["beepSound"]);
+          //} else writedefault = true;
+          
         } else {
-            //config file does not exist - create it with default values
-            Serial.println("write new JSON file");
-            StaticJsonDocument<1024> json;
-
-            json["ntpServer"] = settings.ntpServer;
-            json["gmtOffset"] = settings.gmtOffset;
-            json["daylightOffset"] = settings.daylightOffset;
-            json["autoRotateTimes"] = settings.autoRotateTimes;
-            json["destTimeBright"] = settings.destTimeBright;
-            json["presTimeBright"] = settings.presTimeBright;
-            json["lastTimeBright"] = settings.lastTimeBright;
-            json["beepSound"] = settings.beepSound;
-
-            File configFile = SPIFFS.open("/config.json", FILE_WRITE);
-
-            serializeJson(json, Serial);
-            serializeJson(json, configFile);
-
-            configFile.close();
+          
+          Serial.println("settings_setup: Failed to load json config");
+          
         }
+        
+        configFile.close();
+      }
+      
     } else {
-        Serial.println("failed to mount FS");
+
+      writedefault = true;
+      
     }
-    //end read
+
+    if(writedefault) {
+      
+      // config file does not exist or is incomplete - create one 
+      
+      Serial.println("settings_setup: Settings missing or inomplete; writing new config file");
+      
+      write_settings();
+      
+    }
+    
+  } else {
+    
+    Serial.println("settings_setup: Failed to mount FS");
+  
+  }
 }
 
+void write_settings() 
+{
+  StaticJsonDocument<1024> json;
+
+  if(!haveFS) {
+    Serial.println("write_settings: Cannot write settings, FS not mounted");
+    return;
+  } 
+
+  #ifdef TC_DBG
+  Serial.println("write_settings: Writing config file");
+  #endif
+  
+  json["ntpServer"] = settings.ntpServer;
+  json["timeZone"] = settings.timeZone;
+  json["autoRotateTimes"] = settings.autoRotateTimes;
+  json["destTimeBright"] = settings.destTimeBright;
+  json["presTimeBright"] = settings.presTimeBright;
+  json["lastTimeBright"] = settings.lastTimeBright;
+  //json["beepSound"] = settings.beepSound;
+
+  File configFile = SPIFFS.open("/config.json", FILE_WRITE);
+
+  #ifdef TC_DBG
+  serializeJson(json, Serial);
+  Serial.println("\n");
+  #endif
+  
+  serializeJson(json, configFile);
+
+  configFile.close(); 
+  
+}

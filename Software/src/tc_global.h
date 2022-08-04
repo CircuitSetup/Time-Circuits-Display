@@ -18,35 +18,12 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- * 
  */
 
-#ifndef _TC_SETTINGS_H
-#define _TC_SETTINGS_H
 
-#include <ArduinoJson.h>  // https://github.com/bblanchon/ArduinoJson
-#include <FS.h>
-#include <SPIFFS.h>
+#ifndef _TC_GLOBAL_H
+#define _TC_GLOBAL_H
 
-#include "tc_global.h"
-
-extern void settings_setup();
-extern void write_settings();
-
-//default settings - change settings in the web interface 192.168.4.1
-
-// For list of time zones, see https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
-
-struct Settings {
-    char ntpServer[64] = "pool.ntp.org";
-    char timeZone[64] = "CET-1CEST,M3.5.0/02,M10.5.0/03";   
-    char autoRotateTimes[4] = "1";
-    char destTimeBright[4] = "15";
-    char presTimeBright[4] = "15";
-    char lastTimeBright[4] = "15";
-    //char beepSound[3] = "0";
-};
-
-extern struct Settings settings;
+//#define TC_DBG         // more debug output on Serial
 
 #endif

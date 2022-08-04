@@ -4,6 +4,7 @@
  * Code adapted from Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
+ * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,26 +18,34 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
  */
+
+// not yet supported by esp32 1.0.x
+//#include "esp_sntp.h" // TW 7/2022
 
 #include "tc_time.h"
 
 bool autoTrack = false;
+bool autoReadjust = false;
 int8_t minPrev;  // track previous minute
 
 bool x;  // for tracking second change
-bool y;  // for tracking second change
+bool y;  
 
 bool startup = false;
 bool startupSound = false;
 long startupNow = 0;
-int startupDelay = 1700; //the time between startup sound being played and the display coming on
+int startupDelay = 1700; // the time between startup sound being played and the display coming on
 
 struct tm _timeinfo;  //for NTP
 RTC_DS3231 rtc;       //for RTC IC
 
 long timetravelNow = 0;
 bool timeTraveled = false;
+bool presentTimeBogus = false;
+
+uint8_t timeout = 0;  // for tracking idle time in menus, reset to 0 on each button press
 
 // The displays
 clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_PREF);
@@ -45,7 +54,7 @@ clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 
 // Automatic times
 dateStruct destinationTimes[8] = {
-    //YEAR, MONTH, DAY, HOUR, MIN
+    //YEAR, MONTH, DAY, HOUR, MIN   
     {1985, 10, 26, 1, 21},
     {1985, 10, 26, 1, 24},
     {1955, 11, 5, 6, 0},
@@ -53,7 +62,7 @@ dateStruct destinationTimes[8] = {
     {2015, 10, 21, 16, 29},
     {1955, 11, 12, 6, 0},
     {1885, 1, 1, 0, 0},
-    {1885, 9, 2, 12, 0}};
+    {1885, 9, 2, 12, 0}};  
 
 dateStruct departedTimes[8] = {
     {1985, 10, 26, 1, 20},
@@ -63,68 +72,97 @@ dateStruct departedTimes[8] = {
     {1985, 10, 26, 11, 35},
     {1985, 10, 27, 2, 42},
     {1955, 11, 12, 21, 44},
-    {1955, 11, 13, 12, 0}};
+    {1955, 11, 13, 12, 0}};  
 
 int8_t autoTime = 0;  // selects the above array time
 
 const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
-void time_setup() {
-    pinMode(SECONDS_IN, INPUT_PULLDOWN);  // for monitoring seconds
+/*
+ * time_setup()
+ * 
+ */
+void time_setup() 
+{
+    bool validLoad = true;
+    
+    pinMode(SECONDS_IN, INPUT_PULLDOWN);  // for monitoring seconds (disabled ATM)
     //pinMode(STATUS_LED, OUTPUT);          // Status LED
 
     EEPROM.begin(512);
     
     // RTC setup
-    if (!rtc.begin()) {
-        //something went wrong with RTC IC
-        Serial.println("Couldn't find RTC");
-        while (1)
-            ;
+    if(!rtc.begin()) {
+        
+        Serial.println("time_setup: Couldn't find RTC. Panic!");
+        
+        // Setup pins for white LED
+        pinMode(WHITE_LED, OUTPUT);
+
+        // Blink forever
+        while (1) {
+            digitalWrite(WHITE_LED, HIGH);  
+            delay(1000);
+            digitalWrite(WHITE_LED, LOW);  
+            delay(1000);          
+        }           
+        
     }
 
-    if (rtc.lostPower() && WiFi.status() != WL_CONNECTED) {
+    if(rtc.lostPower() && WiFi.status() != WL_CONNECTED) {
+      
         // Lost power and battery didn't keep time, so set current time to compile time
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-        Serial.println("RTC Lost Power - set compile time");
+        
+        Serial.println("time_setup: RTC Lost Power - setting compile time");
+    
     }
 
     RTCClockOutEnable();  // Turn on the 1Hz second output
-
-    bool validLoad = true;
 
     // Start the displays by calling begin()
     presentTime.begin();
     destinationTime.begin();
     departedTime.begin();
 
-    presentTime.setRTC(true);  // configure as a display that will hold real time
+    // configure presentTime as a display that will hold real time
+    presentTime.setRTC(true);  
 
-    if (getNTPTime()) {
-        //set RTC with NTP time
-        Serial.print("RTC Set with NTP: ");
+    // modify the NTP polling interval; not yet supported by esp32 1.0.x
+    //sntp_set_sync_interval(1 * 60 * 60 * 1000UL); // 1 hour
+
+    // Set RTC with NTP time
+    if(getNTPTime()) {
+
+        #ifdef TC_DBG
+        Serial.print("time_setup: RTC set with NTP: ");
         Serial.println(settings.ntpServer);
+        #endif
+        
     }
 
-    if (!destinationTime.load()) {
-        validLoad = false;
-        // Set valid time and set if invalid load
+    // Load destination time (and set to default if invalid)
+    if(!destinationTime.load()) {
+        validLoad = false;  
         // 10/26/1985 1:21
         destinationTime.setMonth(10);
         destinationTime.setDay(26);
+        destinationTime.setYearOffset(0);
         destinationTime.setYear(1985);
         destinationTime.setHour(1);
-        destinationTime.setMinute(21);
+        destinationTime.setMinute(21);                   
         destinationTime.setBrightness((int)atoi(settings.destTimeBright));
         destinationTime.save();
     }
 
-    if (!departedTime.load()) {
-        validLoad = false;
-        // Set valid time and set if invalid load
+    // Load departed time (and set to default if invalid)
+    if(!departedTime.load()) {
+        validLoad = false; 
+
         // 10/26/1985 1:20
         departedTime.setMonth(10);
         departedTime.setDay(26);
+        destinationTime.setYearOffset(0);
         departedTime.setYear(1985);
         departedTime.setHour(1);
         departedTime.setMinute(20);
@@ -132,94 +170,181 @@ void time_setup() {
         departedTime.save();
     }
 
-    if (!presentTime.load()) {  // Time isn't saved here, but other settings are
+    // "Load" present time; time isn't actually loaded here, but other settings are
+    if(!presentTime.load()) {  
         validLoad = false;
         presentTime.setBrightness((int)atoi(settings.presTimeBright));
         presentTime.save();
     }
 
-    if (!loadAutoInterval()) {  // load saved settings
-        validLoad = false;
-        Serial.println("BAD AUTO INT");
-        EEPROM.write(AUTOINTERVAL_PREF, 1);  // default to first option
-        EEPROM.commit();
+    // load autoInterval (from settings, not EEPROM)
+    if(!loadAutoInterval()) {  
+        // Obsolete; is part of settings now, EEPROM not used.        
+        //validLoad = false;
+        //Serial.println("time_setup: Bad autointerval");
+        //EEPROM.write(AUTOINTERVAL_PREF, 1);  // default to first option
+        //EEPROM.commit();
     }
 
-    if (autoTimeIntervals[autoInterval]) {                    // non zero interval, use auto times
-        destinationTime.setFromStruct(&destinationTimes[0]);  // load the first one
+    // if non zero autoInterval -> use auto times, load the first one
+    if(autoTimeIntervals[autoInterval]) {                    
+        destinationTime.setFromStruct(&destinationTimes[0]); 
         departedTime.setFromStruct(&departedTimes[0]);
-        Serial.println("SetFromStruct");
+        #ifdef TC_DBG
+        Serial.println("time_setup: autointerval enabled");
+        #endif
     }
 
-    if (!validLoad) {
-        // Show message
+    // Show "RE-SET" message if data loaded was invalid somehow
+    if(!validLoad) {          
         destinationTime.showOnlySettingVal("RE", -1, true);
         presentTime.showOnlySettingVal("SET", -1, true);
         delay(1000);
         allOff();
     }
 
-    Serial.println("Update Present Time - Setup");
-    presentTime.setDateTime(rtc.now());  // Load the time for initial animation show
+    // Load the time for initial animation show
+    
+    #ifdef TC_DBG
+    Serial.println("time_setup: Update Present Time");
+    #endif
+    
+    presentTime.setDateTime(rtc.now());  
 
     startup = true;
     startupSound = true;
 }
 
-void time_loop() {
-    if (startupSound) {
+/*
+ * time_loop()
+ * 
+ */
+void time_loop() 
+{
+    if(startupSound) {
         play_startup();
         startupSound = false;
     }
 
+    // Turn display on after startup delay
     if(startup && (millis() >= (startupNow + startupDelay))) {
         startupNow += startupDelay;
         animate();
         startup = false;
-        Serial.println("Startup animate triggered");
+        #ifdef TC_DBG
+        Serial.println("time_loop: Startup animate triggered");
+        #endif
     }
 
-    // time display update
-    DateTime dt = rtc.now();
-
-    // turns display back on after time traveling
-    if ((millis() > timetravelNow + 1500) && timeTraveled) {
+    // Turn display back on after time traveling
+    if((millis() > timetravelNow + 1500) && timeTraveled) {
         timeTraveled = false;
         beepOn = true;
         animate();
-        Serial.println("Display on after time travel");
+        #ifdef TC_DBG
+        Serial.println("time_loop: Display on after time travel");
+        #endif
     }
 
-    if (presentTime.isRTC()) {  //only set real time if present time is RTC
+    // RTC display update
+    DateTime dt = rtc.now();
+
+    if(presentTime.isRTC()) {  // only set real time if present time is RTC  
+
+        if(presentTimeBogus && dt.year() - presentTime.getYearOffset() > 9999) {  
+        
+            Serial.println("Rollover 9999->0 detected, adjusting RTC and yearOffset");
+        
+            int tyr = 2016, tyroffs = 2016;
+
+            // No need to calculate this...
+            /*while(tyr < 2000) {
+                tyr += 28;
+                tyroffs += 28;
+            }*/
+
+            presentTime.setYearOffset(tyroffs);        
+
+            dt = rtc.now();
+            
+            rtc.adjust(DateTime(
+                tyr,
+                dt.month(),
+                dt.day(),
+                dt.hour(),
+                dt.minute(),
+                dt.second()                
+                )
+            );
+            
+            dt = rtc.now();
+        }
+            
         presentTime.setDateTime(dt);
     }
 
     y = digitalRead(SECONDS_IN);
-    if (y != x) {      // different on half second
-        if (y == 0) {  // flash colon on half seconds, lit on start of second
-            /////////////////////////////
-            //
-            // auto display some times
-            Serial.print(dt.minute());
-            Serial.print(":");
-            Serial.println(dt.second());
+    if(y != x) {      // different on half second
+        if(y == 0) {  // flash colon on half seconds, lit on start of second
 
+            // First, handle colon to keep the pace
+            destinationTime.setColon(true);
+            presentTime.setColon(true);
+            departedTime.setColon(true);
+                        
+            // Logging beacon
+            #ifdef TC_DBG
+            if(!(dt.second() % 30)) {
+              Serial.print(dt.year());
+              Serial.print(":");
+              Serial.print(dt.month());
+              Serial.print(":");
+              Serial.print(dt.minute());
+              Serial.print(":");
+              Serial.println(dt.second());
+            }
+            #endif
+            
+            // Re-adjust time periodically using NTP
+            if(!presentTimeBogus && dt.second() == 10 && dt.minute() == 1) {
+                if(!autoReadjust) {                    
+                    if(getNTPTime()) {                    
+                        #ifdef TC_DBG
+                        Serial.println("time_loop: RTC re-adjusted using NTP");                    
+                        #endif
+                        autoReadjust = true;
+                    } else {                          
+                        Serial.println("time_loop: RTC re-adjustment via NTP failed");
+                    }
+                }
+            } else {
+                autoReadjust = false;
+            }
+
+            // Handle autoInterval (aka autoTrack):
+            
             // Do this on previous minute:59
-            if (dt.minute() == 59) {
+            if(dt.minute() == 59) {
                 minPrev = 0;
             } else {
                 minPrev = dt.minute() + 1;
             }
+            
+            // Only do this on second 59, check if it's time to do so
+            if(dt.second() == 59 && autoTimeIntervals[autoInterval] &&
+                      (minPrev % autoTimeIntervals[autoInterval] == 0)) {
+                
+                if(!autoTrack) {
 
-            // only do this on second 59, check if it's time to do so
-            if (dt.second() == 59 && autoTimeIntervals[autoInterval] &&
-                (minPrev % autoTimeIntervals[autoInterval] == 0)) {
-                Serial.println("DO IT");
-                if (!autoTrack) {
-                    autoTrack = true;  // Already did this, don't repeat
+                    #ifdef TC_DBG
+                    Serial.println("time_loop: autoInterval");
+                    #endif                  
+                    
+                    autoTrack = true;     // Already did this, don't repeat
+                    
                     // do auto times
                     autoTime++;
-                    if (autoTime > 4) {  // currently have 5 times
+                    if(autoTime > 4) {    // currently have 5 pre-programmed times
                         autoTime = 0;
                     }
 
@@ -234,184 +359,257 @@ void time_loop() {
                     allOff();
 
                     // Blank on second 59, display when new minute begins
-                    while (digitalRead(SECONDS_IN) == 0) {  // wait for the complete of this half second
-                                                            // Wait for this half second to end
+                    while(digitalRead(SECONDS_IN) == 0) {  // wait for the complete of this half second
+                                                           // Wait for this half second to end
                     }
-                    while (digitalRead(SECONDS_IN) == 1) {  // second on next low
-                                                            // Wait for the other half to end
+                    while(digitalRead(SECONDS_IN) == 1) {  // second on next low
+                                                           // Wait for the other half to end
                     }
 
-                    Serial.println("Update Present Time 2");
-                    if (presentTime.isRTC()) {
+                    #ifdef TC_DBG
+                    Serial.println("time_loop: Update Present Time");
+                    #endif
+                    
+                    if(presentTime.isRTC()) {
                         dt = rtc.now();               // New time by now
                         presentTime.setDateTime(dt);  // will be at next minute
                     }
+                    
                     animate();  // show all with month showing last
-
-                    // end auto times
                 }
+                
             } else {
+                
                 autoTrack = false;
-            }
+            
+            }                       
 
-            //////////////////////////////
-            destinationTime.setColon(true);
-            presentTime.setColon(true);
-            departedTime.setColon(true);
-
-            //play_file("/beep.mp3", 0.03, 1, false); //TODO: fix - currently causing crash
-
-        } else {  // colon
+        } else {  
+          
             destinationTime.setColon(false);
             presentTime.setColon(false);
             departedTime.setColon(false);
-        }  // colon
-
+            
+        }                                         
         //digitalWrite(STATUS_LED, !y);  // built-in LED shows system is alive, invert
-                                       // to light on start of new second
-        x = y;                         // remember it
+                                       // to light on start of new second                            
+        x = y;                        
     }
 
-    if (startup == false) {
+    if(startup == false) {
         presentTime.show();  // update display with object's time
-        destinationTime.show();
-        // destinationTime.showOnlySettingVal("SEC", dt.second(), true); // display
-        // end, no numbers, clear rest of screen
+        destinationTime.show();       
         departedTime.show();
     }
 }
 
-void timeTravel() {
+
+/* Time Travel: User entered a destination time.
+ *  
+ *  -) copy present time into departed time (where it freezes)
+ *  -) copy destination time to present time (where it continues to run as a clock)
+ *
+ *  This is called from tc_keypad.cpp 
+ */
+
+void timeTravel() 
+{
+    int tyr = 0;
+    int tyroffs = 0;
+        
     timetravelNow = millis();
     timeTraveled = true;
     beepOn = false;
     play_file("/timetravel.mp3", getVolume());
     allOff();
 
-    //copy present time to last time departed
-    if (presentTime.isRTC()) {
-        //has to be +1 since presentTime is currently RTC
-        departedTime.setMonth(presentTime.getMonth() + 1);
-    } else {
-        departedTime.setMonth(presentTime.getMonth());
-    }
+    // Copy present time to last time departed
+    departedTime.setMonth(presentTime.getMonth());
     departedTime.setDay(presentTime.getDay());
-    departedTime.setYear(presentTime.getYear());
+    departedTime.setYear(presentTime.getYear() - presentTime.getYearOffset());
     departedTime.setHour(presentTime.getHour());
     departedTime.setMinute(presentTime.getMinute());
+    departedTime.setYearOffset(0);
     departedTime.save();
 
-    //copy destination time to present time
-    //DateTime does not work before 2000 or after 2159
-    if (destinationTime.getYear() < 2000 || destinationTime.getYear() > 2159) {
-        if (presentTime.isRTC()) presentTime.setRTC(false);  //presentTime is no longer 'actual' time
-        presentTime.setMonth(destinationTime.getMonth());
-        presentTime.setDay(destinationTime.getDay());
-        presentTime.setYear(destinationTime.getYear());
-        //TODO: figure out way to set MMMDDYYYY, but keep HH:MM incrementing every min like a clock
-        presentTime.setHour(destinationTime.getHour());
-        presentTime.setMinute(destinationTime.getMinute());
-        presentTime.save();
-    } else if (destinationTime.getYear() >= 2000 || destinationTime.getYear() <= 2159) {
-        //present time still works as a clock, the time is just set differently
-        if (!presentTime.isRTC()) presentTime.setRTC(true);
-        rtc.adjust(DateTime(
-            destinationTime.getYear(),
-            destinationTime.getMonth() - 1,
-            destinationTime.getDay(),
-            destinationTime.getHour(),
-            destinationTime.getMinute()));
-    } else {
-        if (getNTPTime()) {
-            //if nothing or the same exact date try to get NTP time again
+    // Copy destination time to present time
+    // ATTN: DateTime does not work before 2000 or after 2159
+    // ATTN: RTC only used two-digit year 0-99
+    // so we use yearOffs to fake a year with identical calendar within 2000-2050
+    // RTC keeps running within 2000-2050, but display is skewed by yearOffs
+    // Upper limit 2050 to avoid overflow (RTC 0-99, DateTime 2000-2159) while clock 
+    // running and owner still alive.
+
+    tyr = destinationTime.getYear();
+    if(tyr < 2000) {
+        while(tyr < 2000) {
+            tyr += 28;
+            tyroffs += 28;
+        }
+    } else if(tyr > 2050) {
+        while(tyr > 2050) {
+            tyr -= 28;
+            tyroffs -= 28;
         }
     }
+    
+    presentTime.setRTC(true);
+    
+    presentTime.setYearOffset(tyroffs);
+
+    presentTimeBogus = true;  // Avoid overwriting this time by NTP time in loop
+    
+    rtc.adjust(DateTime(
+            tyr,
+            destinationTime.getMonth(),
+            destinationTime.getDay(),
+            destinationTime.getHour(),
+            destinationTime.getMinute()
+            )
+    );
+
+    #ifdef TC_DBG
+    Serial.println("timeTravel: Success, good luck!");
+    #endif
 }
 
-bool getNTPTime() {
-    if (WiFi.status() == WL_CONNECTED) {  //connectToWifi()) {
+/*
+ * Reset present time to actual present time
+ * (aka "return from time travel")
+ */
+void resetPresentTime() 
+{
+    // Copy "present" time to last time departed
+    departedTime.setMonth(presentTime.getMonth());
+    departedTime.setDay(presentTime.getDay());
+    departedTime.setYear(presentTime.getYear() - presentTime.getYearOffset());
+    departedTime.setHour(presentTime.getHour());
+    departedTime.setMinute(presentTime.getMinute());
+    departedTime.setYearOffset(0);
+    departedTime.save();
+    
+    presentTime.setYearOffset(0);
+  
+    if(presentTimeBogus) {
+        presentTimeBogus = false;
+        play_file("/timetravel.mp3", getVolume());
+    }
+  
+    allOff();
+  
+    presentTime.setRTC(true);
+  
+    getNTPTime(); 
+  
+    timetravelNow = millis();
+    timeTraveled = true; 
+}
+
+// choose your time zone from this list
+// https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+
+/* ATTN:
+ *  DateTime uses 1-12 for months
+ *  tm (_timeinfo) uses 0-11 for months
+ *  Hardware RTC uses 1-12 for months
+ *  Xprintf treats "%B" substition as from timeinfo, hence 0-11
+ */
+
+/*
+ * Get time from NTP
+ * (Saves time to RTC)
+ */
+bool getNTPTime() 
+{  
+    if(WiFi.status() == WL_CONNECTED) { 
+      
         // if connected to wifi, get NTP time and set RTC
-        configTime((long)atoi(settings.gmtOffset), (int)atoi(settings.daylightOffset), settings.ntpServer);
+        configTime(0, 0, settings.ntpServer);
+        setenv("TZ", settings.timeZone, 1);   // Set environment variable with time zone
+        tzset();
+
         int ntpRetries = 0;
-        if (!getLocalTime(&_timeinfo)) {
-            while (!getLocalTime(&_timeinfo)) {
-                if (ntpRetries >= 5) {  //retry up to 5 times then quit
-                    Serial.println("Couldn't get NTP time");
+        if(!getLocalTime(&_timeinfo)) {
+          
+            while(!getLocalTime(&_timeinfo)) {
+                if(ntpRetries >= 20) {  
+                    Serial.println("getNTPTime: Couldn't get NTP time");
                     return false;
                 } else {
                     ntpRetries++;
                 }
-                delay(500);
+                delay(800);
             }
+            
         }
-        Serial.println(&_timeinfo, "%A, %B %d %Y %H:%M:%S");
-        byte byteYear = (_timeinfo.tm_year + 1900) % 100;  // adding to get full YYYY from NTP year format
-                                                            // and keeping YY to set DS3232
-        presentTime.setDS3232time(_timeinfo.tm_sec, _timeinfo.tm_min,
-                                    _timeinfo.tm_hour, 0, _timeinfo.tm_mday,
-                                    _timeinfo.tm_mon, byteYear);
-        Serial.println("Time Set with NTP");
+
+        // Don't waste any time here...
+
+        // Timeinfo:  Years since 1900
+        // RTC:       0-99, 0 being 2000 
+        //            (important for leap year compensation, which only works from 2000-2099, not 2100 on, 
+        //            century bit has not influence on leap year comp., is buggy)          
+                                                            
+        presentTime.setDS3232time(_timeinfo.tm_sec, 
+                                    _timeinfo.tm_min,
+                                    _timeinfo.tm_hour, 
+                                    _timeinfo.tm_wday + 1,  // We use Su=1...Sa=7 on HW-RTC, tm uses 0-6 (days since Sunday)
+                                    _timeinfo.tm_mday,
+                                    _timeinfo.tm_mon + 1,   // Month needs to be 1-12, timeinfo uses 0-11
+                                    _timeinfo.tm_year + 1900 - 2000); 
+                                    
+        #ifdef TC_DBG            
+        Serial.print("getNTPTime: Result from NTP update: ");
+        Serial.println(&_timeinfo, "%A, %B %d %Y %H:%M:%S");            
+        Serial.println("getNTPTime: Time successfully set with NTP");
+        #endif
+        
         return true;
+        
     } else {
+      
+        Serial.println("getNTPTime: Time NOT set with NTP, WiFi not connected");
         return false;
+    
     }
 }
 
-void doGetAutoTimes() {
-    destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval], true);
-
-    presentTime.on();
-    if (autoTimeIntervals[autoInterval] == 0) {
-        presentTime.showOnlySettingVal("CUS", -1, true);
-        departedTime.showOnlySettingVal("TOM", -1, true);
-        departedTime.on();
-    } else {
-        departedTime.off();
-        presentTime.showOnlySettingVal("MIN", -1, true);
-    }
-
-    while (!checkTimeOut() && !digitalRead(ENTER_BUTTON)) {
-        autoTimesEnter();
-        delay(100);
-    }
-
-    if (!checkTimeOut()) {  // only if there wasn't a timeout
-        presentTime.off();
-        departedTime.off();
-        destinationTime.showOnlySave();
-        saveAutoInterval();
-        delay(1000);
-    }
-}
-
-bool checkTimeOut() {
-    // Call frequently while waiting for button press, increments timeout each
-    // second, returns true when maxtime reached.
+/* 
+ * Call this frequently while waiting for button press,  
+ * increments timeout each second, returns true when maxtime reached.
+ * 
+ */
+bool checkTimeOut() 
+{    
     y = digitalRead(SECONDS_IN);
-    if (x != y) {
+    if(x != y) {
         x = y;
         //digitalWrite(STATUS_LED, !y);  // update status LED
-        if (y == 0) {
+        if(y == 0) {
             timeout++;
         }
     }
 
-    if (timeout >= maxTime) {
-        return true;  // timed out
+    if(timeout >= maxTime) {
+        return true;  
     }
+    
     return false;
 }
 
-void RTCClockOutEnable() {
-    // enable the 1Hz RTC output
+// enable the 1Hz RTC output
+void RTCClockOutEnable() 
+{    
     uint8_t readValue = 0;
+    
     Wire.beginTransmission(DS3231_I2CADDR);
     Wire.write((byte)0x0E);  // select control register
     Wire.endTransmission();
 
     Wire.requestFrom(DS3231_I2CADDR, 1);
     readValue = Wire.read();
-    readValue = readValue & B11100011;  // enable squarewave and set to 1Hz,
+    readValue = readValue & B11100011;  
+    // enable squarewave and set to 1Hz,
     // Bit 2 INTCN - 0 enables OSC
     // Bit 3 and 4 - 0 0 sets 1Hz
 
@@ -421,11 +619,12 @@ void RTCClockOutEnable() {
     Wire.endTransmission();
 }
 
-bool isLeapYear(int year) {
-    // Determine if provided year is a leap year.
-    if (year % 4 == 0) {
-        if (year % 100 == 0) {
-            if (year % 400 == 0) {
+// Determine if provided year is a leap year.
+bool isLeapYear(int year) 
+{
+    if(year % 4 == 0) {
+        if(year % 100 == 0) {
+            if(year % 400 == 0) {
                 return true;
             } else {
                 return false;
@@ -436,12 +635,13 @@ bool isLeapYear(int year) {
     } else {
         return false;
     }
-}  // isLeapYear
+}
 
-int daysInMonth(int month, int year) {
-    // Find number of days in a month
-    if (month == 2 && isLeapYear(year)) {
+// Find number of days in a month
+int daysInMonth(int month, int year) 
+{    
+    if(month == 2 && isLeapYear(year)) {
         return 29;
     }
     return monthDays[month - 1];
-}  // daysInMonth
+}  

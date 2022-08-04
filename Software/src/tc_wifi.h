@@ -1,6 +1,10 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * Code adapted from Marmoset Electronics 
+ * https://www.marmosetelectronics.com/time-circuits-clock
+ * by John Monaco
+ * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,6 +18,7 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
  */
 
 #ifndef _TC_WIFI_H
@@ -22,11 +27,13 @@
 #include <FS.h> 
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <SPIFFS.h>
-#include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
-#include <clockdisplay.h>
-#include <tc_menus.h>
-#include <tc_time.h>
-#include <tc_settings.h>
+#include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
+
+#include "tc_global.h"
+#include "clockdisplay.h"
+#include "tc_menus.h"
+#include "tc_time.h"
+#include "tc_settings.h"
 
 extern void wifi_setup();
 extern void wifi_loop();

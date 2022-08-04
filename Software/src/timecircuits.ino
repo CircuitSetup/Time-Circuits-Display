@@ -4,6 +4,7 @@
  * Code adapted from Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
+ * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +18,7 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * 
  */
 
 #include <Arduino.h>
@@ -28,19 +30,21 @@
 #include "tc_wifi.h"
 #include "tc_settings.h"
 
-///////////////////////////////////////////////////////
-void setup() {
+void setup() 
+{
     Serial.begin(115200);
 
     Wire.begin();
-    //scan();
+    #ifdef TC_DBG
+    scan();
+    #endif
     Serial.println();
 
     settings_setup();
     wifi_setup();
     audio_setup();
 
-    #ifdef TEST_MODE
+    #ifdef TC_DBG
     allLampTest();
     delay(5000);
     #endif
@@ -52,8 +56,9 @@ void setup() {
 
 ///////////////////////////////////////////////////////
 
-void loop() {
-    keypadLoop();
+void loop() 
+{
+    keypad_loop();
     get_key();
     time_loop();
     wifi_loop();
