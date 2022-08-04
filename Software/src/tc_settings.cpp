@@ -95,6 +95,12 @@ void settings_setup()
           //if(json["beepSound"]) {
           //  strcpy(settings.beepSound, json["beepSound"]);
           //} else writedefault = true;
+          if(json["wifiConRetries"]) {
+              strcpy(settings.wifiConRetries, json["wifiConRetries"]);
+          } else writedefault = true;
+          if(json["wifiConTimeout"]) {
+              strcpy(settings.wifiConTimeout, json["wifiConTimeout"]);
+          } else writedefault = true;
           
         } else {
           
@@ -115,7 +121,7 @@ void settings_setup()
       
       // config file does not exist or is incomplete - create one 
       
-      Serial.println("settings_setup: Settings missing or inomplete; writing new config file");
+      Serial.println("settings_setup: Settings missing or incomplete; writing new config file");
       
       write_settings();
       
@@ -148,6 +154,8 @@ void write_settings()
   json["presTimeBright"] = settings.presTimeBright;
   json["lastTimeBright"] = settings.lastTimeBright;
   //json["beepSound"] = settings.beepSound;
+  json["wifiConRetries"] = settings.wifiConRetries;
+  json["wifiConTimeout"] = settings.wifiConTimeout;
 
   File configFile = SPIFFS.open("/config.json", FILE_WRITE);
 

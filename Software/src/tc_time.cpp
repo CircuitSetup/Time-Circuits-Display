@@ -106,16 +106,13 @@ void time_setup()
             digitalWrite(WHITE_LED, LOW);  
             delay(1000);          
         }           
-        
     }
 
     if(rtc.lostPower() && WiFi.status() != WL_CONNECTED) {
-      
         // Lost power and battery didn't keep time, so set current time to compile time
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
         
         Serial.println("time_setup: RTC Lost Power - setting compile time");
-    
     }
 
     RTCClockOutEnable();  // Turn on the 1Hz second output
@@ -138,7 +135,6 @@ void time_setup()
         Serial.print("time_setup: RTC set with NTP: ");
         Serial.println(settings.ntpServer);
         #endif
-        
     }
 
     // Load destination time (and set to default if invalid)
@@ -162,7 +158,7 @@ void time_setup()
         // 10/26/1985 1:20
         departedTime.setMonth(10);
         departedTime.setDay(26);
-        destinationTime.setYearOffset(0);
+        departedTime.setYearOffset(0);
         departedTime.setYear(1985);
         departedTime.setHour(1);
         departedTime.setMinute(20);
@@ -279,7 +275,6 @@ void time_loop()
             
             dt = rtc.now();
         }
-            
         presentTime.setDateTime(dt);
     }
 
@@ -385,11 +380,9 @@ void time_loop()
             }                       
 
         } else {  
-          
             destinationTime.setColon(false);
             presentTime.setColon(false);
             departedTime.setColon(false);
-            
         }                                         
         //digitalWrite(STATUS_LED, !y);  // built-in LED shows system is alive, invert
                                        // to light on start of new second                            
@@ -593,7 +586,6 @@ bool checkTimeOut()
     if(timeout >= maxTime) {
         return true;  
     }
-    
     return false;
 }
 

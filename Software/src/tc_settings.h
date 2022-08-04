@@ -45,6 +45,8 @@ struct Settings {
     char presTimeBright[4] = "15";
     char lastTimeBright[4] = "15";
     //char beepSound[3] = "0";
+    char wifiConRetries[4] = "3";   // Default: 3 retries
+    char wifiConTimeout[4] = "7";   // Default: 7 seconds time-out
 };
 
 extern struct Settings settings;

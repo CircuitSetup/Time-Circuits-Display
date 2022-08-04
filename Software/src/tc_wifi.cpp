@@ -34,6 +34,8 @@ WiFiManagerParameter custom_destTimeBright("dt_bright", "Destination Time Bright
 WiFiManagerParameter custom_presTimeBright("pt_bright", "Present Time Brightness (1-15)", settings.presTimeBright, 3);
 WiFiManagerParameter custom_lastTimeBright("lt_bright", "Last Time Departed Brightness (1-15)", settings.lastTimeBright, 3);
 //WiFiManagerParameter custom_beepSound;
+WiFiManagerParameter custom_wifiConTimeout("wificon", "WiFi Connection Timeout in seconds (1-15)", settings.wifiConTimeout, 3);
+WiFiManagerParameter custom_wifiConRetries("wifiret", "WiFi Connection Retries (1-15)", settings.wifiConRetries, 3);
 
 bool shouldSaveConfig = false;
 
@@ -43,6 +45,8 @@ bool shouldSaveConfig = false;
  */
 void wifi_setup() 
 {
+    int temp;
+
     WiFi.mode(WIFI_STA);  // explicitly set mode, esp defaults to STA_AP
 
     //wm.setCountry("");                  // was US; not needed at all
@@ -53,8 +57,16 @@ void wifi_setup()
     wm.setSaveParamsCallback(saveParamsCallback);
     wm.setHostname("TCD-Settings");
 
-    wm.setConnectRetries(10);           
-    wm.setConnectTimeout(15);           
+    temp = (int)atoi(settings.wifiConTimeout);
+    if(temp < 0) temp = 0;
+    if(temp > 15) temp = 15;
+    wm.setConnectTimeout(temp);
+
+    temp = (int)atoi(settings.wifiConRetries);
+    if(temp < 0) temp = 0;
+    if(temp > 15) temp = 15;
+    wm.setConnectRetries(temp);  
+
     wm.setCleanConnect(true);           
     //wm.setRemoveDuplicateAPs(false);  
 
@@ -73,6 +85,8 @@ void wifi_setup()
 
     //reset settings - wipe credentials for testing
     //wm.resetSettings();
+    wm.addParameter(&custom_wifiConTimeout);
+    wm.addParameter(&custom_wifiConRetries);
     wm.addParameter(&custom_ntpServer);
     wm.addParameter(&custom_timeZone);
     wm.addParameter(&custom_autoRotateTimes);
@@ -82,6 +96,8 @@ void wifi_setup()
  //   wm.addParameter(&custom_beepSound);
 
     //make sure the settings form has the correct values
+    custom_wifiConTimeout.setValue(settings.wifiConTimeout, 3);
+    custom_wifiConRetries.setValue(settings.wifiConRetries, 3);
     custom_ntpServer.setValue(settings.ntpServer, 63);
     custom_timeZone.setValue(settings.timeZone, 63);
     custom_autoRotateTimes.setValue(settings.autoRotateTimes, 3);
@@ -127,7 +143,9 @@ void wifi_loop()
         strcpy(settings.presTimeBright, custom_presTimeBright.getValue());        
         strcpy(settings.lastTimeBright, custom_lastTimeBright.getValue());                  
         //strcpy(settings.beepSound, getParam("custom_beepSound"));
-
+        strcpy(settings.wifiConRetries, custom_wifiConRetries.getValue()); 
+        strcpy(settings.wifiConTimeout, custom_wifiConTimeout.getValue()); 
+        
         write_settings();        
 
         shouldSaveConfig = false;
