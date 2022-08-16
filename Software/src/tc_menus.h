@@ -38,9 +38,11 @@
 #define MODE_DEST 0
 #define MODE_PRES 1
 #define MODE_DEPT 2
-#define MODE_AINT 3
-#define MODE_BRI  4
-#define MODE_END  5
+#define MODE_ALRM 3
+#define MODE_AINT 4
+#define MODE_BRI  5
+#define MODE_NET  6
+#define MODE_END  7
 #define MODE_MIN  MODE_DEST
 #define MODE_MAX  MODE_END
 
@@ -57,13 +59,20 @@ void displayHighlight(int& number);
 void displaySelect(int& number);
 void setUpdate(uint16_t& number, int field);
 void setField(uint16_t& number, uint8_t field, int year, int month);
+extern bool loadAlarm();
+extern void saveAlarm();
+void doSetAlarm();
+extern void alarmOff();
+extern bool alarmOn();
 bool loadAutoInterval();
 void saveAutoInterval();
 extern void putAutoInt(int position);
 void doSetAutoInterval();
 void doSetBrightness(clockDisplay* displaySet);
+void doShowNetInfo();
 void waitForEnterRelease();
 void prepareInput(uint16_t& number);
+void waitAudioDone();
 
 extern void animate();
 extern void allLampTest();

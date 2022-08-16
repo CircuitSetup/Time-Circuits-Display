@@ -21,29 +21,64 @@
  * 
  */
 
+
+/* Time travel:
+ *  
+ * Time travel works as follows:
+ * First, enter a date and a time through the keypad, either mmddyyyy or mmddyyyyhhmm, then
+ * press ENTER. Note that there is no visual feed back, like in the movie.
+ * If the date or time is invalid, the sound will hint you to this.
+ * To activate the time travel function, then hold "0" on the keypad for 2 seconds. A sound
+ * will activate, and you will travel in time: The destination time is now present time, and
+ * your old present time is not stored in the last departure time.
+ * 
+ * To return to actual present time, hold "9" for 2 seconds.
+ */
+
 // not yet supported by esp32 1.0.x
-//#include "esp_sntp.h" // TW 7/2022
+//#include "esp_sntp.h" 
 
 #include "tc_time.h"
 
-bool autoTrack = false;
+bool autoIntDone = false;
 bool autoReadjust = false;
-int8_t minPrev;  // track previous minute
+bool alarmDone = false;
+int8_t minNext;  
 
 bool x;  // for tracking second change
 bool y;  
 
 bool startup = false;
 bool startupSound = false;
-long startupNow = 0;
-int startupDelay = 1700; // the time between startup sound being played and the display coming on
+unsigned long startupNow = 0;
+#ifndef TWPRIVATE
+int  startupDelay = 1000; // the time between startup sound being played and the display coming on
+#else
+int  startupDelay = 1000; // the time between startup sound being played and the display coming on
+#endif
 
 struct tm _timeinfo;  //for NTP
 RTC_DS3231 rtc;       //for RTC IC
 
-long timetravelNow = 0;
+unsigned long timetravelNow = 0;
 bool timeTraveled = false;
-bool presentTimeBogus = false;
+
+uint64_t timeDifference = 0;
+bool     timeDiffUp = false;  // true = add difference, false = subtract difference
+
+// This controls the app's behavior as regards saving times to the EEPROM.
+// If this is true, a time is saved to the EEPROM, whenever
+//  - the user enters a destination time for time travel and presses ENTER
+//  - the user activates time travel (hold "0") 
+//  - the user returns from a time travel (hold "9")
+// True means that playing around with time travel is persistent, and even
+// present time is kept over a power loss (if the battery backed RTC keeps
+// the time). Downside is that the user's custom destination and last
+// departure times are overwritten during a time travel.
+// False means that time travel games are non-persistent, and the
+// user's custom times (as set up in the keypad menu) are never overwritten.
+// Also, "false" avoids flash wear.
+bool timetravelPersistent = true;
 
 uint8_t timeout = 0;  // for tracking idle time in menus, reset to 0 on each button press
 
@@ -54,29 +89,78 @@ clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 
 // Automatic times
 dateStruct destinationTimes[8] = {
-    //YEAR, MONTH, DAY, HOUR, MIN   
-    {1985, 10, 26, 1, 21},
-    {1985, 10, 26, 1, 24},
-    {1955, 11, 5, 6, 0},
-    {1985, 10, 27, 11, 0},
+    //YEAR, MONTH, DAY, HOUR, MIN
+#ifndef TWPRIVATE    
+    {1985, 10, 26,  1, 21},
+    {1985, 10, 26,  1, 24},
+    {1955, 11,  5,  6,  0},
+    {1985, 10, 27, 11,  0},
     {2015, 10, 21, 16, 29},
-    {1955, 11, 12, 6, 0},
-    {1885, 1, 1, 0, 0},
-    {1885, 9, 2, 12, 0}};  
+    {1955, 11, 12,  6,  0},
+    {1885,  1,  1,  0,  0},
+    {1885,  9,  2, 12,  0}};
+#else
+    {1985,  7, 23, 20,  1},       // TW private
+    {1985, 11, 23, 16, 24},   
+    {1986,  5, 26, 14, 12},    
+    {1986,  8, 23, 11,  0},     
+    {1986, 12, 24, 21, 22},   
+    {1987,  3, 20, 19, 31},    
+    {1987,  5, 26,  0,  0},      
+    {1988, 12, 24, 22, 31}};  
+#endif    
 
 dateStruct departedTimes[8] = {
-    {1985, 10, 26, 1, 20},
-    {1955, 11, 12, 22, 4},
-    {1985, 10, 26, 1, 34},
-    {1885, 9, 7, 9, 10},
+#ifndef TWPRIVATE
+    {1985, 10, 26,  1, 20},
+    {1955, 11, 12, 22,  4},
+    {1985, 10, 26,  1, 34},
+    {1885,  9,  7,  9, 10},
     {1985, 10, 26, 11, 35},
-    {1985, 10, 27, 2, 42},
+    {1985, 10, 27,  2, 42},
     {1955, 11, 12, 21, 44},
-    {1955, 11, 13, 12, 0}};  
+    {1955, 11, 13, 12,  0}};
+#else  
+    {2017,  7, 11, 10, 11},       // TW private
+    {1988,  6,  3, 15, 30},    
+    {1943,  3, 15,  7, 47},     
+    {2016,  6, 22, 16, 11},    
+    {1982,  5, 15,  9, 41},     
+    {1943, 11, 25, 11, 11},   
+    {1970,  5, 26,  8, 22},     
+    {2021,  5,  5, 10,  9}};    
+#endif    
 
 int8_t autoTime = 0;  // selects the above array time
 
 const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+#ifdef FAKE_POWER_ON
+OneButton fakePowerOnKey = OneButton(FAKE_POWER_BUTTON,
+    true,    // Button is active LOW
+    true     // Enable internal pull-up resistor
+);
+bool isFPBKeyChange = false;
+bool isFPBKeyPressed = false;
+bool waitForFakePowerButton = false;
+#endif
+bool FPBUnitIsOn = true;
+
+const unsigned short int mon_yday[2][13] =
+{
+    { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 }, 
+    { 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366 }
+};
+const uint64_t mins1kYears[] = 
+{
+               0,  525074400, 1050674400, 1576274400, 2101874400, 
+      2627474400, 3153074400, 3678674400, 4204274400, 4729874400 
+};
+const uint32_t hours1kYears[] = 
+{
+                  0,  525074400/60, 1050674400/60, 1576274400/60, 2101874400/60, 
+      2627474400/60, 3153074400/60, 3678674400/60, 4204274400/60, 4729874400/60 
+};
 
 /*
  * time_setup()
@@ -85,9 +169,23 @@ const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 void time_setup() 
 {
     bool validLoad = true;
+    bool rtcbad = false;
     
-    pinMode(SECONDS_IN, INPUT_PULLDOWN);  // for monitoring seconds (disabled ATM)
-    //pinMode(STATUS_LED, OUTPUT);          // Status LED
+    pinMode(SECONDS_IN, INPUT_PULLDOWN);  // for monitoring seconds 
+    
+    pinMode(STATUS_LED, OUTPUT);          // Status LED
+
+    #ifdef FAKE_POWER_ON
+    waitForFakePowerButton = ((int)atoi(settings.fakePwrOn) > 0) ? true : false;
+    
+    if(waitForFakePowerButton) {                        
+        fakePowerOnKey.setClickTicks(10);     // millisec after single click is assumed (default 400)
+        fakePowerOnKey.setPressTicks(50);     // millisec after press is assumed (default 800)        
+        fakePowerOnKey.setDebounceTicks(50);  // millisec after safe click is assumed (default 50)
+        fakePowerOnKey.attachLongPressStart(fpbKeyPressed);
+        fakePowerOnKey.attachLongPressStop(fpbKeyLongPressStop);
+    }
+    #endif
 
     EEPROM.begin(512);
     
@@ -106,13 +204,18 @@ void time_setup()
             digitalWrite(WHITE_LED, LOW);  
             delay(1000);          
         }           
+        
     }
 
     if(rtc.lostPower() && WiFi.status() != WL_CONNECTED) {
+      
         // Lost power and battery didn't keep time, so set current time to compile time
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
         
-        Serial.println("time_setup: RTC Lost Power - setting compile time");
+        Serial.println("time_setup: RTC lost power, setting compile time. Change battery!");
+
+        rtcbad = true;
+    
     }
 
     RTCClockOutEnable();  // Turn on the 1Hz second output
@@ -122,31 +225,54 @@ void time_setup()
     destinationTime.begin();
     departedTime.begin();
 
+    // initialize clock mode: 12 hour vs 24 hour
+    bool mymode24 = (int)atoi(settings.mode24) ? true : false;
+    presentTime.set1224(mymode24);
+    destinationTime.set1224(mymode24);
+    departedTime.set1224(mymode24);
+
     // configure presentTime as a display that will hold real time
     presentTime.setRTC(true);  
 
-    // modify the NTP polling interval; not yet supported by esp32 1.0.x
-    //sntp_set_sync_interval(1 * 60 * 60 * 1000UL); // 1 hour
+    // Determine if user wanted Time Travels to be persistent
+    timetravelPersistent = (int)atoi(settings.timesPers) ? true : false;
+
+    // Load present time settings (yearOffs, timeDifference)
+    presentTime.load();
+    if(!timetravelPersistent) {
+        timeDifference = 0;
+    } 
+    
+    if(rtcbad) {        
+        presentTime.setYearOffset(0);
+        timeDifference = 0;
+        // FIXME  .. anything else?
+    }
 
     // Set RTC with NTP time
     if(getNTPTime()) {
 
         #ifdef TC_DBG
-        Serial.print("time_setup: RTC set with NTP: ");
+        Serial.print("time_setup: RTC set through NTP from ");
         Serial.println(settings.ntpServer);
         #endif
+
+        // Save YearOffs to EEPROM if change is detected
+        if(presentTime.getYearOffset() != presentTime.loadYOffs()) {
+            presentTime.save();
+        } 
+        
     }
 
     // Load destination time (and set to default if invalid)
     if(!destinationTime.load()) {
         validLoad = false;  
-        // 10/26/1985 1:21
-        destinationTime.setMonth(10);
-        destinationTime.setDay(26);
         destinationTime.setYearOffset(0);
-        destinationTime.setYear(1985);
-        destinationTime.setHour(1);
-        destinationTime.setMinute(21);                   
+        destinationTime.setYear(destinationTimes[0].year);   
+        destinationTime.setMonth(destinationTimes[0].month);
+        destinationTime.setDay(destinationTimes[0].day);             
+        destinationTime.setHour(destinationTimes[0].hour);
+        destinationTime.setMinute(destinationTimes[0].minute);                   
         destinationTime.setBrightness((int)atoi(settings.destTimeBright));
         destinationTime.save();
     }
@@ -154,33 +280,22 @@ void time_setup()
     // Load departed time (and set to default if invalid)
     if(!departedTime.load()) {
         validLoad = false; 
-
-        // 10/26/1985 1:20
-        departedTime.setMonth(10);
-        departedTime.setDay(26);
         departedTime.setYearOffset(0);
-        departedTime.setYear(1985);
-        departedTime.setHour(1);
-        departedTime.setMinute(20);
+        departedTime.setYear(departedTimes[0].year);
+        departedTime.setMonth(departedTimes[0].month);
+        departedTime.setDay(departedTimes[0].day);        
+        departedTime.setHour(departedTimes[0].hour);
+        departedTime.setMinute(departedTimes[0].minute);     
         departedTime.setBrightness((int)atoi(settings.lastTimeBright));
         departedTime.save();
     }
 
-    // "Load" present time; time isn't actually loaded here, but other settings are
-    if(!presentTime.load()) {  
-        validLoad = false;
-        presentTime.setBrightness((int)atoi(settings.presTimeBright));
-        presentTime.save();
-    }
+    // load autoInterval ("time rotation interval") from settings 
+    loadAutoInterval();
 
-    // load autoInterval (from settings, not EEPROM)
-    if(!loadAutoInterval()) {  
-        // Obsolete; is part of settings now, EEPROM not used.        
-        //validLoad = false;
-        //Serial.println("time_setup: Bad autointerval");
-        //EEPROM.write(AUTOINTERVAL_PREF, 1);  // default to first option
-        //EEPROM.commit();
-    }
+    // load alarm from alarmconfig file
+    // Don't care if data invalid, alarm is off in that case
+    loadAlarm();
 
     // if non zero autoInterval -> use auto times, load the first one
     if(autoTimeIntervals[autoInterval]) {                    
@@ -200,15 +315,35 @@ void time_setup()
     }
 
     // Load the time for initial animation show
-    
-    #ifdef TC_DBG
-    Serial.println("time_setup: Update Present Time");
-    #endif
-    
-    presentTime.setDateTime(rtc.now());  
+    presentTime.setDateTimeDiff(myrtcnow());   
 
-    startup = true;
-    startupSound = true;
+#ifdef FAKE_POWER_ON    
+    if(waitForFakePowerButton) { 
+        digitalWrite(WHITE_LED, HIGH);  
+        delay(500);
+        digitalWrite(WHITE_LED, LOW); 
+        isFPBKeyChange = false; 
+        FPBUnitIsOn = false; 
+           
+        #ifdef TC_DBG
+        Serial.println("time_setup: waiting for fake power on");
+        #endif             
+        
+    } else {
+#endif
+        
+        startup = true;
+        startupSound = true; 
+        FPBUnitIsOn = true;  
+         
+#ifdef FAKE_POWER_ON
+    }
+#endif
+
+    #ifdef TC_DBG
+    Serial.println("time_setup: Done.");
+    #endif  
+    
 }
 
 /*
@@ -216,15 +351,45 @@ void time_setup()
  * 
  */
 void time_loop() 
-{
+{              
+    #ifdef TC_DBG
+    int dbgLastMin;
+    #endif
+
+    #ifdef FAKE_POWER_ON
+    if(waitForFakePowerButton) { 
+        fakePowerOnKey.tick();
+        
+        if(isFPBKeyChange) {
+            if(isFPBKeyPressed) {
+                if(!FPBUnitIsOn) {                                 
+                    startup = true;
+                    startupSound = true;
+                    FPBUnitIsOn = true;
+                }
+            } else {
+                if(FPBUnitIsOn) {       
+                    startup = false;
+                    startupSound = false; 
+                    timeTraveled = false;              
+                    FPBUnitIsOn = false;
+                    allOff();
+                    stopAudio();
+                }
+            }
+            isFPBKeyChange = false;
+        }
+    }
+    #endif
+    
     if(startupSound) {
-        play_startup();
+        startupNow = millis();
+        play_startup(presentTime.getNightMode());
         startupSound = false;
     }
 
     // Turn display on after startup delay
-    if(startup && (millis() >= (startupNow + startupDelay))) {
-        startupNow += startupDelay;
+    if(startup && (millis() - startupNow >= startupDelay)) {        
         animate();
         startup = false;
         #ifdef TC_DBG
@@ -233,113 +398,222 @@ void time_loop()
     }
 
     // Turn display back on after time traveling
-    if((millis() > timetravelNow + 1500) && timeTraveled) {
+    if(timeTraveled && (millis() - timetravelNow >= 1500)) {                
+        animate();
         timeTraveled = false;
         beepOn = true;
-        animate();
         #ifdef TC_DBG
         Serial.println("time_loop: Display on after time travel");
         #endif
-    }
-
-    // RTC display update
-    DateTime dt = rtc.now();
-
-    if(presentTime.isRTC()) {  // only set real time if present time is RTC  
-
-        if(presentTimeBogus && dt.year() - presentTime.getYearOffset() > 9999) {  
-        
-            Serial.println("Rollover 9999->0 detected, adjusting RTC and yearOffset");
-        
-            int tyr = 2016, tyroffs = 2016;
-
-            // No need to calculate this...
-            /*while(tyr < 2000) {
-                tyr += 28;
-                tyroffs += 28;
-            }*/
-
-            presentTime.setYearOffset(tyroffs);        
-
-            dt = rtc.now();
-            
-            rtc.adjust(DateTime(
-                tyr,
-                dt.month(),
-                dt.day(),
-                dt.hour(),
-                dt.minute(),
-                dt.second()                
-                )
-            );
-            
-            dt = rtc.now();
-        }
-        presentTime.setDateTime(dt);
     }
 
     y = digitalRead(SECONDS_IN);
     if(y != x) {      // different on half second
         if(y == 0) {  // flash colon on half seconds, lit on start of second
 
-            // First, handle colon to keep the pace
+            // First, handle colon
             destinationTime.setColon(true);
             presentTime.setColon(true);
             departedTime.setColon(true);
-                        
-            // Logging beacon
-            #ifdef TC_DBG
-            if(!(dt.second() % 30)) {
-              Serial.print(dt.year());
-              Serial.print(":");
-              Serial.print(dt.month());
-              Serial.print(":");
-              Serial.print(dt.minute());
-              Serial.print(":");
-              Serial.println(dt.second());
-            }
-            #endif
+
+            // RTC display update
             
+            DateTime dt = myrtcnow(); 
+
             // Re-adjust time periodically using NTP
-            if(!presentTimeBogus && dt.second() == 10 && dt.minute() == 1) {
-                if(!autoReadjust) {                    
-                    if(getNTPTime()) {                    
+            if(dt.second() == 10 && dt.minute() == 1) {
+              
+                if(!autoReadjust) {     
+
+                    uint64_t oldT;
+
+                    autoReadjust = true;
+
+                    if(timeDifference) {
+                        oldT = dateToMins(dt.year() - presentTime.getYearOffset(), 
+                                       dt.month(), dt.day(), dt.hour(), dt.minute());                
+                    }
+                       
+                    if(getNTPTime()) {  
+
+                        bool wasFakeRTC = false;                         
+
+                        dt = myrtcnow();                         
+                        
                         #ifdef TC_DBG
                         Serial.println("time_loop: RTC re-adjusted using NTP");                    
                         #endif
-                        autoReadjust = true;
+
+                        if(timeDifference) {
+                            uint64_t newT = dateToMins(dt.year() - presentTime.getYearOffset(), 
+                                                    dt.month(), dt.day(), dt.hour(), dt.minute()); 
+                            wasFakeRTC = (newT > oldT) ? (newT - oldT > 30) : (oldT - newT > 30);
+                        
+                            // User played with RTC; return to actual present time
+                            if(wasFakeRTC) timeDifference = 0;
+                        }
+                        
+                        // Save to EEPROM if change is detected, or if RTC was way off
+                        if( (presentTime.getYearOffset() != presentTime.loadYOffs()) || wasFakeRTC ) {
+                            if(timetravelPersistent) {
+                                presentTime.save();
+                            } else {
+                                presentTime.saveYOffs();
+                            }
+                        }
+                         
                     } else {                          
+                        
                         Serial.println("time_loop: RTC re-adjustment via NTP failed");
+
+                        uint16_t myYear = dt.year();
+                        
+                        if(myYear > 2050) {
+
+                            // Keep RTC within 2000-2050 
+                            // (No need to re-calculate timeDifference,
+                            // is based on actual present time (RTC-yoffs)
+                            // and therefore stays the same
+                             
+                            int16_t  yoffs = 0;                             
+                     
+                            while(myYear > 2050) {
+                                myYear -= 28;
+                                yoffs -= 28;
+                            }
+
+                            presentTime.setYearOffset(yoffs);
+
+                            dt = myrtcnow(); 
+                    
+                            rtc.adjust(DateTime(
+                                myYear,
+                                dt.month(),
+                                dt.day(),
+                                dt.hour(),
+                                dt.minute(),
+                                dt.second()                
+                                )
+                            );
+                            
+                            dt = myrtcnow(); 
+                            
+                            presentTime.setDateTimeDiff(dt);
+
+                            // Save YearOffs to EEPROM if change is detected
+                            if(presentTime.getYearOffset() != presentTime.loadYOffs()) {
+                                if(timetravelPersistent) {
+                                    presentTime.save();
+                                } else {
+                                    presentTime.saveYOffs();
+                                }
+                            } 
+
+                        }
                     }
                 }
+                
             } else {
+              
                 autoReadjust = false;
+            
+            }
+                
+            if(dt.year() - presentTime.getYearOffset() > 9999) {  
+
+                // RTC(+yearOffs) roll-over
+            
+                Serial.println("Rollover 9999->1 detected, adjusting RTC and yearOffset");
+
+                if(timeDifference) {
+
+                    // Correct timeDifference
+                    timeDifference = 5255474400 - timeDifference;
+                    timeDiffUp = !timeDiffUp;
+
+                }
+            
+                // For year 1, set year to 2017 and yearOffs to 2016
+                presentTime.setYearOffset(2016);        
+
+                // Update RTC
+                dt = myrtcnow();                 
+                rtc.adjust(DateTime(
+                    2017,
+                    dt.month(),
+                    dt.day(),
+                    dt.hour(),
+                    dt.minute(),
+                    dt.second()                
+                    )
+                );
+
+                // If time travels are persistent, save new value
+                if(timetravelPersistent) {
+                    presentTime.save();
+                } else {
+                    presentTime.saveYOffs();
+                }
+                
+                dt = myrtcnow(); 
+                
+            }     
+            
+            presentTime.setDateTimeDiff(dt);
+                                      
+            // Logging beacon
+            #ifdef TC_DBG
+            if((dt.second() == 0) && (dt.minute() != dbgLastMin)) {
+              Serial.print(dt.year());
+              Serial.print("/");
+              Serial.print(dt.month());
+              Serial.print(" ");
+              dbgLastMin = dt.minute();
+              Serial.print(dbgLastMin);
+              Serial.print(".");
+              Serial.print(dt.second());
+              Serial.print(" ");
+              Serial.println(rtc.getTemperature());
+            }
+            #endif
+            
+            // Handle alarm
+
+            if(alarmOnOff) {
+                bool alarmRTC = ((int)atoi(settings.alarmRTC) > 0) ? true : false;
+                int compHour = alarmRTC ? dt.hour()   : presentTime.getHour();
+                int compMin  = alarmRTC ? dt.minute() : presentTime.getMinute();
+                if((alarmHour == compHour) && (alarmMinute == compMin) ) {
+                    if(!alarmDone) {
+                        alarmDone = true;
+                        play_alarm();
+                    }
+                } else {
+                    alarmDone = false;
+                } 
             }
 
-            // Handle autoInterval (aka autoTrack):
+            // Handle autoInterval
             
             // Do this on previous minute:59
-            if(dt.minute() == 59) {
-                minPrev = 0;
-            } else {
-                minPrev = dt.minute() + 1;
-            }
+            minNext = (dt.minute() == 59) ? 0 : dt.minute() + 1;
             
             // Only do this on second 59, check if it's time to do so
-            if(dt.second() == 59 && autoTimeIntervals[autoInterval] &&
-                      (minPrev % autoTimeIntervals[autoInterval] == 0)) {
+            if(dt.second() == 59 && 
+               autoTimeIntervals[autoInterval] &&
+               (minNext % autoTimeIntervals[autoInterval] == 0)) {
                 
-                if(!autoTrack) {
+                if(!autoIntDone) {
 
                     #ifdef TC_DBG
                     Serial.println("time_loop: autoInterval");
                     #endif                  
                     
-                    autoTrack = true;     // Already did this, don't repeat
+                    autoIntDone = true;     // Already did this, don't repeat
                     
-                    // do auto times
+                    // cycle through pre-programmed times
                     autoTime++;
-                    if(autoTime > 4) {    // currently have 5 pre-programmed times
+                    if(autoTime > 7) {    // currently have 8 pre-programmed times
                         autoTime = 0;
                     }
 
@@ -356,44 +630,79 @@ void time_loop()
                     // Blank on second 59, display when new minute begins
                     while(digitalRead(SECONDS_IN) == 0) {  // wait for the complete of this half second
                                                            // Wait for this half second to end
+                        myloop();
                     }
                     while(digitalRead(SECONDS_IN) == 1) {  // second on next low
                                                            // Wait for the other half to end
+                        myloop();                    
                     }
 
                     #ifdef TC_DBG
                     Serial.println("time_loop: Update Present Time");
                     #endif
                     
-                    if(presentTime.isRTC()) {
-                        dt = rtc.now();               // New time by now
-                        presentTime.setDateTime(dt);  // will be at next minute
-                    }
+                    dt = myrtcnow();                  // New time by now                         
+                    presentTime.setDateTimeDiff(dt);  // will be at next minute
                     
                     animate();  // show all with month showing last
                 }
                 
             } else {
                 
-                autoTrack = false;
+                autoIntDone = false;
             
-            }                       
+            }                      
+
+/*
+            // Test
+            for(int cc = 999; cc < 10000; cc += 1000) {
+              int myy = cc, mym = 2, myd = 19, myh = 0, mymi = 21;
+              int myy2, mym2, myd2, myh2, mymi2;
+              unsigned long t1, t2;
+              uint64_t mytotal;
+              
+              t1 = millis();
+              
+              mytotal = dateToMins(myy, mym, myd, myh, mymi);
+              minsToDate(mytotal, myy2, mym2, myd2, myh2, mymi2);
+              t2 = millis();
+              
+              Serial.print(mytotal, DEC);
+              Serial.print(" ");
+              Serial.print(myy2, DEC);
+              Serial.print(" ");
+              Serial.print(mym2, DEC);
+              Serial.print(" ");
+              Serial.print(myd2, DEC);
+              Serial.print(" ");
+              Serial.print(myh2, DEC);
+              Serial.print(" ");
+              Serial.println(mymi2, DEC);
+  
+              //Serial.print(" millis: ");
+              //Serial.println(t2 - t1, DEC);
+            }
+
+            // TEST END
+*/           
 
         } else {  
+          
             destinationTime.setColon(false);
             presentTime.setColon(false);
             departedTime.setColon(false);
-        }                                         
-        //digitalWrite(STATUS_LED, !y);  // built-in LED shows system is alive, invert
-                                       // to light on start of new second                            
-        x = y;                        
+            
+        }                                          
+                                         
+        x = y;  
+
+        if(!startup && !timeTraveled && FPBUnitIsOn) {
+            presentTime.show();  
+            destinationTime.show();       
+            departedTime.show();
+        }
     }
 
-    if(startup == false) {
-        presentTime.show();  // update display with object's time
-        destinationTime.show();       
-        departedTime.show();
-    }
 }
 
 
@@ -413,7 +722,8 @@ void timeTravel()
     timetravelNow = millis();
     timeTraveled = true;
     beepOn = false;
-    play_file("/timetravel.mp3", getVolume());
+    play_file("/timetravel.mp3", getVolumeNM(presentTime.getNightMode()), 0);
+    
     allOff();
 
     // Copy present time to last time departed
@@ -423,43 +733,42 @@ void timeTravel()
     departedTime.setHour(presentTime.getHour());
     departedTime.setMinute(presentTime.getMinute());
     departedTime.setYearOffset(0);
-    departedTime.save();
-
-    // Copy destination time to present time
-    // ATTN: DateTime does not work before 2000 or after 2159
-    // ATTN: RTC only used two-digit year 0-99
-    // so we use yearOffs to fake a year with identical calendar within 2000-2050
-    // RTC keeps running within 2000-2050, but display is skewed by yearOffs
-    // Upper limit 2050 to avoid overflow (RTC 0-99, DateTime 2000-2159) while clock 
-    // running and owner still alive.
-
-    tyr = destinationTime.getYear();
-    if(tyr < 2000) {
-        while(tyr < 2000) {
-            tyr += 28;
-            tyroffs += 28;
-        }
-    } else if(tyr > 2050) {
-        while(tyr > 2050) {
-            tyr -= 28;
-            tyroffs -= 28;
-        }
+    
+    // We only save the new time to the EEPROM if user wants persistence.
+    // Might not be preferred; first, this messes with the user's custom
+    // times. Secondly, it wears the flash memory.
+    if(timetravelPersistent) {
+        departedTime.save();
     }
-    
-    presentTime.setRTC(true);
-    
-    presentTime.setYearOffset(tyroffs);
 
-    presentTimeBogus = true;  // Avoid overwriting this time by NTP time in loop
-    
-    rtc.adjust(DateTime(
-            tyr,
-            destinationTime.getMonth(),
-            destinationTime.getDay(),
-            destinationTime.getHour(),
-            destinationTime.getMinute()
-            )
-    );
+    // Calculate time difference between RTC and destination time
+
+    DateTime dt = myrtcnow();
+    uint64_t rtcTime = dateToMins(dt.year() - presentTime.getYearOffset(), 
+                                  dt.month(), 
+                                  dt.day(), 
+                                  dt.hour(), 
+                                  dt.minute());
+      
+    uint64_t newTime = dateToMins(
+                destinationTime.getYear(),
+                destinationTime.getMonth(),
+                destinationTime.getDay(),
+                destinationTime.getHour(),
+                destinationTime.getMinute());
+
+    if(rtcTime < newTime) {
+        timeDifference = newTime - rtcTime;
+        timeDiffUp = true;
+    } else {
+        timeDifference = rtcTime - newTime;
+        timeDiffUp = false;
+    }                
+
+    // Save presentTime settings if to be persistent
+    if(timetravelPersistent) {
+        presentTime.save();       
+    }
 
     #ifdef TC_DBG
     Serial.println("timeTravel: Success, good luck!");
@@ -471,7 +780,15 @@ void timeTravel()
  * (aka "return from time travel")
  */
 void resetPresentTime() 
-{
+{    
+    timetravelNow = millis();
+    timeTraveled = true; 
+    if(timeDifference) {
+        play_file("/timetravel.mp3", getVolumeNM(presentTime.getNightMode()), 0);
+    }
+  
+    allOff();
+    
     // Copy "present" time to last time departed
     departedTime.setMonth(presentTime.getMonth());
     departedTime.setDay(presentTime.getDay());
@@ -479,23 +796,21 @@ void resetPresentTime()
     departedTime.setHour(presentTime.getHour());
     departedTime.setMinute(presentTime.getMinute());
     departedTime.setYearOffset(0);
-    departedTime.save();
-    
-    presentTime.setYearOffset(0);
-  
-    if(presentTimeBogus) {
-        presentTimeBogus = false;
-        play_file("/timetravel.mp3", getVolume());
+
+    // We only save the new time to the EEPROM if user wants persistence.
+    // Might not be preferred; first, this messes with the user's custom
+    // times. Secondly, it wears the flash memory.
+    if(timetravelPersistent) {
+        departedTime.save();
     }
-  
-    allOff();
-  
-    presentTime.setRTC(true);
-  
-    getNTPTime(); 
-  
-    timetravelNow = millis();
-    timeTraveled = true; 
+
+    // Reset time, Yes, it's that simple.
+    timeDifference = 0;
+
+    // Save presentTime settings (yearoffs, timeDiff) if to be persistent
+    if(timetravelPersistent) {
+        presentTime.save();
+    } 
 }
 
 // choose your time zone from this list
@@ -514,12 +829,24 @@ void resetPresentTime()
  */
 bool getNTPTime() 
 {  
+    uint16_t newYear;
+    int16_t  newYOffs = 0;
+    
     if(WiFi.status() == WL_CONNECTED) { 
       
         // if connected to wifi, get NTP time and set RTC
+        
         configTime(0, 0, settings.ntpServer);
+        
         setenv("TZ", settings.timeZone, 1);   // Set environment variable with time zone
         tzset();
+
+        if(strlen(settings.ntpServer) == 0) {
+            #ifdef TC_DBG            
+            Serial.println("getNTPTime: NTP skipped, server not defined");
+            #endif
+            return false;
+        }
 
         int ntpRetries = 0;
         if(!getLocalTime(&_timeinfo)) {
@@ -531,26 +858,35 @@ bool getNTPTime()
                 } else {
                     ntpRetries++;
                 }
-                delay(800);
+                mydelay((ntpRetries >= 3) ? 300 : 50);
             }
             
-        }
+        } 
 
         // Don't waste any time here...
 
         // Timeinfo:  Years since 1900
         // RTC:       0-99, 0 being 2000 
         //            (important for leap year compensation, which only works from 2000-2099, not 2100 on, 
-        //            century bit has not influence on leap year comp., is buggy)          
+        //            century bit has not influence on leap year comp., is buggy)   
+
+        newYear = _timeinfo.tm_year + 1900; 
+                       
+        while(newYear > 2050) {
+            newYear -= 28;
+            newYOffs -= 28;
+        }
+
+        presentTime.setYearOffset(newYOffs);
                                                             
         presentTime.setDS3232time(_timeinfo.tm_sec, 
-                                    _timeinfo.tm_min,
-                                    _timeinfo.tm_hour, 
-                                    _timeinfo.tm_wday + 1,  // We use Su=1...Sa=7 on HW-RTC, tm uses 0-6 (days since Sunday)
-                                    _timeinfo.tm_mday,
-                                    _timeinfo.tm_mon + 1,   // Month needs to be 1-12, timeinfo uses 0-11
-                                    _timeinfo.tm_year + 1900 - 2000); 
-                                    
+                                  _timeinfo.tm_min,
+                                  _timeinfo.tm_hour, 
+                                  _timeinfo.tm_wday + 1,  // We use Su=1...Sa=7 on HW-RTC, tm uses 0-6 (days since Sunday)
+                                  _timeinfo.tm_mday,
+                                  _timeinfo.tm_mon + 1,   // Month needs to be 1-12, timeinfo uses 0-11
+                                  newYear - 2000); 
+                                  
         #ifdef TC_DBG            
         Serial.print("getNTPTime: Result from NTP update: ");
         Serial.println(&_timeinfo, "%A, %B %d %Y %H:%M:%S");            
@@ -558,7 +894,7 @@ bool getNTPTime()
         #endif
         
         return true;
-        
+            
     } else {
       
         Serial.println("getNTPTime: Time NOT set with NTP, WiFi not connected");
@@ -577,7 +913,7 @@ bool checkTimeOut()
     y = digitalRead(SECONDS_IN);
     if(x != y) {
         x = y;
-        //digitalWrite(STATUS_LED, !y);  // update status LED
+        digitalWrite(STATUS_LED, !y);  // update status LED
         if(y == 0) {
             timeout++;
         }
@@ -586,6 +922,7 @@ bool checkTimeOut()
     if(timeout >= maxTime) {
         return true;  
     }
+    
     return false;
 }
 
@@ -614,7 +951,7 @@ void RTCClockOutEnable()
 // Determine if provided year is a leap year.
 bool isLeapYear(int year) 
 {
-    if(year % 4 == 0) {
+    if(year & 3 == 0) {
         if(year % 100 == 0) {
             if(year % 400 == 0) {
                 return true;
@@ -637,3 +974,116 @@ int daysInMonth(int month, int year)
     }
     return monthDays[month - 1];
 }  
+
+/*
+ * Internal replacement for RTC.now()
+ * RTC sometimes loses sync and does not send data,
+ * which is interpreted as 2165/165/165 etc
+ * Check for this and retry in case.
+ */
+DateTime myrtcnow()
+{
+    DateTime dt = rtc.now();
+    int retries = 0;
+
+    while ((dt.month() < 1 || dt.month() > 12 ||
+            dt.day()   < 1 || dt.day()   > 31 ||
+            dt.hour() > 23 ||
+            dt.minute() < 0 || dt.minute() > 59) &&
+            retries < 30 ) {
+
+            delay((retries < 5) ? 50 : 100);
+            dt = rtc.now(); 
+            retries++;
+    }
+
+    if(retries > 0) {
+        Serial.print("myrtcnow: ");
+        Serial.print(retries, DEC);
+        Serial.println(" retries needed to read RTC");
+    }
+
+    return dt;
+}    
+
+      
+
+uint64_t dateToMins(int year, int month, int day, int hour, int minute)
+{
+    uint64_t total64 = 0;
+    uint32_t total32 = 0;
+    int c = year, d = 1;
+
+    total32 = hours1kYears[year / 1000];
+    if(total32) d = (year / 1000) * 1000;
+    
+    while(c-- > d) {
+        total32 += (isLeapYear(c) ? (8760+24) : 8760);
+    }
+    total32 += (mon_yday[isLeapYear(year) ? 1 : 0][month - 1] * 24);
+    total32 += (day - 1) * 24;
+    total32 += hour;
+    total64 = (uint64_t)total32 * 60;
+    total64 += minute;
+    return total64;
+}
+
+void minsToDate(uint64_t total64, int& year, int& month, int& day, int& hour, int& minute)
+{
+    int c = 1, d = 9;
+    int temp;
+    uint32_t total32;
+    
+    year = month = day = 1;
+    hour = 0; 
+    minute = 0;
+
+    while(d >= 0) {
+        if(total64 > mins1kYears[d]) break;
+        d--;
+    }
+    if(d > 0) {
+        total64 -= mins1kYears[d];
+        c = year = d * 1000;
+    }    
+
+    total32 = total64;
+   
+    while(1) {
+        temp = isLeapYear(c++) ? ((8760+24)*60) : (8760*60);
+        if(total32 < temp) break;
+        year++;
+        total32 -= temp;        
+    }
+    
+    c = 1;
+    temp = isLeapYear(year) ? 1 : 0;
+    while(c < 12) {
+        if(total32 < (mon_yday[temp][c]*24*60)) break;
+        c++;
+    }
+    month = c;
+    total32 -= (mon_yday[temp][c-1]*24*60);
+
+    temp = total32 / (24*60);
+    day = temp + 1;
+    total32 -= (temp * (24*60));
+
+    temp = total32 / 60;
+    hour = temp;
+    
+    minute = total32 - (temp * 60);
+}
+
+#ifdef FAKE_POWER_ON
+void fpbKeyPressed() 
+{
+    isFPBKeyPressed = true;
+    isFPBKeyChange = true;
+}  
+void fpbKeyLongPressStop() 
+{
+    isFPBKeyPressed = false;
+    isFPBKeyChange = true;
+}    
+#endif

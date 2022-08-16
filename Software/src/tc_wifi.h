@@ -41,6 +41,11 @@ extern void wifi_loop();
 void saveParamsCallback();
 void saveConfigCallback();
 
+extern void updateConfigPortalValues();
+
+extern int wifi_getmode();
+extern bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d);
+
 extern String getParam(String name);
 
 #endif

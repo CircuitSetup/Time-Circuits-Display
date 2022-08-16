@@ -31,47 +31,82 @@
  * The menu is involked by holding the ENTER button.
  * First step is to choose a menu item. The available "items" are
  *    - enter custom dates/times for the three displays
- *    - select the autoInterval ("PRE-SET")
+ *    - set the alarm ("ALA-RM")
+ *    - select the Time-Rotation Interval ("ROT-INT")
  *    - select the brightness for the three displays ("BRI-GHT")
+ *    - view network data, ie IP address ("NET-WRK")
  *    - quit the menu ("END")
  *  Pressing ENTER cycles through the list, holding ENTER selects an item, ie a mode.
- *  If mode is "enter custom dates/times":
+ *  How to to enter custom dates/times or set the RTC (real time clock):
+ *      - Note that the pre-set for destination and last time departed will be the previous 
+ *        date/time stored in the EEPROM, not the date/time that was shown before entering 
+ *        the menu. The pre-set for the present time display is the time stored in the RTC 
+ *        (real time clock).
  *      - the field to enter data into is shown (exclusively)
- *      - 2 or 4 digits can be entered, or ENTER can be pressed, upon which the next field is activated.
- *        (Note that the month needs to be entered numerically, and the hour needs to be entered in 24
- *        hour mode, which is then internally converted to 12 hour mode.)
+ *      - data entry works as follows: 
+ *        ) a pre-set is shown in the field
+ *        ) if you want to keep this pre-set, press ENTER to proceed to next field.
+ *        ) if you enter a digit, the pre-set is overwritten
+ *        ) if you enter 2 (for year: 4) digits, the menu proceeds to the next field
+ *        ) if you enter less than the maximum digits, you can press ENTER to proceed
+ *          to the next field.
+ *        Note that the month needs to be entered numerically, and the hour needs to be entered in 24
+ *        hour mode, which is then shown in 12 hour mode (if this mode is active).
  *      - After entering data into all fields, the data is saved and the menu is left automatically.
- *      - Note that after entering dates/times into the "destination" or "last departure" displays,
- *        autoInterval is set to 0 and your entered date/time(s) are shown permanently (see below).
- *      - If you entered a custom date/time into the "present" time display, this time is then
- *        used as actual the present time, and continues to run like a clock. (As opposed to the 
- *        "destination" and "last departure" times, which are stale.)
- *  If mode is "select AutoInterval" (display shows "INT")
- *      - Press ENTER to cycle through the possible autoInverval settings.
+ *      - Note that after entering dates/times into the "destination" or "last time departed" displays,
+ *        the time-rotation interval is set to 0 and your entered date/time(s) are shown permanently 
+ *        (see below).
+ *      - If you entered a date/time into the "present" time display, this time is then stored to
+ *        the RTC and used as actual the present time, and continues to run like a clock. (As opposed 
+ *        to the "destination" and "last departure" times, which are stale.) If you don't have NTP
+ *        (network time) available, this is the way to set the clock to actual present time. If the 
+ *        clock is connected to the the network, your entered time will eventually be overwritten
+ *        by the time received over the network.
+ *  How to set the alarm:
+ *      - First option is "on" of "off". Press ENTER to toggle, hold ENTER to proceed.
+ *      - Next, enter the hour in 24-hour-format. This works in the same way as described above.
+ *      - Next, enter the minute.
+ *      - "SAVE" is shown briefly, the alarm is saved.
+ *      Note that the alarm is a recurring alarm; it will sound every day at the programmed time,
+ *      unless switched off through the menu.
+ *      The alarm base is configurable in the WiFi-accessible Setup page. It can either be RTC
+ *      (ie the actual present time), or "present time", ie whatever is currently displayed in 
+ *      present time. 
+ *  How to select the Time Rotation Interval (display shows "INT")
+ *      - Press ENTER to cycle through the possible settings.
  *      - Hold ENTER for 2 seconds to select the shown value and exit the menu ("SAVE" is displayed briefly)
- *      - 0 makes your custom "destination" and "last departure" times to be shown permanently.
+ *      - 0 makes your custom "destination" and "last time departed" times to be shown permanently.
  *        (CUS-TOM is displayed as a reminder)
  *      - Non-zero values make the clock cycle through a number of pre-programmed times, your
  *        custom times are ignored. The value means "minutes" (hence "MIN-UTES")               
- *  If mode is "select brightness" (display shows "LVL")
+ *  How to select display brightness (display shows "LVL")
  *      - Press ENTER to cycle through the possible levels (1-5)
  *      - Hold ENTER for 2 seconds to use current value and jump to next display
  *      - After the third display, "SAVE" is displayed briefly and the menu is left automatically.
- *  If mode is "end"
+ *  How to display the current IP address ("NETWRK")
+ *      - the bottom two displays show the current IP address of the device. If this is 192.168.4.1,
+ *        the device very likely could not connect to your WiFi network and runs in AP mode ("TCD-AP")
+ *      - Hold ENTER to quit the menu
+ *  How to quit the menu ("END")
  *      - Hold ENTER to quit the menu
  */
 
-
 #include "tc_menus.h"
 
-int displayNum;                                           // selected display
-uint8_t autoInterval = 1;                                 // array element of autoTimeIntervals[], set's time between automatically displayed times
-const uint8_t autoTimeIntervals[5] = {0, 5, 15, 30, 60};  // time options, first must be 0, this is the off option.
+int displayNum;                                               
+
+// array element of autoTimeIntervals[], set's time between automatically displayed times
+uint8_t autoInterval = 1;                                     
+const uint8_t autoTimeIntervals[6] = {0, 5, 15, 30, 45, 60};  // first must be 0 (=off)
 
 bool isSetUpdate = false;
 bool isYearUpdate = false;
 
 clockDisplay* displaySet;  // the current display
+
+bool    alarmOnOff = false;
+uint8_t alarmHour = 255;
+uint8_t alarmMinute = 255;
 
 /*
  * menu_setup()
@@ -85,23 +120,35 @@ void menu_setup() {
  * enter_menu() - the real thing
  * 
  */
-void enter_menu() {
-
+void enter_menu() 
+{
+    bool desNM = destinationTime.getNightMode();
+    bool preNM = presentTime.getNightMode();
+    bool depNM = departedTime.getNightMode();
+    
     #ifdef TC_DBG
     Serial.println("Menu: enter_menu() invoked");
     #endif
     
     isEnterKeyHeld = false;     
     isEnterKeyPressed = false; 
-    
-    menuFlag = false;
 
+    destinationTime.setNightMode(false);
+    presentTime.setNightMode(false);
+    departedTime.setNightMode(false);
+    
     // start with destination time in main menu
     displayNum = MODE_DEST;     
 
-    // Load the times
+    // Load the custom times from EEPROM
+    // This means that when the user activates the menu while 
+    // autoInterval was > 0, there will be different times
+    // shown in the menu than were outside the menu    
     destinationTime.load();     
     departedTime.load();
+
+    // Load the RTC time into present time
+    presentTime.setDateTime(myrtcnow());     
 
     // Highlight current display
     displayHighlight(displayNum);
@@ -114,12 +161,15 @@ void enter_menu() {
     // Wait for ENTER to cycle through main menu (displays and modes), 
     // HOLDing ENTER selects current menu "item"
     // (Also sets displaySet to selected display)    
-    displaySelect(displayNum);        
+    displaySelect(displayNum);  
+
+    if(checkTimeOut()) 
+        goto quitMenu;
 
     #ifdef TC_DBG
     Serial.println("Menu: Display/mode selected");    
     #endif
-    
+
     if(displayNum <= MODE_DEPT) {  
 
         // Enter display times
@@ -136,7 +186,7 @@ void enter_menu() {
         if(displaySet->isRTC()) {  
           
             // This is the RTC, get the current time, corrected by yearOffset         
-            DateTime currentTime = rtc.now();
+            DateTime currentTime = myrtcnow(); 
             yearSet = currentTime.year() - displaySet->getYearOffset();            
             monthSet = currentTime.month();
             daySet = currentTime.day();
@@ -146,6 +196,9 @@ void enter_menu() {
         } else {
           
             // non RTC, get the time info from the object
+            // Remember: These are the ones saved in the EEPROM
+            // NOT the ones that were possibly shown on the 
+            // display while autoInterval was > 0.
             yearSet = displaySet->getYear();
             monthSet = displaySet->getMonth();
             daySet = displaySet->getDay();
@@ -161,14 +214,20 @@ void enter_menu() {
         setUpdate(yearSet, FIELD_YEAR);  
         prepareInput(yearSet);
         waitForEnterRelease();      
-        setField(yearSet, FIELD_YEAR, 0, 0);         
+        setField(yearSet, FIELD_YEAR, 0, 0);
         isYearUpdate = false;
-
+        
+        if(checkTimeOut()) 
+            goto quitMenu;         
+        
         // Get month
         setUpdate(monthSet, FIELD_MONTH);
         prepareInput(monthSet);
         waitForEnterRelease();
-        setField(monthSet, FIELD_MONTH, 0, 0);          
+        setField(monthSet, FIELD_MONTH, 0, 0); 
+
+        if(checkTimeOut()) 
+            goto quitMenu;
 
         // Get day
         setUpdate(daySet, FIELD_DAY);
@@ -176,11 +235,17 @@ void enter_menu() {
         waitForEnterRelease();        
         setField(daySet, FIELD_DAY, yearSet, monthSet);  // this depends on the month and year        
 
+        if(checkTimeOut()) 
+            goto quitMenu;
+            
         // Get hour
         setUpdate(hourSet, FIELD_HOUR);
         prepareInput(hourSet);
         waitForEnterRelease();       
-        setField(hourSet, FIELD_HOUR, 0, 0);       
+        setField(hourSet, FIELD_HOUR, 0, 0); 
+
+        if(checkTimeOut()) 
+            goto quitMenu;
 
         // Get minute
         setUpdate(minSet, FIELD_MINUTE);
@@ -217,19 +282,30 @@ void enter_menu() {
                     }
                 }
     
-                displaySet->setYearOffset(tyroffs);
-                presentTimeBogus = true;  // Avoid overwriting this time by NTP time in loop
+                displaySet->setYearOffset(tyroffs); 
     
                 rtc.adjust(DateTime(tyr, monthSet, daySet, hourSet, minSet, 0));
+
+                // Resetting the RTC invalidates our timeDifference, ie
+                // fake present time. Make the user return to present
+                // time after setting the RTC
+                timeDifference = 0;
                 
             } else {                 
-                // Not rtc, setting a static display, turn off autoInverval
+
+                // Non-RTC: Setting a static display, turn off autoInverval
+
+                displaySet->setYearOffset(0);
+                
                 autoInterval = 0;    
                 saveAutoInterval();  
+                
             }
 
             // Show a save message for a brief moment
             displaySet->showOnlySave();  
+
+            waitAudioDone();
             
             // update the object
             displaySet->setMonth(monthSet);
@@ -237,7 +313,9 @@ void enter_menu() {
             displaySet->setYear(yearSet);
             displaySet->setHour(hourSet);
             displaySet->setMinute(minSet);
-            displaySet->save();  // save to eeprom
+            
+            // save to eeprom (regardless of persistence mode)
+            displaySet->save();  
             
             mydelay(1000);
 
@@ -245,8 +323,30 @@ void enter_menu() {
             waitForEnterRelease();
             
         }  
+
+    } else if(displayNum == MODE_ALRM) {
+
+        allOff();
+        waitForEnterRelease();
+
+        // Set alarm              
+        doSetAlarm();
+
+        allOff();
+        waitForEnterRelease(); 
+
+    } else if(displayNum == MODE_AINT) {  // Select autoInterval
+
+        allOff();
+        waitForEnterRelease();
+
+        // Set autoInterval              
+        doSetAutoInterval();
         
-    } else if(displayNum == 4) {    // Adjust brightness
+        allOff();
+        waitForEnterRelease();  
+        
+    } else if(displayNum == MODE_BRI) {   // Adjust brightness
 
         allOff();
         waitForEnterRelease();
@@ -259,27 +359,29 @@ void enter_menu() {
         allOff();
         waitForEnterRelease();  
         
-        
-    } else if(displayNum == 3) {  // Select autoInterval
+    } else if(displayNum == MODE_NET) {   // Show network info
 
         allOff();
         waitForEnterRelease();
 
-        // Set autoInterval              
-        doSetAutoInterval();
+        // Show net info              
+        doShowNetInfo();
         
         allOff();
         waitForEnterRelease();  
-        
-    } else {                      // END: Bail out
+    
+    } else {                              // END: Bail out
       
         allOff();
         waitForEnterRelease();  
         
     }
+
+quitMenu:
+
+    isSetUpdate = false;
     
-    // Return dest/dept displays to where they should be
-    // Menu system wipes out auto times
+    // Return dest/dept displays to where they should be    
     if(autoTimeIntervals[autoInterval] == 0) {
         destinationTime.load();
         departedTime.load();
@@ -296,15 +398,19 @@ void enter_menu() {
     #ifdef TC_DBG
     Serial.println("Menu: Update Present Time");
     #endif
-    presentTime.setDateTime(rtc.now());  // Set the current time in the display, 2+ seconds gone
+    presentTime.setDateTimeDiff(myrtcnow()); // Set the current time in the display, 2+ seconds gone
     
-    // all displays on and show
-    animate();  // show all with month showing last
-                // then = millis(); // start count to prevent double animate if it's been too long
-
+    // all displays on and show  
+    
+    animate(); 
+                    
     myloop();
     
     waitForEnterRelease();
+
+    destinationTime.setNightMode(desNM);
+    presentTime.setNightMode(preNM);
+    departedTime.setNightMode(depNM);
 
     #ifdef TC_DBG
     Serial.println("Menu: Exiting....");
@@ -313,7 +419,7 @@ void enter_menu() {
 
 /* 
  *  Cycle through main menu:
- *  Select display to update or mode (bri, autoInt, End)
+ *  Select display to update or mode (alarm, rot-Int, bri, ...)
  *  
  */
 void displaySelect(int& number) 
@@ -375,8 +481,9 @@ void displayHighlight(int& number)
             departedTime.off();
             displaySet = &destinationTime;
             break;
-        case MODE_PRES:  // Present Time
-            destinationTime.off();
+        case MODE_PRES:  // Present Time (RTC)
+            destinationTime.showOnlyRTC();
+            destinationTime.on();
             presentTime.on();
             presentTime.setColon(false);
             presentTime.show();
@@ -391,24 +498,65 @@ void displayHighlight(int& number)
             departedTime.show();
             displaySet = &departedTime;
             break;
-        case MODE_AINT:  // auto enable
-            destinationTime.showOnlySettingVal("PRE", -1, true);  // display PRESET, no numbers, clear rest of screen
-            presentTime.showOnlySettingVal("SET", -1, true);  
+        case MODE_ALRM:   // Alarm
+            #ifdef IS_ACAR_DISPLAY
+            destinationTime.showOnlySettingVal("AL", -1, true);  
+            presentTime.showOnlySettingVal("RM", -1, true);  
+            #else
+            destinationTime.showOnlySettingVal("ALA", -1, true);  // display ALA-RM, no numbers, clear rest of screen
+            presentTime.showOnlySettingVal("RM", -1, true);  
+            #endif
+            destinationTime.on();
+            presentTime.on();            
+            departedTime.off();
+            displaySet = &destinationTime;
+            break;
+        case MODE_AINT:  // autoInterval
+            #ifdef IS_ACAR_DISPLAY
+            destinationTime.showOnlySettingVal("IN", -1, true);
+            presentTime.showOnlySettingVal("T", -1, true); 
+            #else
+            destinationTime.showOnlySettingVal("ROT", -1, true);  // display ROT-INT, no numbers, clear rest of screen
+            presentTime.showOnlySettingVal("INT", -1, true);  
+            #endif
             destinationTime.on();
             presentTime.on();            
             departedTime.off();
             displaySet = NULL;
             break;
         case MODE_BRI:  // Brightness
-            destinationTime.showOnlySettingVal("BRI", -1, true);  // display BRIGHT, no numbers, clear rest of screen
+            #ifdef IS_ACAR_DISPLAY
+            destinationTime.showOnlySettingVal("BR", -1, true); 
+            presentTime.showOnlySettingVal("I", -1, true); 
+            #else
+            destinationTime.showOnlySettingVal("BRI", -1, true);  // display BRI-GHT, no numbers, clear rest of screen
             presentTime.showOnlySettingVal("GHT", -1, true);  
+            #endif
             destinationTime.on();
             presentTime.on();            
             departedTime.off();
             displaySet = NULL;
             break;
+        case MODE_NET:  // Network info
+            #ifdef IS_ACAR_DISPLAY
+            destinationTime.showOnlySettingVal("IP", -1, true); 
+            destinationTime.on(); 
+            presentTime.off(); 
+            #else
+            destinationTime.showOnlySettingVal("NET", -1, true);  // display NET-WRK, no numbers, clear rest of screen
+            presentTime.showOnlySettingVal("WRK", -1, true);  
+            destinationTime.on();
+            presentTime.on();    
+            #endif                    
+            departedTime.off();
+            displaySet = NULL;
+            break;
         case MODE_END:  // end
-            destinationTime.showOnlySettingVal("END", -1, true);  // display end, no numbers, clear rest of screen
+            #ifdef IS_ACAR_DISPLAY
+            destinationTime.showOnlySettingVal("EN", -1, true);
+            #else
+            destinationTime.showOnlySettingVal("END", -1, true);  // display END, no numbers, clear rest of screen
+            #endif
             destinationTime.on();
             destinationTime.setColon(false);            
             presentTime.off();
@@ -491,7 +639,7 @@ void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0)
             break;
         case FIELD_YEAR:
             upperLimit = 9999;
-            lowerLimit = 0;           
+            lowerLimit = 1;           
             numChars = 4;
             break;
         case FIELD_HOUR: 
@@ -514,7 +662,7 @@ void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0)
     while( !checkTimeOut() && !digitalRead(ENTER_BUTTON) &&     
               ( (!someupddone && number == prevNum) || strlen(timeBuffer) < numChars) ) {
         
-        get_key();      // Why???
+        get_key();      // We're outside our main loop, so poll here
 
         /* Using strlen here means that we always need to start a new number at timebuffer[0]. 
          * This is therefore NOT a ringbuffer!
@@ -533,14 +681,15 @@ void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0)
         } 
 
         myloop();    
-        delay(50);
-                    
-        //Serial.print("Setfield: setNum: ");
-        //Serial.println(setNum);                 
+        delay(10);
+                                   
     }
 
     // Force keypad to send keys somewhere else but our buffer
     isSetUpdate = false; 
+
+    if(checkTimeOut())
+        return;
     
     numVal = 0;
     for(i = 0; i < strlen(timeBuffer); i++) {
@@ -560,6 +709,127 @@ void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0)
     #endif
 }  
 
+void alarmOff()
+{
+    alarmOnOff = false;
+    saveAlarm();
+}
+
+bool alarmOn()
+{
+    if(alarmHour <= 23 && alarmMinute <= 59) {
+        alarmOnOff = true;
+        saveAlarm();       
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
+// Set Alarm            
+void doSetAlarm() 
+{
+    bool alarmDone = false;
+
+    bool newAlarmOnOff = alarmOnOff;
+    uint16_t newAlarmHour = (alarmHour <= 23) ? alarmHour : 0;
+    uint16_t newAlarmMinute = (alarmMinute <= 59) ? alarmMinute : 0;
+    
+    #ifdef TC_DBG
+    Serial.println("doSetAlarm() involked");
+    #endif
+
+    // On/Off
+    #ifdef IS_ACAR_DISPLAY
+    displaySet->showOnlySettingVal(newAlarmOnOff ? "ON" : "OF", -1, true);
+    #else
+    displaySet->showOnlySettingVal(newAlarmOnOff ? "ON" : "OFF", -1, true);
+    #endif
+    displaySet->on();
+    
+    isEnterKeyHeld = false;
+
+    timeout = 0;  // reset timeout
+
+    // Wait for enter
+    while(!checkTimeOut() && !alarmDone) {
+      
+      // If pressed
+      if(digitalRead(ENTER_BUTTON)) {
+        
+          // wait for release
+          while(!checkTimeOut() && digitalRead(ENTER_BUTTON)) {
+              // If hold threshold is passed, return false */
+              myloop();
+              if(isEnterKeyHeld) {
+                  isEnterKeyHeld = false;
+                  alarmDone = true;
+                  break;              
+              }
+              delay(10); 
+          }
+
+          if(!checkTimeOut() && !alarmDone) {
+              
+              timeout = 0;  // button pressed, reset timeout
+
+              newAlarmOnOff = !newAlarmOnOff;       
+
+              #ifdef IS_ACAR_DISPLAY
+              displaySet->showOnlySettingVal(newAlarmOnOff ? "ON" : "OF", -1, true);
+              #else
+              displaySet->showOnlySettingVal(newAlarmOnOff ? "ON" : "OFF", -1, true);
+              #endif
+              
+          }
+          
+      } else {
+
+          myloop();
+          delay(50);
+          
+      }
+          
+    }
+
+    if(checkTimeOut()) {
+        return;  
+    }
+
+    // Get hour
+    setUpdate(newAlarmHour, FIELD_HOUR);
+    prepareInput(newAlarmHour);
+    waitForEnterRelease();       
+    setField(newAlarmHour, FIELD_HOUR, 0, 0); 
+
+    if(checkTimeOut()) {
+        return;  
+    }
+
+    // Get minute
+    setUpdate(newAlarmMinute, FIELD_MINUTE);
+    prepareInput(newAlarmMinute);
+    waitForEnterRelease();       
+    setField(newAlarmMinute, FIELD_MINUTE, 0, 0);  
+
+    // Do nothing if there was a timeout waiting for button presses                                                  
+    if(!checkTimeOut()) {
+    
+        displaySet->showOnlySave();
+
+        waitAudioDone();
+
+        alarmOnOff = newAlarmOnOff;
+        alarmHour = newAlarmHour;
+        alarmMinute = newAlarmMinute;
+
+        // Save it
+        saveAlarm();
+        
+        mydelay(1000);
+    }
+}
 /* 
  *  Load the autoInterval from Settings in memory (config file is not reloaded)
  *  
@@ -572,7 +842,7 @@ bool loadAutoInterval()
     Serial.println("Load Auto Interval");
     #endif
     
-    autoInterval = (uint8_t)atoi(settings.autoRotateTimes);   //EEPROM.read(AUTOINTERVAL_PREF);
+    autoInterval = (uint8_t)atoi(settings.autoRotateTimes);
     if(autoInterval > 5) {
         autoInterval = 1;  
         Serial.println("loadAutoInterval: Bad autoInterval, resetting to 1");
@@ -584,7 +854,6 @@ bool loadAutoInterval()
 /* 
  *  Save the autoInterval 
  *  
- *  Note: The autoInterval is no longer saved to the EEPROM.
  *  It is written to the config file, which is updated accordingly.
  */
 void saveAutoInterval() 
@@ -592,10 +861,6 @@ void saveAutoInterval()
     // Convert 'autoInterval' to string, write to settings, write settings file
     sprintf(settings.autoRotateTimes, "%d", autoInterval);   
     write_settings();
-    
-    // Obsolete    
-    //EEPROM.write(AUTOINTERVAL_PREF, autoInterval);
-    //EEPROM.commit();
 }
 
 /*
@@ -608,18 +873,32 @@ void doSetAutoInterval()
     #ifdef TC_DBG
     Serial.println("doSetAutoInterval() involked");
     #endif
-    
+
+    #ifdef IS_ACAR_DISPLAY
+    destinationTime.showOnlySettingVal("IN", autoTimeIntervals[autoInterval], true);
+    #else
     destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval], true);
+    #endif
     destinationTime.on();
 
     presentTime.on();
     departedTime.on();
     if(autoTimeIntervals[autoInterval] == 0) {
+        #ifdef IS_ACAR_DISPLAY
+        presentTime.showOnlySettingVal("CU", -1, true);    // Custom times to be shown
+        departedTime.showOnlySettingVal("ST", -1, true);  
+        #else
         presentTime.showOnlySettingVal("CUS", -1, true);    // Custom times to be shown
         departedTime.showOnlySettingVal("TOM", -1, true);   
+        #endif
     } else {       
+        #ifdef IS_ACAR_DISPLAY
+        presentTime.showOnlySettingVal("MI", -1, true);
+        departedTime.showOnlySettingVal("", -1, true);
+        #else
         presentTime.showOnlySettingVal("MIN", -1, true);    // Times cycled in xx minutes
-        departedTime.showOnlyUtes();        
+        departedTime.showOnlyUtes();
+        #endif        
     }
 
     isEnterKeyHeld = false;
@@ -649,24 +928,38 @@ void doSetAutoInterval()
               timeout = 0;  // button pressed, reset timeout
 
               autoInterval++;       
-              if(autoInterval > 4)
+              if(autoInterval > 5)
                   autoInterval = 0;
 
+              #ifdef IS_ACAR_DISPLAY
+              destinationTime.showOnlySettingVal("IN", autoTimeIntervals[autoInterval], true);
+              #else
               destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval], true);
+              #endif
 
               if(autoTimeIntervals[autoInterval] == 0) {
+                  #ifdef IS_ACAR_DISPLAY
+                  presentTime.showOnlySettingVal("CU", -1, true); 
+                  departedTime.showOnlySettingVal("ST", -1, true);  
+                  #else
                   presentTime.showOnlySettingVal("CUS", -1, true);
                   departedTime.showOnlySettingVal("TOM", -1, true);                  
+                  #endif
               } else {                  
+                  #ifdef IS_ACAR_DISPLAY
+                  presentTime.showOnlySettingVal("MI", -1, true);
+                  departedTime.showOnlySettingVal("", -1, true);
+                  #else
                   presentTime.showOnlySettingVal("MIN", -1, true);
                   departedTime.showOnlyUtes();  
+                  #endif
               }
           }
           
       } else {
 
           myloop();
-          delay(100);
+          delay(50);
           
       }
           
@@ -681,6 +974,7 @@ void doSetAutoInterval()
 
         // Save it
         saveAutoInterval();
+        updateConfigPortalValues();
         
         mydelay(1000);
                 
@@ -703,7 +997,11 @@ void doSetBrightness(clockDisplay* displaySet) {
     allLampTest();  
 
     // Display "LVL"
-    displaySet->showOnlySettingVal("LVL", displaySet->getBrightness() / 3, false);
+    #ifdef IS_ACAR_DISPLAY
+    displaySet->showOnlySettingVal("LV", displaySet->getBrightness(), false);
+    #else
+    displaySet->showOnlySettingVal("LVL", displaySet->getBrightness(), false);
+    #endif
   
     isEnterKeyHeld = false;
 
@@ -731,17 +1029,21 @@ void doSetBrightness(clockDisplay* displaySet) {
               
               timeout = 0;  // button pressed, reset timeout
 
-              number = number + 3;
-              if(number > 15) number = 3;
+              number++;
+              if(number > 15) number = 0;
               displaySet->setBrightness(number);
-              displaySet->showOnlySettingVal("LVL", number / 3, false);
+              #ifdef IS_ACAR_DISPLAY
+              displaySet->showOnlySettingVal("LV", number, false);
+              #else
+              displaySet->showOnlySettingVal("LVL", number, false);
+              #endif
               
           }
           
       } else {
         
           myloop();
-          delay(100);
+          delay(50);
           
       }
           
@@ -756,15 +1058,79 @@ void doSetBrightness(clockDisplay* displaySet) {
         mydelay(1000);        
         
         allLampTest();  // turn on all the segments
-
+        
         // Convert bri values to strings, write to settings, write settings file
         sprintf(settings.destTimeBright, "%d", destinationTime.getBrightness());           
         sprintf(settings.presTimeBright, "%d", presentTime.getBrightness());
-        sprintf(settings.lastTimeBright, "%d", departedTime.getBrightness());        
+        sprintf(settings.lastTimeBright, "%d", departedTime.getBrightness());               
         write_settings();
+        updateConfigPortalValues();
     }
 
     waitForEnterRelease();
+}
+
+/*
+ * Show network info
+ * 
+ */
+void doShowNetInfo() 
+{
+    uint8_t a, b, c, d;
+    //int mymode;
+    bool netDone = false;
+    
+    #ifdef TC_DBG
+    Serial.println("doShowNetInfo() involked");
+    #endif
+
+    //mymode = wifi_getmode();
+    
+    wifi_getIP(a, b, c, d);
+
+    #ifdef IS_ACAR_DISPLAY
+    destinationTime.showOnlySettingVal("IP", a, true);
+    #else
+    destinationTime.showOnlySettingVal("IP", a, true);
+    #endif
+    destinationTime.on();
+
+    presentTime.showOnlyHalfIP(a, b, true);
+    presentTime.on();
+
+    departedTime.showOnlyHalfIP(c, d, true);
+    departedTime.on();
+    
+    isEnterKeyHeld = false;
+
+    timeout = 0;  // reset timeout
+
+    // Wait for enter
+    while(!checkTimeOut() && !netDone) {
+      
+        // If pressed
+        if(digitalRead(ENTER_BUTTON)) {
+          
+            // wait for release
+            while(!checkTimeOut() && digitalRead(ENTER_BUTTON)) {
+                // If hold threshold is passed, bail out
+                myloop();
+                if(isEnterKeyHeld) {
+                    isEnterKeyHeld = false; 
+                    netDone = true;                 
+                    break;              
+                }
+                delay(10); 
+            }
+            
+        } else {
+  
+            myloop();
+            delay(50);
+            
+        }
+          
+    }
 }
 
 // Show all, month after a short delay
@@ -809,12 +1175,20 @@ void waitForEnterRelease()
     
     while(digitalRead(ENTER_BUTTON)) {
         myloop();        
-        delay(100);   // wait for release
+        delay(50);  
     }
     isEnterKeyPressed = false;
     isEnterKeyHeld = false;
-    isEnterKeyDouble = false;
-    return;
+}
+
+void waitAudioDone()
+{
+  int timeout = 100;
+  
+  while(!checkAudioDone() && timeout--) {       
+       myloop();
+       delay(20);
+  }
 }
 
 /*
@@ -823,12 +1197,11 @@ void waitForEnterRelease()
  */
 void mydelay(int mydel) 
 {  
-    while(mydel >= 150) {
-        delay(100);
-        mydel -= 120;
+    unsigned long startNow = millis();
+    while(millis() - startNow < mydel) {
+        delay(20);
         myloop();
-    }  
-    delay(mydel);   
+    }     
 }
 
 /*
@@ -837,9 +1210,7 @@ void mydelay(int mydel)
  */
 void myloop() 
 {
-    //keypadLoop();   No, interferes with our menu
-    enterkeytick();    
-    //time_loop();    No, interferes with our menu
+    enterkeytick();       
     wifi_loop();
     audio_loop();     
 }

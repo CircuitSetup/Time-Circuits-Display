@@ -25,10 +25,14 @@
 #define _TC_TIME_H
 
 #include <Arduino.h>
+#include <time.h>
 #include <RTClib.h>
 #include <WiFi.h>
 #include <Wire.h>
 #include <EEPROM.h>
+#ifdef FAKE_POWER_ON
+#include <OneButton.h>
+#endif
 
 #include "tc_global.h"
 #include "clockdisplay.h"
@@ -47,16 +51,12 @@
 #define PRES_TIME_ADDR 0x72
 #define DEPT_TIME_ADDR 0x74
 
-// EEPROM map
-// We use 1(padded to 8) + 10*3 bytes of EEPROM space at 0x0. Let's hope no one is using this already.
-// Defined in clockdisplay.h
-//#define DEST_TIME_PREF    ... 
-//#define PRES_TIME_PREF    ...
-//#define DEPT_TIME_PREF    ...
-#define   AUTOINTERVAL_PREF 0x00  // autoInterval save location (1 byte)
-
 extern uint8_t        autoInterval;
-extern const uint8_t  autoTimeIntervals[5];
+extern const uint8_t  autoTimeIntervals[6];
+
+extern bool           alarmOnOff;
+extern uint8_t        alarmHour;
+extern uint8_t        alarmMinute;
 
 extern clockDisplay destinationTime;
 extern clockDisplay presentTime;
@@ -77,11 +77,27 @@ extern bool checkTimeOut();
 extern void RTCClockOutEnable();
 extern bool isLeapYear(int year);
 extern int  daysInMonth(int month, int year);
+extern DateTime myrtcnow();
+
+extern uint64_t dateToMins(int year, int month, int day, int hour, int minute);
+extern void minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
+
+#ifdef FAKE_POWER_ON
+void fpbKeyPressed(); 
+void fpbKeyLongPressStop();  
+#endif
+
+extern bool FPBUnitIsOn;
 
 // Our generic timeout when waiting for buttons, in seconds. max 255.
 #define maxTime 240            
 extern uint8_t timeout;
 
-extern bool presentTimeBogus;
+extern uint64_t timeDifference;
+extern bool     timeDiffUp;
+
+#ifdef FAKE_POWER_ON
+extern bool waitForFakePowerButton;
+#endif
 
 #endif

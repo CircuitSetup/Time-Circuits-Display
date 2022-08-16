@@ -26,25 +26,29 @@
 
 #include <Arduino.h>
 #include <Keypad.h>
-#include <Keypad_I2C.h>
 #include <OneButton.h>
 
 #include "tc_global.h"
+#include "tc_keypadi2c.h"
 #include "tc_menus.h"
 #include "tc_audio.h"
 #include "tc_time.h"
 
-//#define GTE_KEYPAD //uncomment if using real GTE/TRW keypad control board
+//#define GTE_KEYPAD // uncomment if using real GTE/TRW keypad control board
 
 #define KEYPAD_ADDR 0x20
 #define WHITE_LED 17            // GPIO that white led is connected to
 #define ENTER_BUTTON 16         // GPIO that enter key is connected to
 
 #define ENTER_DEBOUNCE 50       // enter button debounce time in ms
-#define ENTER_HOLD_TIME 2000    // time in ms holding the enter key will count as a hold
-#define ENTER_DOUBLE_TIME 200   // enter key will register a double click if pressed twice within this time
+#define ENTER_CLICK_TIME 200    // enter button will register a click 
+#define ENTER_HOLD_TIME 2000    // time in ms holding the enter button will count as a hold
 
-#define ENTER_DELAY 400         // when enter key is pressed, turn off display for this many ms
+#define ENTER_DELAY 400         // when enter button is pressed, turn off display for this many ms
+
+#define ETT_DEBOUNCE 50         // external time travel button debounce time in ms
+#define ETT_CLICK_TIME 250      // external time travel button will register a click (unused)
+#define ETT_HOLD_TIME 200       // external time travel button will register a press (that's the one)
 
 void keypadEvent(KeypadEvent key);
 extern void keypad_setup();
@@ -54,6 +58,9 @@ extern void recordSetTimeKey(char key);
 extern void recordSetYearKey(char key);
 extern void recordSetMonthKey(char key);
 extern void resetTimebufIndices();
+
+void nightModeOn();
+void nightModeOff();
 
 extern char timeBuffer[]; 
 extern char yearBuffer[]; 
@@ -65,11 +72,11 @@ void enterKeyDouble();
 void enterkeytick();
 extern bool isEnterKeyPressed;
 extern bool isEnterKeyHeld;
-extern bool isEnterKeyDouble;
-extern void keypad_loop();
 
-extern char key;
-extern bool keyPressed;
-extern bool menuFlag;
+#ifdef EXTERNAL_TIMETRAVEL
+void ettKeyPressed();
+#endif
+
+extern void keypad_loop();
 
 #endif

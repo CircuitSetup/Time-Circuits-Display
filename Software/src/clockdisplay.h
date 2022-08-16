@@ -34,14 +34,41 @@
 
 #define DS3231_I2CADDR 0x68
 
-//define IS_ACAR_DISPLAY // uncomment to the month output to 2 numbers, per the original A Car display
+#ifdef IS_ACAR_DISPLAY      // A-Car (2-digit-month) ---------------------
+#define CD_MONTH_POS  0     //      possibly needs to be adapted
+#define CD_DAY_POS    3
+#define CD_YEAR_POS   4
+#define CD_HOUR_POS   6
+#define CD_MIN_POS    7
+  
+#define CD_AMPM_POS   CD_DAY_POS
+#define CD_COLON_POS  CD_YEAR_POS
 
-// We use 1(padded to 8) + 10*3 bytes of EEPROM space at 0x0. 
-// Belongs in tc_time.h, but...
-//#define AUTOINTERVAL_PREF 0x00  // autoInterval save location (1 byte)
-#define   DEST_TIME_PREF 0x08     // (10 bytes), was 0x10 (8 bytes)
-#define   PRES_TIME_PREF 0x12     // (10 bytes), was 0x18 (8 bytes)
-#define   DEPT_TIME_PREF 0x1c     // (10 bytes), was 0x20 (8 bytes) 
+#define CD_MONTH_SIZE 2
+
+#define CD_BUF_SIZE   8     //      in words (16bit)
+#else                       // All others (3-char month) -----------------
+#define CD_MONTH_POS  0
+#define CD_DAY_POS    3
+#define CD_YEAR_POS   4
+#define CD_HOUR_POS   6
+#define CD_MIN_POS    7
+
+#define CD_AMPM_POS   CD_DAY_POS
+#define CD_COLON_POS  CD_YEAR_POS
+
+#define CD_MONTH_SIZE 3
+
+#define CD_BUF_SIZE   8     //      in words (16bit)
+#endif                      // -------------------------------------------
+
+extern bool alarmOnOff;
+
+extern uint64_t timeDifference;
+extern bool     timeDiffUp;
+
+extern uint64_t dateToMins(int year, int month, int day, int hour, int minute);
+extern void minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
  
 struct dateStruct {
     uint16_t year;
@@ -61,6 +88,12 @@ class clockDisplay {
     void clear();
     uint8_t setBrightness(uint8_t level);
     uint8_t getBrightness();
+
+    void set1224(bool hours24);
+    bool get1224();
+
+    void setNightMode(bool mode);
+    bool getNightMode();
     
     void setMonth(int monthNum);
     void setDay(int dayNum);
@@ -85,58 +118,71 @@ class clockDisplay {
 
     void AM();
     void PM();
+    void AMPMoff();
 
     void showOnlyMonth(int monthNum);  // Show only the supplied month, do not modify object's month
     void showOnlyDay(int dayNum);
     void showOnlyHour(int hourNum);
     void showOnlyMinute(int minuteNum);
     void showOnlyYear(int yearNum);
-    void showOnlySave();
-    void showOnlyUtes();
+
     void showOnlySettingVal(const char* setting, int8_t val = -1, bool clear = false);
+    void showOnlySave();
+    void showOnlyUtes();    
+    void showOnlyRTC();
+    void showOnlyHalfIP(int a, int b, bool clear = false);
 
-    void setDateTime(DateTime dt);  // Set object date & time using a DateTime
-    void setFromStruct(dateStruct* s);
+    void setDateTime(DateTime dt);      // Set object date & time using a DateTime ignoring timeDiff
+    void setDateTimeDiff(DateTime dt);  // Set object date & time using a DateTime plus/minus timeDiff
+    void setFromStruct(dateStruct* s);  // Set object date & time from struct; never use this with RTC
     void setDS3232time(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year);
-
-    //DateTime getDateTime();  // Return object's date & time as a DateTime
 
     void show();
     void showAnimate1();
     void showAnimate2();
 
     bool save();
+    bool saveYOffs();
     bool load();
+    int16_t loadYOffs();
     bool resetClocks();
     bool isPrefData(const char* key);
 
    private:
     uint8_t _address;
     int _saveAddress;
-    uint16_t _displayBuffer[8];  // Segments to make current time.
+    uint16_t _displayBuffer[8]; // Segments to make current time.
 
-    uint16_t _year = 2021;     // keep track of these
-    int16_t  _yearoffset = 0;  // Offset for faking years < 2000 or > 2159
+    uint16_t _year = 2021;      // keep track of these
+    int16_t  _yearoffset = 0;   // Offset for faking years < 2000 or > 2159
     
     uint8_t _month = 1;
     uint8_t _day = 1;
     uint8_t _hour = 0;
     uint8_t _minute = 0;
-    bool _colon = false;  // should colon be on?
-    bool _rtc = false;    // will this be displaying real time
-    uint8_t _brightness = 15;
+    bool _colon = false;        // should colon be on?
+    bool _rtc = false;          // will this be displaying real time
+    uint8_t _brightness = 15;   // display brightness
+    bool _mode24 = false;       // true = 24 hour mode, false 12 hour mode
+    bool _nightmode = false;    // true = dest/dept times off
+    int _oldnm = -1;
 
     uint8_t getLED7SegChar(uint8_t value);
     uint16_t getLEDAlphaChar(char value);
 
     uint16_t makeNum(uint8_t num);
+    uint16_t makeNumN0(uint8_t num);
     uint16_t makeAlpha(uint8_t value);
 
     void clearDisplay();                    // clears display RAM
+    void showInt(bool animate = false); 
     void directCol(int col, int segments);  // directly writes column RAM
+
+    void directAMPM(int val1, int val2);
     void directAM();
     void directPM();
-
+    void directAMPMoff();
+    
     byte decToBcd(byte val);
 };
 
