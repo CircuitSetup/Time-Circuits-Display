@@ -44,7 +44,7 @@
 #define CD_AMPM_POS   CD_DAY_POS
 #define CD_COLON_POS  CD_YEAR_POS
 
-#define CD_MONTH_SIZE 2
+#define CD_MONTH_SIZE 1     //      number of words
 
 #define CD_BUF_SIZE   8     //      in words (16bit)
 #else                       // All others (3-char month) -----------------
@@ -57,7 +57,7 @@
 #define CD_AMPM_POS   CD_DAY_POS
 #define CD_COLON_POS  CD_YEAR_POS
 
-#define CD_MONTH_SIZE 3
+#define CD_MONTH_SIZE 3     //      number of words
 
 #define CD_BUF_SIZE   8     //      in words (16bit)
 #endif                      // -------------------------------------------
@@ -68,7 +68,7 @@ extern uint64_t timeDifference;
 extern bool     timeDiffUp;
 
 extern uint64_t dateToMins(int year, int month, int day, int hour, int minute);
-extern void minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
+extern void     minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
  
 struct dateStruct {
     uint16_t year;
@@ -79,111 +79,120 @@ struct dateStruct {
 };
 
 class clockDisplay {
-   public:
-    clockDisplay(uint8_t address, int saveAddress);
-    void begin();
-    void lampTest();
-    void on();
-    void off();
-    void clear();
-    uint8_t setBrightness(uint8_t level);
-    uint8_t getBrightness();
-
-    void set1224(bool hours24);
-    bool get1224();
-
-    void setNightMode(bool mode);
-    bool getNightMode();
+  
+    public:
     
-    void setMonth(int monthNum);
-    void setDay(int dayNum);
-    void setYear(uint16_t yearNum);
-    void setYearOffset(int16_t yearOffs);
-    void setYearDirect(uint16_t yearNum);
-    void setHour(uint16_t hourNum);
-    void setMinute(int minNum);
-    void setColon(bool col);
-    void colonOn();
-    void colonOff();
-
-    uint8_t getMonth();
-    uint8_t getDay();
-    uint16_t getYear();
-    uint8_t getHour();
-    uint8_t getMinute();
-    int16_t getYearOffset();
-
-    void setRTC(bool rtc);  // make this an RTC display
-    bool isRTC();
-
-    void AM();
-    void PM();
-    void AMPMoff();
-
-    void showOnlyMonth(int monthNum);  // Show only the supplied month, do not modify object's month
-    void showOnlyDay(int dayNum);
-    void showOnlyHour(int hourNum);
-    void showOnlyMinute(int minuteNum);
-    void showOnlyYear(int yearNum);
-
-    void showOnlySettingVal(const char* setting, int8_t val = -1, bool clear = false);
-    void showOnlySave();
-    void showOnlyUtes();    
-    void showOnlyRTC();
-    void showOnlyHalfIP(int a, int b, bool clear = false);
-
-    void setDateTime(DateTime dt);      // Set object date & time using a DateTime ignoring timeDiff
-    void setDateTimeDiff(DateTime dt);  // Set object date & time using a DateTime plus/minus timeDiff
-    void setFromStruct(dateStruct* s);  // Set object date & time from struct; never use this with RTC
-    void setDS3232time(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year);
-
-    void show();
-    void showAnimate1();
-    void showAnimate2();
-
-    bool save();
-    bool saveYOffs();
-    bool load();
-    int16_t loadYOffs();
-    bool resetClocks();
-    bool isPrefData(const char* key);
-
-   private:
-    uint8_t _address;
-    int _saveAddress;
-    uint16_t _displayBuffer[8]; // Segments to make current time.
-
-    uint16_t _year = 2021;      // keep track of these
-    int16_t  _yearoffset = 0;   // Offset for faking years < 2000 or > 2159
+        clockDisplay(uint8_t address, int saveAddress);
+        void begin();    
+        void on();
+        void off();
+        void lampTest();
+        
+        void clear();
+        
+        uint8_t setBrightness(uint8_t level);
+        uint8_t getBrightness();
     
-    uint8_t _month = 1;
-    uint8_t _day = 1;
-    uint8_t _hour = 0;
-    uint8_t _minute = 0;
-    bool _colon = false;        // should colon be on?
-    bool _rtc = false;          // will this be displaying real time
-    uint8_t _brightness = 15;   // display brightness
-    bool _mode24 = false;       // true = 24 hour mode, false 12 hour mode
-    bool _nightmode = false;    // true = dest/dept times off
-    int _oldnm = -1;
-
-    uint8_t getLED7SegChar(uint8_t value);
-    uint16_t getLEDAlphaChar(char value);
-
-    uint16_t makeNum(uint8_t num);
-    uint16_t makeNumN0(uint8_t num);
-    uint16_t makeAlpha(uint8_t value);
-
-    void clearDisplay();                    // clears display RAM
-    void showInt(bool animate = false); 
-    void directCol(int col, int segments);  // directly writes column RAM
-
-    void directAMPM(int val1, int val2);
-    void directAM();
-    void directPM();
-    void directAMPMoff();
+        void set1224(bool hours24);
+        bool get1224();
     
-    byte decToBcd(byte val);
+        void setNightMode(bool mode);
+        bool getNightMode();
+    
+        void setRTC(bool rtc);  // make this an RTC display
+        bool isRTC();
+    
+        void show();
+        void showAnimate1();
+        void showAnimate2();
+    
+        void setDateTime(DateTime dt);      // Set object date & time using a DateTime ignoring timeDiff
+        void setDateTimeDiff(DateTime dt);  // Set object date & time using a DateTime plus/minus timeDiff
+        void setFromStruct(dateStruct* s);  // Set object date & time from struct; never use this with RTC
+        
+        void setMonth(int monthNum);
+        void setDay(int dayNum);
+        void setYearOffset(int16_t yearOffs);
+        void setYear(uint16_t yearNum);    
+        void setHour(uint16_t hourNum);
+        void setMinute(int minNum);
+        
+        void setColon(bool col);
+    
+        uint8_t getMonth();
+        uint8_t getDay();
+        int16_t getYearOffset();
+        uint16_t getYear();    
+        uint8_t getHour();
+        uint8_t getMinute();
+        
+        void showOnlyMonth(int monthNum);  
+        void showOnlyDay(int dayNum);
+        void showOnlyHour(int hourNum);
+        void showOnlyMinute(int minuteNum);
+        void showOnlyYear(int yearNum);
+    
+        void showOnlySettingVal(const char* setting, int8_t val = -1, bool clear = false);
+        void showOnlySave();
+#ifdef IS_ACAR_DISPLAY
+        void showOnlyReset();
+        void showOnlyMin();
+#endif    
+        void showOnlyUtes();    
+        void showOnlyRTC();
+        void showOnlyHalfIP(int a, int b, bool clear = false);
+    
+        bool save();
+        bool saveYOffs();
+        bool load();
+        int16_t loadYOffs();
+        
+        void setDS3232time(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year);    
+
+    private:
+    
+        uint8_t _address;
+        int _saveAddress;
+        uint16_t _displayBuffer[8]; // Segments to make current time.
+    
+        uint16_t _year = 2021;      // keep track of these
+        int16_t  _yearoffset = 0;   // Offset for faking years < 2000 or > 2159
+        
+        uint8_t _month = 1;
+        uint8_t _day = 1;
+        uint8_t _hour = 0;
+        uint8_t _minute = 0;
+        bool _colon = false;        // should colon be on?
+        bool _rtc = false;          // will this be displaying real time
+        uint8_t _brightness = 15;   // display brightness
+        bool _mode24 = false;       // true = 24 hour mode, false 12 hour mode
+        bool _nightmode = false;    // true = dest/dept times off
+        int _oldnm = -1;
+    
+        uint8_t getLED7SegChar(uint8_t value);
+        uint16_t getLEDAlphaChar(char value);
+    
+        uint16_t makeNum(uint8_t num);
+        uint16_t makeNumN0(uint8_t num);
+        uint16_t makeAlpha(uint8_t value);
+    
+        void directCol(int col, int segments);  // directly writes column RAM
+    
+        void clearDisplay();                    // clears display RAM
+        void showInt(bool animate = false); 
+        
+        void colonOn();
+        void colonOff();
+        
+        void AM();
+        void PM();
+        void AMPMoff();
+        void directAMPM(int val1, int val2);
+        void directAM();
+        void directPM();
+        void directAMPMoff();
+        
+        byte decToBcd(byte val);
 };
 
 #endif

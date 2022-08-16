@@ -54,7 +54,6 @@
 
 extern void menu_setup();
 extern void enter_menu();
-extern void fieldSelect();
 void displayHighlight(int& number);
 void displaySelect(int& number);
 void setUpdate(uint16_t& number, int field);
@@ -66,7 +65,6 @@ extern void alarmOff();
 extern bool alarmOn();
 bool loadAutoInterval();
 void saveAutoInterval();
-extern void putAutoInt(int position);
 void doSetAutoInterval();
 void doSetBrightness(clockDisplay* displaySet);
 void doShowNetInfo();

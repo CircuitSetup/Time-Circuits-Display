@@ -893,8 +893,8 @@ void doSetAutoInterval()
         #endif
     } else {       
         #ifdef IS_ACAR_DISPLAY
-        presentTime.showOnlySettingVal("MI", -1, true);
-        departedTime.showOnlySettingVal("", -1, true);
+        presentTime.showOnlyMin();
+        departedTime.showOnlyUtes();
         #else
         presentTime.showOnlySettingVal("MIN", -1, true);    // Times cycled in xx minutes
         departedTime.showOnlyUtes();
@@ -947,8 +947,8 @@ void doSetAutoInterval()
                   #endif
               } else {                  
                   #ifdef IS_ACAR_DISPLAY
-                  presentTime.showOnlySettingVal("MI", -1, true);
-                  departedTime.showOnlySettingVal("", -1, true);
+                  presentTime.showOnlyMin();
+                  departedTime.showOnlyUtes();
                   #else
                   presentTime.showOnlySettingVal("MIN", -1, true);
                   departedTime.showOnlyUtes();  

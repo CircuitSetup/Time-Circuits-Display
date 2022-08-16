@@ -50,8 +50,8 @@ bool isEttKeyPressed = false;
 
 unsigned long timeNow = 0;
 
-const int maxDateLength = 12;  //month, day, year, hour, min
-const int minDateLength = 8;   //month, day, year
+const int maxDateLength = 12;  // month, day, year, hour, min
+const int minDateLength = 8;   // month, day, year
 
 char dateBuffer[maxDateLength + 2];
 char timeBuffer[8]; // 4 characters to accommodate date and time settings
@@ -106,7 +106,7 @@ void keypad_setup()
     enterKey.attachLongPressStart(enterKeyHeld);    // we only need info when the button is held long enough
 
 #ifdef EXTERNAL_TIMETRAVEL
-    // Setup External time travel 
+    // Setup External time travel button
     ettKey.setClickTicks(ETT_CLICK_TIME);   
     ettKey.setPressTicks(ETT_HOLD_TIME); 
     ettKey.setDebounceTicks(ETT_DEBOUNCE);

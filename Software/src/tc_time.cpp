@@ -25,18 +25,17 @@
 /* Time travel:
  *  
  * Time travel works as follows:
- * First, enter a date and a time through the keypad, either mmddyyyy or mmddyyyyhhmm, then
- * press ENTER. Note that there is no visual feed back, like in the movie.
+ * 
+ * To activate the time travel function, hold "0" on the keypad for 2 seconds. A sound
+ * will activate, and you will travel in time: The "destination time" is now "present time", 
+ * and your old present time is now stored in the "last time departured".
+ * In order to select a new destination time, enter a date and a time through the keypad, 
+ * either mmddyyyy or mmddyyyyhhmm, then press ENTER. Note that there is no visual feed 
+ * back, like in the movie.
  * If the date or time is invalid, the sound will hint you to this.
- * To activate the time travel function, then hold "0" on the keypad for 2 seconds. A sound
- * will activate, and you will travel in time: The destination time is now present time, and
- * your old present time is not stored in the last departure time.
  * 
  * To return to actual present time, hold "9" for 2 seconds.
  */
-
-// not yet supported by esp32 1.0.x
-//#include "esp_sntp.h" 
 
 #include "tc_time.h"
 
@@ -66,8 +65,9 @@ bool timeTraveled = false;
 uint64_t timeDifference = 0;
 bool     timeDiffUp = false;  // true = add difference, false = subtract difference
 
+// Persistent time travels:
 // This controls the app's behavior as regards saving times to the EEPROM.
-// If this is true, a time is saved to the EEPROM, whenever
+// If this is true, a times are saved to the EEPROM, whenever
 //  - the user enters a destination time for time travel and presses ENTER
 //  - the user activates time travel (hold "0") 
 //  - the user returns from a time travel (hold "9")
@@ -75,12 +75,12 @@ bool     timeDiffUp = false;  // true = add difference, false = subtract differe
 // present time is kept over a power loss (if the battery backed RTC keeps
 // the time). Downside is that the user's custom destination and last
 // departure times are overwritten during a time travel.
-// False means that time travel games are non-persistent, and the
-// user's custom times (as set up in the keypad menu) are never overwritten.
-// Also, "false" avoids flash wear.
+// False means that time travel games are non-persistent, and the user's
+// custom times (as set up in the keypad menu) are never overwritten.
+// Also, "false" reduces flash wear considerably.
 bool timetravelPersistent = true;
 
-uint8_t timeout = 0;  // for tracking idle time in menus, reset to 0 on each button press
+uint8_t timeout = 0;  // for tracking idle time in menus
 
 // The displays
 clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_PREF);
@@ -220,18 +220,18 @@ void time_setup()
 
     RTCClockOutEnable();  // Turn on the 1Hz second output
 
-    // Start the displays by calling begin()
+    // Start the displays
     presentTime.begin();
     destinationTime.begin();
     departedTime.begin();
 
-    // initialize clock mode: 12 hour vs 24 hour
+    // Initialize clock mode: 12 hour vs 24 hour
     bool mymode24 = (int)atoi(settings.mode24) ? true : false;
     presentTime.set1224(mymode24);
     destinationTime.set1224(mymode24);
     departedTime.set1224(mymode24);
 
-    // configure presentTime as a display that will hold real time
+    // Configure presentTime as a display that will hold real time
     presentTime.setRTC(true);  
 
     // Determine if user wanted Time Travels to be persistent
@@ -290,14 +290,14 @@ void time_setup()
         departedTime.save();
     }
 
-    // load autoInterval ("time rotation interval") from settings 
+    // Load autoInterval ("time rotation interval") from settings 
     loadAutoInterval();
 
-    // load alarm from alarmconfig file
+    // Load alarm from alarmconfig file
     // Don't care if data invalid, alarm is off in that case
     loadAlarm();
 
-    // if non zero autoInterval -> use auto times, load the first one
+    // If using auto times, load the first one
     if(autoTimeIntervals[autoInterval]) {                    
         destinationTime.setFromStruct(&destinationTimes[0]); 
         departedTime.setFromStruct(&departedTimes[0]);
@@ -307,9 +307,13 @@ void time_setup()
     }
 
     // Show "RE-SET" message if data loaded was invalid somehow
-    if(!validLoad) {          
+    if(!validLoad) {      
+        #ifdef IS_ACAR_DISPLAY
+        destinationTime.showOnlyReset();        
+        #else    
         destinationTime.showOnlySettingVal("RE", -1, true);
         presentTime.showOnlySettingVal("SET", -1, true);
+        #endif
         delay(1000);
         allOff();
     }
@@ -381,7 +385,8 @@ void time_loop()
         }
     }
     #endif
-    
+
+    // Initiate startup delay, playe startup sound
     if(startupSound) {
         startupNow = millis();
         play_startup(presentTime.getNightMode());
@@ -621,9 +626,9 @@ void time_loop()
                     destinationTime.setFromStruct(&destinationTimes[autoTime]);
                     departedTime.setFromStruct(&departedTimes[autoTime]);
 
-                    destinationTime.setColon(true);
-                    presentTime.setColon(true);
-                    departedTime.setColon(true);
+                    //destinationTime.setColon(true);
+                    //presentTime.setColon(true);
+                    //departedTime.setColon(true);
 
                     allOff();
 
@@ -644,7 +649,7 @@ void time_loop()
                     dt = myrtcnow();                  // New time by now                         
                     presentTime.setDateTimeDiff(dt);  // will be at next minute
                     
-                    animate();  // show all with month showing last
+                    if(FPBUnitIsOn) animate();        // show all with month showing last
                 }
                 
             } else {
@@ -765,7 +770,7 @@ void timeTravel()
         timeDiffUp = false;
     }                
 
-    // Save presentTime settings if to be persistent
+    // Save presentTime settings (timeDifference) if to be persistent
     if(timetravelPersistent) {
         presentTime.save();       
     }
@@ -807,7 +812,7 @@ void resetPresentTime()
     // Reset time, Yes, it's that simple.
     timeDifference = 0;
 
-    // Save presentTime settings (yearoffs, timeDiff) if to be persistent
+    // Save presentTime settings (timeDifference) if to be persistent
     if(timetravelPersistent) {
         presentTime.save();
     } 
@@ -843,7 +848,7 @@ bool getNTPTime()
 
         if(strlen(settings.ntpServer) == 0) {
             #ifdef TC_DBG            
-            Serial.println("getNTPTime: NTP skipped, server not defined");
+            Serial.println("getNTPTime: NTP skipped, server name not defined");
             #endif
             return false;
         }
@@ -912,8 +917,7 @@ bool checkTimeOut()
 {    
     y = digitalRead(SECONDS_IN);
     if(x != y) {
-        x = y;
-        digitalWrite(STATUS_LED, !y);  // update status LED
+        x = y;        
         if(y == 0) {
             timeout++;
         }
@@ -926,7 +930,7 @@ bool checkTimeOut()
     return false;
 }
 
-// enable the 1Hz RTC output
+// Enable the 1Hz RTC output
 void RTCClockOutEnable() 
 {    
     uint8_t readValue = 0;
@@ -1006,8 +1010,9 @@ DateTime myrtcnow()
     return dt;
 }    
 
-      
-
+/* 
+ *  Convert a date into "minutes since 1/1/1 0:0"
+ */
 uint64_t dateToMins(int year, int month, int day, int hour, int minute)
 {
     uint64_t total64 = 0;
@@ -1028,6 +1033,9 @@ uint64_t dateToMins(int year, int month, int day, int hour, int minute)
     return total64;
 }
 
+/* 
+ *  Convert "minutes since 1/1/1 0:0" into date
+ */
 void minsToDate(uint64_t total64, int& year, int& month, int& day, int& hour, int& minute)
 {
     int c = 1, d = 9;
@@ -1075,6 +1083,9 @@ void minsToDate(uint64_t total64, int& year, int& month, int& day, int& hour, in
     minute = total32 - (temp * 60);
 }
 
+/*
+ * Callbacks for fake power switch
+ */
 #ifdef FAKE_POWER_ON
 void fpbKeyPressed() 
 {
