@@ -59,27 +59,21 @@ void settings_setup()
         #ifdef TC_DBG
         Serial.println("No SD card found");
         #endif
-    
     } else {
-      
         #ifdef TC_DBG
         Serial.println("SD card initialized");
         #endif
 
         uint8_t cardType = SD.cardType();
         if(cardType == CARD_NONE) {
-          
             Serial.println("No SD card inserted");
-        
         } else {
-          
             #ifdef TC_DBG
             Serial.print("SD card type ");
             Serial.println(cardType, DEC);
             #endif
-            
+    
             haveSD = true;
-            
         }
     }
 
@@ -159,38 +153,22 @@ void settings_setup()
                     if(json["alarmRTC"]) {
                         strcpy(settings.alarmRTC, json["alarmRTC"]);
                     } else writedefault = true;
-                  
                 } else {
-                  
                     Serial.println("settings_setup: Failed to parse settings file");
-          
                     writedefault = true;
-                  
                 }
-              
               configFile.close();
             }
-          
         } else {
-    
             writedefault = true;
-          
         }
-    
         if(writedefault) {
-          
             // config file does not exist or is incomplete - create one 
-            
             Serial.println("settings_setup: Settings missing or incomplete; writing new file");
-            
             write_settings();
-          
         }
-      
     } else {
-      
         Serial.println("settings_setup: Failed to mount SPIFFS");
-    
     }
 }
 
@@ -250,11 +228,8 @@ bool loadAlarm()
     //SPIFFS.remove("/alarmconfig.json");  /// QQQ TEST
     
     if(!haveFS) {
-      
         Serial.println("loadAlarm(): SPIFFS not mounted, using EEPROM");
-        
         return loadAlarmEEPROM();
-        
     } 
 
     if(SPIFFS.exists("/alarmconfig.json")) {
@@ -304,34 +279,21 @@ bool loadAlarm()
                     Serial.println("loadAlarm: alarmmin missing");
                     #endif                     
                 }
-              
             } else {
-              
                 Serial.println("loadAlarm: Failed to parse alarm settings file");
-
                 writedefault = true;
-              
             }
-            
             configFile.close();
         }
-      
     } else {
-
         writedefault = true;
-      
     }
 
     if(writedefault) {
-        
         // alarmconfig file does not exist or is incomplete - create one 
-        
         Serial.println("loadAlarm: Alarm settings missing or incomplete; writing new file");
-        
         saveAlarm();
-      
     }    
-
     return true;
 }
 
@@ -380,9 +342,7 @@ void saveAlarm()
 
     if(!haveFS) {
         Serial.println("saveAlarm(): SPIFFS not mounted, using EEPROM");
-        
         saveAlarmEEPROM();
-        
         return;        
     } 
   
