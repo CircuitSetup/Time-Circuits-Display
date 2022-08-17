@@ -72,6 +72,7 @@ extern void time_setup();
 extern void time_loop();
 extern void timeTravel();
 extern void resetPresentTime();
+extern void pauseAuto();
 extern bool getNTPTime();
 extern bool checkTimeOut();
 extern void RTCClockOutEnable();

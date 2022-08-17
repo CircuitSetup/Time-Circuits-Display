@@ -559,6 +559,23 @@ void clockDisplay::showOnlyReset()
 }
 #endif
 
+void clockDisplay::showOnlyBatt()
+{
+    clearDisplay();
+    
+#ifdef IS_ACAR_DISPLAY
+    directCol(CD_MONTH_POS,     numDigs['B' - 'A' + 10] |
+                               (numDigs['A' - 'A' + 10] << 8));
+    directCol(CD_DAY_POS,       numDigs['T' - 'A' + 10] | 
+                               (numDigs['T' - 'A' + 10] << 8));   
+#else
+    directCol(CD_MONTH_POS,     makeAlpha('B'));
+    directCol(CD_MONTH_POS + 1, makeAlpha('A'));
+    directCol(CD_MONTH_POS + 2, makeAlpha('T'));
+    directCol(CD_DAY_POS,         numDigs['T' - 'A' + 10]);
+#endif
+}
+
 // clears the display RAM and only shows the provided 2 numbers (parts of IP)
 void clockDisplay::showOnlyHalfIP(int a, int b, bool clear) 
 {
@@ -811,7 +828,7 @@ bool clockDisplay::load()
               timeDiffUp = loadBuf[8] ? true : false;
 
               #ifdef TC_DBG  
-              Serial.print("Clockdisplay: Loading RTC settings from EEPROM");
+              Serial.println("Clockdisplay: Loading RTC settings from EEPROM");
               #endif
                      
         } else {
@@ -859,11 +876,9 @@ int16_t clockDisplay::loadYOffs()
                 
           return ((loadBuf[2] << 8) | loadBuf[1]);  
                  
-    } else {
+    } 
 
-          return -1;
-          
-    }         
+    return -1;        
 }
 
 // Write time to RTC chip
@@ -894,7 +909,7 @@ uint8_t clockDisplay::getLED7SegChar(uint8_t value)
     } else if(value <= 9) {
         return numDigs[value];
     }
-    return 0x0;   // blank on invalid
+    return 0;   // blank on invalid
 }
 
 // Returns bit pattern for provided character for display on alphanumeric 14 segment display
@@ -1086,5 +1101,3 @@ byte clockDisplay::decToBcd(byte val)
 {
     return ((val / 10 * 16) + (val % 10));
 }
-
-    

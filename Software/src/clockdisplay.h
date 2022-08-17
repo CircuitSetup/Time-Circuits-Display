@@ -138,8 +138,9 @@ class clockDisplay {
         void showOnlyReset();
         void showOnlyMin();
 #endif    
-        void showOnlyUtes();    
+        void showOnlyUtes();          
         void showOnlyRTC();
+        void showOnlyBatt();
         void showOnlyHalfIP(int a, int b, bool clear = false);
     
         bool save();

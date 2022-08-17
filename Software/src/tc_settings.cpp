@@ -89,108 +89,107 @@ void settings_setup()
 
     if(SPIFFS.begin()) {
   
-      #ifdef TC_DBG
-      Serial.println("settings_setup: Mounted SPIFFS");
-      #endif
-      
-      haveFS = true;
-      
-      if(SPIFFS.exists("/config.json")) {
+        #ifdef TC_DBG
+        Serial.println("settings_setup: Mounted SPIFFS");
+        #endif
         
-        //file exists, load and parse it     
-        File configFile = SPIFFS.open("/config.json", "r");
+        haveFS = true;
         
-        if (configFile) {
-  
-          #ifdef TC_DBG
-          Serial.println("settings_setup: Opened config file");
-          #endif
-  
-          StaticJsonDocument<1024> json;
-          DeserializationError error = deserializeJson(json, configFile);
-  
-          #ifdef TC_DBG
-          serializeJson(json, Serial);
-          #endif
+        if(SPIFFS.exists("/config.json")) {
+             
+            File configFile = SPIFFS.open("/config.json", "r");
+            
+            if(configFile) {
+      
+                #ifdef TC_DBG
+                Serial.println("settings_setup: Opened config file");
+                #endif
+        
+                StaticJsonDocument<1024> json;
+                DeserializationError error = deserializeJson(json, configFile);
+        
+                #ifdef TC_DBG
+                serializeJson(json, Serial);
+                #endif
+                
+                if(!error) {
+        
+                    #ifdef TC_DBG
+                    Serial.println("\nsettings_setup: Parsed json");
+                    #endif
+                    
+                    if(json["ntpServer"]) {
+                        strcpy(settings.ntpServer, json["ntpServer"]);
+                    } else writedefault = true;          
+                    if(json["timeZone"]) {
+                        strcpy(settings.timeZone, json["timeZone"]);
+                    } else writedefault = true;
+                    if(json["autoRotateTimes"]) {
+                        strcpy(settings.autoRotateTimes, json["autoRotateTimes"]);
+                    } else writedefault = true;
+                    if(json["destTimeBright"]) {
+                        strcpy(settings.destTimeBright, json["destTimeBright"]);
+                    } else writedefault = true;
+                    if(json["presTimeBright"]) {
+                        strcpy(settings.presTimeBright, json["presTimeBright"]);
+                    } else writedefault = true;
+                    if(json["lastTimeBright"]) {
+                        strcpy(settings.lastTimeBright, json["lastTimeBright"]);
+                    } else writedefault = true;
+                    //if(json["beepSound"]) {
+                    //  strcpy(settings.beepSound, json["beepSound"]);
+                    //} else writedefault = true;
+                    if(json["wifiConRetries"]) {
+                        strcpy(settings.wifiConRetries, json["wifiConRetries"]);
+                    } else writedefault = true;
+                    if(json["wifiConTimeout"]) {
+                        strcpy(settings.wifiConTimeout, json["wifiConTimeout"]);
+                    } else writedefault = true;
+                    if(json["mode24"]) {
+                        strcpy(settings.mode24, json["mode24"]);
+                    } else writedefault = true;
+                    if(json["timeTrPers"]) {
+                        strcpy(settings.timesPers, json["timeTrPers"]);
+                    } else writedefault = true;
+                    #ifdef FAKE_POWER_ON
+                    if(json["fakePwrOn"]) {
+                        strcpy(settings.fakePwrOn, json["fakePwrOn"]);
+                    } else writedefault = true;
+                    #endif
+                    if(json["alarmRTC"]) {
+                        strcpy(settings.alarmRTC, json["alarmRTC"]);
+                    } else writedefault = true;
+                  
+                } else {
+                  
+                    Serial.println("settings_setup: Failed to parse settings file");
           
-          if (!error) {
-  
-            #ifdef TC_DBG
-            Serial.println("\nsettings_setup: Parsed json");
-            #endif
-            
-            if(json["ntpServer"]) {
-                strcpy(settings.ntpServer, json["ntpServer"]);
-            } else writedefault = true;          
-            if(json["timeZone"]) {
-                strcpy(settings.timeZone, json["timeZone"]);
-            } else writedefault = true;
-            if(json["autoRotateTimes"]) {
-                strcpy(settings.autoRotateTimes, json["autoRotateTimes"]);
-            } else writedefault = true;
-            if(json["destTimeBright"]) {
-                strcpy(settings.destTimeBright, json["destTimeBright"]);
-            } else writedefault = true;
-            if(json["presTimeBright"]) {
-                strcpy(settings.presTimeBright, json["presTimeBright"]);
-            } else writedefault = true;
-            if(json["lastTimeBright"]) {
-                strcpy(settings.lastTimeBright, json["lastTimeBright"]);
-            } else writedefault = true;
-            //if(json["beepSound"]) {
-            //  strcpy(settings.beepSound, json["beepSound"]);
-            //} else writedefault = true;
-            if(json["wifiConRetries"]) {
-                strcpy(settings.wifiConRetries, json["wifiConRetries"]);
-            } else writedefault = true;
-            if(json["wifiConTimeout"]) {
-                strcpy(settings.wifiConTimeout, json["wifiConTimeout"]);
-            } else writedefault = true;
-            if(json["mode24"]) {
-                strcpy(settings.mode24, json["mode24"]);
-            } else writedefault = true;
-            if(json["timeTrPers"]) {
-                strcpy(settings.timesPers, json["timeTrPers"]);
-            } else writedefault = true;
-            #ifdef FAKE_POWER_ON
-            if(json["fakePwrOn"]) {
-                strcpy(settings.fakePwrOn, json["fakePwrOn"]);
-            } else writedefault = true;
-            #endif
-            if(json["alarmRTC"]) {
-                strcpy(settings.alarmRTC, json["alarmRTC"]);
-            } else writedefault = true;
-            
-          } else {
-            
-            Serial.println("settings_setup: Failed to parse json config");
-  
+                    writedefault = true;
+                  
+                }
+              
+              configFile.close();
+            }
+          
+        } else {
+    
             writedefault = true;
-            
-          }
           
-          configFile.close();
         }
-        
-      } else {
-  
-        writedefault = true;
-        
-      }
-  
-      if(writedefault) {
-        
-        // config file does not exist or is incomplete - create one 
-        
-        Serial.println("settings_setup: Settings missing or incomplete; writing new config file");
-        
-        write_settings();
-        
-      }
+    
+        if(writedefault) {
+          
+            // config file does not exist or is incomplete - create one 
+            
+            Serial.println("settings_setup: Settings missing or incomplete; writing new file");
+            
+            write_settings();
+          
+        }
       
     } else {
       
-      Serial.println("settings_setup: Failed to mount FS");
+        Serial.println("settings_setup: Failed to mount SPIFFS");
     
     }
 }
@@ -200,8 +199,8 @@ void write_settings()
     StaticJsonDocument<1024> json;
   
     if(!haveFS) {
-      Serial.println("write_settings: Cannot write settings, FS not mounted");
-      return;
+        Serial.println("write_settings: Cannot write settings, SPIFFS not mounted");
+        return;
     } 
   
     #ifdef TC_DBG
@@ -231,10 +230,12 @@ void write_settings()
     Serial.println("\n");
     #endif
     
-    serializeJson(json, configFile);
-  
-    configFile.close(); 
-  
+    if(configFile) {
+        serializeJson(json, configFile);
+        configFile.close(); 
+    } else {
+        Serial.println("write_settings: Failed to open file for writing");
+    }
 }
 
 /* 
@@ -245,10 +246,12 @@ void write_settings()
 bool loadAlarm()
 {
     bool writedefault = false;
+
+    //SPIFFS.remove("/alarmconfig.json");  /// QQQ TEST
     
     if(!haveFS) {
       
-        Serial.println("loadAlarm(): FS not mounted, using EEPROM");
+        Serial.println("loadAlarm(): SPIFFS not mounted, using EEPROM");
         
         return loadAlarmEEPROM();
         
@@ -256,64 +259,80 @@ bool loadAlarm()
 
     if(SPIFFS.exists("/alarmconfig.json")) {
       
-      //file exists, load and parse it     
-      File configFile = SPIFFS.open("/alarmconfig.json", "r");
-      
-      if (configFile) {
-
-        #ifdef TC_DBG
-        Serial.println("loadAlarm: Opened alarmconfig file");
-        #endif
-
-        StaticJsonDocument<1024> json;
-        DeserializationError error = deserializeJson(json, configFile);
-
-        #ifdef TC_DBG
-        serializeJson(json, Serial);
-        #endif
+        File configFile = SPIFFS.open("/alarmconfig.json", "r");
         
-        if (!error) {
+        if(configFile) {
 
-          #ifdef TC_DBG
-          Serial.println("\nloadAlarm: Parsed json");
-          #endif
-          
-          if(json["alarmonoff"]) {
-              alarmOnOff = (atoi(json["alarmonoff"]) != 0) ? true : false;              
-          } else writedefault = true;          
-          if(json["alarmhour"]) {
-              alarmHour = atoi(json["alarmhour"]);              
-          } else writedefault = true;
-          if(json["alarmmin"]) {
-              alarmMinute = atoi(json["alarmmin"]); 
-          } else writedefault = true;                    
-          
-        } else {
-          
-          Serial.println("loadAlarm: Failed to parse json config");
+            #ifdef TC_DBG
+            Serial.println("loadAlarm: Opened alarmconfig file");
+            #endif
 
-          writedefault = true;
-          
+            StaticJsonDocument<1024> json;
+            DeserializationError error = deserializeJson(json, configFile);
+
+            #ifdef TC_DBG
+            serializeJson(json, Serial);
+            #endif
+            
+            if(!error) {
+
+                #ifdef TC_DBG
+                Serial.println("\nloadAlarm: Parsed json");
+                #endif
+                
+                if(json["alarmonoff"]) {
+                    alarmOnOff = (atoi(json["alarmonoff"]) != 0) ? true : false;              
+                } else {
+                    writedefault = true;  
+                    #ifdef TC_DBG
+                    Serial.println("loadAlarm: alarmonoff missing");
+                    #endif        
+                }
+                if(json["alarmhour"]) {
+                    alarmHour = atoi(json["alarmhour"]);              
+                } else {
+                    writedefault = true;
+                    #ifdef TC_DBG
+                    Serial.println("loadAlarm: alarmhour missing");
+                    #endif  
+                }
+                if(json["alarmmin"]) {
+                    alarmMinute = atoi(json["alarmmin"]); 
+                } else {
+                    writedefault = true;
+                    #ifdef TC_DBG
+                    Serial.println("loadAlarm: alarmmin missing");
+                    #endif                     
+                }
+              
+            } else {
+              
+                Serial.println("loadAlarm: Failed to parse alarm settings file");
+
+                writedefault = true;
+              
+            }
+            
+            configFile.close();
         }
-        
-        configFile.close();
-      }
       
     } else {
 
-      writedefault = true;
+        writedefault = true;
       
     }
 
     if(writedefault) {
-      
-      // alarmconfig file does not exist or is incomplete - create one 
-      
-      Serial.println("loadAlarm: Alarm settings missing or incomplete; writing new config file");
-      
-      saveAlarm();
+        
+        // alarmconfig file does not exist or is incomplete - create one 
+        
+        Serial.println("loadAlarm: Alarm settings missing or incomplete; writing new file");
+        
+        saveAlarm();
       
     }    
+
+    return true;
 }
 
 bool loadAlarmEEPROM() 
@@ -350,40 +369,44 @@ bool loadAlarmEEPROM()
 
 void saveAlarm() 
 {
-    StaticJsonDocument<1024> json;
     char hourBuf[8];
     char minBuf[8];
-
+    
+    StaticJsonDocument<1024> json;
+    
     #ifdef TC_DBG
     Serial.println("Save Alarm");
     #endif
 
     if(!haveFS) {
-        Serial.println("saveAlarm(): FS not mounted, using EEPROM");
+        Serial.println("saveAlarm(): SPIFFS not mounted, using EEPROM");
         
         saveAlarmEEPROM();
         
         return;        
     } 
   
-    json["alarmonoff"] = alarmOnOff ? "1" : "0";
+    json["alarmonoff"] = (char *)(alarmOnOff ? "1" : "0");
 
     sprintf(hourBuf, "%d", alarmHour);
     sprintf(minBuf, "%d", alarmMinute);
     
-    json["alarmhour"] = hourBuf;
-    json["alarmmin"] = minBuf;
+    json["alarmhour"] = (char *)hourBuf;
+    json["alarmmin"] = (char *)minBuf;
 
     File configFile = SPIFFS.open("/alarmconfig.json", FILE_WRITE);
   
     #ifdef TC_DBG
     serializeJson(json, Serial);
-    Serial.println("\n");
+    Serial.println(" ");
     #endif
-    
-    serializeJson(json, configFile);
-  
-    configFile.close(); 
+
+    if(configFile) {        
+        serializeJson(json, configFile);        
+        configFile.close();         
+    } else {
+        Serial.println("saveAlarm: Failed to open alarm settings file for writing");
+    }
 }    
 
 void saveAlarmEEPROM()
@@ -403,6 +426,4 @@ void saveAlarmEEPROM()
     EEPROM.write(ALARM_PREF + 3, (sum & 0xff));   
     
     EEPROM.commit();
-    
-    return;
 }

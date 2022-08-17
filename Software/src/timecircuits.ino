@@ -23,6 +23,11 @@
 
 /* Changelog 
  *  
+ *  2022/08/16 (A10001986)
+ *    - Show "BATT" during booting if RTC battery is depleted and needs to be 
+ *      changed
+ *    - Pause autoInterval-cycling when user entered a valid destination time
+ *      and/or initiated a time travel
  *  2022/08/15 (A10001986)
  *    - Time logic re-written. RTC now always keeps real actual present
  *      time, all fake times are calculated off the RTC time. 
@@ -32,6 +37,9 @@
  *    - Alarm base can now be selected between RTC (ie actual present
  *      time, what is stored in the RTC), or "present time" (ie fake
  *      present time).
+ *    - Fix fake power off if time rotation interval is non-zero
+ *    - Correct some inconsistency in my assumptions on A-car display
+ *      handling
  *  2022/08/13 (A10001986)
  *    - Changed "fake power" logic : This is no longer a "button" to  
  *      only power on, but a switch. The unit can now be "fake" powered 

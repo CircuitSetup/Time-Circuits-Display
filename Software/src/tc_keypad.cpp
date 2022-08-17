@@ -103,7 +103,7 @@ void keypad_setup()
     enterKey.setPressTicks(ENTER_HOLD_TIME);
     enterKey.setDebounceTicks(ENTER_DEBOUNCE);
     enterKey.attachClick(enterKeyPressed);    
-    enterKey.attachLongPressStart(enterKeyHeld);    // we only need info when the button is held long enough
+    enterKey.attachLongPressStart(enterKeyHeld);
 
 #ifdef EXTERNAL_TIMETRAVEL
     // Setup External time travel button
@@ -263,7 +263,10 @@ void keypad_loop()
 {   
     enterkeytick();
 
-    if(!FPBUnitIsOn) return;
+    if(!FPBUnitIsOn) {
+        isEttKeyPressed = false; 
+        return;
+    }
 
 #ifdef EXTERNAL_TIMETRAVEL
     if(isEttKeyPressed) {
@@ -362,6 +365,9 @@ void keypad_loop()
             if(timetravelPersistent) {
                 destinationTime.save();      
             }     
+
+            // Pause autoInterval-cycling so user can play undisturbed
+            pauseAuto();
         }
 
         // Prepare for next input

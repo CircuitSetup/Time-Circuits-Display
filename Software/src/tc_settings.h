@@ -63,19 +63,19 @@ extern bool    haveSD;
 struct Settings {
     char ntpServer[64]      = "pool.ntp.org";
     char timeZone[64]       = "CST6CDT,M3.2.0,M11.1.0";     
-    char autoRotateTimes[4] = "1";
+    char autoRotateTimes[4] = "0";    // Default: Off, use time circuits like in movie
     char destTimeBright[4]  = "15";
     char presTimeBright[4]  = "15";
     char lastTimeBright[4]  = "15";
     //char beepSound[3]     = "0";
-    char wifiConRetries[4]  = "3";   // Default: 3 retries
-    char wifiConTimeout[4]  = "7";   // Default: 7 seconds time-out
-    char mode24[4]          = "0";   // Default: 0 = 12-hour-mode    
-    char timesPers[4]       = "1";   // Default: TimeTravel persistent 
+    char wifiConRetries[4]  = "3";    // Default: 3 retries
+    char wifiConTimeout[4]  = "7";    // Default: 7 seconds time-out
+    char mode24[4]          = "0";    // Default: 0 = 12-hour-mode    
+    char timesPers[4]       = "1";    // Default: TimeTravel persistent 
 #ifdef FAKE_POWER_ON 
     char fakePwrOn[4]       = "0";       
 #endif
-    char alarmRTC[4]        = "1";   // Default: Alarm is RTC-based (1) (otherwise presentTime based (0))
+    char alarmRTC[4]        = "1";    // Default: Alarm is RTC-based (otherwise presentTime-based = 0)
 };
 
 extern struct Settings settings;
