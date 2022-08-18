@@ -183,7 +183,6 @@ void saveParamsCallback()
 {
     //Serial.println("Should save params config");
     shouldSaveConfig = true;
-    wm.stopConfigPortal();
 }
 
 void updateConfigPortalValues()
@@ -206,22 +205,6 @@ void updateConfigPortalValues()
     //custom_beepSound.setValue(settings.beepSound, 3);
 }
 
-/*
-int wifi_getmode()
-{
-  WiFiMode_t mymode = WiFi.getMode();
-
-  switch(mymode) {
-    case WIFI_STA:
-        return 1;
-    case WIFI_AP:
-        return 2;
-  }
-   
-  return 0;  
-}
-*/
-
 bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d)
 {
   IPAddress myip = WiFi.localIP();
@@ -233,15 +216,3 @@ bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d)
   
   return true;
 }
-
-/*
- * read parameter from server, for customhmtl input
- * /
-String getParam(String name){  
-  String value;
-  if(wm.server->hasArg(name)) {
-    value = wm.server->arg(name);
-  }
-  return value;
-}
-*/

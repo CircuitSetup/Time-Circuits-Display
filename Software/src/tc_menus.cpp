@@ -442,7 +442,7 @@ void displaySelect(int& number)
                   isEnterKeyHeld = false;
                   return;              
               }
-              delay(100); 
+              delay(10); 
           }
 
           if(checkTimeOut()) return;
@@ -458,7 +458,7 @@ void displaySelect(int& number)
       } else {
 
           myloop();
-          delay(100);
+          delay(50);
           
       }
       

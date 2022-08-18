@@ -815,15 +815,15 @@ bool clockDisplay::load()
             if(i < 9) sum += loadBuf[i] ^ 0x55;                    
         }    
 
-        if((sum & 0xff) == loadBuf[9]) { 
+        if((sum & 0xff) == loadBuf[9]) {               
               
               setYearOffset((loadBuf[2] << 8) | loadBuf[1]); 
 
-              timeDifference = (loadBuf[3] << 32) |
-                               (loadBuf[4] << 24) |
-                               (loadBuf[5] << 16) |
-                               (loadBuf[6] <<  8) |
-                                loadBuf[7];
+              timeDifference = ((uint64_t)loadBuf[3] << 32) |  // Dumb cast is for silencing compiler
+                                         (loadBuf[4] << 24) |
+                                         (loadBuf[5] << 16) |
+                                         (loadBuf[6] <<  8) |
+                                         loadBuf[7];
                                 
               timeDiffUp = loadBuf[8] ? true : false;
 

@@ -21,8 +21,31 @@
  * 
  */
 
+/*
+ * 
+ * Needs ESP32 Arduino framework: https://github.com/espressif/arduino-esp32
+ *
+ * Library dependencies:
+ * - OneButton: https://github.com/mathertel/OneButton
+ *   (Tested with 2.0.4)
+ * - ESP8266Audio: https://github.com/earlephilhower/ESP8266Audio
+ *   (1.9.7 and later for esp-arduino 2.x; 1.9.5 for 1.x)
+ * - RTClib (Adafruit): https://github.com/adafruit/RTClib
+ *   (Tested with 2.1.1)
+ * - WifiManager (tablatronix, tzapu; v0.16 and later) https://github.com/tzapu/WiFiManager
+ *   (Tested with 2.1.12beta)
+ * - Keypad ("by Community; Mark Stanley, Alexander Brevig): https://github.com/Chris--A/Keypad
+ *   (Tested with 3.1.1)
+ * 
+ * 
+ * Detailed installation and compilation instructions are here:
+ * https://github.com/CircuitSetup/Time-Circuits-Display/wiki/Programming-the-ESP32-Module
+ */
+
 /* Changelog 
  *  
+ *  2022/08/17 (A10001986)
+ *    - Fix missing return value in loadAlarm
  *  2022/08/16 (A10001986)
  *    - Show "BATT" during booting if RTC battery is depleted and needs to be 
  *      changed

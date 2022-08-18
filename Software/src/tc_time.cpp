@@ -44,17 +44,13 @@ bool autoReadjust = false;
 bool alarmDone = false;
 int8_t minNext;  
 
-bool x;  // for tracking second change
+bool x;  // for tracking second changes
 bool y;  
 
 bool startup = false;
 bool startupSound = false;
 unsigned long startupNow = 0;
-#ifndef TWPRIVATE
 int  startupDelay = 1000; // the time between startup sound being played and the display coming on
-#else
-int  startupDelay = 1000; // the time between startup sound being played and the display coming on
-#endif
 
 unsigned long pauseNow;                 // Pause autoInterval if user played with time travel
 unsigned long pauseDelay = 30*60*1000;  // Pause for 30 minutes
@@ -94,7 +90,6 @@ clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 // Automatic times
 dateStruct destinationTimes[8] = {
     //YEAR, MONTH, DAY, HOUR, MIN
-#ifndef TWPRIVATE    
     {1985, 10, 26,  1, 21},
     {1985, 10, 26,  1, 24},
     {1955, 11,  5,  6,  0},
@@ -102,20 +97,9 @@ dateStruct destinationTimes[8] = {
     {2015, 10, 21, 16, 29},
     {1955, 11, 12,  6,  0},
     {1885,  1,  1,  0,  0},
-    {1885,  9,  2, 12,  0}};
-#else
-    {1985,  7, 23, 20,  1},       // TW private
-    {1985, 11, 23, 16, 24},   
-    {1986,  5, 26, 14, 12},    
-    {1986,  8, 23, 11,  0},     
-    {1986, 12, 24, 21, 22},   
-    {1987,  3, 20, 19, 31},    
-    {1987,  5, 26,  0,  0},      
-    {1988, 12, 24, 22, 31}};  
-#endif    
+    {1885,  9,  2, 12,  0}};   
 
 dateStruct departedTimes[8] = {
-#ifndef TWPRIVATE
     {1985, 10, 26,  1, 20},
     {1955, 11, 12, 22,  4},
     {1985, 10, 26,  1, 34},
@@ -123,17 +107,7 @@ dateStruct departedTimes[8] = {
     {1985, 10, 26, 11, 35},
     {1985, 10, 27,  2, 42},
     {1955, 11, 12, 21, 44},
-    {1955, 11, 13, 12,  0}};
-#else  
-    {2017,  7, 11, 10, 11},       // TW private
-    {1988,  6,  3, 15, 30},    
-    {1943,  3, 15,  7, 47},     
-    {2016,  6, 22, 16, 11},    
-    {1982,  5, 15,  9, 41},     
-    {1943, 11, 25, 11, 11},   
-    {1970,  5, 26,  8, 22},     
-    {2021,  5,  5, 10,  9}};    
-#endif    
+    {1955, 11, 13, 12,  0}};   
 
 int8_t autoTime = 0;  // selects the above array time
 

@@ -114,7 +114,7 @@ void audio_loop()
     }
 }
 
-void play_file(char *audio_file, double volume, int channel) 
+void play_file(const char *audio_file, double volume, int channel) 
 {
     if(audioMute) return;
 

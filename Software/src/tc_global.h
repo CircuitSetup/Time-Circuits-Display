@@ -54,7 +54,4 @@
 #define DEPT_TIME_PREF    0x1c    // departure time prefs         (10 bytes)
 #define ALARM_PREF        0x26    // alarm prefs                  (4 bytes; only used if fs unavailable)
 
-
-//#define TWPRIVATE       // A10001986's private customizations
-
 #endif
