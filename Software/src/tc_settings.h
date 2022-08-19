@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +37,7 @@
 #include "tc_global.h"
 
 // SD Card pins
-#define SD_CS     5
+#define SD_CS      5
 #define SPI_MOSI  23
 #define SPI_MISO  19
 #define SPI_SCK   18

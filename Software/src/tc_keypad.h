@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,11 +46,18 @@
 #define ENTER_CLICK_TIME 200    // enter button will register a click 
 #define ENTER_HOLD_TIME 2000    // time in ms holding the enter button will count as a hold
 
-#define ENTER_DELAY 400         // when enter button is pressed, turn off display for this many ms
-
 #define ETT_DEBOUNCE 50         // external time travel button debounce time in ms
 #define ETT_CLICK_TIME 250      // external time travel button will register a click (unused)
 #define ETT_HOLD_TIME 200       // external time travel button will register a press (that's the one)
+
+// When ENTER button is pressed, turn off display for this many ms
+// Must be sync'd to the sound file used! (enter.mp3 and baddate.mp3)
+#ifndef TWPRIVATE
+#define ENTER_DELAY   600         
+#else
+#define ENTER_DELAY   400 
+#endif
+#define BADDATE_DELAY 400
 
 void keypadEvent(KeypadEvent key);
 extern void keypad_setup();

@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,6 +53,15 @@
 #define PRES_TIME_ADDR 0x72
 #define DEPT_TIME_ADDR 0x74
 
+// The time between startup sound being played and the display coming on
+// Must be sync'd to the sound file used! (startup.mp3/timetravel.mp3)
+#ifndef TWPRIVATE
+#define STARTUP_DELAY 1050
+#else
+#define STARTUP_DELAY 900 
+#endif
+#define TIMETRAVEL_DELAY 1500
+
 extern uint8_t        autoInterval;
 extern const uint8_t  autoTimeIntervals[6];
 
@@ -73,6 +84,7 @@ extern void time_loop();
 extern void timeTravel();
 extern void resetPresentTime();
 extern void pauseAuto();
+extern bool checkIfAutoPaused();
 extern bool getNTPTime();
 extern bool checkTimeOut();
 extern void RTCClockOutEnable();

@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,6 +44,7 @@
 bool autoIntDone = false;
 bool autoReadjust = false;
 bool alarmDone = false;
+bool hourlySoundDone = false;
 int8_t minNext;  
 
 bool x;  // for tracking second changes
@@ -50,7 +53,6 @@ bool y;
 bool startup = false;
 bool startupSound = false;
 unsigned long startupNow = 0;
-int  startupDelay = 1000; // the time between startup sound being played and the display coming on
 
 unsigned long pauseNow;                 // Pause autoInterval if user played with time travel
 unsigned long pauseDelay = 30*60*1000;  // Pause for 30 minutes
@@ -90,6 +92,7 @@ clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 // Automatic times
 dateStruct destinationTimes[8] = {
     //YEAR, MONTH, DAY, HOUR, MIN
+#ifndef TWPRIVATE    
     {1985, 10, 26,  1, 21},
     {1985, 10, 26,  1, 24},
     {1955, 11,  5,  6,  0},
@@ -97,9 +100,20 @@ dateStruct destinationTimes[8] = {
     {2015, 10, 21, 16, 29},
     {1955, 11, 12,  6,  0},
     {1885,  1,  1,  0,  0},
-    {1885,  9,  2, 12,  0}};   
+    {1885,  9,  2, 12,  0}};
+#else
+    {1985,  7, 23, 20,  1},       // TW private
+    {1985, 11, 23, 16, 24},   
+    {1986,  5, 26, 14, 12},    
+    {1986,  8, 23, 11,  0},     
+    {1986, 12, 24, 21, 22},   
+    {1987,  3, 20, 19, 31},    
+    {1987,  5, 26,  0,  0},      
+    {1988, 12, 24, 22, 31}};  
+#endif    
 
 dateStruct departedTimes[8] = {
+#ifndef TWPRIVATE
     {1985, 10, 26,  1, 20},
     {1955, 11, 12, 22,  4},
     {1985, 10, 26,  1, 34},
@@ -107,7 +121,17 @@ dateStruct departedTimes[8] = {
     {1985, 10, 26, 11, 35},
     {1985, 10, 27,  2, 42},
     {1955, 11, 12, 21, 44},
-    {1955, 11, 13, 12,  0}};   
+    {1955, 11, 13, 12,  0}};
+#else  
+    {2017,  7, 11, 10, 11},       // TW private
+    {1988,  6,  3, 15, 30},    
+    {1943,  3, 15,  7, 47},     
+    {2016,  6, 22, 16, 11},    
+    {1982,  5, 15,  9, 41},     
+    {1943, 11, 25, 11, 11},   
+    {1970,  5, 26,  8, 22},     
+    {2021,  5,  5, 10,  9}};    
+#endif    
 
 int8_t autoTime = 0;  // selects the above array time
 
@@ -190,7 +214,7 @@ void time_setup()
         // Lost power and battery didn't keep time, so set current time to compile time
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
         
-        Serial.println("time_setup: RTC lost power, setting compile time. Change battery!");
+        Serial.println("time_setup: RTC lost power, setting default time. Change battery!");
 
         rtcbad = true;
     
@@ -354,7 +378,7 @@ void time_loop()
                 if(!FPBUnitIsOn) {                                 
                     startup = true;
                     startupSound = true;
-                    FPBUnitIsOn = true;
+                    FPBUnitIsOn = true;                    
                 }
             } else {
                 if(FPBUnitIsOn) {       
@@ -374,21 +398,22 @@ void time_loop()
     // Initiate startup delay, play startup sound
     if(startupSound) {
         startupNow = millis();
-        play_startup(presentTime.getNightMode());
+        play_startup();
         startupSound = false;
+        hourlySoundDone = true; // Don't let the startup be interrupted
     }
 
     // Turn display on after startup delay
-    if(startup && (millis() - startupNow >= startupDelay)) {        
+    if(startup && (millis() - startupNow >= STARTUP_DELAY)) {        
         animate();
-        startup = false;
+        startup = false;        
         #ifdef TC_DBG
         Serial.println("time_loop: Startup animate triggered");
         #endif
     }
 
     // Turn display back on after time traveling
-    if(timeTraveled && (millis() - timetravelNow >= 1500)) {                
+    if(timeTraveled && (millis() - timetravelNow >= TIMETRAVEL_DELAY)) {                
         animate();
         timeTraveled = false;
         beepOn = true;
@@ -566,6 +591,20 @@ void time_loop()
               Serial.println(rtc.getTemperature());
             }
             #endif
+
+            // Sound to play hourly (if available)
+
+            if(presentTime.getMinute() == 0) { 
+                if(presentTime.getNightMode() || !FPBUnitIsOn) {
+                    hourlySoundDone = true;
+                }                                
+                if(!hourlySoundDone) {                  
+                    play_file("/hour.mp3", 1.0, false, 0); 
+                    hourlySoundDone = true;
+                }            
+            } else {
+                hourlySoundDone = false;
+            }
             
             // Handle alarm
 
@@ -581,7 +620,7 @@ void time_loop()
                 } else {
                     alarmDone = false;
                 } 
-            }
+            }                      
 
             // Handle autoInterval
             
@@ -682,7 +721,7 @@ void timeTravel()
     timetravelNow = millis();
     timeTraveled = true;
     beepOn = false;
-    play_file("/timetravel.mp3", getVolumeNM(presentTime.getNightMode()), 0);
+    play_file("/timetravel.mp3", 1.0, true, 0);
     
     allOff();
 
@@ -733,6 +772,9 @@ void timeTravel()
     // Pause autoInterval-cycling so user can play undisturbed
     pauseAuto();
 
+    // Don't let the sound be interrupted
+    hourlySoundDone = true; 
+
     #ifdef TC_DBG
     Serial.println("timeTravel: Success, good luck!");
     #endif
@@ -747,7 +789,9 @@ void resetPresentTime()
     timetravelNow = millis();
     timeTraveled = true; 
     if(timeDifference) {
-        play_file("/timetravel.mp3", getVolumeNM(presentTime.getNightMode()), 0);
+        play_file("/timetravel.mp3", 1.0, true, 0);
+        // Don't let the sound be interrupted
+        hourlySoundDone = true;
     }
   
     allOff();
@@ -789,6 +833,14 @@ void pauseAuto(void)
           Serial.println("pauseAuto: autoInterval paused for 30 minutes");          
           #endif
     }
+}
+
+bool checkIfAutoPaused() 
+{
+    if(!autoPaused || (millis() - pauseNow >= pauseDelay)) {
+        return false;
+    }
+    return true;
 }
 
 // choose your time zone from this list
@@ -914,11 +966,11 @@ void RTCClockOutEnable()
 
     Wire.requestFrom(DS3231_I2CADDR, 1);
     readValue = Wire.read();
-    readValue = readValue & B11100011;  
     // enable squarewave and set to 1Hz,
     // Bit 2 INTCN - 0 enables OSC
     // Bit 3 and 4 - 0 0 sets 1Hz
-
+    readValue = readValue & B11100011;  
+    
     Wire.beginTransmission(DS3231_I2CADDR);
     Wire.write((byte)0x0E);  // select control register
     Wire.write(readValue);

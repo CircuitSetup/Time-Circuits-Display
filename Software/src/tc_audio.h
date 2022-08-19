@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,10 +32,12 @@
 #include <AudioFileSourceSPIFFS.h>
 #include <AudioFileSourceSD.h>
 #include <AudioGeneratorMP3.h>
+#include <AudioGeneratorWAV.h>
 #include <AudioOutputMixer.h>
 
 #include "tc_global.h"
 #include "tc_keypad.h"
+#include "tc_time.h"
 
 // I2S audio pins
 #define I2S_BCLK  26
@@ -44,13 +48,13 @@
 #define VOLUME    32
 
 extern void audio_setup();
-extern void play_keypad_sound(char key, bool nm);
-extern void play_startup(bool nm);
+extern void play_keypad_sound(char key);
+extern void play_startup();
 extern void play_alarm();
 extern void audio_loop();
-extern void play_file(const char *audio_file, double volume = 0.1, int channel = 0);
-extern double getVolume();
-extern double getVolumeNM(bool nm);
+extern void play_file(const char *audio_file, double volumeFactor = 1, bool checkNightMode = true, int channel = 0);
+extern double getRawVolume();
+extern double getVolume(int channel);
 extern bool checkAudioDone();
 extern void stopAudio();
 extern bool beepOn;

@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,7 +46,25 @@
 
 /* Changelog 
  *  
+ *  2022/08/19 (A10001986)
+ *    - audio cleanup
+ *    - clean up sound/animation delay definitions
+ *    - audio: vol knob delivers inconsistent values, do some "noise reduction"
+ *  2022/08/18 (A10001986)
+ *    - Destination time/date can now be entered in mmddyyyy, mmddyyyyhhmm or hhmm
+ *      format.
+ *    - Sound file "hour.mp3" is played hourly on the hour, if the file exists on 
+ *      the SD card; disabled in night mode
+ *    - Holding "3" or "6" plays sound files "key3.mp3"/"key6.mp3" if these files
+ *      exist on the SD card
+ *    - Since audio mixing is a no-go for the time being, remove all unneccessary 
+ *      code dealing with this.
+ *    - Volume knob is now polled during play back, allowing changes while sound
+ *      is playing
+ *    - Fix auto time rotation pause logic at menu return
+ *    - [Fix crash when saving settings before WiFi was connected (John)]
  *  2022/08/17 (A10001986)
+ *    - Silence compiler warnings
  *    - Fix missing return value in loadAlarm
  *  2022/08/16 (A10001986)
  *    - Show "BATT" during booting if RTC battery is depleted and needs to be 

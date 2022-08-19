@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,10 +52,13 @@ bool isEttKeyPressed = false;
 
 unsigned long timeNow = 0;
 
-const int maxDateLength = 12;  // month, day, year, hour, min
-const int minDateLength = 8;   // month, day, year
+unsigned long lastKeyPressed = 0;
 
-char dateBuffer[maxDateLength + 2];
+#define DATELEN_ALL   12   // month, day, year, hour, min
+#define DATELEN_DATE   8   // month, day, year
+#define DATELEN_TIME   4   // hour, minute
+
+char dateBuffer[DATELEN_ALL + 2];
 char timeBuffer[8]; // 4 characters to accommodate date and time settings
 
 int dateIndex = 0;
@@ -61,6 +66,8 @@ int timeIndex = 0;
 int yearIndex = 0;
 
 bool doKey = false;
+
+unsigned long enterDelay = 0;
 
 OneButton enterKey = OneButton(ENTER_BUTTON,
     false,    // Button is active HIGH
@@ -147,7 +154,7 @@ void keypadEvent(KeypadEvent key)
     switch(keypad.getState()) {
         case PRESSED:
             if(key != '#' && key != '*') {
-                play_keypad_sound(key, presentTime.getNightMode());
+                play_keypad_sound(key);
             }
             doKey = true;            
             break;        
@@ -163,25 +170,33 @@ void keypadEvent(KeypadEvent key)
             if(key == '1') {    // "1" held down -> turn alarm on
                 doKey = false;
                 if(alarmOn()) {          
-                    play_file("/alarmon.mp3", getVolumeNM(presentTime.getNightMode()), 0);      
+                    play_file("/alarmon.mp3", 1.0, true, 0);      
                 } else {
-                    play_file("/baddate.mp3", getVolumeNM(presentTime.getNightMode()), 0); 
+                    play_file("/baddate.mp3", 1.0, true, 0); 
                 }
             }
             if(key == '2') {    // "2" held down -> turn alarm off
                 doKey = false;
                 alarmOff();                
-                play_file("/alarmoff.mp3", getVolumeNM(presentTime.getNightMode()), 0);
+                play_file("/alarmoff.mp3", 1.0, true, 0);
             }
             if(key == '4') {    // "4" held down -> nightmode on
                 doKey = false;
                 nightModeOn();
-                play_file("/nmon.mp3", getVolume(), 0);                   
+                play_file("/nmon.mp3", 1.0, false, 0);                   
             }
             if(key == '5') {    // "5" held down -> nightmode off
                 doKey = false;
                 nightModeOff(); 
-                play_file("/nmoff.mp3", getVolume(), 0);                
+                play_file("/nmoff.mp3", 1.0, false, 0);                
+            }
+            if(key == '3') {    // "3" held down -> play audio file "key3"
+                doKey = false;
+                play_file("/key3.mp3", 1.0, true, 0);                
+            }
+            if(key == '6') {    // "6" held down -> play audio file "key6"
+                doKey = false;
+                play_file("/key6.mp3", 1.0, true, 0);                
             }
             break;
         case RELEASED:
@@ -223,7 +238,8 @@ void recordKey(char key)
 {
     dateBuffer[dateIndex++] = key;
     dateBuffer[dateIndex] = '\0'; 
-    if (dateIndex >= maxDateLength) dateIndex = maxDateLength - 1;  // don't overflow, will overwrite end of date next time
+    if(dateIndex >= DATELEN_ALL) dateIndex = DATELEN_ALL - 1;  // don't overflow, will overwrite end of date next time
+    lastKeyPressed = millis();
 }
 
 void recordSetTimeKey(char key) 
@@ -263,6 +279,12 @@ void keypad_loop()
 {   
     enterkeytick();
 
+    // Discard keypad input after 5 minutes of inactivity
+    if(millis() - lastKeyPressed >= 5*60*1000) {
+        dateBuffer[0] = '\0'; 
+        dateIndex = 0;
+    }
+
     if(!FPBUnitIsOn) {
         isEttKeyPressed = false; 
         return;
@@ -299,6 +321,8 @@ void keypad_loop()
 
     // if enter key is merely pressed, copy dateBuffer to destination time (if valid)
     if(isEnterKeyPressed) {
+
+        int strLen = strlen(dateBuffer);
       
         isEnterKeyPressed = false; 
         enterWasPressed = true;
@@ -311,15 +335,22 @@ void keypad_loop()
                  
         timeNow = millis();        
         
-        if(strlen(dateBuffer) > maxDateLength || strlen(dateBuffer) < minDateLength) {
+        if(strLen != DATELEN_ALL && 
+           strLen != DATELEN_DATE &&
+           strLen != DATELEN_TIME) {
             
             Serial.println(F("keypad_loop: Date is too long or too short"));
                         
-            play_file("/baddate.mp3", getVolumeNM(presentTime.getNightMode()), 0);   
+            play_file("/baddate.mp3", 1.0, true, 0); 
+            enterDelay = BADDATE_DELAY;  
                  
         } else {
+          
+            int _setMonth = -1, _setDay = -1, _setYear = -1;
+            int _setHour = -1, _setMin = -1;            
         
-            play_file("/enter.mp3", getVolumeNM(presentTime.getNightMode()), 0);
+            play_file("/enter.mp3", 1.0, true, 0);
+            enterDelay = ENTER_DELAY;  
 
             #ifdef TC_DBG
             Serial.print(F("date entered: ["));
@@ -328,36 +359,43 @@ void keypad_loop()
             #endif
 
             // Convert char to String so substring can be used
-            String dateBufferString(dateBuffer);  
+            String dateBufferString(dateBuffer); 
 
             // Copy dates in dateBuffer and make ints
-            int _setMonth = dateBufferString.substring(0, 2).toInt();
-            int _setDay = dateBufferString.substring(2, 4).toInt();
-            int _setYear = dateBufferString.substring(4, 8).toInt();
-            int _setHour = dateBufferString.substring(8, 10).toInt();
-            int _setMin = dateBufferString.substring(10, 12).toInt();
-
-            // Fix month
-            if (_setMonth < 1)  _setMonth = 1;
-            if (_setMonth > 12) _setMonth = 12;            
-
-            // Check if day makes sense for the month entered 
-            if(_setDay < 1)     _setDay = 1;
-            if(_setDay > daysInMonth(_setMonth, _setYear)) {
-                _setDay = daysInMonth(_setMonth, _setYear); //set to max day in that month
+            if(strLen == DATELEN_TIME) {
+                _setHour = dateBufferString.substring(0, 2).toInt();
+                _setMin  = dateBufferString.substring(2, 4).toInt();
+            } else {         
+                _setMonth = dateBufferString.substring(0, 2).toInt();
+                _setDay = dateBufferString.substring(2, 4).toInt();
+                _setYear = dateBufferString.substring(4, 8).toInt();
+                if(strLen == DATELEN_ALL) {
+                    _setHour = dateBufferString.substring(8, 10).toInt();
+                    _setMin = dateBufferString.substring(10, 12).toInt();
+                }
+    
+                // Fix month
+                if (_setMonth < 1)  _setMonth = 1;
+                if (_setMonth > 12) _setMonth = 12;            
+    
+                // Check if day makes sense for the month entered 
+                if(_setDay < 1)     _setDay = 1;
+                if(_setDay > daysInMonth(_setMonth, _setYear)) {
+                    _setDay = daysInMonth(_setMonth, _setYear); //set to max day in that month
+                }
+    
+                // year: 1-9999 allowed. There is no year "0", for crying out loud.
+                if(_setYear < 1)    _setYear = 1;
             }
-
-            // year: 1-9999 allowed 
-            if(_setYear < 1)    _setYear = 1;
 
             // hour and min are checked in clockdisplay
 
             // Copy date to destination time
-            destinationTime.setMonth(_setMonth);
-            destinationTime.setDay(_setDay);
-            destinationTime.setYear(_setYear);
-            destinationTime.setHour(_setHour);
-            destinationTime.setMinute(_setMin);
+            if(_setMonth > 0)   destinationTime.setMonth(_setMonth);
+            if(_setDay > 0)     destinationTime.setDay(_setDay);
+            if(_setYear > 0)    destinationTime.setYear(_setYear);
+            if(_setHour >= 0)   destinationTime.setHour(_setHour);
+            if(_setMin >= 0)    destinationTime.setMinute(_setMin);
 
             // We only save the new time to the EEPROM if user wants persistence.
             // Might not be preferred; first, this messes with the user's custom
@@ -378,10 +416,10 @@ void keypad_loop()
     // Turn everything back on after entering date
     // (might happen in next iteration of loop)
     
-    if(enterWasPressed && (millis() - timeNow > ENTER_DELAY)) {
+    if(enterWasPressed && (millis() - timeNow > enterDelay)) {
       
         destinationTime.showAnimate1();   // Show all but month
-        delay(80);                        // Wait 80ms
+        mysdelay(80);                     // Wait 80ms
         destinationTime.showAnimate2();   // turn on month
         
         digitalWrite(WHITE_LED, LOW);     // turn off white LED

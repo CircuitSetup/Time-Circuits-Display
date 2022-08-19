@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -819,11 +821,11 @@ bool clockDisplay::load()
               
               setYearOffset((loadBuf[2] << 8) | loadBuf[1]); 
 
-              timeDifference = ((uint64_t)loadBuf[3] << 32) |  // Dumb cast is for silencing compiler
-                                         (loadBuf[4] << 24) |
-                                         (loadBuf[5] << 16) |
-                                         (loadBuf[6] <<  8) |
-                                         loadBuf[7];
+              timeDifference = ((uint64_t)loadBuf[3] << 32) |  // Dumb casts for 
+                               ((uint64_t)loadBuf[4] << 24) |  // silencing compiler
+                               ((uint64_t)loadBuf[5] << 16) |
+                               ((uint64_t)loadBuf[6] <<  8) |
+                                (uint64_t)loadBuf[7];
                                 
               timeDiffUp = loadBuf[8] ? true : false;
 
@@ -1101,3 +1103,5 @@ byte clockDisplay::decToBcd(byte val)
 {
     return ((val / 10 * 16) + (val % 10));
 }
+
+    

@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,5 +55,8 @@
 #define PRES_TIME_PREF    0x12    // present time prefs           (10 bytes)
 #define DEPT_TIME_PREF    0x1c    // departure time prefs         (10 bytes)
 #define ALARM_PREF        0x26    // alarm prefs                  (4 bytes; only used if fs unavailable)
+
+
+//#define TWPRIVATE       // A10001986's private customizations
 
 #endif

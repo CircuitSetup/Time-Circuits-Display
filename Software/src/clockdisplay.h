@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,8 +23,8 @@
  *
  */
 
-#ifndef CLOCKDISPLAY_H
-#define CLOCKDISPLAY_H
+#ifndef _CLOCKDISPLAY_H
+#define _CLOCKDISPLAY_H
 
 #include <Arduino.h>
 #include <RTClib.h>

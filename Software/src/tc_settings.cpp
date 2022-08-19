@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +52,6 @@ void settings_setup()
   
     // set up SD card
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
-    //SPI.setFrequency(1000000);
 
     haveSD = false;
     
@@ -59,21 +60,27 @@ void settings_setup()
         #ifdef TC_DBG
         Serial.println("No SD card found");
         #endif
+    
     } else {
+      
         #ifdef TC_DBG
         Serial.println("SD card initialized");
         #endif
 
         uint8_t cardType = SD.cardType();
         if(cardType == CARD_NONE) {
+          
             Serial.println("No SD card inserted");
+        
         } else {
+          
             #ifdef TC_DBG
             Serial.print("SD card type ");
             Serial.println(cardType, DEC);
             #endif
-    
+            
             haveSD = true;
+            
         }
     }
 
@@ -104,12 +111,13 @@ void settings_setup()
         
                 #ifdef TC_DBG
                 serializeJson(json, Serial);
+                Serial.println(" ");
                 #endif
                 
                 if(!error) {
         
                     #ifdef TC_DBG
-                    Serial.println("\nsettings_setup: Parsed json");
+                    Serial.println("settings_setup: Parsed json");
                     #endif
                     
                     if(json["ntpServer"]) {
@@ -153,22 +161,38 @@ void settings_setup()
                     if(json["alarmRTC"]) {
                         strcpy(settings.alarmRTC, json["alarmRTC"]);
                     } else writedefault = true;
+                  
                 } else {
+                  
                     Serial.println("settings_setup: Failed to parse settings file");
+          
                     writedefault = true;
+                  
                 }
+              
               configFile.close();
             }
+          
         } else {
+    
             writedefault = true;
+          
         }
+    
         if(writedefault) {
+          
             // config file does not exist or is incomplete - create one 
+            
             Serial.println("settings_setup: Settings missing or incomplete; writing new file");
+            
             write_settings();
+          
         }
+      
     } else {
+      
         Serial.println("settings_setup: Failed to mount SPIFFS");
+    
     }
 }
 
@@ -205,7 +229,7 @@ void write_settings()
   
     #ifdef TC_DBG
     serializeJson(json, Serial);
-    Serial.println("\n");
+    Serial.println(" ");
     #endif
     
     if(configFile) {
@@ -224,12 +248,13 @@ void write_settings()
 bool loadAlarm()
 {
     bool writedefault = false;
-
-    //SPIFFS.remove("/alarmconfig.json");  /// QQQ TEST
     
     if(!haveFS) {
+      
         Serial.println("loadAlarm(): SPIFFS not mounted, using EEPROM");
+        
         return loadAlarmEEPROM();
+        
     } 
 
     if(SPIFFS.exists("/alarmconfig.json")) {
@@ -247,53 +272,58 @@ bool loadAlarm()
 
             #ifdef TC_DBG
             serializeJson(json, Serial);
+            Serial.println(" ");
             #endif
             
             if(!error) {
 
                 #ifdef TC_DBG
-                Serial.println("\nloadAlarm: Parsed json");
+                Serial.println("loadAlarm: Parsed json");
                 #endif
                 
                 if(json["alarmonoff"]) {
                     alarmOnOff = (atoi(json["alarmonoff"]) != 0) ? true : false;              
                 } else {
-                    writedefault = true;  
-                    #ifdef TC_DBG
-                    Serial.println("loadAlarm: alarmonoff missing");
-                    #endif        
+                    writedefault = true;                            
                 }
                 if(json["alarmhour"]) {
                     alarmHour = atoi(json["alarmhour"]);              
                 } else {
-                    writedefault = true;
-                    #ifdef TC_DBG
-                    Serial.println("loadAlarm: alarmhour missing");
-                    #endif  
+                    writedefault = true;                    
                 }
                 if(json["alarmmin"]) {
                     alarmMinute = atoi(json["alarmmin"]); 
                 } else {
-                    writedefault = true;
-                    #ifdef TC_DBG
-                    Serial.println("loadAlarm: alarmmin missing");
-                    #endif                     
+                    writedefault = true;                                        
                 }
+              
             } else {
+              
                 Serial.println("loadAlarm: Failed to parse alarm settings file");
+
                 writedefault = true;
+              
             }
+            
             configFile.close();
         }
+      
     } else {
+
         writedefault = true;
+      
     }
 
     if(writedefault) {
+        
         // alarmconfig file does not exist or is incomplete - create one 
+        
         Serial.println("loadAlarm: Alarm settings missing or incomplete; writing new file");
+        
         saveAlarm();
+      
     }    
+
     return true;
 }
 
@@ -342,7 +372,9 @@ void saveAlarm()
 
     if(!haveFS) {
         Serial.println("saveAlarm(): SPIFFS not mounted, using EEPROM");
+        
         saveAlarmEEPROM();
+        
         return;        
     } 
   

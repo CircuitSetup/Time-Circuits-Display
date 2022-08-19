@@ -38,8 +38,8 @@
 ||
 */
 
-#ifndef TCKEYPAD_I2C_H
-#define TCKEYPAD_I2C_H
+#ifndef _TCKEYPAD_I2C_H
+#define _TCKEYPAD_I2C_H
 
 #include "Keypad.h"
 #include "Wire.h"

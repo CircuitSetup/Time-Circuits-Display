@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -205,6 +207,22 @@ void updateConfigPortalValues()
     //custom_beepSound.setValue(settings.beepSound, 3);
 }
 
+/*
+int wifi_getmode()
+{
+  WiFiMode_t mymode = WiFi.getMode();
+
+  switch(mymode) {
+    case WIFI_STA:
+        return 1;
+    case WIFI_AP:
+        return 2;
+  }
+   
+  return 0;  
+}
+*/
+
 bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d)
 {
   IPAddress myip = WiFi.localIP();
@@ -216,3 +234,15 @@ bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d)
   
   return true;
 }
+
+/*
+ * read parameter from server, for customhmtl input
+ * /
+String getParam(String name){  
+  String value;
+  if(wm.server->hasArg(name)) {
+    value = wm.server->arg(name);
+  }
+  return value;
+}
+*/

@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -93,7 +95,7 @@
 
 #include "tc_menus.h"
 
-int displayNum;                                               
+int menuItemNum;                                               
 
 // array element of autoTimeIntervals[], set's time between automatically displayed times
 uint8_t autoInterval = 1;                                     
@@ -136,9 +138,11 @@ void enter_menu()
     destinationTime.setNightMode(false);
     presentTime.setNightMode(false);
     departedTime.setNightMode(false);
+
+    stopAudio();
     
     // start with destination time in main menu
-    displayNum = MODE_DEST;     
+    menuItemNum = MODE_DEST;     
 
     // Load the custom times from EEPROM
     // This means that when the user activates the menu while 
@@ -150,18 +154,18 @@ void enter_menu()
     // Load the RTC time into present time
     presentTime.setDateTime(myrtcnow());     
 
-    // Highlight current display
-    displayHighlight(displayNum);
+    // Show first menu item
+    menuShow(menuItemNum);
 
     waitForEnterRelease();
 
     timeout = 0;  
 
-    // DisplaySelect: 
+    // menuSelect: 
     // Wait for ENTER to cycle through main menu (displays and modes), 
     // HOLDing ENTER selects current menu "item"
-    // (Also sets displaySet to selected display)    
-    displaySelect(displayNum);  
+    // (Also sets displaySet to selected display, if applicable)    
+    menuSelect(menuItemNum);  
 
     if(checkTimeOut()) 
         goto quitMenu;
@@ -170,7 +174,7 @@ void enter_menu()
     Serial.println("Menu: Display/mode selected");    
     #endif
 
-    if(displayNum <= MODE_DEPT) {  
+    if(menuItemNum <= MODE_DEPT) {  
 
         // Enter display times
 
@@ -324,7 +328,7 @@ void enter_menu()
             
         }  
 
-    } else if(displayNum == MODE_ALRM) {
+    } else if(menuItemNum == MODE_ALRM) {
 
         allOff();
         waitForEnterRelease();
@@ -335,7 +339,7 @@ void enter_menu()
         allOff();
         waitForEnterRelease(); 
 
-    } else if(displayNum == MODE_AINT) {  // Select autoInterval
+    } else if(menuItemNum == MODE_AINT) {  // Select autoInterval
 
         allOff();
         waitForEnterRelease();
@@ -346,7 +350,7 @@ void enter_menu()
         allOff();
         waitForEnterRelease();  
         
-    } else if(displayNum == MODE_BRI) {   // Adjust brightness
+    } else if(menuItemNum == MODE_BRI) {   // Adjust brightness
 
         allOff();
         waitForEnterRelease();
@@ -359,7 +363,7 @@ void enter_menu()
         allOff();
         waitForEnterRelease();  
         
-    } else if(displayNum == MODE_NET) {   // Show network info
+    } else if(menuItemNum == MODE_NET) {   // Show network info
 
         allOff();
         waitForEnterRelease();
@@ -382,7 +386,7 @@ quitMenu:
     isSetUpdate = false;
     
     // Return dest/dept displays to where they should be    
-    if(autoTimeIntervals[autoInterval] == 0) {
+    if(autoTimeIntervals[autoInterval] == 0 || checkIfAutoPaused()) {
         destinationTime.load();
         departedTime.load();
     } else {
@@ -419,10 +423,10 @@ quitMenu:
 
 /* 
  *  Cycle through main menu:
- *  Select display to update or mode (alarm, rot-Int, bri, ...)
+ *  Select display to update, or mode (alarm, rot-Int, bri, ...)
  *  
  */
-void displaySelect(int& number) 
+void menuSelect(int& number) 
 {   
     isEnterKeyHeld = false;
 
@@ -452,8 +456,8 @@ void displaySelect(int& number)
           number++;
           if(number > MODE_MAX) number = MODE_MIN;
 
-          // Show only the selected display and set pointer to it
-          displayHighlight(number);   
+          // Show only the selected display, or menu item text
+          menuShow(number);   
         
       } else {
 
@@ -466,11 +470,11 @@ void displaySelect(int& number)
 }  
 
 /* 
- *  Turns on the currently selected display during setting
- *  Also sets the displaySet pointer to the display being updated
+ *  Shows the currently selected menu item, ie it turns on the currently 
+ *  selected display, or shows descriptive text
  *  
  */ 
-void displayHighlight(int& number) 
+void menuShow(int& number) 
 {   
     switch (number) {
         case MODE_DEST:  // Destination Time
@@ -610,9 +614,9 @@ void prepareInput(uint16_t& number)
  * Update a field of a display using user input
  * 
  * number - a value we're updating (pre-set and result of input)
- * displayNum - the display number being modified
- * field - field being modified, this will be displayed on displayNum as it is updated
- *          0 Destination Time, 1 Present Time, 2 Last Time Departed
+ * field - field being modified, this will be displayed as it is updated
+ * year, month - check checking maximum day number
+ *          
  */
 void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0) 
 {    
@@ -1139,7 +1143,7 @@ void animate()
     destinationTime.showAnimate1();
     presentTime.showAnimate1();
     departedTime.showAnimate1();
-    delay(80);
+    mysdelay(80); //delay(80);
     destinationTime.showAnimate2();
     presentTime.showAnimate2();
     departedTime.showAnimate2();
@@ -1170,12 +1174,9 @@ void allOff()
  */
 void waitForEnterRelease() 
 {    
-    // Would be nice to activate eg the green LED here
-    // to signal the user to release the button....
-    
     while(digitalRead(ENTER_BUTTON)) {
         myloop();        
-        delay(50);  
+        delay(10);  
     }
     isEnterKeyPressed = false;
     isEnterKeyHeld = false;
@@ -1187,7 +1188,7 @@ void waitAudioDone()
   
   while(!checkAudioDone() && timeout--) {       
        myloop();
-       delay(20);
+       delay(10);
   }
 }
 
@@ -1204,8 +1205,17 @@ void mydelay(int mydel)
     }     
 }
 
+void mysdelay(int mydel) 
+{  
+    unsigned long startNow = millis();
+    while(millis() - startNow < mydel) {
+        delay(5);
+        myloop();
+    }     
+}
+
 /*
- *  Do this during enter_menu whenever we are cought in a while() loop
+ *  Do this during enter_menu whenever we are caught in a while() loop
  *  This allows other stuff to proceed
  */
 void myloop() 

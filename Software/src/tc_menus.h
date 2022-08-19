@@ -1,10 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * 
+ * Code based on Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
  * by John Monaco
- * Enhanced/modified in 2022 by Thomas Winischhofer (A10001986)
+ *
+ * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,8 +56,8 @@
 
 extern void menu_setup();
 extern void enter_menu();
-void displayHighlight(int& number);
-void displaySelect(int& number);
+void menuSelect(int& number);
+void menuShow(int& number);
 void setUpdate(uint16_t& number, int field);
 void setField(uint16_t& number, uint8_t field, int year, int month);
 extern bool loadAlarm();
@@ -81,6 +83,7 @@ extern bool isYearUpdate;
 extern uint8_t timeout;
 
 extern void mydelay(int mydel);
+extern void mysdelay(int mydel);
 extern void enterkeytick();
 extern void myloop();
 
