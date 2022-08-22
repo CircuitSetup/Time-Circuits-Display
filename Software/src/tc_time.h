@@ -57,7 +57,7 @@
 #define TT_P1_DELAY_P1  4500      // Sum of all must be 10000
 #define TT_P1_DELAY_P2  (5800-TT_P1_DELAY_P1)
 #define TT_P1_DELAY_P3  (8000-(TT_P1_DELAY_P2+TT_P1_DELAY_P1))
-#define TT_P1_DELAY_P4  (10000-(TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))
+#define TT_P1_DELAY_P4  (8000-(TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))
 
 
 extern uint8_t        autoInterval;

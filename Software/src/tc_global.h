@@ -31,6 +31,7 @@
 
 #ifndef IS_ACAR_DISPLAY
 #define TC_VERSION "AUG212022"
+#define TC_VERSION_EXTRA "v2.0.0"
 #else
 #define TC_VERSION "08212022"
 #define TC_VERSION_EXTRA "A CAR"
