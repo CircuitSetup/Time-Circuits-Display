@@ -36,15 +36,9 @@
 
 #include "tc_global.h"
 
-// SD Card pins
-#define SD_CS      5
-#define SPI_MOSI  23
-#define SPI_MISO  19
-#define SPI_SCK   18
-
 extern void settings_setup();
 extern void write_settings();
-
+bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault);
 extern bool loadAlarm();
 extern void saveAlarm();
 bool loadAlarmEEPROM();
@@ -62,14 +56,15 @@ extern bool    haveSD;
 
 // For list of time zones, see https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 
+// If numerical defaults are changed, those also need to be changed in settings.cpp
+
 struct Settings {
     char ntpServer[64]      = "pool.ntp.org";
     char timeZone[64]       = "CST6CDT,M3.2.0,M11.1.0";     
     char autoRotateTimes[4] = "0";    // Default: Off, use time circuits like in movie
     char destTimeBright[4]  = "15";
     char presTimeBright[4]  = "15";
-    char lastTimeBright[4]  = "15";
-    //char beepSound[3]     = "0";
+    char lastTimeBright[4]  = "15";    
     char wifiConRetries[4]  = "3";    // Default: 3 retries
     char wifiConTimeout[4]  = "7";    // Default: 7 seconds time-out
     char mode24[4]          = "0";    // Default: 0 = 12-hour-mode    
@@ -78,6 +73,8 @@ struct Settings {
     char fakePwrOn[4]       = "0";       
 #endif
     char alarmRTC[4]        = "1";    // Default: Alarm is RTC-based (otherwise presentTime-based = 0)
+    char playIntro[4]       = "1";
+    //char beepSound[3]     = "0";
 };
 
 extern struct Settings settings;

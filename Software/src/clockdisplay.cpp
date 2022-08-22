@@ -44,7 +44,7 @@ void clockDisplay::begin()
     Wire.endTransmission();
 
     clear();            // clear buffer
-    setBrightness(15);  // be sure in case coming up for mc reset
+    setBrightness(15);  // setup initial brightness
     clearDisplay();     // clear display RAM
     on();               // turn it on
 }
@@ -96,7 +96,7 @@ void clockDisplay::clear()
 uint8_t clockDisplay::setBrightness(uint8_t level) 
 {
     if(level > 15)
-        return _brightness;
+        level = 15;
 
     Wire.beginTransmission(_address);
     Wire.write(0xE0 | level);  // Dimming command
@@ -232,7 +232,7 @@ void clockDisplay::showAnimate2()
     
     Wire.beginTransmission(_address);
     Wire.write(0x00);  // start at address 0x0
-    for (int i = 0; i < CD_BUF_SIZE; i++) {
+    for(int i = 0; i < CD_BUF_SIZE; i++) {
         Wire.write(_displayBuffer[i] & 0xFF);
         Wire.write(_displayBuffer[i] >> 8);
     }
@@ -347,16 +347,12 @@ void clockDisplay::setMinute(int minNum)
     }
     
     _minute = minNum;
-
-    if(minNum < 60) {
-        _displayBuffer[CD_MIN_POS] = makeNum(minNum);
-    } else if(minNum >= 60) {
-        _displayBuffer[CD_MIN_POS] = makeNum(0);
-    }
+    
+    _displayBuffer[CD_MIN_POS] = makeNum(minNum);
 
     if(isRTC()) {
-       if(alarmOnOff) 
-          _displayBuffer[CD_MIN_POS] |= 0x8000;
+        if(alarmOnOff) 
+            _displayBuffer[CD_MIN_POS] |= 0x8000;
     }
 }
 
@@ -483,99 +479,43 @@ void clockDisplay::showOnlyMinute(int minuteNum)
 // Special purpose -------------------------------------------------------------
 
 
-// clears the display RAM and only shows the word "SAVE"
-void clockDisplay::showOnlySave() 
+// clears the display RAM and only shows the given text
+void clockDisplay::showOnlyText(const char *text)
 {
+    int idx = 0, pos = CD_MONTH_POS;
+    int temp = 0;
+    
     clearDisplay();
     
 #ifdef IS_ACAR_DISPLAY
-    directCol(CD_MONTH_POS,     numDigs['S' - 'A' + 10] |
-                               (numDigs['A' - 'A' + 10] << 8));
-    directCol(CD_DAY_POS,       numDigs['V' - 'A' + 10] | 
-                               (numDigs['E' - 'A' + 10] << 8));
+    while(text[idx] && pos < CD_MONTH_DIGS) {
+        temp = getLED7AlphaChar(text[idx]);
+        idx++;
+        if(text[idx]) {
+            temp |= (getLED7AlphaChar(text[idx]) << 8);
+            idx++;
+        }
+        directCol(pos, temp);
+        pos++;
+    }
 #else
-    directCol(CD_MONTH_POS,     makeAlpha('S'));
-    directCol(CD_MONTH_POS + 1, makeAlpha('A'));
-    directCol(CD_MONTH_POS + 2, makeAlpha('V'));
-    directCol(CD_DAY_POS,         numDigs['E' - 'A' + 10]);
+    while(text[idx] && pos < CD_MONTH_DIGS) {
+        directCol(pos, makeAlpha(text[idx]));
+        idx++;
+        pos++;
+    }
 #endif    
-}
-
-#ifdef IS_ACAR_DISPLAY
-// clears the display RAM and only shows the word "MIN" (as in "MINUTES")
-// A-car only, others use showOnlySettingsVal()
-void clockDisplay::showOnlyMin() 
-{
-    clearDisplay();
-    
-    directCol(CD_MONTH_POS,     numDigs['M' - 'A' + 10] |
-                               (numDigs['I' - 'A' + 10] << 8));
-    directCol(CD_DAY_POS,       numDigs['N' - 'A' + 10]);   
-}
-#endif 
-
-// clears the display RAM and only shows the word "UTES" (as in "MINUTES")
-void clockDisplay::showOnlyUtes() 
-{
-    clearDisplay();
-
-#ifdef IS_ACAR_DISPLAY
-    directCol(CD_MONTH_POS,     numDigs['U' - 'A' + 10] |
-                               (numDigs['T' - 'A' + 10] << 8));
-    directCol(CD_DAY_POS,       numDigs['E' - 'A' + 10] | 
-                               (numDigs['S' - 'A' + 10] << 8));
-#else
-    directCol(CD_MONTH_POS,     makeAlpha('U'));
-    directCol(CD_MONTH_POS + 1, makeAlpha('T'));
-    directCol(CD_MONTH_POS + 2, makeAlpha('E'));
-    directCol(CD_DAY_POS,         numDigs['S' - 'A' + 10]);
-#endif    
-}
-
-// clears the display RAM and only shows the word "RTC"
-void clockDisplay::showOnlyRTC() 
-{
-    clearDisplay();
-
-#ifdef IS_ACAR_DISPLAY
-    directCol(CD_MONTH_POS,     numDigs['R' - 'A' + 10] |
-                               (numDigs['T' - 'A' + 10] << 8));
-    directCol(CD_DAY_POS,       numDigs['C' - 'A' + 10]);
-#else
-    directCol(CD_MONTH_POS,     makeAlpha('R'));
-    directCol(CD_MONTH_POS + 1, makeAlpha('T'));
-    directCol(CD_MONTH_POS + 2, makeAlpha('C'));
-#endif    
-}
-
-#ifdef IS_ACAR_DISPLAY
-// clears the display RAM and only shows the word "RESET"
-// A-car only, others use showOnlySettingsVal()
-void clockDisplay::showOnlyReset()
-{
-    directCol(CD_MONTH_POS,     numDigs['R' - 'A' + 10] |
-                               (numDigs['E' - 'A' + 10] << 8));
-    directCol(CD_DAY_POS,       numDigs['S' - 'A' + 10] | 
-                               (numDigs['E' - 'A' + 10] << 8));
-    directCol(CD_YEAR_POS,      numDigs['T' - 'A' + 10]);                               
-}
-#endif
-
-void clockDisplay::showOnlyBatt()
-{
-    clearDisplay();
-    
-#ifdef IS_ACAR_DISPLAY
-    directCol(CD_MONTH_POS,     numDigs['B' - 'A' + 10] |
-                               (numDigs['A' - 'A' + 10] << 8));
-    directCol(CD_DAY_POS,       numDigs['T' - 'A' + 10] | 
-                               (numDigs['T' - 'A' + 10] << 8));   
-#else
-    directCol(CD_MONTH_POS,     makeAlpha('B'));
-    directCol(CD_MONTH_POS + 1, makeAlpha('A'));
-    directCol(CD_MONTH_POS + 2, makeAlpha('T'));
-    directCol(CD_DAY_POS,         numDigs['T' - 'A' + 10]);
-#endif
+    pos = CD_DAY_POS;
+    while(text[idx] && pos <= CD_MIN_POS) {
+        temp = getLED7AlphaChar(text[idx]);
+        idx++;
+        if(text[idx]) {
+            temp |= (getLED7AlphaChar(text[idx]) << 8);
+            idx++;
+        }
+        directCol(pos, temp);
+        pos++;
+    }
 }
 
 // clears the display RAM and only shows the provided 2 numbers (parts of IP)
@@ -617,8 +557,8 @@ void clockDisplay::showOnlySettingVal(const char* setting, int8_t val, bool clea
         clearDisplay();
 
 #ifdef IS_ACAR_DISPLAY
-    directCol(CD_MONTH_POS, numDigs[setting[0] - 'A' + 10] |
-             ((setting[1] ? numDigs[setting[1] - 'A' + 10] : 0) << 8));       
+    directCol(CD_MONTH_POS, getLED7AlphaChar(setting[0]) |
+             ((setting[1] ? getLED7AlphaChar(setting[1]) : 0) << 8));       
 #else
     directCol(CD_MONTH_POS, makeAlpha(setting[0]));
     if(setting[1]) {
@@ -902,8 +842,9 @@ void clockDisplay::setDS3232time(byte second, byte minute, byte hour, byte dayOf
 // Private functions ###########################################################
 
 
-// Returns bit pattern for provided number 0-9 or number provided as a char 0-9 for display on 7 segment display
-uint8_t clockDisplay::getLED7SegChar(uint8_t value) 
+// Returns bit pattern for provided value 0-9 or number provided as a char '0'-'9' 
+// for display on 7 segment display
+uint8_t clockDisplay::getLED7NumChar(uint8_t value) 
 {    
     if(value >= '0' && value <= '9') {  
         // if provided as a char
@@ -914,23 +855,34 @@ uint8_t clockDisplay::getLED7SegChar(uint8_t value)
     return 0;   // blank on invalid
 }
 
+// Returns bit pattern for provided character for display on 7 segment display
+uint8_t clockDisplay::getLED7AlphaChar(uint8_t value) 
+{    
+    if(value == ' ' || value == 0) {
+        return 0;
+    } else if(value >= '0' && value <= '9') {
+        return numDigs[value - 48];        
+    } else {
+        return numDigs[value - 'A' + 10];
+    }   
+}
+
 // Returns bit pattern for provided character for display on alphanumeric 14 segment display
 uint16_t clockDisplay::getLEDAlphaChar(char value) 
 {    
 #ifdef IS_ACAR_DISPLAY
     if(value == ' ' || value == 0) {
         return 0;
+    } else if(value >= '0' && value <= '9') {
+        return numDigs[value - 48];    
     } else {
         return numDigs[value - 'A' + 10];
     }
 #else  
-    if(value == ' ') {
-        return alphaChars[0];
-    } else {
-        return pgm_read_word(alphaChars + value);        
-    }
+    return pgm_read_word(alphaChars + value);        
 #endif    
 }
+
 
 // Make a 2 digit number from the array and place it in the buffer at pos
 // (makes leading 0s)
@@ -940,8 +892,8 @@ uint16_t clockDisplay::makeNum(uint8_t num)
 
     // Each position holds two digits, high byte is 1's, low byte is 10's
     
-    segments = getLED7SegChar(num % 10) << 8;        // Place 1's in upper byte
-    segments = segments | getLED7SegChar(num / 10);  // 10's in lower byte
+    segments = getLED7NumChar(num % 10) << 8;        // Place 1's in upper byte
+    segments = segments | getLED7NumChar(num / 10);  // 10's in lower byte
     
     return segments;
 }
@@ -954,9 +906,9 @@ uint16_t clockDisplay::makeNumN0(uint8_t num)
 
     // Each position holds two digits, high byte is 1's, low byte is 10's
     
-    segments = getLED7SegChar(num % 10) << 8;        // Place 1's in upper byte
+    segments = getLED7NumChar(num % 10) << 8;        // Place 1's in upper byte
     if(num / 10) {
-        segments = segments | getLED7SegChar(num / 10);  // 10's in lower byte
+        segments = segments | getLED7NumChar(num / 10);  // 10's in lower byte
     }
     
     return segments;

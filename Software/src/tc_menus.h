@@ -40,11 +40,13 @@
 #define MODE_DEST 0
 #define MODE_PRES 1
 #define MODE_DEPT 2
-#define MODE_ALRM 3
-#define MODE_AINT 4
-#define MODE_BRI  5
-#define MODE_NET  6
-#define MODE_END  7
+#define MODE_VOL  3
+#define MODE_ALRM 4
+#define MODE_AINT 5
+#define MODE_BRI  6
+#define MODE_NET  7
+#define MODE_VER  8
+#define MODE_END  9
 #define MODE_MIN  MODE_DEST
 #define MODE_MAX  MODE_END
 
@@ -60,6 +62,11 @@ void menuSelect(int& number);
 void menuShow(int& number);
 void setUpdate(uint16_t& number, int field);
 void setField(uint16_t& number, uint8_t field, int year, int month);
+void saveCurVolume();
+bool loadCurVolume();
+void showCurVolHWSW();
+void showCurVol();
+void doSetVolume();
 extern bool loadAlarm();
 extern void saveAlarm();
 void doSetAlarm();

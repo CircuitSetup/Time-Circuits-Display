@@ -39,20 +39,10 @@
 #include "tc_keypad.h"
 #include "tc_time.h"
 
-// I2S audio pins
-#define I2S_BCLK  26
-#define I2S_LRCLK 25
-#define I2S_DIN   33
-
-// analog input pin
-#define VOLUME    32
-
 extern void audio_setup();
 extern void play_keypad_sound(char key);
-extern void play_startup();
-extern void play_alarm();
 extern void audio_loop();
-extern void play_file(const char *audio_file, double volumeFactor = 1, bool checkNightMode = true, int channel = 0);
+extern void play_file(const char *audio_file, double volumeFactor = 1.0, bool checkNightMode = true, int channel = 0);
 extern double getRawVolume();
 extern double getVolume(int channel);
 extern bool checkAudioDone();
@@ -60,5 +50,7 @@ extern void stopAudio();
 extern bool beepOn;
 
 extern bool audioMute;
+
+extern uint8_t curVolume;
 
 #endif

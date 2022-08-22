@@ -47,6 +47,7 @@
 #define CD_COLON_POS  CD_YEAR_POS
 
 #define CD_MONTH_SIZE 1     //      number of words
+#define CD_MONTH_DIGS 2     //      number of digits/letters
 
 #define CD_BUF_SIZE   8     //      in words (16bit)
 #else                       // All others (3-char month) -----------------
@@ -60,6 +61,7 @@
 #define CD_COLON_POS  CD_YEAR_POS
 
 #define CD_MONTH_SIZE 3     //      number of words
+#define CD_MONTH_DIGS 3     //      number of digits/letters
 
 #define CD_BUF_SIZE   8     //      in words (16bit)
 #endif                      // -------------------------------------------
@@ -135,14 +137,7 @@ class clockDisplay {
         void showOnlyYear(int yearNum);
     
         void showOnlySettingVal(const char* setting, int8_t val = -1, bool clear = false);
-        void showOnlySave();
-#ifdef IS_ACAR_DISPLAY
-        void showOnlyReset();
-        void showOnlyMin();
-#endif    
-        void showOnlyUtes();          
-        void showOnlyRTC();
-        void showOnlyBatt();
+        void showOnlyText(const char *text);
         void showOnlyHalfIP(int a, int b, bool clear = false);
     
         bool save();
@@ -172,7 +167,8 @@ class clockDisplay {
         bool _nightmode = false;    // true = dest/dept times off
         int _oldnm = -1;
     
-        uint8_t getLED7SegChar(uint8_t value);
+        uint8_t  getLED7NumChar(uint8_t value);
+        uint8_t  getLED7AlphaChar(uint8_t value);
         uint16_t getLEDAlphaChar(char value);
     
         uint16_t makeNum(uint8_t num);

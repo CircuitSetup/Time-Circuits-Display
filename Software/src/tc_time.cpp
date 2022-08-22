@@ -32,8 +32,8 @@
  * will activate, and you will travel in time: The "destination time" is now "present time", 
  * and your old present time is now stored in the "last time departured".
  * In order to select a new destination time, enter a date and a time through the keypad, 
- * either mmddyyyy or mmddyyyyhhmm, then press ENTER. Note that there is no visual feed 
- * back, like in the movie.
+ * either mmddyyyy, mmddyyyyhhmm or hhmm, then press ENTER. Note that there is no visual  
+ * feed back while typing, like in the movie.
  * If the date or time is invalid, the sound will hint you to this.
  * 
  * To return to actual present time, hold "9" for 2 seconds.
@@ -63,6 +63,10 @@ RTC_DS3231 rtc;       //for RTC IC
 
 unsigned long timetravelNow = 0;
 bool timeTraveled = false;
+
+unsigned long timetravelP1Now = 0;
+unsigned long timetravelP1Delay = 0;
+int timeTravelP1 = 0;
 
 uint64_t timeDifference = 0;
 bool     timeDiffUp = false;  // true = add difference, false = subtract difference
@@ -138,7 +142,7 @@ int8_t autoTime = 0;  // selects the above array time
 const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 #ifdef FAKE_POWER_ON
-OneButton fakePowerOnKey = OneButton(FAKE_POWER_BUTTON,
+OneButton fakePowerOnKey = OneButton(FAKE_POWER_BUTTON_PIN,
     true,    // Button is active LOW
     true     // Enable internal pull-up resistor
 );
@@ -165,6 +169,18 @@ const uint32_t hours1kYears[] =
 };
 
 /*
+ * time_boot()
+ * 
+ */
+void time_boot() 
+{
+    // Start the displays early to clear them
+    presentTime.begin();
+    destinationTime.begin();
+    departedTime.begin();
+}
+
+/*
  * time_setup()
  * 
  */
@@ -173,9 +189,9 @@ void time_setup()
     bool validLoad = true;
     bool rtcbad = false;
     
-    pinMode(SECONDS_IN, INPUT_PULLDOWN);  // for monitoring seconds 
+    pinMode(SECONDS_IN_PIN, INPUT_PULLDOWN);  // for monitoring seconds 
     
-    pinMode(STATUS_LED, OUTPUT);          // Status LED
+    pinMode(STATUS_LED_PIN, OUTPUT);          // Status LED
 
     #ifdef FAKE_POWER_ON
     waitForFakePowerButton = ((int)atoi(settings.fakePwrOn) > 0) ? true : false;
@@ -188,8 +204,6 @@ void time_setup()
         fakePowerOnKey.attachLongPressStop(fpbKeyLongPressStop);
     }
     #endif
-
-    EEPROM.begin(512);
     
     // RTC setup
     if(!rtc.begin()) {
@@ -197,13 +211,13 @@ void time_setup()
         Serial.println("time_setup: Couldn't find RTC. Panic!");
         
         // Setup pins for white LED
-        pinMode(WHITE_LED, OUTPUT);
+        pinMode(WHITE_LED_PIN, OUTPUT);
 
         // Blink forever
         while (1) {
-            digitalWrite(WHITE_LED, HIGH);  
+            digitalWrite(WHITE_LED_PIN, HIGH);  
             delay(1000);
-            digitalWrite(WHITE_LED, LOW);  
+            digitalWrite(WHITE_LED_PIN, LOW);  
             delay(1000);          
         }           
         
@@ -308,33 +322,63 @@ void time_setup()
         #endif
     }
 
-    // Show "RE-SET" message if data loaded was invalid somehow
+    // Show "RESET" message if data loaded was invalid somehow
     if(!validLoad) {      
-        #ifdef IS_ACAR_DISPLAY
-        destinationTime.showOnlyReset();        
-        #else    
-        destinationTime.showOnlySettingVal("RE", -1, true);
-        presentTime.showOnlySettingVal("SET", -1, true);
-        #endif
+        destinationTime.showOnlyText("RESET");         
         delay(1000);
         allOff();
     }
 
     // Show "BATT" message if RTC battery is depleted
     if(rtcbad) {      
-        destinationTime.showOnlyBatt();                
+        destinationTime.showOnlyText("BATT");
         delay(3000);
         allOff();
     }
 
+    if((int)atoi(settings.playIntro)) {
+        const char *t1 = "             BACK";
+        const char *t2 = "TO";
+        const char *t3 = "THE FUTURE";  
+        int oldBriDest = destinationTime.getBrightness();
+        int oldBriPres = presentTime.getBrightness();
+        int oldBriDep = departedTime.getBrightness();
+        destinationTime.setBrightness(15);
+        presentTime.setBrightness(0);
+        departedTime.setBrightness(0);
+        presentTime.off();
+        departedTime.off();
+        destinationTime.showOnlyText(t1);
+        presentTime.showOnlyText(t2);
+        departedTime.showOnlyText(t3);
+        destinationTime.on();
+        for(int i = 0; i < 14; i++) {
+           delay(50);
+           destinationTime.showOnlyText(&t1[i]);
+        }
+        delay(500);                                
+        presentTime.on();
+        departedTime.on();
+        for(int i = 0; i <= 15; i++) {
+            presentTime.setBrightness(i);
+            departedTime.setBrightness(i);
+            delay(100);
+        }
+        delay(3000);
+        allOff();
+        destinationTime.setBrightness(oldBriDest);
+        presentTime.setBrightness(oldBriPres);
+        departedTime.setBrightness(oldBriDep);
+    }
+
     // Load the time for initial animation show
-    presentTime.setDateTimeDiff(myrtcnow());   
+    presentTime.setDateTimeDiff(myrtcnow()); 
 
 #ifdef FAKE_POWER_ON    
     if(waitForFakePowerButton) { 
-        digitalWrite(WHITE_LED, HIGH);  
+        digitalWrite(WHITE_LED_PIN, HIGH);  
         delay(500);
-        digitalWrite(WHITE_LED, LOW); 
+        digitalWrite(WHITE_LED_PIN, LOW); 
         isFPBKeyChange = false; 
         FPBUnitIsOn = false; 
            
@@ -377,14 +421,15 @@ void time_loop()
             if(isFPBKeyPressed) {
                 if(!FPBUnitIsOn) {                                 
                     startup = true;
-                    startupSound = true;
+                    startupSound = true;                    
                     FPBUnitIsOn = true;                    
                 }
             } else {
                 if(FPBUnitIsOn) {       
                     startup = false;
                     startupSound = false; 
-                    timeTraveled = false;              
+                    timeTraveled = false;  
+                    timeTravelP1 = 0;            
                     FPBUnitIsOn = false;
                     allOff();
                     stopAudio();
@@ -398,9 +443,8 @@ void time_loop()
     // Initiate startup delay, play startup sound
     if(startupSound) {
         startupNow = millis();
-        play_startup();
-        startupSound = false;
-        hourlySoundDone = true; // Don't let the startup be interrupted
+        play_file("/startup.mp3", 1.0, true, 0);
+        startupSound = false;        
     }
 
     // Turn display on after startup delay
@@ -410,6 +454,39 @@ void time_loop()
         #ifdef TC_DBG
         Serial.println("time_loop: Startup animate triggered");
         #endif
+    }
+
+    // Time travel animation
+    if(timeTravelP1 && (millis() - timetravelP1Now >= timetravelP1Delay)) {  
+        timeTravelP1++;
+        timetravelP1Now = millis();
+        switch(timeTravelP1) {
+        case 2:            
+            allOff();
+            timetravelP1Delay = TT_P1_DELAY_P2;
+            #ifdef TC_DBG
+            Serial.println("long time travel phase 2");
+            #endif
+            break;
+        case 3:
+            timetravelP1Delay = TT_P1_DELAY_P3;
+            #ifdef TC_DBG
+            Serial.println("long time travel phase 3");
+            #endif
+            break;
+        case 4:
+            timetravelP1Delay = TT_P1_DELAY_P4;
+            #ifdef TC_DBG
+            Serial.println("long time travel phase 4");
+            #endif
+            break;
+        default:
+            #ifdef TC_DBG
+            Serial.println("long time travel phase 5 - re-entry");
+            #endif
+            timeTravelP1 = 0;
+            timeTravel(false);
+        }
     }
 
     // Turn display back on after time traveling
@@ -422,7 +499,7 @@ void time_loop()
         #endif
     }
 
-    y = digitalRead(SECONDS_IN);
+    y = digitalRead(SECONDS_IN_PIN);
     if(y != x) {      // different on half second
         if(y == 0) {  // flash colon on half seconds, lit on start of second
 
@@ -591,37 +668,45 @@ void time_loop()
               Serial.println(rtc.getTemperature());
             }
             #endif
-
-            // Sound to play hourly (if available)
-
-            if(presentTime.getMinute() == 0) { 
-                if(presentTime.getNightMode() || !FPBUnitIsOn) {
-                    hourlySoundDone = true;
-                }                                
-                if(!hourlySoundDone) {                  
-                    play_file("/hour.mp3", 1.0, false, 0); 
-                    hourlySoundDone = true;
-                }            
-            } else {
-                hourlySoundDone = false;
-            }
             
-            // Handle alarm
+            {
 
-            if(alarmOnOff) {
                 bool alarmRTC = ((int)atoi(settings.alarmRTC) > 0) ? true : false;
                 int compHour = alarmRTC ? dt.hour()   : presentTime.getHour();
                 int compMin  = alarmRTC ? dt.minute() : presentTime.getMinute();
-                if((alarmHour == compHour) && (alarmMinute == compMin) ) {
-                    if(!alarmDone) {
-                        alarmDone = true;
-                        play_alarm();
-                    }
-                } else {
-                    alarmDone = false;
-                } 
-            }                      
 
+                // Sound to play hourly (if available)
+                // Follows setting for alarm as regards the options
+                // of "real actual present time" vs whatever is currently
+                // displayed on presentTime.
+
+                if(compMin == 0) { 
+                    if(presentTime.getNightMode() || !FPBUnitIsOn || startup || timeTraveled || timeTravelP1) {
+                        hourlySoundDone = true;
+                    }                                
+                    if(!hourlySoundDone) {                  
+                        play_file("/hour.mp3", 1.0, false, 0); 
+                        hourlySoundDone = true;
+                    }            
+                } else {
+                    hourlySoundDone = false;
+                }
+                
+                // Handle alarm
+    
+                if(alarmOnOff) {
+                    if((alarmHour == compHour) && (alarmMinute == compMin) ) {
+                        if(!alarmDone) {
+                            play_file("/alarm.mp3", 1.0, false, 0); 
+                            alarmDone = true; 
+                        }
+                    } else {
+                        alarmDone = false;
+                    } 
+                }                      
+
+            }
+            
             // Handle autoInterval
             
             // Do this on previous minute:59
@@ -660,11 +745,11 @@ void time_loop()
                     allOff();
 
                     // Blank on second 59, display when new minute begins
-                    while(digitalRead(SECONDS_IN) == 0) {  // wait for the complete of this half second
+                    while(digitalRead(SECONDS_IN_PIN) == 0) {  // wait for the complete of this half second
                                                            // Wait for this half second to end
                         myloop();
                     }
-                    while(digitalRead(SECONDS_IN) == 1) {  // second on next low
+                    while(digitalRead(SECONDS_IN_PIN) == 1) {  // second on next low
                                                            // Wait for the other half to end
                         myloop();                    
                     }
@@ -695,7 +780,42 @@ void time_loop()
                                          
         x = y;  
 
-        if(!startup && !timeTraveled && FPBUnitIsOn) {
+        if(timeTravelP1 > 1) {  
+            int ii = 5;        
+            switch(timeTravelP1) { 
+            case 2:
+                /* Nothing, displays off */
+                break;
+            case 3:                
+                destinationTime.show();  
+                presentTime.show();                       
+                departedTime.show();
+                while(ii--) {
+                    destinationTime.on();
+                    ((rand() % 10) < 7) ? destinationTime.showOnlyText("MALFUNCTION") : destinationTime.show();
+                    presentTime.on();
+                    departedTime.on();
+                    ((rand() % 10) < 2) ? departedTime.showOnlyText("KHDW2011GIDUW") : departedTime.show();
+                    mysdelay(10);
+                    allOff();
+                    mysdelay(10);
+                }
+                break;       
+            case 4:          
+                allLampTest();
+                while(ii--) {      
+                    ((rand() % 10) > 5) ? presentTime.on() : presentTime.off();
+                    ((rand() % 10) < 5) ? destinationTime.on() : destinationTime.off();
+                    ((rand() % 10) > 5) ? departedTime.on() : departedTime.off();
+                    mysdelay(10);
+                }
+                break;
+            default:
+                allOff();
+            }
+        }
+
+        if(!startup && !timeTraveled && (timeTravelP1 <= 1) && FPBUnitIsOn) {
             presentTime.show();  
             destinationTime.show();       
             departedTime.show();
@@ -713,10 +833,24 @@ void time_loop()
  *  This is called from tc_keypad.cpp 
  */
 
-void timeTravel() 
+void timeTravel(bool makeLong) 
 {
     int tyr = 0;
     int tyroffs = 0;
+
+#define TRST_TOTAL_DELAY  10
+#define TRST_DELAY_P1         
+
+    if(makeLong) {
+        #ifdef TC_DBG
+        Serial.println("long time travel phase 1");
+        #endif
+        play_file("/travelstart.mp3", 1.0, true, 0);
+        timetravelP1Now = millis();
+        timetravelP1Delay = TT_P1_DELAY_P1;
+        timeTravelP1 = 1;
+        return;
+    }  
         
     timetravelNow = millis();
     timeTraveled = true;
@@ -820,7 +954,7 @@ void resetPresentTime()
     } 
 }
 
-// Pause autoInverval-updating for theDelay minutes
+// Pause autoInverval-updating for 30 minutes
 // Subsequent calls re-start the pause; therefore, it
 // is not advised to use different pause durations
 void pauseAuto(void)
@@ -873,7 +1007,7 @@ bool getNTPTime()
 
         if(strlen(settings.ntpServer) == 0) {
             #ifdef TC_DBG            
-            Serial.println("getNTPTime: NTP skipped, server name not defined");
+            Serial.println("getNTPTime: NTP skipped, no server configured");
             #endif
             return false;
         }
@@ -940,7 +1074,7 @@ bool getNTPTime()
  */
 bool checkTimeOut() 
 {    
-    y = digitalRead(SECONDS_IN);
+    y = digitalRead(SECONDS_IN_PIN);
     if(x != y) {
         x = y;        
         if(y == 0) {
@@ -1021,7 +1155,7 @@ DateTime myrtcnow()
             dt.minute() < 0 || dt.minute() > 59) &&
             retries < 30 ) {
 
-            delay((retries < 5) ? 50 : 100);
+            mydelay((retries < 5) ? 50 : 100);
             dt = rtc.now(); 
             retries++;
     }

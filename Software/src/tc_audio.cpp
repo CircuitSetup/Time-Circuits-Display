@@ -26,11 +26,11 @@
 #include "tc_audio.h"
 
 // Use the mixer, or do not use the mixer.
-// Since we don't use mixing, it could be turned off, but the sounds and anims
-// are synced to the timing with the mixer. 
-// Also, it seems the raw i2s output sometimes grables output at the end of
-// a sound.
-#define TC_USE_MIXER
+// Since we don't use mixing, turn it off.
+// With the current versions of the audio library,
+// turning it on might cause a static after stopping
+// sound play back.
+//#define TC_USE_MIXER
 
 // Initialize ESP32 Audio Library classes
 AudioGeneratorMP3 *mp3;
@@ -52,6 +52,15 @@ bool beepOn;
 
 bool audioMute = false;
 
+double volTable[16] = {
+    0.00, 0.03, 0.06, 0.10, 
+    0.15, 0.20, 0.25, 0.30,
+    0.35, 0.42, 0.50, 0.60,
+    0.70, 0.80, 0.90, 1.00
+};
+
+uint8_t curVolume = 4;
+
 double curVolFact[2] = { 1.0, 1.0 };
 bool   curChkNM[2]   = { true, true };
 
@@ -70,11 +79,13 @@ void audio_setup()
 {
     audioLogger = &Serial;
 
+    // Set resolution for volume pot to 9 bit
     analogSetWidth(9);
+    analogReadResolution(9);
 
     out = new AudioOutputI2S(0, 0, 32, 0);
     out->SetOutputModeMono(true);
-    out->SetPinout(I2S_BCLK, I2S_LRCLK, I2S_DIN);
+    out->SetPinout(I2S_BCLK_PIN, I2S_LRCLK_PIN, I2S_DIN_PIN);
 
     #ifdef TC_USE_MIXER
     mixer = new AudioOutputMixer(8, out); 
@@ -95,19 +106,6 @@ void audio_setup()
     stub[0] = mixer->NewInput();    
     //stub[1] = mixer->NewInput();
     #endif
-}
-
-// Play startup sound
-void play_startup() 
-{
-    play_file("/startup.mp3", 1, true, 0);
-}
-
-// Play alarm sound
-// always at normal volume, not nm-reduced
-void play_alarm() 
-{
-    play_file("/alarm.mp3", 1, false, 0);    
 }
 
 void play_keypad_sound(char key) 
@@ -178,8 +176,8 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
         #ifdef TC_USE_MIXER
         stub[0]->stop();        
         //stub[0]->flush();
-        #endif
-        //out->flush();          
+        //out->flush();
+        #endif                  
     }
 
     /*
@@ -224,13 +222,13 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
 }
 
 // Returns value for volume based on the position of the pot
-// Since the values vary very much we do some noise reduction
+// Since the values vary we do some noise reduction
 double getRawVolume() 
 {
     double vol_val; 
     unsigned long avg = 0;
     
-    rawVol[rawVolIdx] = analogRead(VOLUME);
+    rawVol[rawVolIdx] = analogRead(VOLUME_PIN);
 
     if(anaReadCount > 1) {
         avg = 0;
@@ -246,7 +244,7 @@ double getRawVolume()
 
     rawVolIdx++;
     rawVolIdx &= (VOL_SMOOTH_SIZE-1);
-    
+        
     vol_val = (double)avg / 511.0; 
     
     if(fabs(vol_val - prev_vol) <= 0.015) {
@@ -262,21 +260,29 @@ double getRawVolume()
 
 double getVolume(int channel) 
 {
-    double vol_val = getRawVolume();
+    double vol_val; 
 
+    if(curVolume == 255) {
+        vol_val = getRawVolume();
+    } else {
+        vol_val = (double)volTable[curVolume];
+    }
+     
     // If user muted, return 0
     if(vol_val == 0.0) return vol_val;
 
     vol_val *= curVolFact[channel];
+    // Do not totally mute
+    if(vol_val < 0.03) vol_val = 0.03;
 
     // Reduce volume in night mode, if requested
     if(curChkNM[channel] && presentTime.getNightMode()) {
         vol_val *= 0.3;
-        // Do not totally mute in night mode
+        // Do not totally mute
         if(vol_val < 0.03) vol_val = 0.03;
     }
 
-    return vol_val;
+    return vol_val;        
 }
 
 bool checkAudioDone()
@@ -292,8 +298,8 @@ void stopAudio()
         #ifdef TC_USE_MIXER
         stub[0]->stop();
         //stub[0]->flush();
-        #endif 
         //out->flush();                 
+        #endif         
     }
     /*
     if(beep->isRunning()) {          

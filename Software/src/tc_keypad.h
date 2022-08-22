@@ -38,9 +38,7 @@
 
 //#define GTE_KEYPAD // uncomment if using real GTE/TRW keypad control board
 
-#define KEYPAD_ADDR 0x20
-#define WHITE_LED 17            // GPIO that white led is connected to
-#define ENTER_BUTTON 16         // GPIO that enter key is connected to
+#define KEYPAD_ADDR 0x20        // I2C address of the PCF8574 port expander (keypad)
 
 #define ENTER_DEBOUNCE 50       // enter button debounce time in ms
 #define ENTER_CLICK_TIME 200    // enter button will register a click 

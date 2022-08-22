@@ -45,15 +45,11 @@
 #include "time.h"
 #include "tc_settings.h"
 
-#define SECONDS_IN 15       // SQW Monitor 1Hz from the DS3231
-
-#define STATUS_LED 2        // Status LED (on ESP)
-
 #define DEST_TIME_ADDR 0x71 // i2C address of displays
 #define PRES_TIME_ADDR 0x72
 #define DEPT_TIME_ADDR 0x74
 
-// The time between startup sound being played and the display coming on
+// The time between sound being started and the display coming on
 // Must be sync'd to the sound file used! (startup.mp3/timetravel.mp3)
 #ifndef TWPRIVATE
 #define STARTUP_DELAY 1050
@@ -61,6 +57,12 @@
 #define STARTUP_DELAY 900 
 #endif
 #define TIMETRAVEL_DELAY 1500
+
+#define TT_P1_DELAY_P1  4500      // Sum of all must be 10000
+#define TT_P1_DELAY_P2  (5800-TT_P1_DELAY_P1)
+#define TT_P1_DELAY_P3  (8000-(TT_P1_DELAY_P2+TT_P1_DELAY_P1))
+#define TT_P1_DELAY_P4  (10000-(TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))
+
 
 extern uint8_t        autoInterval;
 extern const uint8_t  autoTimeIntervals[6];
@@ -79,9 +81,10 @@ extern dateStruct destinationTimes[8];
 extern dateStruct departedTimes[8];
 extern int8_t     autoTime;
 
+extern void time_boot();
 extern void time_setup();
 extern void time_loop();
-extern void timeTravel();
+extern void timeTravel(bool makeLong);
 extern void resetPresentTime();
 extern void pauseAuto();
 extern bool checkIfAutoPaused();
