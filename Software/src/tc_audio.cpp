@@ -30,6 +30,7 @@
 // With the current versions of the audio library,
 // turning it on might cause a static after stopping
 // sound play back.
+
 //#define TC_USE_MIXER
 
 // Initialize ESP32 Audio Library classes
@@ -66,11 +67,14 @@ bool   curChkNM[2]   = { true, true };
 
 int sampleCnt = 0;
 
-#define VOL_SMOOTH_SIZE 8
+#define VOL_SMOOTH_SIZE 4
 int rawVol[VOL_SMOOTH_SIZE] = {  };
 int rawVolIdx = 0;
 int anaReadCount = 0;
 double prev_vol = 10.0;
+
+// Resolution for pot, 9-12 allowed
+#define POT_RESOLUTION 9
 
 /*
  * audio_setup()
@@ -79,9 +83,9 @@ void audio_setup()
 {
     audioLogger = &Serial;
 
-    // Set resolution for volume pot to 9 bit
-    analogSetWidth(9);
-    analogReadResolution(9);
+    // Set resolution for volume pot
+    analogReadResolution(POT_RESOLUTION);
+    analogSetWidth(POT_RESOLUTION);
 
     out = new AudioOutputI2S(0, 0, 32, 0);
     out->SetOutputModeMono(true);
@@ -205,15 +209,20 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
             #else
             mp3->begin(mySD0, out);
             #endif
+            #ifdef TC_DBG
             Serial.println("Playing from SD");
-        } else {
-            mySPIFFS0->open(audio_file);  
+            #endif
+        } else if(mySPIFFS0->open(audio_file)) {             
             #ifdef TC_USE_MIXER
             mp3->begin(mySPIFFS0, stub[0]);
             #else
             mp3->begin(mySPIFFS0, out);
             #endif
+            #ifdef TC_DBG
             Serial.println("Playing from SPIFFS");
+            #endif
+        } else {
+            Serial.println("Audio file not found");
         }
     //} else {        
     //    mySPIFFS1->open(audio_file);
@@ -244,8 +253,8 @@ double getRawVolume()
 
     rawVolIdx++;
     rawVolIdx &= (VOL_SMOOTH_SIZE-1);
-        
-    vol_val = (double)avg / 511.0; 
+    
+    vol_val = (double)avg / (double)((1<<POT_RESOLUTION)-1); 
     
     if(fabs(vol_val - prev_vol) <= 0.015) {
         vol_val = prev_vol;

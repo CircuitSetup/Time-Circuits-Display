@@ -198,9 +198,19 @@ void updateConfigPortalValues()
     //custom_beepSound.setValue(settings.beepSound, 3);
 }
 
-int wifi_getmode()
+int wifi_getStatus()
 {
-    return (int)WiFi.status();
+    switch(WiFi.getMode()) {
+      case WIFI_STA:
+          return (int)WiFi.status();
+      case WIFI_AP:
+          return 0x10000;     // AP MODE
+      case WIFI_OFF:
+          return 0x10001;     // OFF          
+    }
+
+    return 0x10002;           // UNKNOWN
+    
     /*
     WiFiMode_t mymode = WiFi.getMode();
   
@@ -217,7 +227,19 @@ int wifi_getmode()
 
 bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d)
 {
-    IPAddress myip = WiFi.localIP();
+    IPAddress myip;
+  
+    switch(WiFi.getMode()) {
+      case WIFI_STA:
+          myip = WiFi.localIP();
+          break;
+      case WIFI_AP:
+          myip = WiFi.softAPIP();
+          break;
+      default:
+          a = b = c = d = 0;
+          return true;
+    }
   
     a = myip[0];
     b = myip[1];

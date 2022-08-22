@@ -315,9 +315,9 @@ void enter_menu()
             waitAudioDone();
             
             // update the object
-            displaySet->setMonth(monthSet);
-            displaySet->setDay(daySet);
             displaySet->setYear(yearSet);
+            displaySet->setMonth(monthSet);
+            displaySet->setDay(daySet);            
             displaySet->setHour(hourSet);
             displaySet->setMinute(minSet);
             
@@ -1346,7 +1346,7 @@ void doShowNetInfo()
                 case 1:
                     destinationTime.showOnlyText("WIFI");
                     destinationTime.on();  
-                    switch(wifi_getmode()) {    
+                    switch(wifi_getStatus()) {    
                     case WL_IDLE_STATUS:
                         presentTime.showOnlyText("IDLE");
                         departedTime.off();
@@ -1379,6 +1379,15 @@ void doShowNetInfo()
                         presentTime.showOnlyText("DISCONNECTED");
                         departedTime.off();  
                         break;
+                    case 0x10000:
+                        presentTime.showOnlyText("AP MODE");
+                        departedTime.off();  
+                        break; 
+                    case 0x10001:
+                        presentTime.showOnlyText("OFF");
+                        departedTime.off();  
+                        break;     
+                    //case 0x10002:     // UNKNOWN
                     default:
                         presentTime.showOnlyText("UNKNOWN");
                         departedTime.off();   

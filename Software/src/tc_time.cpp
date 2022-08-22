@@ -86,6 +86,9 @@ bool     timeDiffUp = false;  // true = add difference, false = subtract differe
 // Also, "false" reduces flash wear considerably.
 bool timetravelPersistent = true;
 
+// Alarm/HourlySound based on RTC (or presentTime's display if false)
+bool alarmRTC = true;
+
 uint8_t timeout = 0;  // for tracking idle time in menus
 
 // The displays
@@ -95,8 +98,7 @@ clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 
 // Automatic times
 dateStruct destinationTimes[8] = {
-    //YEAR, MONTH, DAY, HOUR, MIN
-#ifndef TWPRIVATE    
+    //YEAR, MONTH, DAY, HOUR, MIN 
     {1985, 10, 26,  1, 21},
     {1985, 10, 26,  1, 24},
     {1955, 11,  5,  6,  0},
@@ -104,20 +106,9 @@ dateStruct destinationTimes[8] = {
     {2015, 10, 21, 16, 29},
     {1955, 11, 12,  6,  0},
     {1885,  1,  1,  0,  0},
-    {1885,  9,  2, 12,  0}};
-#else
-    {1985,  7, 23, 20,  1},       // TW private
-    {1985, 11, 23, 16, 24},   
-    {1986,  5, 26, 14, 12},    
-    {1986,  8, 23, 11,  0},     
-    {1986, 12, 24, 21, 22},   
-    {1987,  3, 20, 19, 31},    
-    {1987,  5, 26,  0,  0},      
-    {1988, 12, 24, 22, 31}};  
-#endif    
+    {1885,  9,  2, 12,  0}}; 
 
 dateStruct departedTimes[8] = {
-#ifndef TWPRIVATE
     {1985, 10, 26,  1, 20},
     {1955, 11, 12, 22,  4},
     {1985, 10, 26,  1, 34},
@@ -126,16 +117,6 @@ dateStruct departedTimes[8] = {
     {1985, 10, 27,  2, 42},
     {1955, 11, 12, 21, 44},
     {1955, 11, 13, 12,  0}};
-#else  
-    {2017,  7, 11, 10, 11},       // TW private
-    {1988,  6,  3, 15, 30},    
-    {1943,  3, 15,  7, 47},     
-    {2016,  6, 22, 16, 11},    
-    {1982,  5, 15,  9, 41},     
-    {1943, 11, 25, 11, 11},   
-    {1970,  5, 26,  8, 22},     
-    {2021,  5,  5, 10,  9}};    
-#endif    
 
 int8_t autoTime = 0;  // selects the above array time
 
@@ -321,6 +302,8 @@ void time_setup()
         Serial.println("time_setup: autointerval enabled");
         #endif
     }
+
+    alarmRTC = ((int)atoi(settings.alarmRTC) > 0) ? true : false;
 
     // Show "RESET" message if data loaded was invalid somehow
     if(!validLoad) {      
@@ -656,22 +639,20 @@ void time_loop()
             // Logging beacon
             #ifdef TC_DBG
             if((dt.second() == 0) && (dt.minute() != dbgLastMin)) {
-              Serial.print(dt.year());
-              Serial.print("/");
-              Serial.print(dt.month());
-              Serial.print(" ");
-              dbgLastMin = dt.minute();
-              Serial.print(dbgLastMin);
-              Serial.print(".");
-              Serial.print(dt.second());
-              Serial.print(" ");
-              Serial.println(rtc.getTemperature());
+                Serial.print(dt.year());
+                Serial.print("/");
+                Serial.print(dt.month());
+                Serial.print(" ");
+                dbgLastMin = dt.minute();
+                Serial.print(dbgLastMin);
+                Serial.print(".");
+                Serial.print(dt.second());
+                Serial.print(" ");
+                Serial.println(rtc.getTemperature());
             }
             #endif
             
             {
-
-                bool alarmRTC = ((int)atoi(settings.alarmRTC) > 0) ? true : false;
                 int compHour = alarmRTC ? dt.hour()   : presentTime.getHour();
                 int compMin  = alarmRTC ? dt.minute() : presentTime.getMinute();
 
@@ -681,7 +662,12 @@ void time_loop()
                 // displayed on presentTime.
 
                 if(compMin == 0) { 
-                    if(presentTime.getNightMode() || !FPBUnitIsOn || startup || timeTraveled || timeTravelP1) {
+                    if(presentTime.getNightMode() || 
+                       !FPBUnitIsOn || 
+                       startup || 
+                       timeTraveled || 
+                       timeTravelP1 || 
+                       (alarmOnOff && (alarmHour == compHour) && (alarmMinute == compMin))) {
                         hourlySoundDone = true;
                     }                                
                     if(!hourlySoundDone) {                  
@@ -836,10 +822,7 @@ void time_loop()
 void timeTravel(bool makeLong) 
 {
     int tyr = 0;
-    int tyroffs = 0;
-
-#define TRST_TOTAL_DELAY  10
-#define TRST_DELAY_P1         
+    int tyroffs = 0;        
 
     if(makeLong) {
         #ifdef TC_DBG
@@ -860,9 +843,9 @@ void timeTravel(bool makeLong)
     allOff();
 
     // Copy present time to last time departed
+    departedTime.setYear(presentTime.getYear() - presentTime.getYearOffset());
     departedTime.setMonth(presentTime.getMonth());
     departedTime.setDay(presentTime.getDay());
-    departedTime.setYear(presentTime.getYear() - presentTime.getYearOffset());
     departedTime.setHour(presentTime.getHour());
     departedTime.setMinute(presentTime.getMinute());
     departedTime.setYearOffset(0);
@@ -931,9 +914,9 @@ void resetPresentTime()
     allOff();
     
     // Copy "present" time to last time departed
+    departedTime.setYear(presentTime.getYear() - presentTime.getYearOffset());
     departedTime.setMonth(presentTime.getMonth());
     departedTime.setDay(presentTime.getDay());
-    departedTime.setYear(presentTime.getYear() - presentTime.getYearOffset());
     departedTime.setHour(presentTime.getHour());
     departedTime.setMinute(presentTime.getMinute());
     departedTime.setYearOffset(0);

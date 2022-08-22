@@ -50,11 +50,7 @@
 
 // When ENTER button is pressed, turn off display for this many ms
 // Must be sync'd to the sound file used! (enter.mp3 and baddate.mp3)
-#ifndef TWPRIVATE
 #define ENTER_DELAY   600         
-#else
-#define ENTER_DELAY   400 
-#endif
 #define BADDATE_DELAY 400
 
 void keypadEvent(KeypadEvent key);

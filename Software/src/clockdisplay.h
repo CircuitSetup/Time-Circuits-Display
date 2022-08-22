@@ -73,6 +73,8 @@ extern bool     timeDiffUp;
 
 extern uint64_t dateToMins(int year, int month, int day, int hour, int minute);
 extern void     minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
+
+extern int      daysInMonth(int month, int year);
  
 struct dateStruct {
     uint16_t year;

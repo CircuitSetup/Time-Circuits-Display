@@ -29,13 +29,8 @@
 // Uncomment if month is 2 digits (7-seg), as in the original A-Car display.
 //#define IS_ACAR_DISPLAY 
 
-//#define TWPRIVATE       // A10001986's private customizations
-
 #ifndef IS_ACAR_DISPLAY
 #define TC_VERSION "AUG212022"
-#ifdef TWPRIVATE
-#define TC_VERSION_EXTRA "A10001986"
-#endif
 #else
 #define TC_VERSION "08212022"
 #define TC_VERSION_EXTRA "A CAR"

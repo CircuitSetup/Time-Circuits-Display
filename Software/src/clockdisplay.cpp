@@ -155,10 +155,10 @@ bool clockDisplay::isRTC()
 void clockDisplay::setDateTime(DateTime dt) 
 {
     // ATTN: DateTime implemention does not work for years < 2000!    
-    
-    setMonth(dt.month());
-    setDay(dt.day());
+
     setYear(dt.year());
+    setMonth(dt.month());
+    setDay(dt.day());    
     setHour(dt.hour());
     setMinute(dt.minute());
 }
@@ -186,10 +186,10 @@ void clockDisplay::setDateTimeDiff(DateTime dt)
     }
 
     minsToDate(rtcTime, year, month, day, hour, minute); 
-    
-    setMonth(month);
-    setDay(day);
+
     setYear(year + _yearoffset);
+    setMonth(month);
+    setDay(day);    
     setHour(hour);
     setMinute(minute);
 }
@@ -243,7 +243,30 @@ void clockDisplay::showAnimate2()
 // Set fields in buffer --------------------------------------------------------
 
 
-// Makes characters for 3 char month, valid months 1-12
+// Set yearOffset
+void clockDisplay::setYearOffset(int16_t yearOffs) 
+{
+    _yearoffset = yearOffs;
+}
+
+// Place LED pattern in year position in buffer
+void clockDisplay::setYear(uint16_t yearNum) 
+{
+    if(yearNum < 1) { // || yearNum > 9999) {        
+        Serial.print("Clockdisplay: setYear: Bad year: ");
+        Serial.println(yearNum, DEC);
+        yearNum = (yearNum > 9999) ? 9999 : 1;        
+    }
+    
+    _year = yearNum;
+    yearNum -= _yearoffset;
+
+    if(yearNum > 10000) yearNum -= 10000;
+    
+    _displayBuffer[CD_YEAR_POS]     = makeNum(yearNum / 100);
+    _displayBuffer[CD_YEAR_POS + 1] = makeNum(yearNum % 100);
+}
+// Place LED pattern in month position in buffer
 void clockDisplay::setMonth(int monthNum) 
 {
     if(monthNum < 1 || monthNum > 12) {        
@@ -267,42 +290,18 @@ void clockDisplay::setMonth(int monthNum)
 #endif
 }
 
-// Place LED pattern in day position in buffer, which is 3.
+// Place LED pattern in day position in buffer
 void clockDisplay::setDay(int dayNum) 
 {
     if(dayNum < 1 || dayNum > 31) {          
         Serial.print("Clockdisplay: setDay: Bad day: ");
         Serial.println(dayNum, DEC);
-        dayNum = 1;
+        dayNum = (dayNum < 1) ? 1 : daysInMonth(_month, _year-_yearoffset);
     }
     
     _day = dayNum;
     
     _displayBuffer[CD_DAY_POS] = makeNum(dayNum);
-}
-
-// Set yearOffset
-void clockDisplay::setYearOffset(int16_t yearOffs) 
-{
-    _yearoffset = yearOffs;
-}
-
-// Place LED pattern in year position in buffer
-void clockDisplay::setYear(uint16_t yearNum) 
-{
-    if(yearNum < 1) { // || yearNum > 9999) {        
-        Serial.print("Clockdisplay: setYear: Bad year: ");
-        Serial.println(yearNum, DEC);
-        yearNum = (yearNum > 9999) ? 9999 : 1;        
-    }
-    
-    _year = yearNum;
-    yearNum -= _yearoffset;
-
-    if(yearNum > 10000) yearNum -= 10000;
-    
-    _displayBuffer[CD_YEAR_POS]     = makeNum(yearNum / 100);
-    _displayBuffer[CD_YEAR_POS + 1] = makeNum(yearNum % 100);
 }
 
 // Place LED pattern in hour position in buffer.

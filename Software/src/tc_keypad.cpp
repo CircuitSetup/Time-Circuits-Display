@@ -391,9 +391,9 @@ void keypad_loop()
             // hour and min are checked in clockdisplay
 
             // Copy date to destination time
-            if(_setMonth > 0)   destinationTime.setMonth(_setMonth);
-            if(_setDay > 0)     destinationTime.setDay(_setDay);
             if(_setYear > 0)    destinationTime.setYear(_setYear);
+            if(_setMonth > 0)   destinationTime.setMonth(_setMonth);
+            if(_setDay > 0)     destinationTime.setDay(_setDay);            
             if(_setHour >= 0)   destinationTime.setHour(_setHour);
             if(_setMin >= 0)    destinationTime.setMinute(_setMin);
 
