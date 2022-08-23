@@ -98,7 +98,7 @@ clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 
 // Automatic times
 dateStruct destinationTimes[8] = {
-    //YEAR, MONTH, DAY, HOUR, MIN 
+    //YEAR, MONTH, DAY, HOUR, MIN
     {1985, 10, 26,  1, 21},
     {1985, 10, 26,  1, 24},
     {1955, 11,  5,  6,  0},
@@ -106,7 +106,7 @@ dateStruct destinationTimes[8] = {
     {2015, 10, 21, 16, 29},
     {1955, 11, 12,  6,  0},
     {1885,  1,  1,  0,  0},
-    {1885,  9,  2, 12,  0}}; 
+    {1885,  9,  2, 12,  0}};
 
 dateStruct departedTimes[8] = {
     {1985, 10, 26,  1, 20},
@@ -463,9 +463,15 @@ void time_loop()
             Serial.println("long time travel phase 4");
             #endif
             break;
+        case 5:
+            timetravelP1Delay = TT_P1_DELAY_P5;
+            #ifdef TC_DBG
+            Serial.println("long time travel phase 5");
+            #endif
+            break;
         default:
             #ifdef TC_DBG
-            Serial.println("long time travel phase 5 - re-entry");
+            Serial.println("long time travel phase 6 - re-entry");
             #endif
             timeTravelP1 = 0;
             timeTravel(false);
@@ -767,34 +773,72 @@ void time_loop()
         x = y;  
 
         if(timeTravelP1 > 1) {  
-            int ii = 5;        
+            int ii = 5, tt, obdt, obpt, oblt;       
             switch(timeTravelP1) { 
             case 2:
-                /* Nothing, displays off */
+                //while(ii--) {
+                    ((rand() % 10) > 8) ? presentTime.off() : presentTime.on();
+                    ((rand() % 10) > 8) ? destinationTime.off() : destinationTime.on();
+                    ((rand() % 10) > 8) ? departedTime.off() : departedTime.on();
+                //    mysdelay(5);
+                //    presentTime.on();
+                //    destinationTime.on();
+                //    departedTime.on();
+                //}
                 break;
-            case 3:                
+            case 3:
+                presentTime.off();
+                destinationTime.off();
+                departedTime.off();
+                break;
+            case 4:                
                 destinationTime.show();  
                 presentTime.show();                       
                 departedTime.show();
+                //store original brightness
+                obdt = destinationTime.getBrightness();
+                obpt = presentTime.getBrightness();
+                oblt = departedTime.getBrightness();
                 while(ii--) {
                     destinationTime.on();
                     ((rand() % 10) < 7) ? destinationTime.showOnlyText("MALFUNCTION") : destinationTime.show();
+                    destinationTime.setBrightness(1+(rand() % 10));
                     presentTime.on();
+                    presentTime.setBrightness(1+(rand() % 10));
                     departedTime.on();
-                    ((rand() % 10) < 2) ? departedTime.showOnlyText("KHDW2011GIDUW") : departedTime.show();
-                    mysdelay(10);
+                    ((rand() % 10) < 3) ? departedTime.showOnlyText("KHDW2011GIDUW") : departedTime.show();
+                    departedTime.setBrightness(1+(rand() % 10));
+                    mysdelay(5);
                     allOff();
                     mysdelay(10);
                 }
-                break;       
-            case 4:          
-                allLampTest();
-                while(ii--) {      
-                    ((rand() % 10) > 5) ? presentTime.on() : presentTime.off();
-                    ((rand() % 10) < 5) ? destinationTime.on() : destinationTime.off();
-                    ((rand() % 10) > 5) ? departedTime.on() : departedTime.off();
-                    mysdelay(10);
+                //restore original brightness
+                destinationTime.setBrightness(obdt);
+                presentTime.setBrightness(obpt);
+                departedTime.setBrightness(oblt);
+                break;      
+            case 5:          
+                obdt = destinationTime.getBrightness();
+                obpt = presentTime.getBrightness();
+                oblt = departedTime.getBrightness();
+                while(ii--) {   
+                    tt = rand() % 10; 
+                    if(tt < 3)      { presentTime.lampTest(); }
+                    else if(tt < 7) { presentTime.show(); presentTime.on(); presentTime.setBrightness(5+(rand() % 10));}
+                    else            { presentTime.off(); }
+                    tt = (rand() + millis()) % 10;
+                    if(tt < 2)      { destinationTime.lampTest(); }
+                    else if(tt < 6) { destinationTime.show(); destinationTime.on(); destinationTime.setBrightness(5+(rand() % 10)); }
+                    else            { destinationTime.setBrightness(1+(rand() % 10)); }  
+                    tt = (rand() + millis()) % 10; 
+                    if(tt < 4)      { departedTime.lampTest(); }
+                    else if(tt < 8) { departedTime.showOnlyText("00000000000000"); departedTime.on(); departedTime.setBrightness(5+(rand() % 10)); }
+                    else            { departedTime.off(); }
+                    mysdelay(5);
                 }
+                destinationTime.setBrightness(obdt);
+                presentTime.setBrightness(obpt);
+                departedTime.setBrightness(oblt);
                 break;
             default:
                 allOff();

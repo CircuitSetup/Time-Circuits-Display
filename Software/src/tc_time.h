@@ -54,11 +54,12 @@
 #define STARTUP_DELAY 1050
 #define TIMETRAVEL_DELAY 1500
 
-#define TT_P1_DELAY_P1  4500      // Sum of all must be 10000
-#define TT_P1_DELAY_P2  (5800-TT_P1_DELAY_P1)
-#define TT_P1_DELAY_P3  (8000-(TT_P1_DELAY_P2+TT_P1_DELAY_P1))
-#define TT_P1_DELAY_P4  (8000-(TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))
-
+// Sum of all must be 8000
+#define TT_P1_DELAY_P1  1400                                                                    // Normal
+#define TT_P1_DELAY_P2  (4200-TT_P1_DELAY_P1)                                                   // Light flicker
+#define TT_P1_DELAY_P3  (5800-(TT_P1_DELAY_P2+TT_P1_DELAY_P1))                                  // Off
+#define TT_P1_DELAY_P4  (6800-(TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))                   // Random display I
+#define TT_P1_DELAY_P5  (8000-(TT_P1_DELAY_P4+TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))    // Random display II
 
 extern uint8_t        autoInterval;
 extern const uint8_t  autoTimeIntervals[6];

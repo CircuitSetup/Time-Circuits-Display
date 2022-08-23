@@ -171,11 +171,12 @@ class clockDisplay {
     
         uint8_t  getLED7NumChar(uint8_t value);
         uint8_t  getLED7AlphaChar(uint8_t value);
+        #ifndef IS_ACAR_DISPLAY
         uint16_t getLEDAlphaChar(char value);
+        #endif
     
         uint16_t makeNum(uint8_t num);
         uint16_t makeNumN0(uint8_t num);
-        uint16_t makeAlpha(uint8_t value);
     
         void directCol(int col, int segments);  // directly writes column RAM
     

@@ -57,7 +57,7 @@ void wifi_setup()
 { 
     int temp;
     
-    WiFi.mode(WIFI_STA);  // explicitly set mode, esp defaults to STA_AP
+    WiFi.mode(WIFI_MODE_STA);  // explicitly set mode, esp defaults to STA_AP
     
     #ifndef TC_DBG
     wm.setDebugOutput(false);
@@ -201,11 +201,11 @@ void updateConfigPortalValues()
 int wifi_getStatus()
 {
     switch(WiFi.getMode()) {
-      case WIFI_STA:
+      case WIFI_MODE_STA:
           return (int)WiFi.status();
-      case WIFI_AP:
+      case WIFI_MODE_AP:
           return 0x10000;     // AP MODE
-      case WIFI_OFF:
+      case WIFI_MODE_NULL:
           return 0x10001;     // OFF          
     }
 
@@ -230,10 +230,10 @@ bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d)
     IPAddress myip;
   
     switch(WiFi.getMode()) {
-      case WIFI_STA:
+      case WIFI_MODE_STA:
           myip = WiFi.localIP();
           break;
-      case WIFI_AP:
+      case WIFI_MODE_AP:
           myip = WiFi.softAPIP();
           break;
       default:

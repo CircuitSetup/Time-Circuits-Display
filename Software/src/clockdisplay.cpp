@@ -252,20 +252,22 @@ void clockDisplay::setYearOffset(int16_t yearOffs)
 // Place LED pattern in year position in buffer
 void clockDisplay::setYear(uint16_t yearNum) 
 {
-    if(yearNum < 1) { // || yearNum > 9999) {        
+    if(yearNum < 1) {         
         Serial.print("Clockdisplay: setYear: Bad year: ");
         Serial.println(yearNum, DEC);
-        yearNum = (yearNum > 9999) ? 9999 : 1;        
+        yearNum = 1;        
     }
     
     _year = yearNum;
     yearNum -= _yearoffset;
 
-    if(yearNum > 10000) yearNum -= 10000;
+    while(yearNum >= 10000) 
+        yearNum -= 10000;
     
     _displayBuffer[CD_YEAR_POS]     = makeNum(yearNum / 100);
     _displayBuffer[CD_YEAR_POS + 1] = makeNum(yearNum % 100);
 }
+
 // Place LED pattern in month position in buffer
 void clockDisplay::setMonth(int monthNum) 
 {
@@ -284,19 +286,24 @@ void clockDisplay::setMonth(int monthNum)
     // Exception: timeinfo (tm) works with 0-11, but we only use this in getNTPtime 
     // for syncing. Therefore, we must ALWAYS decrease monthNum here
     monthNum--;    
-    _displayBuffer[CD_MONTH_POS]     = makeAlpha(months[monthNum][0]);
-    _displayBuffer[CD_MONTH_POS + 1] = makeAlpha(months[monthNum][1]);
-    _displayBuffer[CD_MONTH_POS + 2] = makeAlpha(months[monthNum][2]);
+    _displayBuffer[CD_MONTH_POS]     = getLEDAlphaChar(months[monthNum][0]);
+    _displayBuffer[CD_MONTH_POS + 1] = getLEDAlphaChar(months[monthNum][1]);
+    _displayBuffer[CD_MONTH_POS + 2] = getLEDAlphaChar(months[monthNum][2]);
 #endif
 }
 
 // Place LED pattern in day position in buffer
 void clockDisplay::setDay(int dayNum) 
 {
-    if(dayNum < 1 || dayNum > 31) {          
+    int maxDay = daysInMonth(_month, _year-_yearoffset);
+
+    // It is essential that setDay is called AFTER year
+    // and month have been set!
+    
+    if(dayNum < 1 || dayNum > maxDay) {          
         Serial.print("Clockdisplay: setDay: Bad day: ");
         Serial.println(dayNum, DEC);
-        dayNum = (dayNum < 1) ? 1 : daysInMonth(_month, _year-_yearoffset);
+        dayNum = (dayNum < 1) ? 1 : maxDay;
     }
     
     _day = dayNum;
@@ -412,9 +419,9 @@ void clockDisplay::showOnlyMonth(int monthNum)
     directCol(CD_MONTH_POS, makeNum(monthNum));
 #else
     monthNum--;
-    directCol(CD_MONTH_POS,     makeAlpha(months[monthNum][0]));
-    directCol(CD_MONTH_POS + 1, makeAlpha(months[monthNum][1]));
-    directCol(CD_MONTH_POS + 2, makeAlpha(months[monthNum][2]));
+    directCol(CD_MONTH_POS,     getLEDAlphaChar(months[monthNum][0]));
+    directCol(CD_MONTH_POS + 1, getLEDAlphaChar(months[monthNum][1]));
+    directCol(CD_MONTH_POS + 2, getLEDAlphaChar(months[monthNum][2]));
 #endif    
 }
 // clears the display RAM and only shows the provided day
@@ -487,19 +494,19 @@ void clockDisplay::showOnlyText(const char *text)
     clearDisplay();
     
 #ifdef IS_ACAR_DISPLAY
-    while(text[idx] && pos < CD_MONTH_DIGS) {
+    while(text[idx] && pos < CD_MONTH_SIZE) {
         temp = getLED7AlphaChar(text[idx]);
         idx++;
         if(text[idx]) {
             temp |= (getLED7AlphaChar(text[idx]) << 8);
-            idx++;
+            idx++;            
         }
         directCol(pos, temp);
         pos++;
     }
 #else
-    while(text[idx] && pos < CD_MONTH_DIGS) {
-        directCol(pos, makeAlpha(text[idx]));
+    while(text[idx] && pos < CD_MONTH_SIZE) {
+        directCol(pos, getLEDAlphaChar(text[idx]));
         idx++;
         pos++;
     }
@@ -530,15 +537,15 @@ void clockDisplay::showOnlyHalfIP(int a, int b, bool clear)
         directCol(CD_MONTH_POS, makeNum(a / 10));
         directCol(CD_DAY_POS, numDigs[(a % 10)]);
     } else {
-        directCol(CD_MONTH_POS, makeNum(a));
+        directCol(CD_MONTH_POS, makeNumN0(a));
     }
 #else    
     sprintf(buf, "%d", a);
-    directCol(CD_MONTH_POS, makeAlpha(buf[0]));
+    directCol(CD_MONTH_POS, getLEDAlphaChar(buf[0]));
     if(buf[1]) {
-        directCol(CD_MONTH_POS + 1, makeAlpha(buf[1]));
+        directCol(CD_MONTH_POS + 1, getLEDAlphaChar(buf[1]));
         if(buf[2]) {
-            directCol(CD_MONTH_POS + 2, makeAlpha(buf[2]));
+            directCol(CD_MONTH_POS + 2, getLEDAlphaChar(buf[2]));
         }
     }
 #endif    
@@ -559,11 +566,11 @@ void clockDisplay::showOnlySettingVal(const char* setting, int8_t val, bool clea
     directCol(CD_MONTH_POS, getLED7AlphaChar(setting[0]) |
              ((setting[1] ? getLED7AlphaChar(setting[1]) : 0) << 8));       
 #else
-    directCol(CD_MONTH_POS, makeAlpha(setting[0]));
+    directCol(CD_MONTH_POS, getLEDAlphaChar(setting[0]));
     if(setting[1]) {
-        directCol(CD_MONTH_POS + 1, makeAlpha(setting[1]));
+        directCol(CD_MONTH_POS + 1, getLEDAlphaChar(setting[1]));
         if(setting[2]) {
-            directCol(CD_MONTH_POS + 2, makeAlpha(setting[2]));
+            directCol(CD_MONTH_POS + 2, getLEDAlphaChar(setting[2]));
         }
     }
 #endif
@@ -867,21 +874,12 @@ uint8_t clockDisplay::getLED7AlphaChar(uint8_t value)
 }
 
 // Returns bit pattern for provided character for display on alphanumeric 14 segment display
+#ifndef IS_ACAR_DISPLAY
 uint16_t clockDisplay::getLEDAlphaChar(char value) 
 {    
-#ifdef IS_ACAR_DISPLAY
-    if(value == ' ' || value == 0) {
-        return 0;
-    } else if(value >= '0' && value <= '9') {
-        return numDigs[value - 48];    
-    } else {
-        return numDigs[value - 'A' + 10];
-    }
-#else  
-    return pgm_read_word(alphaChars + value);        
-#endif    
+    return alphaChars[value];
 }
-
+#endif
 
 // Make a 2 digit number from the array and place it in the buffer at pos
 // (makes leading 0s)
@@ -911,12 +909,6 @@ uint16_t clockDisplay::makeNumN0(uint8_t num)
     }
     
     return segments;
-}
-
-uint16_t clockDisplay::makeAlpha(uint8_t value) 
-{
-    // valid positions are 0 to 2
-    return getLEDAlphaChar(value);
 }
 
 // Directly write to a column with supplied segments
