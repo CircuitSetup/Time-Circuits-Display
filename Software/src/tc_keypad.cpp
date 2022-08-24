@@ -124,7 +124,7 @@ void keypad_setup()
     timeBuffer[0] = '\0';
   
     #ifdef TC_DBG
-    Serial.println("keypad_setup: Setup Complete");
+    Serial.println(F("keypad_setup: Setup Complete"));
     #endif
 }
 
@@ -149,7 +149,8 @@ char get_key()
  */
 void keypadEvent(KeypadEvent key) 
 {
-    if(!FPBUnitIsOn) return;
+    if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP1) 
+        return;
     
     switch(keypad.getState()) {
         case PRESSED:

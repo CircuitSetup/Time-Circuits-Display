@@ -30,7 +30,6 @@
 // With the current versions of the audio library,
 // turning it on might cause a static after stopping
 // sound play back.
-
 //#define TC_USE_MIXER
 
 // Initialize ESP32 Audio Library classes
@@ -48,8 +47,6 @@ AudioOutputI2S *out;
 AudioOutputMixer *mixer;
 AudioOutputMixerStub *stub[2];
 #endif
-
-bool beepOn;
 
 bool audioMute = false;
 
@@ -117,9 +114,8 @@ void play_keypad_sound(char key)
     char buf[16] = "/Dtmf-0.mp3\0";
     
     if(key) {
-        beepOn = false;
         buf[6] = key;
-        play_file(buf, 0.8, true, 0);
+        play_file(buf, 0.6, true, 0);
     }
 }
 
@@ -134,8 +130,6 @@ void audio_loop()
             mp3->stop();
             #ifdef TC_USE_MIXER
             stub[0]->stop();
-            //stub[0]->flush();
-            //out->flush();
             #endif
         } else {
             sampleCnt++;
@@ -154,8 +148,6 @@ void audio_loop()
         if(!beep->loop()) {
             beep->stop();
             stub[1]->stop();
-            //stub[1]->flush();
-            //out->flush();
         }
     }
     */
@@ -168,9 +160,9 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
     if(channel != 0) return;  // For now, only 0 is allowed
 
     #ifdef TC_DBG
-    Serial.printf("CH:");
+    Serial.print(F("CH:"));
     Serial.print(channel);
-    Serial.printf("  Playing <");
+    Serial.print(F("  Playing <"));
     Serial.println(audio_file);    
     #endif
 
@@ -179,8 +171,6 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
         mp3->stop();
         #ifdef TC_USE_MIXER
         stub[0]->stop();        
-        //stub[0]->flush();
-        //out->flush();
         #endif                  
     }
 
@@ -188,8 +178,6 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
     if((channel == 1) && beep->isRunning()) {          
         beep->stop();
         stub[1]->stop();
-        //stub[1]->flush();
-        //out->flush();
     }
     */
 
@@ -210,7 +198,7 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
             mp3->begin(mySD0, out);
             #endif
             #ifdef TC_DBG
-            Serial.println("Playing from SD");
+            Serial.println(F("Playing from SD"));
             #endif
         } else if(mySPIFFS0->open(audio_file)) {             
             #ifdef TC_USE_MIXER
@@ -219,10 +207,10 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
             mp3->begin(mySPIFFS0, out);
             #endif
             #ifdef TC_DBG
-            Serial.println("Playing from SPIFFS");
+            Serial.println(F("Playing from SPIFFS"));
             #endif
         } else {
-            Serial.println("Audio file not found");
+            Serial.println(F("Audio file not found"));
         }
     //} else {        
     //    mySPIFFS1->open(audio_file);
@@ -305,17 +293,13 @@ void stopAudio()
     if(mp3->isRunning()) {          
         mp3->stop();
         #ifdef TC_USE_MIXER
-        stub[0]->stop();
-        //stub[0]->flush();
-        //out->flush();                 
+        stub[0]->stop();                
         #endif         
     }
     /*
     if(beep->isRunning()) {          
         beep->stop();
         stub[1]->stop();
-        //stub[1]->flush();
-        //out->flush();
     }
     */
 }

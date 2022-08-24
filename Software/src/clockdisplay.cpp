@@ -83,7 +83,7 @@ void clockDisplay::clear()
     // must call show() to actually clear display
 
     #ifdef TC_DBG
-    Serial.println("Clockdisplay: Clear Buffer");
+    Serial.println(F("Clockdisplay: Clear Buffer"));
     #endif
     
     for(int i = 0; i < CD_BUF_SIZE; i++) {
@@ -103,7 +103,7 @@ uint8_t clockDisplay::setBrightness(uint8_t level)
     Wire.endTransmission();
 
     #ifdef TC_DBG
-    Serial.print("Clockdisplay: Setting brightness: ");
+    Serial.print(F("Clockdisplay: Setting brightness: "));
     Serial.println(level, DEC);
     #endif
 
@@ -199,7 +199,7 @@ void clockDisplay::setDateTimeDiff(DateTime dt)
 void clockDisplay::setFromStruct(dateStruct* s) 
 {    
     if(isRTC()) {
-        Serial.println("Clockdisplay: Internal error; setFromStruct() called for RTC");
+        Serial.println(F("Clockdisplay: Internal error; setFromStruct() called for RTC"));
     }
     setYear(s->year);
     setMonth(s->month);
@@ -253,7 +253,7 @@ void clockDisplay::setYearOffset(int16_t yearOffs)
 void clockDisplay::setYear(uint16_t yearNum) 
 {
     if(yearNum < 1) {         
-        Serial.print("Clockdisplay: setYear: Bad year: ");
+        Serial.print(F("Clockdisplay: setYear: Bad year: "));
         Serial.println(yearNum, DEC);
         yearNum = 1;        
     }
@@ -272,7 +272,7 @@ void clockDisplay::setYear(uint16_t yearNum)
 void clockDisplay::setMonth(int monthNum) 
 {
     if(monthNum < 1 || monthNum > 12) {        
-        Serial.print("Clockdisplay: setMonth: Bad month: "); 
+        Serial.print(F("Clockdisplay: setMonth: Bad month: ")); 
         Serial.println(monthNum, DEC); 
         monthNum = (monthNum > 12) ? 12 : 1;                   
     } 
@@ -301,7 +301,7 @@ void clockDisplay::setDay(int dayNum)
     // and month have been set!
     
     if(dayNum < 1 || dayNum > maxDay) {          
-        Serial.print("Clockdisplay: setDay: Bad day: ");
+        Serial.print(F("Clockdisplay: setDay: Bad day: "));
         Serial.println(dayNum, DEC);
         dayNum = (dayNum < 1) ? 1 : maxDay;
     }
@@ -315,7 +315,7 @@ void clockDisplay::setDay(int dayNum)
 void clockDisplay::setHour(uint16_t hourNum) 
 {   
     if(hourNum > 23) {                
-        Serial.print("Clockdisplay: setHour: Bad hour: ");
+        Serial.print(F("Clockdisplay: setHour: Bad hour: "));
         Serial.println(hourNum, DEC);
         hourNum = 23;
     }
@@ -347,7 +347,7 @@ void clockDisplay::setHour(uint16_t hourNum)
 void clockDisplay::setMinute(int minNum) 
 {
     if(minNum < 0 || minNum > 59) {
-        Serial.print("Clockdisplay: setMinute: Bad Minute: ");
+        Serial.print(F("Clockdisplay: setMinute: Bad Minute: "));
         Serial.println(minNum, DEC);
         minNum = (minNum > 59) ? 59 : 0;
     }
@@ -411,7 +411,7 @@ void clockDisplay::showOnlyMonth(int monthNum)
     clearDisplay();
     
     if(monthNum < 1 || monthNum > 12) {
-        Serial.println("Clockdisplay: showOnlyMonth: Bad month");
+        Serial.println(F("Clockdisplay: showOnlyMonth: Bad month"));
         monthNum = (monthNum > 12) ? 12 : 1;
     }
     
@@ -494,7 +494,7 @@ void clockDisplay::showOnlyText(const char *text)
     clearDisplay();
     
 #ifdef IS_ACAR_DISPLAY
-    while(text[idx] && pos < CD_MONTH_SIZE) {
+    while(text[idx] && pos < (CD_MONTH_POS+CD_MONTH_SIZE)) {
         temp = getLED7AlphaChar(text[idx]);
         idx++;
         if(text[idx]) {
@@ -505,7 +505,7 @@ void clockDisplay::showOnlyText(const char *text)
         pos++;
     }
 #else
-    while(text[idx] && pos < CD_MONTH_SIZE) {
+    while(text[idx] && pos < (CD_MONTH_POS+CD_MONTH_SIZE)) {
         directCol(pos, getLEDAlphaChar(text[idx]));
         idx++;
         pos++;
@@ -606,7 +606,7 @@ bool clockDisplay::save()
         // Non-RTC: Save time
 
         #ifdef TC_DBG      
-        Serial.println("Clockdisplay: Saving non-RTC settings to EEPROM");
+        Serial.println(F("Clockdisplay: Saving non-RTC settings to EEPROM"));
         #endif
         
         savBuf[0] = _year & 0xff;
@@ -633,7 +633,7 @@ bool clockDisplay::save()
         // RTC: Save yearoffs, timeDiff (time comes from battery-backed RTC)
 
         #ifdef TC_DBG  
-        Serial.println("Clockdisplay: Saving RTC settings to EEPROM");
+        Serial.println(F("Clockdisplay: Saving RTC settings to EEPROM"));
         #endif
                 
         savBuf[0] = 0; // unused
@@ -679,7 +679,7 @@ bool clockDisplay::saveYOffs()
     // RTC: Save yearoffs; zero timeDifference
 
     #ifdef TC_DBG  
-    Serial.println("Clockdisplay: Saving RTC/YOffs setting to EEPROM");
+    Serial.println(F("Clockdisplay: Saving RTC/YOffs setting to EEPROM"));
     #endif
                 
     savBuf[0] = 0;        
@@ -733,7 +733,7 @@ bool clockDisplay::load()
         if( (sum != 0) && ((sum & 0xff) == loadBuf[9])) { 
                                    
             #ifdef TC_DBG  
-            Serial.println("Clockdisplay: Loading non-RTC settings from EEPROM");
+            Serial.println(F("Clockdisplay: Loading non-RTC settings from EEPROM"));
             #endif
             
             setYearOffset((loadBuf[3] << 8) | loadBuf[2]);
@@ -776,7 +776,7 @@ bool clockDisplay::load()
               timeDiffUp = loadBuf[8] ? true : false;
 
               #ifdef TC_DBG  
-              Serial.println("Clockdisplay: Loading RTC settings from EEPROM");
+              Serial.println(F("Clockdisplay: Loading RTC settings from EEPROM"));
               #endif
                      
         } else {
@@ -785,7 +785,7 @@ bool clockDisplay::load()
 
               timeDifference = 0;
 
-              Serial.println("Clockdisplay: Invalid RTC EEPROM data");
+              Serial.println(F("Clockdisplay: Invalid RTC EEPROM data"));
               
         }
 
@@ -795,7 +795,7 @@ bool clockDisplay::load()
         return true;             
     }
      
-    Serial.println("Clockdisplay: Invalid EEPROM data");
+    Serial.println(F("Clockdisplay: Invalid EEPROM data"));
 
     // Do NOT clear EEPROM if data is invalid.
     // All 0s are as bad, wait for EEPROM to be
@@ -868,15 +868,19 @@ uint8_t clockDisplay::getLED7AlphaChar(uint8_t value)
         return 0;
     } else if(value >= '0' && value <= '9') {
         return numDigs[value - 48];        
-    } else {
+    } else if(value >= 'A' && value <= 'Z') {
         return numDigs[value - 'A' + 10];
     }   
+
+    return 0;
 }
 
 // Returns bit pattern for provided character for display on alphanumeric 14 segment display
 #ifndef IS_ACAR_DISPLAY
-uint16_t clockDisplay::getLEDAlphaChar(char value) 
-{    
+uint16_t clockDisplay::getLEDAlphaChar(uint8_t value) 
+{
+    if(value > 127) return 0;
+        
     return alphaChars[value];
 }
 #endif
@@ -889,8 +893,8 @@ uint16_t clockDisplay::makeNum(uint8_t num)
 
     // Each position holds two digits, high byte is 1's, low byte is 10's
     
-    segments = getLED7NumChar(num % 10) << 8;        // Place 1's in upper byte
-    segments = segments | getLED7NumChar(num / 10);  // 10's in lower byte
+    segments = getLED7NumChar(num % 10) << 8;     // Place 1's in upper byte
+    segments |= getLED7NumChar(num / 10);         // 10's in lower byte
     
     return segments;
 }
@@ -903,9 +907,9 @@ uint16_t clockDisplay::makeNumN0(uint8_t num)
 
     // Each position holds two digits, high byte is 1's, low byte is 10's
     
-    segments = getLED7NumChar(num % 10) << 8;        // Place 1's in upper byte
+    segments = getLED7NumChar(num % 10) << 8;     // Place 1's in upper byte
     if(num / 10) {
-        segments = segments | getLED7NumChar(num / 10);  // 10's in lower byte
+        segments |= getLED7NumChar(num / 10);     // 10's in lower byte
     }
     
     return segments;

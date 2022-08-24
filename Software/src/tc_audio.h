@@ -47,7 +47,6 @@ extern double getRawVolume();
 extern double getVolume(int channel);
 extern bool checkAudioDone();
 extern void stopAudio();
-extern bool beepOn;
 
 extern bool audioMute;
 

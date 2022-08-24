@@ -50,24 +50,29 @@ int8_t minNext;
 bool x;  // for tracking second changes
 bool y;  
 
-bool startup = false;
-bool startupSound = false;
-unsigned long startupNow = 0;
+// The startup sequence
+bool startup              = false;
+bool startupSound         = false;
+unsigned long startupNow  = 0;
 
-unsigned long pauseNow;                 // Pause autoInterval if user played with time travel
+// Pause autoInterval if user played with time travel
+unsigned long pauseNow;                 
 unsigned long pauseDelay = 30*60*1000;  // Pause for 30 minutes
-bool autoPaused = false;
+bool          autoPaused = false;
+
+// The timetravel sequence
+unsigned long timetravelP1Now = 0;
+unsigned long timetravelP1Delay = 0;
+int           timeTravelP1 = 0;
+
+// The timetravel re-entry sequence
+unsigned long timetravelNow = 0;
+bool          timeTraveled = false;
 
 struct tm _timeinfo;  //for NTP
 RTC_DS3231 rtc;       //for RTC IC
 
-unsigned long timetravelNow = 0;
-bool timeTraveled = false;
-
-unsigned long timetravelP1Now = 0;
-unsigned long timetravelP1Delay = 0;
-int timeTravelP1 = 0;
-
+// For displaying times off the real time
 uint64_t timeDifference = 0;
 bool     timeDiffUp = false;  // true = add difference, false = subtract difference
 
@@ -89,16 +94,22 @@ bool timetravelPersistent = true;
 // Alarm/HourlySound based on RTC (or presentTime's display if false)
 bool alarmRTC = true;
 
-uint8_t timeout = 0;  // for tracking idle time in menus
+// For tracking idle time in menus
+uint8_t timeout = 0;  
 
-// The displays
+// The display objects
 clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_PREF);
 clockDisplay presentTime(PRES_TIME_ADDR, PRES_TIME_PREF);
 clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 
-// Automatic times
+// Automatic times ("decorative mode")
+
+int8_t autoTime = 0;  // Selects from time from array below
+
+#ifndef TWPRIVATE //  ----------------- OFFICIAL
+
 dateStruct destinationTimes[8] = {
-    //YEAR, MONTH, DAY, HOUR, MIN
+    //YEAR, MONTH, DAY, HOUR, MIN    
     {1985, 10, 26,  1, 21},
     {1985, 10, 26,  1, 24},
     {1955, 11,  5,  6,  0},
@@ -106,8 +117,8 @@ dateStruct destinationTimes[8] = {
     {2015, 10, 21, 16, 29},
     {1955, 11, 12,  6,  0},
     {1885,  1,  1,  0,  0},
-    {1885,  9,  2, 12,  0}};
-
+    {1885,  9,  2, 12,  0}
+}; 
 dateStruct departedTimes[8] = {
     {1985, 10, 26,  1, 20},
     {1955, 11, 12, 22,  4},
@@ -116,11 +127,12 @@ dateStruct departedTimes[8] = {
     {1985, 10, 26, 11, 35},
     {1985, 10, 27,  2, 42},
     {1955, 11, 12, 21, 44},
-    {1955, 11, 13, 12,  0}};
+    {1955, 11, 13, 12,  0}
+};
 
-int8_t autoTime = 0;  // selects the above array time
+#else //  --------------------------- TWPRIVATE
 
-const uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+#endif  // ------------------------------------
 
 #ifdef FAKE_POWER_ON
 OneButton fakePowerOnKey = OneButton(FAKE_POWER_BUTTON_PIN,
@@ -133,7 +145,10 @@ bool waitForFakePowerButton = false;
 #endif
 bool FPBUnitIsOn = true;
 
-const unsigned short int mon_yday[2][13] =
+const uint8_t monthDays[] = { 
+    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+};
+const unsigned int mon_yday[2][13] =
 {
     { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 }, 
     { 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366 }
@@ -189,7 +204,7 @@ void time_setup()
     // RTC setup
     if(!rtc.begin()) {
         
-        Serial.println("time_setup: Couldn't find RTC. Panic!");
+        Serial.println(F("time_setup: Couldn't find RTC. Panic!"));
         
         // Setup pins for white LED
         pinMode(WHITE_LED_PIN, OUTPUT);
@@ -209,7 +224,7 @@ void time_setup()
         // Lost power and battery didn't keep time, so set current time to compile time
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
         
-        Serial.println("time_setup: RTC lost power, setting default time. Change battery!");
+        Serial.println(F("time_setup: RTC lost power, setting default time. Change battery!"));
 
         rtcbad = true;
     
@@ -250,7 +265,7 @@ void time_setup()
     if(getNTPTime()) {
 
         #ifdef TC_DBG
-        Serial.print("time_setup: RTC set through NTP from ");
+        Serial.print(F("time_setup: RTC set through NTP from "));
         Serial.println(settings.ntpServer);
         #endif
 
@@ -299,7 +314,7 @@ void time_setup()
         destinationTime.setFromStruct(&destinationTimes[0]); 
         departedTime.setFromStruct(&departedTimes[0]);
         #ifdef TC_DBG
-        Serial.println("time_setup: autointerval enabled");
+        Serial.println(F("time_setup: autointerval enabled"));
         #endif
     }
 
@@ -326,6 +341,10 @@ void time_setup()
         int oldBriDest = destinationTime.getBrightness();
         int oldBriPres = presentTime.getBrightness();
         int oldBriDep = departedTime.getBrightness();
+
+        play_file("/intro.mp3", 1.0, true, 0);
+
+        my2delay(1200);
         destinationTime.setBrightness(15);
         presentTime.setBrightness(0);
         departedTime.setBrightness(0);
@@ -336,22 +355,31 @@ void time_setup()
         departedTime.showOnlyText(t3);
         destinationTime.on();
         for(int i = 0; i < 14; i++) {
-           delay(50);
+           my2delay(50);
            destinationTime.showOnlyText(&t1[i]);
         }
-        delay(500);                                
+        my2delay(500);                                
         presentTime.on();
         departedTime.on();
         for(int i = 0; i <= 15; i++) {
             presentTime.setBrightness(i);
             departedTime.setBrightness(i);
-            delay(100);
+            my2delay(100);
         }
-        delay(3000);
+        my2delay(1500);
+        for(int i = 15; i >= 0; i--) {
+            destinationTime.setBrightness(i);
+            presentTime.setBrightness(i);
+            departedTime.setBrightness(i);
+            my2delay(20);
+        }
         allOff();
         destinationTime.setBrightness(oldBriDest);
         presentTime.setBrightness(oldBriPres);
         departedTime.setBrightness(oldBriDep);
+
+        waitAudioDoneIntro();
+        stopAudio();
     }
 
     // Load the time for initial animation show
@@ -366,7 +394,7 @@ void time_setup()
         FPBUnitIsOn = false; 
            
         #ifdef TC_DBG
-        Serial.println("time_setup: waiting for fake power on");
+        Serial.println(F("time_setup: waiting for fake power on"));
         #endif             
         
     } else {
@@ -381,7 +409,7 @@ void time_setup()
 #endif
 
     #ifdef TC_DBG
-    Serial.println("time_setup: Done.");
+    Serial.println(F("time_setup: Done."));
     #endif  
     
 }
@@ -435,7 +463,7 @@ void time_loop()
         animate();
         startup = false;        
         #ifdef TC_DBG
-        Serial.println("time_loop: Startup animate triggered");
+        Serial.println(F("time_loop: Startup animate triggered"));
         #endif
     }
 
@@ -448,30 +476,30 @@ void time_loop()
             allOff();
             timetravelP1Delay = TT_P1_DELAY_P2;
             #ifdef TC_DBG
-            Serial.println("long time travel phase 2");
+            Serial.println(F("long time travel phase 2"));
             #endif
             break;
         case 3:
             timetravelP1Delay = TT_P1_DELAY_P3;
             #ifdef TC_DBG
-            Serial.println("long time travel phase 3");
+            Serial.println(F("long time travel phase 3"));
             #endif
             break;
         case 4:
             timetravelP1Delay = TT_P1_DELAY_P4;
             #ifdef TC_DBG
-            Serial.println("long time travel phase 4");
+            Serial.println(F("long time travel phase 4"));
             #endif
             break;
         case 5:
             timetravelP1Delay = TT_P1_DELAY_P5;
             #ifdef TC_DBG
-            Serial.println("long time travel phase 5");
+            Serial.println(F("long time travel phase 5"));
             #endif
             break;
         default:
             #ifdef TC_DBG
-            Serial.println("long time travel phase 6 - re-entry");
+            Serial.println(F("long time travel phase 6 - re-entry"));
             #endif
             timeTravelP1 = 0;
             timeTravel(false);
@@ -482,9 +510,8 @@ void time_loop()
     if(timeTraveled && (millis() - timetravelNow >= TIMETRAVEL_DELAY)) {                
         animate();
         timeTraveled = false;
-        beepOn = true;
         #ifdef TC_DBG
-        Serial.println("time_loop: Display on after time travel");
+        Serial.println(F("time_loop: Display on after time travel"));
         #endif
     }
 
@@ -522,7 +549,7 @@ void time_loop()
                         dt = myrtcnow();                         
                         
                         #ifdef TC_DBG
-                        Serial.println("time_loop: RTC re-adjusted using NTP");                    
+                        Serial.println(F("time_loop: RTC re-adjusted using NTP"));
                         #endif
 
                         if(timeDifference) {
@@ -545,7 +572,7 @@ void time_loop()
                          
                     } else {                          
                         
-                        Serial.println("time_loop: RTC re-adjustment via NTP failed");
+                        Serial.println(F("time_loop: RTC re-adjustment via NTP failed"));
 
                         uint16_t myYear = dt.year();
                         
@@ -604,7 +631,7 @@ void time_loop()
 
                 // RTC(+yearOffs) roll-over
             
-                Serial.println("Rollover 9999->1 detected, adjusting RTC and yearOffset");
+                Serial.println(F("Rollover 9999->1 detected, adjusting RTC and yearOffset"));
 
                 if(timeDifference) {
 
@@ -646,14 +673,14 @@ void time_loop()
             #ifdef TC_DBG
             if((dt.second() == 0) && (dt.minute() != dbgLastMin)) {
                 Serial.print(dt.year());
-                Serial.print("/");
+                Serial.print(F("/"));
                 Serial.print(dt.month());
-                Serial.print(" ");
+                Serial.print(F(" "));
                 dbgLastMin = dt.minute();
                 Serial.print(dbgLastMin);
-                Serial.print(".");
+                Serial.print(F("."));
                 Serial.print(dt.second());
-                Serial.print(" ");
+                Serial.print(F(" "));
                 Serial.println(rtc.getTemperature());
             }
             #endif
@@ -713,7 +740,7 @@ void time_loop()
                 if(!autoIntDone) {
 
                     #ifdef TC_DBG
-                    Serial.println("time_loop: autoInterval");
+                    Serial.println(F("time_loop: autoInterval"));
                     #endif             
 
                     autoPaused = false;
@@ -747,7 +774,7 @@ void time_loop()
                     }
 
                     #ifdef TC_DBG
-                    Serial.println("time_loop: Update Present Time");
+                    Serial.println(F("time_loop: Update Present Time"));
                     #endif
                     
                     dt = myrtcnow();                  // New time by now                         
@@ -773,18 +800,12 @@ void time_loop()
         x = y;  
 
         if(timeTravelP1 > 1) {  
-            int ii = 5, tt, obdt, obpt, oblt;       
+            int ii = 5, tt, obdt, obpt, obld;       
             switch(timeTravelP1) { 
             case 2:
-                //while(ii--) {
-                    ((rand() % 10) > 8) ? presentTime.off() : presentTime.on();
-                    ((rand() % 10) > 8) ? destinationTime.off() : destinationTime.on();
-                    ((rand() % 10) > 8) ? departedTime.off() : departedTime.on();
-                //    mysdelay(5);
-                //    presentTime.on();
-                //    destinationTime.on();
-                //    departedTime.on();
-                //}
+                ((rand() % 10) > 8) ? presentTime.off() : presentTime.on();
+                ((rand() % 10) > 8) ? destinationTime.off() : destinationTime.on();
+                ((rand() % 10) > 8) ? departedTime.off() : departedTime.on();                
                 break;
             case 3:
                 presentTime.off();
@@ -795,50 +816,44 @@ void time_loop()
                 destinationTime.show();  
                 presentTime.show();                       
                 departedTime.show();
-                //store original brightness
                 obdt = destinationTime.getBrightness();
                 obpt = presentTime.getBrightness();
-                oblt = departedTime.getBrightness();
+                obld = departedTime.getBrightness();
                 while(ii--) {
                     destinationTime.on();
                     ((rand() % 10) < 7) ? destinationTime.showOnlyText("MALFUNCTION") : destinationTime.show();
-                    destinationTime.setBrightness(1+(rand() % 10));
+                    if(ii % 2) destinationTime.setBrightness((1+(rand() % 10)) & 0x0b);
                     presentTime.on();
-                    presentTime.setBrightness(1+(rand() % 10));
+                    if(ii % 2) presentTime.setBrightness((1+(rand() % 10)) & 0x0b);
                     departedTime.on();
                     ((rand() % 10) < 3) ? departedTime.showOnlyText("KHDW2011GIDUW") : departedTime.show();
-                    departedTime.setBrightness(1+(rand() % 10));
+                    if(ii % 2) departedTime.setBrightness((1+(rand() % 10)) & 0x0b);
                     mysdelay(5);
                     allOff();
                     mysdelay(10);
                 }
-                //restore original brightness
                 destinationTime.setBrightness(obdt);
                 presentTime.setBrightness(obpt);
-                departedTime.setBrightness(oblt);
-                break;      
+                departedTime.setBrightness(obld);
+                break;       
             case 5:          
                 obdt = destinationTime.getBrightness();
-                obpt = presentTime.getBrightness();
-                oblt = departedTime.getBrightness();
                 while(ii--) {   
                     tt = rand() % 10; 
                     if(tt < 3)      { presentTime.lampTest(); }
-                    else if(tt < 7) { presentTime.show(); presentTime.on(); presentTime.setBrightness(5+(rand() % 10));}
+                    else if(tt < 7) { presentTime.show(); presentTime.on(); }
                     else            { presentTime.off(); }
                     tt = (rand() + millis()) % 10;
                     if(tt < 2)      { destinationTime.lampTest(); }
-                    else if(tt < 6) { destinationTime.show(); destinationTime.on(); destinationTime.setBrightness(5+(rand() % 10)); }
+                    else if(tt < 6) { destinationTime.show(); destinationTime.on(); }
                     else            { destinationTime.setBrightness(1+(rand() % 10)); }  
                     tt = (rand() + millis()) % 10; 
                     if(tt < 4)      { departedTime.lampTest(); }
-                    else if(tt < 8) { departedTime.showOnlyText("00000000000000"); departedTime.on(); departedTime.setBrightness(5+(rand() % 10)); }
+                    else if(tt < 8) { departedTime.showOnlyText("00000000000000"); departedTime.on(); }
                     else            { departedTime.off(); }
                     mysdelay(5);
                 }
                 destinationTime.setBrightness(obdt);
-                presentTime.setBrightness(obpt);
-                departedTime.setBrightness(oblt);
                 break;
             default:
                 allOff();
@@ -866,11 +881,14 @@ void time_loop()
 void timeTravel(bool makeLong) 
 {
     int tyr = 0;
-    int tyroffs = 0;        
+    int tyroffs = 0;    
+
+    // Pause autoInterval-cycling so user can play undisturbed
+    pauseAuto();
 
     if(makeLong) {
         #ifdef TC_DBG
-        Serial.println("long time travel phase 1");
+        Serial.println(F("long time travel phase 1"));
         #endif
         play_file("/travelstart.mp3", 1.0, true, 0);
         timetravelP1Now = millis();
@@ -881,7 +899,7 @@ void timeTravel(bool makeLong)
         
     timetravelNow = millis();
     timeTraveled = true;
-    beepOn = false;
+
     play_file("/timetravel.mp3", 1.0, true, 0);
     
     allOff();
@@ -930,14 +948,8 @@ void timeTravel(bool makeLong)
         presentTime.save();       
     }
 
-    // Pause autoInterval-cycling so user can play undisturbed
-    pauseAuto();
-
-    // Don't let the sound be interrupted
-    hourlySoundDone = true; 
-
     #ifdef TC_DBG
-    Serial.println("timeTravel: Success, good luck!");
+    Serial.println(F("timeTravel: Success, good luck!"));
     #endif
 }
 
@@ -951,8 +963,6 @@ void resetPresentTime()
     timeTraveled = true; 
     if(timeDifference) {
         play_file("/timetravel.mp3", 1.0, true, 0);
-        // Don't let the sound be interrupted
-        hourlySoundDone = true;
     }
   
     allOff();
@@ -991,7 +1001,7 @@ void pauseAuto(void)
           autoPaused = true;
           pauseNow = millis();
           #ifdef TC_DBG
-          Serial.println("pauseAuto: autoInterval paused for 30 minutes");          
+          Serial.println(F("pauseAuto: autoInterval paused for 30 minutes"));
           #endif
     }
 }
@@ -1034,7 +1044,7 @@ bool getNTPTime()
 
         if(strlen(settings.ntpServer) == 0) {
             #ifdef TC_DBG            
-            Serial.println("getNTPTime: NTP skipped, no server configured");
+            Serial.println(F("getNTPTime: NTP skipped, no server configured"));
             #endif
             return false;
         }
@@ -1044,7 +1054,7 @@ bool getNTPTime()
           
             while(!getLocalTime(&_timeinfo)) {
                 if(ntpRetries >= 20) {  
-                    Serial.println("getNTPTime: Couldn't get NTP time");
+                    Serial.println(F("getNTPTime: Couldn't get NTP time"));
                     return false;
                 } else {
                     ntpRetries++;
@@ -1079,16 +1089,16 @@ bool getNTPTime()
                                   newYear - 2000); 
                                   
         #ifdef TC_DBG            
-        Serial.print("getNTPTime: Result from NTP update: ");
+        Serial.print(F("getNTPTime: Result from NTP update: "));
         Serial.println(&_timeinfo, "%A, %B %d %Y %H:%M:%S");            
-        Serial.println("getNTPTime: Time successfully set with NTP");
+        Serial.println(F("getNTPTime: Time successfully set with NTP"));
         #endif
         
         return true;
             
     } else {
       
-        Serial.println("getNTPTime: Time NOT set with NTP, WiFi not connected");
+        Serial.println(F("getNTPTime: Time NOT set with NTP, WiFi not connected"));
         return false;
     
     }
@@ -1188,9 +1198,9 @@ DateTime myrtcnow()
     }
 
     if(retries > 0) {
-        Serial.print("myrtcnow: ");
+        Serial.print(F("myrtcnow: "));
         Serial.print(retries, DEC);
-        Serial.println(" retries needed to read RTC");
+        Serial.println(F(" retries needed to read RTC"));
     }
 
     return dt;
@@ -1284,3 +1294,23 @@ void fpbKeyLongPressStop()
     isFPBKeyChange = true;
 }    
 #endif
+
+void my2delay(unsigned long mydel) 
+{  
+    unsigned long startNow = millis();
+    while(millis() - startNow < mydel) {
+        delay(5);
+        audio_loop();
+    }     
+}
+
+
+void waitAudioDoneIntro()
+{
+  int timeout = 100;
+  
+  while(!checkAudioDone() && timeout--) {       
+       audio_loop();
+       delay(10);
+  }
+}

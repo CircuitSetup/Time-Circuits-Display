@@ -27,6 +27,8 @@
 
 Settings settings;
 
+IPSettings ipsettings;
+
 WiFiManager wm;
 
 WiFiManagerParameter custom_headline("<h2>TimeCircuits Setup</h2>");
@@ -45,9 +47,10 @@ WiFiManagerParameter custom_fakePwrOn("fpo", "Enable fake power switch (0=no, 1=
 #endif
 WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is RTC (1) or current present time (0)", settings.alarmRTC, 3);
 WiFiManagerParameter custom_playIntro("plIn", "Play intro (1=on, 0=off)", settings.playIntro, 3);
-//WiFiManagerParameter custom_beepSound;
 
 bool shouldSaveConfig = false;
+bool shouldSaveIPConfig = false;
+bool shouldDeleteIPConfig = false;
 
 /*
  * wifi_setup()
@@ -56,6 +59,10 @@ bool shouldSaveConfig = false;
 void wifi_setup() 
 { 
     int temp;
+    
+    #define TC_MENUSIZE (8-2)
+    const char* wifiMenu[TC_MENUSIZE] = {"wifi", "info", "param", "sep", "restart", "update"/*, "sep", "exit"*/ };
+    // We are running in non-blocking mode, so no point in "exit".
     
     WiFi.mode(WIFI_MODE_STA);  // explicitly set mode, esp defaults to STA_AP
     
@@ -66,9 +73,19 @@ void wifi_setup()
     wm.setParamsPage(true);
     wm.setBreakAfterConfig(true);
     wm.setConfigPortalBlocking(false);
+    wm.setPreSaveConfigCallback(preSaveConfigCallback);
     wm.setSaveConfigCallback(saveConfigCallback);
     wm.setSaveParamsCallback(saveParamsCallback);
-    wm.setHostname("TimeCircuits");
+    wm.setHostname("TIMECIRCUITS");
+
+    // Hack version number into WiFiManager main page
+    wm.setCustomHeadElement("<style type='text/css'>H1{margin-top:0px;margin-bottom:0px;text-align:center;}</style>");
+    wm.setTitle(F("TimeCircuits</H1><div style='font-size:8px;margin-left:auto;margin-right:auto;text-align:center;'>Version " TC_VERSION "(" TC_VERSION_EXTRA ")</div><H1 style='font-size=0px;margin:0'>"));
+
+    // Static IP info is not saved by WiFiManager,
+    // have to do this "manually". Hence ipsettings.
+    wm.setShowStaticFields(true);
+    wm.setShowDnsFields(true);
 
     temp = (int)atoi(settings.wifiConTimeout);
     if(temp < 1) temp = 1;    // Do not allow 0, might make it hang 
@@ -83,8 +100,7 @@ void wifi_setup()
     wm.setCleanConnect(true);           
     //wm.setRemoveDuplicateAPs(false);  
 
-    std::vector<const char*> menu = {"wifi", "info", "param", "sep", "restart", "exit", "update"};
-    wm.setMenu(menu);
+    wm.setMenu(wifiMenu, TC_MENUSIZE);
 
     wm.addParameter(&custom_headline);
     wm.addParameter(&custom_wifiConTimeout);
@@ -98,24 +114,28 @@ void wifi_setup()
     wm.addParameter(&custom_destTimeBright);
     wm.addParameter(&custom_presTimeBright);
     wm.addParameter(&custom_lastTimeBright);
+    wm.addParameter(&custom_playIntro);
     #ifdef FAKE_POWER_ON    
     wm.addParameter(&custom_fakePwrOn);
     #endif    
-    wm.addParameter(&custom_playIntro);
-    // wm.addParameter(&custom_beepSound);
-
+    
     updateConfigPortalValues();
+
+    // Configure static IP
+    if(loadIpSettings()) {        
+        setupStaticIP();
+    }
 
     // Automatically connect using saved credentials if they exist
     // If connection fails it starts an access point with the specified name
     if(wm.autoConnect("TCD-AP")) {
         #ifdef TC_DBG
-        Serial.println("WiFi connected");
+        Serial.println(F("WiFi connected"));
         #endif
         wm.startWebPortal();  //start config portal in STA mode
     } else {
         #ifdef TC_DBG
-        Serial.println("Config portal running");
+        Serial.println(F("Config portal running"));
         #endif
     }
 }
@@ -127,13 +147,35 @@ void wifi_setup()
 void wifi_loop() 
 {
     wm.process();
+
+    if(shouldSaveIPConfig) {
+      
+        #ifdef TC_DBG
+        Serial.println(F("WiFi: Saving IP config"));
+        #endif
+
+        writeIpSettings();
+        
+        shouldSaveIPConfig = false;
+
+    } else if(shouldDeleteIPConfig) { 
+
+        #ifdef TC_DBG
+        Serial.println(F("WiFi: Deleting IP config"));
+        #endif
+
+        deleteIpSettings();
+        
+        shouldDeleteIPConfig = false;
+      
+    }
     
     if(shouldSaveConfig) {
       
         // Save settings and restart esp32
 
         #ifdef TC_DBG
-        Serial.println("WiFi: Saving config");
+        Serial.println(F("WiFi: Saving config"));
         #endif
 
         strcpy(settings.ntpServer, custom_ntpServer.getValue());
@@ -150,8 +192,7 @@ void wifi_loop()
         strcpy(settings.fakePwrOn, custom_fakePwrOn.getValue()); 
         #endif        
         strcpy(settings.alarmRTC, custom_alarmRTC.getValue());
-        strcpy(settings.playIntro, custom_playIntro.getValue());
-        //strcpy(settings.beepSound, getParam("custom_beepSound")); 
+        strcpy(settings.playIntro, custom_playIntro.getValue()); 
 
         write_settings();        
 
@@ -160,22 +201,108 @@ void wifi_loop()
         // Reset esp32 to load new settings
 
         #ifdef TC_DBG
-        Serial.println("WiFi: Restarting ESP....");
+        Serial.println(F("WiFi: Restarting ESP...."));
         #endif
         
         esp_restart();
     }
 }
 
+// This is called when the WiFi config changes, so it has
+// nothing to do with our settings here. Despite that,
+// we write out our config file so that if the user initially
+// configures WiFi, a default settings file exists upon reboot.
 void saveConfigCallback() 
 {
-    shouldSaveConfig = true;
+    shouldSaveConfig = true;    
 }
 
 void saveParamsCallback() 
 {
     shouldSaveConfig = true;
 }
+
+// Grab static IP parameters from WiFiManager's server.
+// Since there is no public method for this, we steal
+// the html form parameters in this callback.
+void preSaveConfigCallback()
+{
+    char ipBuf[20] = "";
+    char gwBuf[20] = "";
+    char snBuf[20] = "";
+    char dnsBuf[20] = "";
+    bool invalConf = false;
+
+    #ifdef TC_DBG
+    Serial.println("preSaveConfigCallback");
+    #endif
+    
+    if(wm.server->arg(FPSTR(S_ip)) != "") {
+        strncpy(ipBuf, wm.server->arg(FPSTR(S_ip)).c_str(), 19);
+    } else invalConf |= true;
+    if(wm.server->arg(FPSTR(S_gw)) != "") {
+        strncpy(gwBuf, wm.server->arg(FPSTR(S_gw)).c_str(), 19);
+    } else invalConf |= true;
+    if(wm.server->arg(FPSTR(S_sn)) != "") {
+        strncpy(snBuf, wm.server->arg(FPSTR(S_sn)).c_str(), 19);
+    } else invalConf |= true;
+    if(wm.server->arg(FPSTR(S_dns)) != "") {
+        strncpy(dnsBuf, wm.server->arg(FPSTR(S_dns)).c_str(), 19);
+    } else invalConf |= true;
+
+    #ifdef TC_DBG
+    Serial.println(ipBuf);   
+    Serial.println(gwBuf);
+    Serial.println(snBuf);
+    Serial.println(dnsBuf);
+    #endif
+
+    if(!invalConf && isIp(ipBuf) && isIp(gwBuf) && isIp(snBuf) && isIp(dnsBuf)) {
+
+        #ifdef TC_DBG
+        Serial.println("All IPs valid");
+        #endif
+        
+        strcpy(ipsettings.ip, ipBuf);
+        strcpy(ipsettings.gateway, gwBuf);
+        strcpy(ipsettings.netmask, snBuf);
+        strcpy(ipsettings.dns, dnsBuf);
+        
+        shouldSaveIPConfig = true;
+    
+    } else {
+
+        #ifdef TC_DBG
+        Serial.println("Invalid IP"); 
+        #endif
+
+        shouldDeleteIPConfig = true;     
+    
+    }
+}
+
+void setupStaticIP()
+{
+    IPAddress ip;
+    IPAddress gw;
+    IPAddress sn;
+    IPAddress dns;
+
+    if(strlen(ipsettings.ip) > 0 &&
+        isIp(ipsettings.ip) &&
+        isIp(ipsettings.gateway) &&
+        isIp(ipsettings.netmask) &&
+        isIp(ipsettings.dns)) {
+  
+        ip = stringToIp(ipsettings.ip);
+        gw = stringToIp(ipsettings.gateway);
+        sn = stringToIp(ipsettings.netmask);
+        dns = stringToIp(ipsettings.dns);
+
+        wm.setSTAStaticIPConfig(ip, gw, sn, dns);
+           
+    }
+}       
 
 void updateConfigPortalValues()
 {
@@ -195,7 +322,6 @@ void updateConfigPortalValues()
     #endif    
     custom_alarmRTC.setValue(settings.alarmRTC, 2);
     custom_playIntro.setValue(settings.playIntro, 2);
-    //custom_beepSound.setValue(settings.beepSound, 3);
 }
 
 int wifi_getStatus()
@@ -210,19 +336,6 @@ int wifi_getStatus()
     }
 
     return 0x10002;           // UNKNOWN
-    
-    /*
-    WiFiMode_t mymode = WiFi.getMode();
-  
-    switch(mymode) {
-      case WIFI_STA:
-          return 1;
-      case WIFI_AP:
-          return 2;
-    }
-     
-    return 0; 
-    */ 
 }
 
 bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d)
@@ -249,14 +362,70 @@ bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d)
     return true;
 }
 
+// Check if String is a valid IP address
+bool isIp(char *str) 
+{
+    int segs = 0;
+    int digcnt = 0; 
+    int num = 0;
+      
+    while(*str != '\0') {
+        
+        if(*str == '.') {
+            
+            if(!digcnt || (++segs == 4))
+                return false;
+                
+            num = digcnt = 0;
+            str++;
+            continue;
+            
+        } else if((*str < '0') || (*str > '9')) {
+          
+            return false;
+            
+        }
+
+        if((num = (num * 10) + (*str - '0')) > 255)
+            return false;
+
+        digcnt++;
+        str++;
+    }
+
+    return true;
+}
+
+// IPAddress to string
+void ipToString(char *str, IPAddress ip) 
+{
+    sprintf(str, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+}
+
+// String to IPAddress
+IPAddress stringToIp(char *str)
+{
+    int ip1, ip2, ip3, ip4;
+    
+    sscanf(str, "%d.%d.%d.%d", &ip1, &ip2, &ip3, &ip4);
+    
+    return IPAddress(ip1, ip2, ip3, ip4);
+}
+
 /*
  * read parameter from server, for customhmtl input
- * /
-String getParam(String name){  
+ */
+/* 
+String getParam(String name)
+{  
   String value;
+
   if(wm.server->hasArg(name)) {
-    value = wm.server->arg(name);
+      value = wm.server->arg(name);
   }
+  
+  value = wm.server->arg(FPSTR(S_gw));
+  
   return value;
 }
 */

@@ -42,11 +42,18 @@ extern void wifi_loop();
 
 void saveParamsCallback();
 void saveConfigCallback();
+void preSaveConfigCallback();
+
+void setupStaticIP();
 
 extern void updateConfigPortalValues();
 
 extern int wifi_getStatus();
 extern bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d);
+
+bool isIp(char *str);
+void ipToString(char *str, IPAddress ip);
+IPAddress stringToIp(char *str);
 
 //extern String getParam(String name);
 

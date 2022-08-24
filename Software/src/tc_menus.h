@@ -89,8 +89,8 @@ extern bool isSetUpdate;
 extern bool isYearUpdate;
 extern uint8_t timeout;
 
-extern void mydelay(int mydel);
-extern void mysdelay(int mydel);
+extern void mydelay(unsigned long mydel);
+extern void mysdelay(unsigned long mydel);
 extern void enterkeytick();
 extern void myloop();
 

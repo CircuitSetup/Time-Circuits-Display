@@ -33,6 +33,7 @@
  * The menu is involked by holding the ENTER button.
  * First step is to choose a menu item. The available "items" are
  *    - enter custom dates/times for the three displays
+ *    - set the audio volume ("VOL-UME")
  *    - set the alarm ("ALA-RM")
  *    - select the Time-Rotation Interval ("ROT-INT")
  *    - select the brightness for the three displays ("BRI-GHT")
@@ -64,8 +65,15 @@
  *        (network time) available, this is the way to set the clock to actual present time. If the 
  *        clock is connected to the the network, your entered time will eventually be overwritten
  *        by the time received over the network.
+ *  How to set the audio volume:
+ *      - First option is "HW" or "SW". "HW" means that the device polls the volume pot, which is
+ *        the default. "SW" means the volume is set by manually selecting a numerical level.
+ *      - Hold ENTER to save your "HW" or "SW" setting.
+ *      - If "SW" was chosen, now press ENTER until the desired level is reached. There are 16
+ *        levels available.
+ *      - Hold ENTER to save your setting.
  *  How to set the alarm:
- *      - First option is "on" of "off". Press ENTER to toggle, hold ENTER to proceed.
+ *      - First option is "on" or "off". Press ENTER to toggle, hold ENTER to proceed.
  *      - Next, enter the hour in 24-hour-format. This works in the same way as described above.
  *      - Next, enter the minute.
  *      - "SAVE" is shown briefly, the alarm is saved.
@@ -88,6 +96,7 @@
  *  How to display the current IP address ("NETWRK")
  *      - the bottom two displays show the current IP address of the device. If this is 192.168.4.1,
  *        the device very likely could not connect to your WiFi network and runs in AP mode ("TCD-AP")
+ *      - Press ENTER to view the WiFi status
  *      - Hold ENTER to quit the menu
  *  How to quit the menu ("END")
  *      - Hold ENTER to quit the menu
@@ -104,7 +113,7 @@ const uint8_t autoTimeIntervals[6] = {0, 5, 15, 30, 45, 60};  // first must be 0
 bool isSetUpdate = false;
 bool isYearUpdate = false;
 
-clockDisplay* displaySet;  // the current display
+clockDisplay* displaySet;
 
 bool    alarmOnOff = false;
 uint8_t alarmHour = 255;
@@ -132,7 +141,7 @@ void enter_menu()
     bool depNM = departedTime.getNightMode();
     
     #ifdef TC_DBG
-    Serial.println("Menu: enter_menu() invoked");
+    Serial.println(F("Menu: enter_menu() invoked"));
     #endif
     
     isEnterKeyHeld = false;     
@@ -174,7 +183,7 @@ void enter_menu()
         goto quitMenu;
 
     #ifdef TC_DBG
-    Serial.println("Menu: Display/mode selected");    
+    Serial.println(F("Menu: Menu item selected"));    
     #endif
 
     if(menuItemNum <= MODE_DEPT) {  
@@ -268,7 +277,7 @@ void enter_menu()
         if(!checkTimeOut()) {  
 
             #ifdef TC_DBG
-            Serial.println("Menu: Fields all set");
+            Serial.println(F("Menu: Fields all set"));
             #endif
     
             if(displaySet->isRTC()) {  // this is the RTC display, set the RTC 
@@ -414,7 +423,7 @@ quitMenu:
     mydelay(1000);
 
     #ifdef TC_DBG
-    Serial.println("Menu: Update Present Time");
+    Serial.println(F("Menu: Update Present Time"));
     #endif
 
     // Set the current time in the display, 2+ seconds gone
@@ -433,7 +442,7 @@ quitMenu:
     departedTime.setNightMode(depNM);
 
     #ifdef TC_DBG
-    Serial.println("Menu: Exiting....");
+    Serial.println(F("Menu: Exiting...."));
     #endif
 }
 
@@ -695,7 +704,7 @@ void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0)
     }    
 
     #ifdef TC_DBG        
-    Serial.println("setField: Awaiting digits or ENTER...");
+    Serial.println(F("setField: Awaiting digits or ENTER..."));
     #endif
 
     // Force keypad to send keys to our buffer
@@ -746,10 +755,14 @@ void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0)
     setUpdate(setNum, field);  
 
     #ifdef TC_DBG 
-    Serial.print("Setfield: number: ");
+    Serial.print(F("Setfield: number: "));
     Serial.println(number);
     #endif
 }  
+
+/* 
+ *  Volume 
+ */
 
 void saveCurVolume()
 {      
@@ -767,7 +780,7 @@ bool loadCurVolume()
         
     if(loadBuf[0] != loadBuf[1]) {
           
-        Serial.println("loadVolume: Invalid volume data in EEPROM");
+        Serial.println(F("loadVolume: Invalid volume data in EEPROM"));
 
         curVolume = 255;
     
@@ -822,7 +835,7 @@ void doSetVolume()
     uint8_t oldVol = curVolume;
 
     #ifdef TC_DBG
-    Serial.println("doSetVolume() involked");
+    Serial.println(F("doSetVolume() involked"));
     #endif
 
     showCurVolHWSW();
@@ -946,6 +959,10 @@ void doSetVolume()
     }
 }       
 
+/* 
+ *  Alarm 
+ */
+
 void alarmOff()
 {
     alarmOnOff = false;
@@ -974,7 +991,7 @@ void doSetAlarm()
     uint16_t newAlarmMinute = (alarmMinute <= 59) ? alarmMinute : 0;
     
     #ifdef TC_DBG
-    Serial.println("doSetAlarm() involked");
+    Serial.println(F("doSetAlarm() involked"));
     #endif
 
     // On/Off
@@ -1059,6 +1076,11 @@ void doSetAlarm()
         mydelay(1000);
     }
 }
+
+/* 
+ *  Time-rotation Interval (aka "autoInterval") 
+ */
+
 /* 
  *  Load the autoInterval from Settings in memory (config file is not reloaded)
  *  
@@ -1068,13 +1090,13 @@ void doSetAlarm()
 bool loadAutoInterval() 
 {
     #ifdef TC_DBG
-    Serial.println("Load Auto Interval");
+    Serial.println(F("Load Auto Interval"));
     #endif
     
     autoInterval = (uint8_t)atoi(settings.autoRotateTimes);
     if(autoInterval > 5) {
         autoInterval = 1;  
-        Serial.println("loadAutoInterval: Bad autoInterval, resetting to 1");
+        Serial.println(F("loadAutoInterval: Bad autoInterval, resetting to 1"));
         return false;
     }
     return true;
@@ -1100,7 +1122,7 @@ void doSetAutoInterval()
     bool autoDone = false;
 
     #ifdef TC_DBG
-    Serial.println("doSetAutoInterval() involked");
+    Serial.println(F("doSetAutoInterval() involked"));
     #endif
 
     #ifdef IS_ACAR_DISPLAY
@@ -1200,7 +1222,7 @@ void doSetBrightness(clockDisplay* displaySet) {
     bool briDone = false;
 
     #ifdef TC_DBG
-    Serial.println("Set Brightness");
+    Serial.println(F("Set Brightness"));
     #endif
 
     // turn on all the segments
@@ -1291,7 +1313,7 @@ void doShowNetInfo()
     bool netDone = false;
     
     #ifdef TC_DBG
-    Serial.println("doShowNetInfo() involked");
+    Serial.println(F("doShowNetInfo() involked"));
     #endif
     
     wifi_getIP(a, b, c, d);
@@ -1408,6 +1430,8 @@ void doShowNetInfo()
     }
 }
 
+/* *** Helpers **** */
+
 // Show all, month after a short delay
 void animate() 
 {    
@@ -1467,7 +1491,7 @@ void waitAudioDone()
  * MyDelay: For delays > 150ms
  * Calls myloop() periodically
  */
-void mydelay(int mydel) 
+void mydelay(unsigned long mydel) 
 {  
     unsigned long startNow = millis();
     while(millis() - startNow < mydel) {
@@ -1476,7 +1500,7 @@ void mydelay(int mydel)
     }     
 }
 
-void mysdelay(int mydel) 
+void mysdelay(unsigned long mydel) 
 {  
     unsigned long startNow = millis();
     while(millis() - startNow < mydel) {

@@ -172,7 +172,7 @@ class clockDisplay {
         uint8_t  getLED7NumChar(uint8_t value);
         uint8_t  getLED7AlphaChar(uint8_t value);
         #ifndef IS_ACAR_DISPLAY
-        uint16_t getLEDAlphaChar(char value);
+        uint16_t getLEDAlphaChar(uint8_t value);
         #endif
     
         uint16_t makeNum(uint8_t num);

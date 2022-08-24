@@ -30,6 +30,11 @@
  * 
  * Read configuration from JSON config file
  * If config file not found, create one with default settings
+ * 
+ * Read IP settings if a static IP is configured. If the device
+ * is powered on or reset while ENTER is held down, the IP
+ * settings file will be deleted and the device will use DHCP.
+ * 
  */
 
 /* If SPIFFS is mounted */
@@ -45,9 +50,13 @@ bool haveSD = false;
 void settings_setup() 
 {
     bool writedefault = false;
+
+    // Pre-maturely use ENTER button (initialized again in keypad_setup())
+    pinMode(ENTER_BUTTON_PIN, INPUT_PULLUP);
+    delay(20);
   
     #ifdef TC_DBG
-    Serial.println("settings_setup: Mounting SD...");
+    Serial.println(F("settings_setup: Mounting SD..."));
     #endif
 
     EEPROM.begin(512);
@@ -60,24 +69,24 @@ void settings_setup()
     if (!SD.begin(SD_CS_PIN)) {
 
         #ifdef TC_DBG
-        Serial.println("No SD card found");
+        Serial.println(F("No SD card found"));
         #endif
     
     } else {
       
         #ifdef TC_DBG
-        Serial.println("SD card initialized");
+        Serial.println(F("SD card initialized"));
         #endif
 
         uint8_t cardType = SD.cardType();
         if(cardType == CARD_NONE) {
           
-            Serial.println("No SD card inserted");
+            Serial.println(F("No SD card inserted"));
         
         } else {
           
             #ifdef TC_DBG
-            Serial.print("SD card type ");
+            Serial.print(F("SD card type "));
             Serial.println(cardType, DEC);
             #endif
             
@@ -87,16 +96,29 @@ void settings_setup()
     }
 
     #ifdef TC_DBG
-    Serial.println("settings_setup: Mounting SPIFFS...");
+    Serial.println(F("settings_setup: Mounting SPIFFS..."));
     #endif
 
     if(SPIFFS.begin()) {
   
         #ifdef TC_DBG
-        Serial.println("settings_setup: Mounted SPIFFS");
+        Serial.println(F("settings_setup: Mounted SPIFFS"));
         #endif
         
         haveFS = true;
+
+        if(digitalRead(ENTER_BUTTON_PIN)) {
+          
+            Serial.println(F("settings_setup: ENTER pressed - deleting ipconfig file"));
+          
+            deleteIpSettings();
+
+            // Pre-maturely use white led (initialized again in keypad_setup())
+            pinMode(WHITE_LED_PIN, OUTPUT);
+            digitalWrite(WHITE_LED_PIN, HIGH);
+            while(digitalRead(ENTER_BUTTON_PIN)) { }
+            digitalWrite(WHITE_LED_PIN, LOW);                         
+        }
         
         if(SPIFFS.exists("/config.json")) {
              
@@ -105,7 +127,7 @@ void settings_setup()
             if(configFile) {
       
                 #ifdef TC_DBG
-                Serial.println("settings_setup: Opened config file");
+                Serial.println(F("settings_setup: Opened config file"));
                 #endif
         
                 StaticJsonDocument<1024> json;
@@ -113,13 +135,13 @@ void settings_setup()
         
                 #ifdef TC_DBG
                 serializeJson(json, Serial);
-                Serial.println(" ");
+                Serial.println(F(" "));
                 #endif
                 
                 if(!error) {
         
                     #ifdef TC_DBG
-                    Serial.println("settings_setup: Parsed json");
+                    Serial.println(F("settings_setup: Parsed json"));
                     #endif
                     
                     if(json["ntpServer"]) {
@@ -130,63 +152,65 @@ void settings_setup()
                     } else writedefault = true;
                     if(json["autoRotateTimes"]) {
                         strcpy(settings.autoRotateTimes, json["autoRotateTimes"]);
-                        writedefault |= checkValidNumParm(settings.autoRotateTimes, 0, 5, 0);
+                        writedefault |= checkValidNumParm(settings.autoRotateTimes, 0, 5, DEF_AUTOROTTIMES);
                     } else writedefault = true;
                     if(json["destTimeBright"]) {
                         strcpy(settings.destTimeBright, json["destTimeBright"]);
-                        writedefault |= checkValidNumParm(settings.destTimeBright, 0, 15, 15);
+                        writedefault |= checkValidNumParm(settings.destTimeBright, 0, 15, DEF_BRIGHT_DEST);
                     } else writedefault = true;
                     if(json["presTimeBright"]) {
                         strcpy(settings.presTimeBright, json["presTimeBright"]);
-                        writedefault |= checkValidNumParm(settings.presTimeBright, 0, 15, 15);
+                        writedefault |= checkValidNumParm(settings.presTimeBright, 0, 15, DEF_BRIGHT_PRES);
                     } else writedefault = true;
                     if(json["lastTimeBright"]) {
                         strcpy(settings.lastTimeBright, json["lastTimeBright"]);
-                        writedefault |= checkValidNumParm(settings.lastTimeBright, 0, 15, 15);
+                        writedefault |= checkValidNumParm(settings.lastTimeBright, 0, 15, DEF_BRIGHT_DEPA);
                     } else writedefault = true;                    
                     if(json["wifiConRetries"]) {
                         strcpy(settings.wifiConRetries, json["wifiConRetries"]);
-                        writedefault |= checkValidNumParm(settings.wifiConRetries, 1, 15, 3);
+                        writedefault |= checkValidNumParm(settings.wifiConRetries, 1, 15, DEF_WIFI_RETRY);
                     } else writedefault = true;
                     if(json["wifiConTimeout"]) {
                         strcpy(settings.wifiConTimeout, json["wifiConTimeout"]);
-                        writedefault |= checkValidNumParm(settings.wifiConTimeout, 1, 15, 7);
+                        writedefault |= checkValidNumParm(settings.wifiConTimeout, 1, 15, DEF_WIFI_TIMEOUT);
                     } else writedefault = true;
                     if(json["mode24"]) {
                         strcpy(settings.mode24, json["mode24"]);
-                        writedefault |= checkValidNumParm(settings.mode24, 0, 1, 0);
+                        writedefault |= checkValidNumParm(settings.mode24, 0, 1, DEF_MODE24);
                     } else writedefault = true;
                     if(json["timeTrPers"]) {
                         strcpy(settings.timesPers, json["timeTrPers"]);
-                        writedefault |= checkValidNumParm(settings.timesPers, 0, 1, 1);
+                        writedefault |= checkValidNumParm(settings.timesPers, 0, 1, DEF_TIMES_PERS);
                     } else writedefault = true;
                     #ifdef FAKE_POWER_ON
                     if(json["fakePwrOn"]) {
                         strcpy(settings.fakePwrOn, json["fakePwrOn"]);
-                        writedefault |= checkValidNumParm(settings.fakePwrOn, 0, 1, 0);
+                        writedefault |= checkValidNumParm(settings.fakePwrOn, 0, 1, DEF_FAKE_PWR);
                     } else writedefault = true;
                     #endif
                     if(json["alarmRTC"]) {
                         strcpy(settings.alarmRTC, json["alarmRTC"]);
-                        writedefault |= checkValidNumParm(settings.alarmRTC, 0, 1, 1);
+                        writedefault |= checkValidNumParm(settings.alarmRTC, 0, 1, DEF_ALARM_RTC);
                     } else writedefault = true;
                     if(json["playIntro"]) {
                         strcpy(settings.playIntro, json["playIntro"]);
-                        writedefault |= checkValidNumParm(settings.playIntro, 0, 1, 1);
+                        writedefault |= checkValidNumParm(settings.playIntro, 0, 1, DEF_PLAY_INTRO);
                     } else writedefault = true;
-                    //if(json["beepSound"]) {
-                    //  strcpy(settings.beepSound, json["beepSound"]);
-                    //} else writedefault = true;
                   
                 } else {
                   
-                    Serial.println("settings_setup: Failed to parse settings file");
+                    Serial.println(F("settings_setup: Failed to parse settings file"));
           
                     writedefault = true;
                   
                 }
               
-              configFile.close();
+                configFile.close();
+              
+            } else {
+
+                writedefault = true;
+                
             }
           
         } else {
@@ -199,7 +223,7 @@ void settings_setup()
           
             // config file does not exist or is incomplete - create one 
             
-            Serial.println("settings_setup: Settings missing or incomplete; writing new file");
+            Serial.println(F("settings_setup: Settings missing or incomplete; writing new file"));
             
             write_settings();
           
@@ -207,7 +231,7 @@ void settings_setup()
       
     } else {
       
-        Serial.println("settings_setup: Failed to mount SPIFFS");
+        Serial.println(F("settings_setup: Failed to mount SPIFFS"));
     
     }
 }
@@ -217,12 +241,12 @@ void write_settings()
     StaticJsonDocument<1024> json;
   
     if(!haveFS) {
-        Serial.println("write_settings: Cannot write settings, SPIFFS not mounted");
+        Serial.println(F("write_settings: Cannot write settings, SPIFFS not mounted"));
         return;
     } 
   
     #ifdef TC_DBG
-    Serial.println("write_settings: Writing config file");
+    Serial.println(F("write_settings: Writing config file"));
     #endif
     
     json["ntpServer"] = settings.ntpServer;
@@ -240,23 +264,23 @@ void write_settings()
     #endif
     json["alarmRTC"] = settings.alarmRTC;
     json["playIntro"] = settings.playIntro;
-    //json["beepSound"] = settings.beepSound;
   
     File configFile = SPIFFS.open("/config.json", FILE_WRITE);
   
     #ifdef TC_DBG
     serializeJson(json, Serial);
-    Serial.println(" ");
+    Serial.println(F(" "));
     #endif
     
     if(configFile) {
         serializeJson(json, configFile);
         configFile.close(); 
     } else {
-        Serial.println("write_settings: Failed to open file for writing");
+        Serial.println(F("write_settings: Failed to open file for writing"));
     }
 }
 
+// Helper for checking validity of numerical user-entered parameters
 bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault)
 {
     int i, len = strlen(text);
@@ -289,7 +313,6 @@ bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault)
     
 /* 
  *  Load the Alarm time and settings from alarmconfig
- *  
  */
 
 bool loadAlarm()
@@ -298,7 +321,7 @@ bool loadAlarm()
     
     if(!haveFS) {
       
-        Serial.println("loadAlarm(): SPIFFS not mounted, using EEPROM");
+        Serial.println(F("loadAlarm(): SPIFFS not mounted, using EEPROM"));
         
         return loadAlarmEEPROM();
         
@@ -311,7 +334,7 @@ bool loadAlarm()
         if(configFile) {
 
             #ifdef TC_DBG
-            Serial.println("loadAlarm: Opened alarmconfig file");
+            Serial.println(F("loadAlarm: Opened alarmconfig file"));
             #endif
 
             StaticJsonDocument<1024> json;
@@ -319,13 +342,13 @@ bool loadAlarm()
 
             #ifdef TC_DBG
             serializeJson(json, Serial);
-            Serial.println(" ");
+            Serial.println(F(" "));
             #endif
             
             if(!error) {
 
                 #ifdef TC_DBG
-                Serial.println("loadAlarm: Parsed json");
+                Serial.println(F("loadAlarm: Parsed json"));
                 #endif
                 
                 if(json["alarmonoff"]) {
@@ -346,13 +369,18 @@ bool loadAlarm()
               
             } else {
               
-                Serial.println("loadAlarm: Failed to parse alarm settings file");
+                Serial.println(F("loadAlarm: Failed to parse alarm settings file"));
 
                 writedefault = true;
               
             }
             
             configFile.close();
+            
+        } else {
+          
+            writedefault = true;
+            
         }
       
     } else {
@@ -365,7 +393,7 @@ bool loadAlarm()
         
         // alarmconfig file does not exist or is incomplete - create one 
         
-        Serial.println("loadAlarm: Alarm settings missing or incomplete; writing new file");
+        Serial.println(F("loadAlarm: Alarm settings missing or incomplete; writing new file"));
         
         saveAlarm();
       
@@ -377,7 +405,7 @@ bool loadAlarm()
 bool loadAlarmEEPROM() 
 {
     #ifdef TC_DBG
-    Serial.println("Load Alarm EEPROM");
+    Serial.println(F("Load Alarm EEPROM"));
     #endif
 
     uint8_t loadBuf[4];    // on/off, hour, minute, checksum
@@ -391,7 +419,7 @@ bool loadAlarmEEPROM()
 
     if((sum & 0xff) != loadBuf[3]) {
           
-        Serial.println("loadAlarm: Invalid alarm data in EEPROM");
+        Serial.println(F("loadAlarm: Invalid alarm data in EEPROM"));
 
         alarmOnOff = false;
         alarmHour = alarmMinute = 255;    // means "unset"
@@ -414,11 +442,11 @@ void saveAlarm()
     StaticJsonDocument<1024> json;
     
     #ifdef TC_DBG
-    Serial.println("Save Alarm");
+    Serial.println(F("Save Alarm"));
     #endif
 
     if(!haveFS) {
-        Serial.println("saveAlarm(): SPIFFS not mounted, using EEPROM");
+        Serial.println(F("saveAlarm(): SPIFFS not mounted, using EEPROM"));
         
         saveAlarmEEPROM();
         
@@ -437,14 +465,14 @@ void saveAlarm()
   
     #ifdef TC_DBG
     serializeJson(json, Serial);
-    Serial.println(" ");
+    Serial.println(F(" "));
     #endif
 
     if(configFile) {        
         serializeJson(json, configFile);        
         configFile.close();         
     } else {
-        Serial.println("saveAlarm: Failed to open alarm settings file for writing");
+        Serial.println(F("saveAlarm: Failed to open alarm settings file for writing"));
     }
 }    
 
@@ -465,4 +493,134 @@ void saveAlarmEEPROM()
     EEPROM.write(ALARM_PREF + 3, (sum & 0xff));   
     
     EEPROM.commit();
+}
+
+/*
+ * Load/save/delete settings for static IP configuration
+ */
+
+bool loadIpSettings()
+{
+    bool invalid = false;
+    bool haveConfig = false;
+    
+    if(!haveFS) {
+        return false;
+    }
+    
+    if(SPIFFS.exists("/ipconfig.json")) {
+             
+        File configFile = SPIFFS.open("/ipconfig.json", "r");
+            
+        if(configFile) {
+  
+            #ifdef TC_DBG
+            Serial.println(F("loadIpSettings: Opened ip config file"));
+            #endif
+    
+            StaticJsonDocument<1024> json;
+            DeserializationError error = deserializeJson(json, configFile);
+    
+            #ifdef TC_DBG
+            serializeJson(json, Serial);
+            Serial.println(F(" "));
+            #endif
+            
+            if(!error) {
+    
+                #ifdef TC_DBG
+                Serial.println(F("loadIpSettings: Parsed json"));
+                #endif
+                
+                if(json["IpAddress"]) {
+                    strcpy(ipsettings.ip, json["IpAddress"]);
+                } else invalid = true;   
+                if(json["Gateway"]) {
+                    strcpy(ipsettings.gateway, json["Gateway"]);
+                } else invalid = true;   
+                if(json["Netmask"]) {
+                    strcpy(ipsettings.netmask, json["Netmask"]);
+                } else invalid = true; 
+                if(json["DNS"]) {
+                    strcpy(ipsettings.dns, json["DNS"]);
+                } else invalid = true; 
+
+                if(!invalid) haveConfig = true;
+
+            } else {
+              
+                Serial.println(F("loadIpSettings: Failed to parse file"));
+
+                invalid = true;
+              
+            }
+            
+            configFile.close();
+
+        } 
+
+    }
+    
+    if(invalid) {
+      
+        // config file is invalid - delete it
+        
+        Serial.println(F("loadIpSettings: IP settings invalid; deleting file"));
+        
+        deleteIpSettings();
+
+        ipsettings.ip[0] = '\0';
+        ipsettings.gateway[0] = '\0';
+        ipsettings.netmask[0] = '\0';
+        ipsettings.dns[0] = '\0';
+     
+    }
+
+    return haveConfig;
+}
+
+void writeIpSettings()
+{
+    StaticJsonDocument<1024> json;
+  
+    if(!haveFS) {
+        Serial.println(F("writeIpSettings: Cannot write ip settings, SPIFFS not mounted"));
+        return;
+    } 
+  
+    #ifdef TC_DBG
+    Serial.println(F("writeIpSettings: Writing ipconfig file"));
+    #endif
+    
+    json["IpAddress"] = ipsettings.ip;
+    json["Gateway"] = ipsettings.gateway;
+    json["Netmask"] = ipsettings.netmask;
+    json["DNS"] = ipsettings.dns;
+
+    File configFile = SPIFFS.open("/ipconfig.json", FILE_WRITE);
+  
+    #ifdef TC_DBG
+    serializeJson(json, Serial);
+    Serial.println(F(" "));
+    #endif
+    
+    if(configFile) {
+        serializeJson(json, configFile);
+        configFile.close(); 
+    } else {
+        Serial.println(F("writeIpSettings: Failed to open file for writing"));
+    }
+}
+
+void deleteIpSettings()
+{
+    if(!haveFS) {
+        return;
+    }
+
+    #ifdef TC_DBG
+    Serial.println(F("deleteIpSettings: Deleting ipconfig.json"));
+    #endif
+
+    SPIFFS.remove("/ipconfig.json");
 }

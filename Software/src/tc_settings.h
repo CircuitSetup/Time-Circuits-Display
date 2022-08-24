@@ -43,6 +43,9 @@ extern bool loadAlarm();
 extern void saveAlarm();
 bool loadAlarmEEPROM();
 void saveAlarmEEPROM();
+extern bool loadIpSettings();
+extern void writeIpSettings();
+extern void deleteIpSettings();
 
 extern bool    alarmOnOff;
 extern uint8_t alarmHour;
@@ -52,31 +55,52 @@ extern bool    timetravelPersistent;
 
 extern bool    haveSD;
 
-// Default settings - change settings in the web interface 192.168.4.1
+#define MS(s) XMS(s)
+#define XMS(s) #s
 
+// Default settings - change settings in the web interface 192.168.4.1
 // For list of time zones, see https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 
-// If numerical defaults are changed, those also need to be changed in settings.cpp
+#define DEF_NTP_SERVER      "pool.ntp.org"
+#define DEF_TIMEZONE        "CST6CDT,M3.2.0,M11.1.0"    // Posix format
+#define DEF_AUTOROTTIMES    0     // 0-5;  Default: Auto-rotate off, use device like in movie
+#define DEF_BRIGHT_DEST     15    // 1-15; Default: max brightness
+#define DEF_BRIGHT_PRES     15
+#define DEF_BRIGHT_DEPA     15
+#define DEF_WIFI_RETRY      3     // 1-15; Default: 3 retries
+#define DEF_WIFI_TIMEOUT    7     // 1-15; Default: 7 seconds time-out
+#define DEF_MODE24          0     // 0-1;  Default: 0=12-hour-mode, 1=24-hour-mode
+#define DEF_TIMES_PERS      1     // 0-1;  Default: 1 = TimeTravel persistent
+#define DEF_FAKE_PWR        0     // 0-1;  Default: 0 = Do not use external fake "power" switch
+#define DEF_ALARM_RTC       1     // 0-1;  Default: 1 = Alarm is RTC-based (otherwise 0 = presentTime-based)
+#define DEF_PLAY_INTRO      1     // 0-1;  Default: 1 = Play intro
 
 struct Settings {
-    char ntpServer[64]      = "pool.ntp.org";
-    char timeZone[64]       = "CST6CDT,M3.2.0,M11.1.0";     
-    char autoRotateTimes[4] = "0";    // Default: Off, use time circuits like in movie
-    char destTimeBright[4]  = "15";
-    char presTimeBright[4]  = "15";
-    char lastTimeBright[4]  = "15";    
-    char wifiConRetries[4]  = "3";    // Default: 3 retries
-    char wifiConTimeout[4]  = "7";    // Default: 7 seconds time-out
-    char mode24[4]          = "0";    // Default: 0 = 12-hour-mode    
-    char timesPers[4]       = "1";    // Default: TimeTravel persistent 
+    char ntpServer[64]      = DEF_NTP_SERVER;
+    char timeZone[64]       = DEF_TIMEZONE;     
+    char autoRotateTimes[4] = MS(DEF_AUTOROTTIMES);
+    char destTimeBright[4]  = MS(DEF_BRIGHT_DEST);
+    char presTimeBright[4]  = MS(DEF_BRIGHT_PRES);
+    char lastTimeBright[4]  = MS(DEF_BRIGHT_DEPA);
+    char wifiConRetries[4]  = MS(DEF_WIFI_RETRY);
+    char wifiConTimeout[4]  = MS(DEF_WIFI_TIMEOUT);
+    char mode24[4]          = MS(DEF_MODE24);
+    char timesPers[4]       = MS(DEF_TIMES_PERS);
 #ifdef FAKE_POWER_ON 
-    char fakePwrOn[4]       = "0";       
+    char fakePwrOn[4]       = MS(DEF_FAKE_PWR);
 #endif
-    char alarmRTC[4]        = "1";    // Default: Alarm is RTC-based (otherwise presentTime-based = 0)
-    char playIntro[4]       = "1";
-    //char beepSound[3]     = "0";
+    char alarmRTC[4]        = MS(DEF_ALARM_RTC);
+    char playIntro[4]       = MS(DEF_PLAY_INTRO);
+};
+
+struct IPSettings {
+    char ip[20]       = "";
+    char gateway[20]  = "";     
+    char netmask[20]  = "";
+    char dns[20]      = "";
 };
 
 extern struct Settings settings;
+extern struct IPSettings ipsettings;
 
 #endif
