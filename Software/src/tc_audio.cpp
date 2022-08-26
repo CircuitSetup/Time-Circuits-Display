@@ -119,7 +119,7 @@ void play_keypad_sound(char key)
     
     if(key) {
         buf[6] = key;
-        play_file(buf, 0.6, true, 0);
+        play_file(buf, 0.6, true, 0, false);
     }
 }
 
@@ -157,7 +157,7 @@ void audio_loop()
     */
 }
 
-void play_file(const char *audio_file, double volumeFactor, bool checkNightMode, int channel) 
+void play_file(const char *audio_file, double volumeFactor, bool checkNightMode, int channel, bool allowSD) 
 {
     if(audioMute) return;
     
@@ -195,7 +195,7 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
     #endif
     
     //if(channel == 0) { 
-        if(haveSD && mySD0->open(audio_file)) {
+        if(haveSD && allowSD && mySD0->open(audio_file)) {
             #ifdef TC_USE_MIXER           
             mp3->begin(mySD0, stub[0]);
             #else
@@ -211,7 +211,7 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
             mp3->begin(myFS0, out);
             #endif
             #ifdef TC_DBG
-            Serial.println(F("Playing from SPIFFS"));
+            Serial.println(F("Playing from flash FS"));
             #endif
         } else {
             Serial.println(F("Audio file not found"));

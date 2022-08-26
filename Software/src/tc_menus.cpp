@@ -37,7 +37,8 @@
  *    - set the alarm ("ALA-RM")
  *    - select the Time-Rotation Interval ("ROT-INT")
  *    - select the brightness for the three displays ("BRI-GHT")
- *    - view network data, ie IP address ("NET-WRK")
+ *    - view network info: IP address, WiFi status ("NET-WRK")
+ *    - install the default audio files ("INSTALL AUDIO FILES")
  *    - quit the menu ("END")
  *  Pressing ENTER cycles through the list, holding ENTER selects an item, ie a mode.
  *  How to to enter custom dates/times or set the RTC (real time clock):

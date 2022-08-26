@@ -691,7 +691,9 @@ bool check_if_default_audio_present()
 
     // If identifier missing, quit now
     if(!(SD.exists("/TCD_def_snd.txt"))) {
-        Serial.println("SD ID missing");    
+        #ifdef TC_DBG
+        Serial.println("SD: ID file missing");
+        #endif
         return false;
     }
 
@@ -700,12 +702,12 @@ bool check_if_default_audio_present()
         if(!(SD.exists(dtmf_buf))) {
             #ifdef TC_DBG
             Serial.print("missing: ");
-            Serial.println(dtmf_buf);   
+            Serial.println(dtmf_buf);
             #endif
             return false;
         }
         if(!(file = SD.open(dtmf_buf)))
-            return false;             
+            return false;
         ts = file.size();
         file.close();
         #ifdef TC_DBG
@@ -716,16 +718,16 @@ bool check_if_default_audio_present()
         #endif
     }
 
-    for(i = 0; i < NUM_AUDIOFILES; i++) {     
+    for(i = 0; i < NUM_AUDIOFILES; i++) {
         if(!SD.exists(audioFiles[i])) {
             #ifdef TC_DBG
             Serial.print("missing: ");
-            Serial.println(audioFiles[i]);   
+            Serial.println(audioFiles[i]);
             #endif
             return false;
         }
         if(!(file = SD.open(audioFiles[i])))
-            return false;             
+            return false;
         ts = file.size();
         file.close();
         #ifdef TC_DBG

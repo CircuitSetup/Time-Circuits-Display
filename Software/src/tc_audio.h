@@ -50,7 +50,7 @@
 extern void audio_setup();
 extern void play_keypad_sound(char key);
 extern void audio_loop();
-extern void play_file(const char *audio_file, double volumeFactor = 1.0, bool checkNightMode = true, int channel = 0);
+extern void play_file(const char *audio_file, double volumeFactor = 1.0, bool checkNightMode = true, int channel = 0, bool allowSD = true);
 extern double getRawVolume();
 extern double getVolume(int channel);
 extern bool checkAudioDone();

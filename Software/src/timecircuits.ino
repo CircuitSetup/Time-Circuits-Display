@@ -46,6 +46,30 @@
 
 /* Changelog 
  *  
+ *  2022/08/26 (A10001986)
+ *    - Attempt to beautify the Config Portal by using checkboxes instead of
+ *      text input for boolean options
+ *  2022/08/25 (A10001986)
+ *    - Add default sound file installer. This installer is for initial installation  
+ *      or upgrade of the software. Put the contents of the data folder on a
+ *      FAT formatted SD card, put this card in the slot, reboot the clock,
+ *      and either go to the "INSTALL AUDIO FILES" menu item in the keypad menu,  
+ *      or to the "Setup" page on the Config Portal (see bottom). 
+ *      Note that this only installs the original default files. It is not meant 
+ *      for custom audio files substituting the default files. Custom audio files 
+ *      reside on the SD card and will be played back from there. 
+ *  2022/08/24 (A10001986)
+ *    - Intro beefed up with sound
+ *    - Do not interrupt time travel by key presses
+ *    - Clean up code for default settings
+ *    - Prepare for LittleFS; switch not done yet. I prefer SPIFFS as long as it's
+ *      around, and LittleFS doesn't support wear leveling.
+ *    - AutoTimes sync'd with movies
+ *  2022/08/23 (A10001986)
+ *    - Allow a static IP (plus gateway, subnet mask, dns) to be configured.
+ *      All four IP address must be valid. IP settings can be reset to DHCP
+ *      by holding down ENTER during power-up until the white LED goes on.
+ *    - F-ified most constant texts (pointless on ESP32, but standard)
  *  2022/08/22 (A10001986)
  *    - New long time travel sequence (only for keypad-timetravel, not for 
  *      externally triggered timetravel)
@@ -198,7 +222,8 @@ void setup()
     Wire.begin();
     // scan();
     Serial.println();
-
+    
+    time_boot();
     settings_setup();
     wifi_setup();
     audio_setup();

@@ -78,7 +78,7 @@ extern bool    haveSD;
 
 #define DEF_NTP_SERVER      "pool.ntp.org"
 #define DEF_TIMEZONE        "CST6CDT,M3.2.0,M11.1.0"    // Posix format
-#define DEF_AUTOROTTIMES    0     // 0-5;  Default: Auto-rotate off, use device like in movie
+#define DEF_AUTOROTTIMES    1     // 0-5;  Default: Auto-rotate every 5 min
 #define DEF_BRIGHT_DEST     15    // 1-15; Default: max brightness
 #define DEF_BRIGHT_PRES     15
 #define DEF_BRIGHT_DEPA     15

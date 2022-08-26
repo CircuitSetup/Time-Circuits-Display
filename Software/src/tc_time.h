@@ -79,11 +79,7 @@ extern clockDisplay departedTime;
 
 extern RTC_DS3231 rtc;
 
-#ifndef TWPRIVATE //  ----------------- OFFICIAL
 #define NUM_AUTOTIMES 11
-#else
-#define NUM_AUTOTIMES 8 // TWPRIVATE
-#endif
 extern dateStruct destinationTimes[NUM_AUTOTIMES];
 extern dateStruct departedTimes[NUM_AUTOTIMES];
 extern int8_t     autoTime;

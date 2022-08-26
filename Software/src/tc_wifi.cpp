@@ -25,29 +25,43 @@
 
 #include "tc_wifi.h"
 
+// If undefined, use the checkbox-hacks. 
+// If defined, go back to standard text boxes
+//#define TC_NOCHECKBOXES
+
 Settings settings;
 
 IPSettings ipsettings;
 
 WiFiManager wm;
 
-WiFiManagerParameter custom_headline("<h2>TimeCircuits Setup</h2>");
-WiFiManagerParameter custom_wifiConTimeout("wificon", "WiFi Connection Timeout in seconds (1-15)", settings.wifiConTimeout, 3);
-WiFiManagerParameter custom_wifiConRetries("wifiret", "WiFi Connection attempts (1-15)", settings.wifiConRetries, 3);
-WiFiManagerParameter custom_ntpServer("ntp_server", "NTP Server (eg. 'pool.ntp.org'; empty to disable NTP)", settings.ntpServer, 63);
-WiFiManagerParameter custom_timeZone("time_zone", "Timezone (<a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target=_blank>Posix</a>, eg. 'CST6CDT,M3.2.0,M11.1.0')", settings.timeZone, 63);
+WiFiManagerParameter custom_headline("<h2 style='margin-bottom:0px'>TimeCircuits Setup</h2>");
+#ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
+WiFiManagerParameter custom_ttrp("ttrp", "<p></p>Make time travels persistent (0=no, 1=yes)", settings.timesPers, 2);
+WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is RTC (1) or current present time (0)", settings.alarmRTC, 2);
+WiFiManagerParameter custom_playIntro("plIn", "Play intro (1=on, 0=off)", settings.playIntro, 2);
 WiFiManagerParameter custom_mode24("md24", "Enable 24-hour clock mode: (0=12hr, 1=24hr)", settings.mode24, 2);
-WiFiManagerParameter custom_ttrp("ttrp", "Make time travels persistent: (0=no, 1=yes)", settings.timesPers, 2);
-WiFiManagerParameter custom_autoRotateTimes("rotate_times", "Time-rotation interval (0=off, 1-5=every 5th/15th/30th/45th/60th minute)",settings.autoRotateTimes, 3);
-WiFiManagerParameter custom_destTimeBright("dt_bright", "Destination Time display brightness (1-15)", settings.destTimeBright, 3);
-WiFiManagerParameter custom_presTimeBright("pt_bright", "Present Time display brightness (1-15)", settings.presTimeBright, 3);
-WiFiManagerParameter custom_lastTimeBright("lt_bright", "Last Time Departed display brightness (1-15)", settings.lastTimeBright, 3);
 #ifdef FAKE_POWER_ON
-WiFiManagerParameter custom_fakePwrOn("fpo", "Enable fake power switch (0=no, 1=yes)", settings.fakePwrOn, 3);
+WiFiManagerParameter custom_fakePwrOn("fpo", "<p></p>Enable fake power switch (0=no, 1=yes)", settings.fakePwrOn, 2);
 #endif
-WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is RTC (1) or current present time (0)", settings.alarmRTC, 3);
-WiFiManagerParameter custom_playIntro("plIn", "Play intro (1=on, 0=off)", settings.playIntro, 3);
-WiFiManagerParameter custom_copyAudio("cpAu", "Audio file installation: Write COPY here to copy audio files from SD to flash.", settings.copyAudio, 5, "autocomplete='off'");
+#else // -------------------- Checkbox hack: --------------
+WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is real present time<br>", settings.alarmRTC, 2, "type='checkbox'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_ttrp("ttrp", "Make time travels persistent<br>", settings.timesPers, 2, "type='checkbox'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_playIntro("plIn", "Play intro<br>", settings.playIntro, 2, "type='checkbox'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_mode24("md24", "Enable 24-hour clock mode<br>", settings.mode24, 2, "type='checkbox'", WFM_LABEL_AFTER);
+#ifdef FAKE_POWER_ON
+WiFiManagerParameter custom_fakePwrOn("fpo", "Enable fake power switch<br>", settings.fakePwrOn, 2, "type='checkbox' style='margin-top:16px'", WFM_LABEL_AFTER);
+#endif
+#endif // -------------------------------------------------
+WiFiManagerParameter custom_autoRotateTimes("rotate_times", "<p></p>Time-rotation interval<br>0=off, 1-5=every 5/15/30/45/60th minute",settings.autoRotateTimes, 3);
+WiFiManagerParameter custom_wifiConRetries("wifiret", "<p></p>WiFi Connection attempts (1-15)", settings.wifiConRetries, 3, "", WFM_LABEL_BEFORE);
+WiFiManagerParameter custom_wifiConTimeout("wificon", "WiFi Connection timeout in seconds (1-15)", settings.wifiConTimeout, 3);
+WiFiManagerParameter custom_ntpServer("ntp_server", "NTP Server (empty to disable NTP)", settings.ntpServer, 63);
+WiFiManagerParameter custom_timeZone("time_zone", "Timezone (in <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target=_blank>Posix</a> format)", settings.timeZone, 63);
+WiFiManagerParameter custom_destTimeBright("dt_bright", "<p></p>Destination Time display brightness (1-15)", settings.destTimeBright, 3, "", WFM_LABEL_BEFORE);
+WiFiManagerParameter custom_presTimeBright("pt_bright", "Present Time display brightness (1-15)", settings.presTimeBright, 3);
+WiFiManagerParameter custom_lastTimeBright("lt_bright", "Last Time Dep. display brightness (1-15)", settings.lastTimeBright, 3);
+WiFiManagerParameter custom_copyAudio("cpAu", "<p></p>Audio file installation: Write COPY here to copy the original audio files from the SD card to the internal flash file system", settings.copyAudio, 5, "autocomplete='off'");
 
 bool shouldSaveConfig = false;
 bool shouldSaveIPConfig = false;
@@ -61,12 +75,12 @@ void wifi_setup()
 { 
     int temp;
     
-    #define TC_MENUSIZE (8-2)
-    const char* wifiMenu[TC_MENUSIZE] = {"wifi", "info", "param", "sep", "restart", "update"/*, "sep", "exit"*/ };
+    #define TC_MENUSIZE (6)
+    const char* wifiMenu[TC_MENUSIZE] = {"wifi", "info", "param", "sep", "restart", "update" };
     // We are running in non-blocking mode, so no point in "exit".
 
     // explicitly set mode, esp allegedly defaults to STA_AP
-    WiFi.mode(WIFI_MODE_STA);  
+    WiFi.mode(WIFI_MODE_STA);
     
     #ifndef TC_DBG
     wm.setDebugOutput(false);
@@ -97,29 +111,29 @@ void wifi_setup()
     temp = (int)atoi(settings.wifiConRetries);
     if(temp < 1) temp = 1;
     if(temp > 15) temp = 15;
-    wm.setConnectRetries(temp);           
+    wm.setConnectRetries(temp);
                
-    wm.setCleanConnect(true);           
-    //wm.setRemoveDuplicateAPs(false);  
+    wm.setCleanConnect(true);
+    //wm.setRemoveDuplicateAPs(false);
 
     wm.setMenu(wifiMenu, TC_MENUSIZE);
 
     wm.addParameter(&custom_headline);
-    wm.addParameter(&custom_wifiConTimeout);
+    wm.addParameter(&custom_ttrp);
+    wm.addParameter(&custom_alarmRTC);
+    wm.addParameter(&custom_playIntro);
+    wm.addParameter(&custom_mode24);
+    wm.addParameter(&custom_autoRotateTimes);
     wm.addParameter(&custom_wifiConRetries);
+    wm.addParameter(&custom_wifiConTimeout);
     wm.addParameter(&custom_ntpServer);
     wm.addParameter(&custom_timeZone);
-    wm.addParameter(&custom_mode24);
-    wm.addParameter(&custom_alarmRTC);
-    wm.addParameter(&custom_ttrp);
-    wm.addParameter(&custom_autoRotateTimes);
     wm.addParameter(&custom_destTimeBright);
     wm.addParameter(&custom_presTimeBright);
     wm.addParameter(&custom_lastTimeBright);
-    wm.addParameter(&custom_playIntro);
-    #ifdef FAKE_POWER_ON    
+    #ifdef FAKE_POWER_ON
     wm.addParameter(&custom_fakePwrOn);
-    #endif    
+    #endif
     if(check_allow_CPA()) {
         wm.addParameter(&custom_copyAudio);
     }
@@ -127,7 +141,7 @@ void wifi_setup()
     updateConfigPortalValues();
 
     // Configure static IP
-    if(loadIpSettings()) {        
+    if(loadIpSettings()) {
         setupStaticIP();
     }
 
@@ -191,22 +205,37 @@ void wifi_loop()
         strcpy(settings.lastTimeBright, custom_lastTimeBright.getValue());                          
         strcpy(settings.wifiConRetries, custom_wifiConRetries.getValue()); 
         strcpy(settings.wifiConTimeout, custom_wifiConTimeout.getValue()); 
-        strcpy(settings.mode24, custom_mode24.getValue()); 
+
+        #ifdef TC_NOCHECKBOXES // ---------
+        
+        strcpy(settings.mode24, custom_mode24.getValue());                
+        strcpy(settings.alarmRTC, custom_alarmRTC.getValue());
         strcpy(settings.timesPers, custom_ttrp.getValue()); 
+        strcpy(settings.playIntro, custom_playIntro.getValue()); 
         #ifdef FAKE_POWER_ON      
         strcpy(settings.fakePwrOn, custom_fakePwrOn.getValue()); 
-        #endif        
-        strcpy(settings.alarmRTC, custom_alarmRTC.getValue());
-        strcpy(settings.playIntro, custom_playIntro.getValue()); 
-
-        write_settings();        
+        #endif 
+        
+        #else // if checkboxes are used: ---
+        
+        strcpy(settings.mode24, ((int)atoi(custom_mode24.getValue()) > 0) ? "1" : "0");
+        strcpy(settings.alarmRTC, ((int)atoi(custom_alarmRTC.getValue()) > 0) ? "1" : "0");
+        strcpy(settings.timesPers, ((int)atoi(custom_ttrp.getValue()) > 0) ? "1" : "0"); 
+        strcpy(settings.playIntro, ((int)atoi(custom_playIntro.getValue()) > 0) ? "1" : "0"); 
+        #ifdef FAKE_POWER_ON      
+        strcpy(settings.fakePwrOn, ((int)atoi(custom_fakePwrOn.getValue()) > 0) ? "1" : "0"); 
+        #endif 
+        
+        #endif  // -------------------------
+        
+        write_settings();
 
         if(check_allow_CPA()) {
             if(!strcmp(custom_copyAudio.getValue(), "COPY")) {
                 #ifdef TC_DBG
                 Serial.println(F("WiFi: Copying audio files...."));
                 #endif
-                copy_audio_files();            
+                copy_audio_files();
                 delay(2000);
             }
         }
@@ -219,9 +248,9 @@ void wifi_loop()
         Serial.println(F("WiFi: Restarting ESP...."));
         #endif
 
-        Serial.flush();        
+        Serial.flush();
         
-        esp_restart();        
+        esp_restart();
     }
     
 }
@@ -230,6 +259,8 @@ void wifi_loop()
 // nothing to do with our settings here. Despite that,
 // we write out our config file so that if the user initially
 // configures WiFi, a default settings file exists upon reboot.
+// Also, this causes a reboot, so if the user entered static
+// IP data, it becomes active after this reboot.
 void saveConfigCallback() 
 {
     shouldSaveConfig = true;    
@@ -324,22 +355,43 @@ void setupStaticIP()
 
 void updateConfigPortalValues()
 {
+    #ifndef TC_NOCHECKBOXES
+    const char makeCheck[] = "1' checked a='";
+    #endif
+    
     // Make sure the settings form has the correct values
     custom_wifiConTimeout.setValue(settings.wifiConTimeout, 3);
     custom_wifiConRetries.setValue(settings.wifiConRetries, 3);
     custom_ntpServer.setValue(settings.ntpServer, 63);
     custom_timeZone.setValue(settings.timeZone, 63);
-    custom_mode24.setValue(settings.mode24, 2);
+
+    #ifdef TC_NOCHECKBOXES  // Standard text boxes: -------
+    
+    custom_mode24.setValue(settings.mode24, 2);           
+    custom_alarmRTC.setValue(settings.alarmRTC, 2);
     custom_ttrp.setValue(settings.timesPers, 2);
+    custom_playIntro.setValue(settings.playIntro, 2);
+    #ifdef FAKE_POWER_ON 
+    custom_fakePwrOn.setValue(settings.fakePwrOn, 2);
+    #endif 
+
+    #else   // For checkbox hack --------------------------
+
+    custom_mode24.setValue(((int)atoi(settings.mode24) > 0) ? makeCheck : "1", 14);
+    custom_alarmRTC.setValue(((int)atoi(settings.alarmRTC) > 0) ? makeCheck : "1", 14);
+    custom_ttrp.setValue(((int)atoi(settings.timesPers) > 0) ? makeCheck : "1", 14);           
+    custom_playIntro.setValue(((int)atoi(settings.playIntro) > 0) ? makeCheck : "1", 14);
+    #ifdef FAKE_POWER_ON 
+    custom_fakePwrOn.setValue(((int)atoi(settings.fakePwrOn) > 0) ? makeCheck : "1", 14);
+    #endif 
+
+    #endif // ---------------------------------------------
+
     custom_autoRotateTimes.setValue(settings.autoRotateTimes, 3);
     custom_destTimeBright.setValue(settings.destTimeBright, 3);
     custom_presTimeBright.setValue(settings.presTimeBright, 3);
     custom_lastTimeBright.setValue(settings.lastTimeBright, 3);
-    #ifdef FAKE_POWER_ON 
-    custom_fakePwrOn.setValue(settings.fakePwrOn, 2);
-    #endif    
-    custom_alarmRTC.setValue(settings.alarmRTC, 2);
-    custom_playIntro.setValue(settings.playIntro, 2);
+    
     custom_copyAudio.setValue("", 5);   // Always clear
 }
 
