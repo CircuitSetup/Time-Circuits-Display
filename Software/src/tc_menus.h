@@ -46,7 +46,8 @@
 #define MODE_BRI  6
 #define MODE_NET  7
 #define MODE_VER  8
-#define MODE_END  9
+#define MODE_CPA  9
+#define MODE_END  10
 #define MODE_MIN  MODE_DEST
 #define MODE_MAX  MODE_END
 
@@ -77,6 +78,7 @@ void saveAutoInterval();
 void doSetAutoInterval();
 void doSetBrightness(clockDisplay* displaySet);
 void doShowNetInfo();
+void doCopyAudioFiles();
 void waitForEnterRelease();
 void prepareInput(uint16_t& number);
 void waitAudioDone();
@@ -84,6 +86,11 @@ void waitAudioDone();
 extern void animate();
 extern void allLampTest();
 extern void allOff();
+
+void start_file_copy();
+void file_copy_progress();
+void file_copy_done();
+void file_copy_error();
 
 extern bool isSetUpdate;
 extern bool isYearUpdate;

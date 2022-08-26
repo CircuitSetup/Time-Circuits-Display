@@ -26,15 +26,19 @@
 #ifndef _TC_SETTINGS_H
 #define _TC_SETTINGS_H
 
+#include "tc_global.h"
+
 #include <ArduinoJson.h>  // https://github.com/bblanchon/ArduinoJson
 #include <SD.h>
 #include <SPI.h>
 #include <FS.h>
+#ifdef USE_SPIFFS
 #include <SPIFFS.h>
-
+#else
+#define SPIFFS LittleFS
+#include <LittleFS.h>
+#endif
 #include <EEPROM.h>
-
-#include "tc_global.h"
 
 extern void settings_setup();
 extern void write_settings();
@@ -46,6 +50,17 @@ void saveAlarmEEPROM();
 extern bool loadIpSettings();
 extern void writeIpSettings();
 extern void deleteIpSettings();
+
+extern bool copy_audio_files();
+void open_and_copy(const char *fn, int& haveErr);
+bool filecopy(File source, File dest);
+
+extern bool check_allow_CPA();
+bool check_if_default_audio_present();
+extern void start_file_copy();
+extern void file_copy_progress();
+extern void file_copy_done();
+extern void file_copy_error();
 
 extern bool    alarmOnOff;
 extern uint8_t alarmHour;
@@ -91,6 +106,8 @@ struct Settings {
 #endif
     char alarmRTC[4]        = MS(DEF_ALARM_RTC);
     char playIntro[4]       = MS(DEF_PLAY_INTRO);
+
+    char copyAudio[6]       = "";   // never loaded or saved!
 };
 
 struct IPSettings {

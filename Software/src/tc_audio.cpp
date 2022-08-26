@@ -34,7 +34,11 @@
 
 // Initialize ESP32 Audio Library classes
 AudioGeneratorMP3 *mp3;
-AudioFileSourceSPIFFS *mySPIFFS0;
+#ifdef USE_SPIFFS
+AudioFileSourceSPIFFS *myFS0;
+#else
+AudioFileSourceLittleFS *myFS0;
+#endif
 AudioFileSourceSD *mySD0;
 
 //AudioGeneratorMP3 *beep;
@@ -96,7 +100,7 @@ void audio_setup()
     //beep = new AudioGeneratorMP3();
     //beep = new AudioGeneratorWAV();
     
-    mySPIFFS0 = new AudioFileSourceSPIFFS();
+    myFS0 = new AudioFileSourceSPIFFS();
     //mySPIFFS1 = new AudioFileSourceSPIFFS();
 
     if(haveSD) {
@@ -200,11 +204,11 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
             #ifdef TC_DBG
             Serial.println(F("Playing from SD"));
             #endif
-        } else if(mySPIFFS0->open(audio_file)) {             
+        } else if(myFS0->open(audio_file)) {             
             #ifdef TC_USE_MIXER
-            mp3->begin(mySPIFFS0, stub[0]);
+            mp3->begin(myFS0, stub[0]);
             #else
-            mp3->begin(mySPIFFS0, out);
+            mp3->begin(myFS0, out);
             #endif
             #ifdef TC_DBG
             Serial.println(F("Playing from SPIFFS"));

@@ -47,6 +47,7 @@ WiFiManagerParameter custom_fakePwrOn("fpo", "Enable fake power switch (0=no, 1=
 #endif
 WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is RTC (1) or current present time (0)", settings.alarmRTC, 3);
 WiFiManagerParameter custom_playIntro("plIn", "Play intro (1=on, 0=off)", settings.playIntro, 3);
+WiFiManagerParameter custom_copyAudio("cpAu", "Audio file installation: Write COPY here to copy audio files from SD to flash.", settings.copyAudio, 5, "autocomplete='off'");
 
 bool shouldSaveConfig = false;
 bool shouldSaveIPConfig = false;
@@ -63,8 +64,9 @@ void wifi_setup()
     #define TC_MENUSIZE (8-2)
     const char* wifiMenu[TC_MENUSIZE] = {"wifi", "info", "param", "sep", "restart", "update"/*, "sep", "exit"*/ };
     // We are running in non-blocking mode, so no point in "exit".
-    
-    WiFi.mode(WIFI_MODE_STA);  // explicitly set mode, esp defaults to STA_AP
+
+    // explicitly set mode, esp allegedly defaults to STA_AP
+    WiFi.mode(WIFI_MODE_STA);  
     
     #ifndef TC_DBG
     wm.setDebugOutput(false);
@@ -118,6 +120,9 @@ void wifi_setup()
     #ifdef FAKE_POWER_ON    
     wm.addParameter(&custom_fakePwrOn);
     #endif    
+    if(check_allow_CPA()) {
+        wm.addParameter(&custom_copyAudio);
+    }
     
     updateConfigPortalValues();
 
@@ -196,6 +201,16 @@ void wifi_loop()
 
         write_settings();        
 
+        if(check_allow_CPA()) {
+            if(!strcmp(custom_copyAudio.getValue(), "COPY")) {
+                #ifdef TC_DBG
+                Serial.println(F("WiFi: Copying audio files...."));
+                #endif
+                copy_audio_files();            
+                delay(2000);
+            }
+        }
+
         shouldSaveConfig = false;
 
         // Reset esp32 to load new settings
@@ -203,9 +218,12 @@ void wifi_loop()
         #ifdef TC_DBG
         Serial.println(F("WiFi: Restarting ESP...."));
         #endif
+
+        Serial.flush();        
         
-        esp_restart();
+        esp_restart();        
     }
+    
 }
 
 // This is called when the WiFi config changes, so it has
@@ -322,6 +340,7 @@ void updateConfigPortalValues()
     #endif    
     custom_alarmRTC.setValue(settings.alarmRTC, 2);
     custom_playIntro.setValue(settings.playIntro, 2);
+    custom_copyAudio.setValue("", 5);   // Always clear
 }
 
 int wifi_getStatus()

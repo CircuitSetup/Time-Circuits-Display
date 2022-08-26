@@ -29,23 +29,23 @@
 // Uncomment if month is 2 digits (7-seg), as in the original A-Car display.
 //#define IS_ACAR_DISPLAY 
 
-//#define TWSOUND         // Use A10001986's sound files
+#define TWSOUND         // Use A10001986's sound files
 //#define TWPRIVATE     // A10001986's private customizations
 
 // Version strings. 
 // These must not use any characters other than '0'-'9', 'A'-'Z' or space
 // Max length 12 characters
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION "AUG242022"
+#define TC_VERSION "AUG252022"
 #ifdef TWPRIVATE
 #define TC_VERSION_EXTRA "A10001986P"
 #elif defined(TWSOUND)
 #define TC_VERSION_EXTRA "A10001986"
 #else
-#define TC_VERSION_EXTRA "V2 0 0"
+#define TC_VERSION_EXTRA "OEM V2 0 0"
 #endif
 #else   // A-Car
-#define TC_VERSION "08242022"
+#define TC_VERSION "08252022"
 #define TC_VERSION_EXTRA "A CAR"
 #endif
 
@@ -99,5 +99,10 @@
 #define PRES_TIME_PREF    0x12    // present time prefs           (10 bytes)
 #define DEPT_TIME_PREF    0x1c    // departure time prefs         (10 bytes)
 #define ALARM_PREF        0x26    // alarm prefs                  (4 bytes; only used if fs unavailable)
+
+// Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino >= 2.x)
+// As long as SPIFFS is around, and LittleFS does not support wear levelling,
+// we go with SPIFFS.
+#define USE_SPIFFS
 
 #endif

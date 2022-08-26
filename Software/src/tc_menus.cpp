@@ -119,6 +119,9 @@ bool    alarmOnOff = false;
 uint8_t alarmHour = 255;
 uint8_t alarmMinute = 255;
 
+bool fcprog = false;
+unsigned long fcstart = 0;
+
 /*
  * menu_setup()
  * 
@@ -396,6 +399,17 @@ void enter_menu()
         
         allOff();
         waitForEnterRelease();  
+        
+    } else if(menuItemNum == MODE_CPA) {   // Copy audio files
+
+        allOff();
+        waitForEnterRelease();
+
+        // Copy audio files            
+        doCopyAudioFiles();
+
+        allOff();
+        waitForEnterRelease();
     
     } else {                              // VERSION, END: Bail out
       
@@ -479,6 +493,7 @@ void menuSelect(int& number)
           timeout = 0;  // button pressed, reset timeout
           
           number++;
+          if(number == MODE_CPA && !check_allow_CPA()) number++;
           if(number > MODE_MAX) number = MODE_MIN;
 
           // Show only the selected display, or menu item text
@@ -606,6 +621,14 @@ void menuShow(int& number)
             #endif
             displaySet = NULL;
             break;
+        case MODE_CPA:  // install audio files
+            destinationTime.showOnlyText("INSTALL"); 
+            destinationTime.on();
+            presentTime.showOnlyText("AUDIO FILES");
+            presentTime.on();            
+            departedTime.off();            
+            displaySet = NULL;
+            break;                     
         case MODE_END:  // end            
             destinationTime.showOnlyText("END");  // display END, clear rest of screen
             destinationTime.on();
@@ -1430,6 +1453,73 @@ void doShowNetInfo()
     }
 }
 
+/*
+ * Copy audio files from SD to flash FS
+ */
+void doCopyAudioFiles()
+{
+    bool doCancDone = false;
+    bool newCanc = false;
+
+    #ifdef TC_DBG
+    Serial.println(F("doCopyAudioFiles() involked"));
+    #endif
+
+    // Cancel/Copy
+    destinationTime.on();
+    presentTime.on();
+    departedTime.showOnlyText("CANCEL");
+    departedTime.on();
+
+    isEnterKeyHeld = false;
+
+    timeout = 0;  // reset timeout
+
+    // Wait for enter
+    while(!checkTimeOut() && !doCancDone) {
+      
+      // If pressed
+      if(digitalRead(ENTER_BUTTON_PIN)) {
+        
+          // wait for release
+          while(!checkTimeOut() && digitalRead(ENTER_BUTTON_PIN)) {
+              // If hold threshold is passed, return false */
+              myloop();
+              if(isEnterKeyHeld) {
+                  isEnterKeyHeld = false;
+                  doCancDone = true;
+                  break;              
+              }
+              delay(10); 
+          }
+
+          if(!checkTimeOut() && !doCancDone) {
+              
+              timeout = 0;  // button pressed, reset timeout
+
+              newCanc = !newCanc;       
+
+              departedTime.showOnlyText(newCanc ? "COPY" : "CANCEL");
+                            
+          }
+          
+      } else {
+
+          myloop();
+          delay(50);
+          
+      }
+          
+    }
+
+    if(checkTimeOut() || !newCanc) {
+        return;  
+    }
+
+    copy_audio_files();            
+    delay(2000);
+}
+
 /* *** Helpers **** */
 
 // Show all, month after a short delay
@@ -1460,6 +1550,37 @@ void allOff()
     destinationTime.off();
     presentTime.off();
     departedTime.off();
+}
+
+void start_file_copy()
+{
+    destinationTime.on();
+    presentTime.on();
+    departedTime.on();
+    destinationTime.showOnlyText("COPYING");
+    presentTime.showOnlyText("FILES"); 
+    departedTime.showOnlyText("PLEASE");
+    fcprog = false; 
+    fcstart = millis();
+}
+
+void file_copy_progress()
+{
+    if((millis() - fcstart >= 1000)) {  
+        departedTime.showOnlyText(fcprog ? "PLEASE" : "WAIT");
+        fcprog = !fcprog;
+        fcstart = millis();
+    }
+}
+
+void file_copy_done()
+{
+    departedTime.showOnlyText("DONE");    
+}
+
+void file_copy_error()
+{
+    departedTime.showOnlyText("ERROR");  
 }
 
 /* 

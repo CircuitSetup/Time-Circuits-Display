@@ -107,30 +107,72 @@ clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 int8_t autoTime = 0;  // Selects from time from array below
 
 #ifndef TWPRIVATE //  ----------------- OFFICIAL
-
-dateStruct destinationTimes[8] = {
-    //YEAR, MONTH, DAY, HOUR, MIN    
-    {1985, 10, 26,  1, 21},
-    {1985, 10, 26,  1, 24},
-    {1955, 11,  5,  6,  0},
-    {1985, 10, 27, 11,  0},
-    {2015, 10, 21, 16, 29},
-    {1955, 11, 12,  6,  0},
-    {1885,  1,  1,  0,  0},
-    {1885,  9,  2, 12,  0}
+dateStruct destinationTimes[NUM_AUTOTIMES] = {
+    //YEAR, MONTH, DAY, HOUR, MIN 
+    {1985, 10, 26,  1, 21},   // Einstein 1:20 -> 1:21
+    {1955, 11,  5,  6,  0},   // Marty -> 1955
+    {1985, 10, 26,  1, 24},   // Marty -> 1985
+    {2015, 10, 21, 16, 29},   // Marty, Doc, Jennifer -> 2015 (mins random)
+    {1955, 11, 12,  8,  0},   // Old Biff -> 1955 (time unknown)
+    {2015, 10, 21, 19, 25},   // Old Biff -> 2015 (time assumed from run of scene)
+    {1985, 10, 26, 21,  0},   // Marty, Doc, Jennifer -> 1985
+    {1955, 11, 12,  6,  0},   // Marty, Doc -> 1955
+    {1885,  1,  1,  0,  0},   // Doc in thunderstorm -> 1885 (date/time assumed from letter)
+    {1885,  9,  2,  8,  0},   // Marty -> 1885
+    {1985, 10, 27, 11,  0}    // Marty -> 1985
+//    {1985, 10, 26,  1, 21},
+//    {1985, 10, 26,  1, 24},
+//    {1955, 11,  5,  6,  0},
+//    {1985, 10, 27, 11,  0},
+//    {2015, 10, 21, 16, 29},
+//    {1955, 11, 12,  6,  0},
+//    {1885,  1,  1,  0,  0},
+//    {1885,  9,  2, 12,  0}
 }; 
-dateStruct departedTimes[8] = {
-    {1985, 10, 26,  1, 20},
-    {1955, 11, 12, 22,  4},
-    {1985, 10, 26,  1, 34},
-    {1885,  9,  7,  9, 10},
-    {1985, 10, 26, 11, 35},
-    {1985, 10, 27,  2, 42},
-    {1955, 11, 12, 21, 44},
-    {1955, 11, 13, 12,  0}
+dateStruct departedTimes[NUM_AUTOTIMES] = {
+    {1985, 10, 26,  1, 20},   // Einstein 1:20 -> 1:21
+    {1985, 10, 26,  1, 29},   // Marty -> 1955 (time assumed)
+    {1955, 11, 12, 22,  4},   // Marty -> 1985
+    {1985, 10, 26, 11, 35},   // Marty, Doc, Jennifer -> 2015 (time random)
+    {2015, 10, 21, 19, 15},   // Old Biff -> 1955  (time assumed from run of scene)   
+    {1955, 11, 12, 18, 38},   // Old Biff -> 2015
+    {2015, 10, 21, 19, 28},   // Marty, Doc, Jennifer -> 1985
+    {1985, 10, 27,  2, 42},   // Marty, Doc -> 1955
+    {1955, 11, 12, 21, 33},   // Doc in thunderstorm -> 1885 (time assumed from following events)
+    {1955, 11, 15, 11, 11},   // Marty -> 1885 (Date shown in movie 11/5 - wrong! Must be after 11/12! Time guessed)
+    {1885,  9,  7,  8, 22}    // Marty -> 1985 (time guessed/assumed)
+//    {1985, 10, 26,  1, 20},
+//    {1955, 11, 12, 22,  4},
+//    {1985, 10, 26,  1, 34},
+//    {1885,  9,  7,  9, 10},
+//    {1985, 10, 26, 11, 35},
+//    {1985, 10, 27,  2, 42},
+//    {1955, 11, 12, 21, 44},
+//    {1955, 11, 13, 12,  0}
 };
 
 #else //  --------------------------- TWPRIVATE
+dateStruct destinationTimes[NUM_AUTOTIMES] = {
+    //YEAR, MONTH, DAY, HOUR, MIN
+    {1985,  7, 23, 20,  1},       
+    {1985, 11, 23, 16, 24},   
+    {1986,  5, 26, 14, 12},    
+    {1986,  8, 23, 11,  0},     
+    {1986, 12, 24, 21, 22},   
+    {1987,  3, 20, 19, 31},    
+    {1987,  5, 26,  0,  0},      
+    {1988, 12, 24, 22, 31}
+}; 
+dateStruct departedTimes[NUM_AUTOTIMES] = {
+    {2017,  7, 11, 10, 11},       
+    {1988,  6,  3, 15, 30},    
+    {1943,  3, 15,  7, 47},     
+    {2016,  6, 22, 16, 11},    
+    {1982,  5, 15,  9, 41},     
+    {1943, 11, 25, 11, 11},   
+    {1970,  5, 26,  8, 22},     
+    {2021,  5,  5, 10,  9}
+};    
 
 #endif  // ------------------------------------
 
@@ -749,7 +791,7 @@ void time_loop()
                     
                     // cycle through pre-programmed times
                     autoTime++;
-                    if(autoTime > 7) {    // currently have 8 pre-programmed times
+                    if(autoTime >= NUM_AUTOTIMES) {
                         autoTime = 0;
                     }
 

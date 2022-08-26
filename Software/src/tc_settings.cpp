@@ -26,7 +26,7 @@
 #include "tc_settings.h"
 
 /*
- * Mount SPIFF, und SD (if available)
+ * Mount SPIFFS/LittleFS, und SD (if available)
  * 
  * Read configuration from JSON config file
  * If config file not found, create one with default settings
@@ -37,11 +37,29 @@
  * 
  */
 
-/* If SPIFFS is mounted */
+/* If SPIFFS/LittleFS is mounted */
 bool haveFS = false;
 
 /* If a SD card is found */
 bool haveSD = false;
+
+/* If SD contains all default audio files */
+bool allowCPA = false;
+
+#define NUM_AUDIOFILES 11
+const char *audioFiles[NUM_AUDIOFILES] = {
+      "/alarm.mp3\0", 
+      "/alarmoff.mp3\0", 
+      "/alarmon.mp3\0",
+      "/baddate.mp3\0",
+      "/enter.mp3\0",
+      "/intro.mp3\0",
+      "/nmoff.mp3\0",
+      "/nmon.mp3\0",
+      "/startup.mp3\0",
+      "/timetravel.mp3\0",
+      "/travelstart.mp3\0"
+};
 
 /*
  * settings_setup()
@@ -96,17 +114,19 @@ void settings_setup()
     }
 
     #ifdef TC_DBG
-    Serial.println(F("settings_setup: Mounting SPIFFS..."));
+    Serial.println(F("settings_setup: Mounting flash FS..."));
     #endif
 
     if(SPIFFS.begin()) {
   
         #ifdef TC_DBG
-        Serial.println(F("settings_setup: Mounted SPIFFS"));
+        Serial.println(F("settings_setup: Mounted flash FS"));
         #endif
-        
+
         haveFS = true;
 
+        // Allow user to delete static IP data by holding ENTER 
+        // while booting
         if(digitalRead(ENTER_BUTTON_PIN)) {
           
             Serial.println(F("settings_setup: ENTER pressed - deleting ipconfig file"));
@@ -119,7 +139,13 @@ void settings_setup()
             while(digitalRead(ENTER_BUTTON_PIN)) { }
             digitalWrite(WHITE_LED_PIN, LOW);                         
         }
-        
+
+        // Check if SD contains our default sound files
+        if(haveSD) {
+            allowCPA = check_if_default_audio_present();            
+        }
+
+        // Read our main config file
         if(SPIFFS.exists("/config.json")) {
              
             File configFile = SPIFFS.open("/config.json", "r");
@@ -231,7 +257,7 @@ void settings_setup()
       
     } else {
       
-        Serial.println(F("settings_setup: Failed to mount SPIFFS"));
+        Serial.println(F("settings_setup: Failed to mount flash FS"));
     
     }
 }
@@ -241,7 +267,7 @@ void write_settings()
     StaticJsonDocument<1024> json;
   
     if(!haveFS) {
-        Serial.println(F("write_settings: Cannot write settings, SPIFFS not mounted"));
+        Serial.println(F("write_settings: Cannot write settings, flash FS not mounted"));
         return;
     } 
   
@@ -321,7 +347,7 @@ bool loadAlarm()
     
     if(!haveFS) {
       
-        Serial.println(F("loadAlarm(): SPIFFS not mounted, using EEPROM"));
+        Serial.println(F("loadAlarm(): flash FS not mounted, using EEPROM"));
         
         return loadAlarmEEPROM();
         
@@ -446,7 +472,7 @@ void saveAlarm()
     #endif
 
     if(!haveFS) {
-        Serial.println(F("saveAlarm(): SPIFFS not mounted, using EEPROM"));
+        Serial.println(F("saveAlarm(): flash FS not mounted, using EEPROM"));
         
         saveAlarmEEPROM();
         
@@ -584,7 +610,7 @@ void writeIpSettings()
     StaticJsonDocument<1024> json;
   
     if(!haveFS) {
-        Serial.println(F("writeIpSettings: Cannot write ip settings, SPIFFS not mounted"));
+        Serial.println(F("writeIpSettings: Cannot write ip settings, flash FS not mounted"));
         return;
     } 
   
@@ -623,4 +649,178 @@ void deleteIpSettings()
     #endif
 
     SPIFFS.remove("/ipconfig.json");
+}
+
+/*
+ * Audio file installer 
+ * 
+ * Copies our default audio files from SD to flash FS.
+ * The is restricted to the original default audio
+ * files that came with the software. If you want to
+ * customize your sounds, put them on a FAT formatted
+ * SD card and leave this SD card in the slot.
+ */
+
+bool check_allow_CPA()
+{
+    return allowCPA;
+}
+
+bool check_if_default_audio_present()
+{
+    File file;
+    size_t ts;
+    int i, idx = 0;    
+    char dtmf_buf[16] = "/Dtmf-0.mp3\0";
+    size_t sizes[10+NUM_AUDIOFILES] = {
+#ifndef TWSOUND
+      4178, 4178, 4178, 4178, 4178, 4178, 3760, 3760, 4596, 3760, // DTMF
+      70664, 71500, 60633, 10478,   // alarm, alarmoff, alarmon, baddate
+      13374, 125804, 33853, 47228,  // enter, intro, nmoff, nmon
+      21907, 38899, 135447          // startup, timetravel, travelstart
+#else      
+      4178, 4178, 4178, 4178, 4178, 4178, 3760, 3760, 4596, 3760, //DTMF
+      70664, 71500, 60633, 10478,   // alarm, alarmoff, alarmon, baddate
+      12149, 125804, 33853, 47228,  // enter, intro, nmoff, nmon
+      18419, 38899, 135447          // startup, timetravel, travelstart
+#endif      
+    };
+    
+    if(!haveSD)       
+        return false;
+
+    // If identifier missing, quit now
+    if(!(SD.exists("/TCD_def_snd.txt"))) {
+        Serial.println("SD ID missing");    
+        return false;
+    }
+
+    for(i = 0; i < 10; i++) {
+        dtmf_buf[6] = i + '0';
+        if(!(SD.exists(dtmf_buf))) {
+            #ifdef TC_DBG
+            Serial.print("missing: ");
+            Serial.println(dtmf_buf);   
+            #endif
+            return false;
+        }
+        if(!(file = SD.open(dtmf_buf)))
+            return false;             
+        ts = file.size();
+        file.close();
+        #ifdef TC_DBG
+        sizes[idx++] = ts;
+        #else
+        if(sizes[idx++] != ts)
+            return false;
+        #endif
+    }
+
+    for(i = 0; i < NUM_AUDIOFILES; i++) {     
+        if(!SD.exists(audioFiles[i])) {
+            #ifdef TC_DBG
+            Serial.print("missing: ");
+            Serial.println(audioFiles[i]);   
+            #endif
+            return false;
+        }
+        if(!(file = SD.open(audioFiles[i])))
+            return false;             
+        ts = file.size();
+        file.close();
+        #ifdef TC_DBG
+        sizes[idx++] = ts;
+        #else
+        if(sizes[idx++] != ts)
+            return false;
+        #endif
+    }
+
+    #ifdef TC_DBG
+    for(i = 0; i < (10+NUM_AUDIOFILES); i++) {
+        Serial.print(sizes[i], DEC);
+        Serial.print(", ");
+    }
+    Serial.println("");
+    #endif
+
+    return true;
+}
+
+bool copy_audio_files()
+{
+    char dtmf_buf[16] = "/Dtmf-0.mp3\0";    
+    int i, haveErr = 0;
+
+    if(!allowCPA) {
+        Serial.println(F("copy_audio_files: SD missing or flash FS not mounted"));
+        return false;
+    }
+
+    start_file_copy(); 
+
+    /* Copy DTMF files */
+    for(i = 0; i < 10; i++) {
+        dtmf_buf[6] = i + '0';
+        open_and_copy(dtmf_buf, haveErr);        
+    }
+
+    for(i = 0; i < NUM_AUDIOFILES; i++) {     
+        open_and_copy(audioFiles[i], haveErr);         
+    }
+
+    if(haveErr) {
+        file_copy_error();        
+    } else {
+        file_copy_done();
+    }
+
+    return (haveErr == 0);
+}
+
+void open_and_copy(const char *fn, int& haveErr)
+{
+    File sFile, dFile;
+    
+    if((sFile = SD.open(fn, FILE_READ))) {
+        #ifdef TC_DBG
+        Serial.print(F("copy_audio_files: Opened source file: "));
+        Serial.println(fn);
+        #endif
+        if((dFile = SPIFFS.open(fn, FILE_WRITE))) {
+            #ifdef TC_DBG
+            Serial.print(F("copy_audio_files: Opened destination file: "));
+            Serial.println(fn);
+            #endif
+            if(!filecopy(sFile, dFile)) {
+                haveErr++;                    
+            }
+            dFile.close();
+        } else {                
+            Serial.print(F("copy_audio_files: Error opening destination file: "));
+            Serial.println(fn);
+            haveErr++;
+        }
+        sFile.close();
+    } else {
+        Serial.print(F("copy_audio_files: Error opening source file: "));
+        Serial.println(fn);
+        haveErr++;              
+    } 
+}         
+
+bool filecopy(File source, File dest)
+{
+    uint8_t buffer[1024];
+    size_t bytesr, bytesw;
+    
+    while((bytesr = source.read(buffer, 1024))) {
+        if((bytesw = dest.write(buffer, bytesr)) != bytesr) {
+            Serial.println(F("filecopy: Error writing data"));
+            return false;   
+        }
+        file_copy_progress();
+    }
+
+    return true;   
 }
