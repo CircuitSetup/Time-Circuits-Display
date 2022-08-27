@@ -29,23 +29,22 @@
 // Uncomment if month is 2 digits (7-seg), as in the original A-Car display.
 //#define IS_ACAR_DISPLAY 
 
-#define TWSOUND         // Use A10001986's sound files
+//#define TWSOUND         // Use A10001986's sound files
 //#define TWPRIVATE     // A10001986's private customizations
 
 // Version strings. 
 // These must not contain any characters other than '0'-'9', 'A'-'Z' or space
 // Max length 12 characters
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION "AUG262022"
+#define TC_VERSION "V2 0 0"
 #ifdef TWPRIVATE
 #define TC_VERSION_EXTRA "A10001986P"
 #elif defined(TWSOUND)
 #define TC_VERSION_EXTRA "A10001986"
 #else
-#define TC_VERSION_EXTRA "OEM V2 0 0"
+#define TC_VERSION_EXTRA "AUG262022"
 #endif
 #else   // A-Car
-#define TC_VERSION "08262022"
 #define TC_VERSION_EXTRA "A CAR"
 #endif
 
