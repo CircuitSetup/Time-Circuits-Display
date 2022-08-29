@@ -1,12 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
  * 
- * Code based on Marmoset Electronics 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
- *
- * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- * 
  */
 
 #include "tc_settings.h"
@@ -46,7 +45,7 @@ bool haveSD = false;
 /* If SD contains all default audio files */
 bool allowCPA = false;
 
-#define NUM_AUDIOFILES 11
+#define NUM_AUDIOFILES 12
 const char *audioFiles[NUM_AUDIOFILES] = {
       "/alarm.mp3\0", 
       "/alarmoff.mp3\0", 
@@ -56,6 +55,7 @@ const char *audioFiles[NUM_AUDIOFILES] = {
       "/intro.mp3\0",
       "/nmoff.mp3\0",
       "/nmon.mp3\0",
+      "/shutdown.mp3",
       "/startup.mp3\0",
       "/timetravel.mp3\0",
       "/travelstart.mp3\0"
@@ -677,12 +677,12 @@ bool check_if_default_audio_present()
       4178, 4178, 4178, 4178, 4178, 4178, 3760, 3760, 4596, 3760, // DTMF
       70664, 71500, 60633, 10478,   // alarm, alarmoff, alarmon, baddate
       13374, 125804, 33853, 47228,  // enter, intro, nmoff, nmon
-      21907, 38899, 135447          // startup, timetravel, travelstart
+      3790, 21907, 38899, 135447    // shutdown, startup, timetravel, travelstart
 #else      
       4178, 4178, 4178, 4178, 4178, 4178, 3760, 3760, 4596, 3760, //DTMF
       70664, 71500, 60633, 10478,   // alarm, alarmoff, alarmon, baddate
       12149, 125804, 33853, 47228,  // enter, intro, nmoff, nmon
-      18419, 38899, 135447          // startup, timetravel, travelstart
+      3790, 18419, 38899, 135447    // shutdown, startup, timetravel, travelstart
 #endif      
     };
     
