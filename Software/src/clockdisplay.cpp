@@ -1,12 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
  * 
- * Code based on Marmoset Electronics 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
- *
- * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +26,8 @@
 #include "tc_font.h"
 
 const char months[12][4] = {
-      "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+      "JAN", "FEB", "MAR", "APR", "MAY", "JUN", 
+      "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
 };
 
 // Store i2c address and eeprom data location
@@ -81,10 +82,6 @@ void clockDisplay::lampTest()
 void clockDisplay::clear() 
 {
     // must call show() to actually clear display
-
-    #ifdef TC_DBG
-    Serial.println(F("Clockdisplay: Clear Buffer"));
-    #endif
     
     for(int i = 0; i < CD_BUF_SIZE; i++) {
         _displayBuffer[i] = 0;
@@ -93,7 +90,18 @@ void clockDisplay::clear()
 
 // Set display brightness
 // Valid brighness levels are 0 to 15. Default is 15.
+// 255 sets it to previous level
 uint8_t clockDisplay::setBrightness(uint8_t level) 
+{
+    if(level == 255)  
+        level = _brightness;    // restore to old val 
+        
+    _brightness = setBrightnessDirect(level);
+
+    return _brightness;
+}
+
+uint8_t clockDisplay::setBrightnessDirect(uint8_t level) 
 {
     if(level > 15)
         level = 15;
@@ -102,13 +110,7 @@ uint8_t clockDisplay::setBrightness(uint8_t level)
     Wire.write(0xE0 | level);  // Dimming command
     Wire.endTransmission();
 
-    #ifdef TC_DBG
-    Serial.print(F("Clockdisplay: Setting brightness: "));
-    Serial.println(level, DEC);
-    #endif
-
-    _brightness = level;
-    return _brightness;
+    return level;
 }
 
 uint8_t clockDisplay::getBrightness() 
@@ -588,12 +590,9 @@ void clockDisplay::showOnlySettingVal(const char* setting, int8_t val, bool clea
 /* 
  * Save date/time and other settings to EEPROM 
  * Only non-RTC displays save their time.
- * We stick with the EEPROM here because the times
- * probably won't be changed that often to cause
- * a problem with flash wear.
- * "Persistent" time travel causes more wear than
- * "Non-Persistent".
- * 
+ * We stick with the EEPROM here because the times probably won't be 
+ * changed that often to cause a problem with flash wear.
+ * "Persistent" time travel causes more wear than "Non-Persistent".
  */
 bool clockDisplay::save() 
 {    
@@ -853,7 +852,6 @@ void clockDisplay::setDS3232time(byte second, byte minute, byte hour, byte dayOf
 uint8_t clockDisplay::getLED7NumChar(uint8_t value) 
 {    
     if(value >= '0' && value <= '9') {  
-        // if provided as a char
         return numDigs[value - 48];
     } else if(value <= 9) {
         return numDigs[value];
@@ -864,13 +862,24 @@ uint8_t clockDisplay::getLED7NumChar(uint8_t value)
 // Returns bit pattern for provided character for display on 7 segment display
 uint8_t clockDisplay::getLED7AlphaChar(uint8_t value) 
 {    
-    if(value == ' ' || value == 0) {
-        return 0;
-    } else if(value >= '0' && value <= '9') {
+    if(value >= '0' && value <= '9') {
         return numDigs[value - 48];        
     } else if(value >= 'A' && value <= 'Z') {
         return numDigs[value - 'A' + 10];
-    }   
+    }
+    switch(value) {
+    case '-':
+        return numDigs[36];
+    case '(':
+    case '[':
+        return numDigs[37];
+    case ')':
+    case ']':
+        return numDigs[38];
+    case '_':
+    case '.':
+        return numDigs[39];
+    }
 
     return 0;
 }
@@ -935,6 +944,7 @@ void clockDisplay::clearDisplay()
     for(int i = 0; i < CD_BUF_SIZE*2; i++) {
         Wire.write(0x0);
     }
+    
     Wire.endTransmission();
 }
 
@@ -975,8 +985,8 @@ void clockDisplay::showInt(bool animate)
     Wire.write(0x00);  // start at address 0x0
 
     if(animate) {
-        for(int c = 0; c < CD_MONTH_SIZE; c++) {
-            Wire.write(0x00);  //blank month
+        for(i = 0; i < CD_MONTH_SIZE; i++) {
+            Wire.write(0x00);  // blank month
             Wire.write(0x00);
         }        
         i = CD_DAY_POS;
@@ -1024,7 +1034,7 @@ void clockDisplay::AMPMoff()
 void clockDisplay::directAMPM(int val1, int val2) 
 {
     Wire.beginTransmission(_address);
-    Wire.write(CD_DAY_POS * 2);    
+    Wire.write(CD_AMPM_POS * 2);    
     Wire.write(val1 & 0xff);
     Wire.write(val2 & 0xff);
     Wire.endTransmission();
