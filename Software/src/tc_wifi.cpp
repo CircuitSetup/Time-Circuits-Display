@@ -1,12 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
  * 
- * Code based on Marmoset Electronics 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
- *
- * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- * 
  */
 
 #include "tc_wifi.h"
@@ -75,8 +74,8 @@ void wifi_setup()
 { 
     int temp;
     
-    #define TC_MENUSIZE (6)
-    const char* wifiMenu[TC_MENUSIZE] = {"wifi", "info", "param", "sep", "restart", "update" };
+    #define TC_MENUSIZE (7)
+    const char* wifiMenu[TC_MENUSIZE] = {"wifi", "info", "param", "sep", "restart", "update", "custom" };
     // We are running in non-blocking mode, so no point in "exit".
 
     // explicitly set mode, esp allegedly defaults to STA_AP
@@ -94,9 +93,12 @@ void wifi_setup()
     wm.setSaveParamsCallback(saveParamsCallback);
     wm.setHostname("TIMECIRCUITS");
 
+    // Center-align looks better
+    wm.setCustomHeadElement("<style type='text/css'>H1,H2{margin-top:0px;margin-bottom:0px;text-align:center;}</style>");
+    wm.setTitle(F("TimeCircuits"));
+
     // Hack version number into WiFiManager main page
-    wm.setCustomHeadElement("<style type='text/css'>H1{margin-top:0px;margin-bottom:0px;text-align:center;}</style>");
-    wm.setTitle(F("TimeCircuits</H1><div style='font-size:8px;margin-left:auto;margin-right:auto;text-align:center;'>Version " TC_VERSION "(" TC_VERSION_EXTRA ")</div><H1 style='font-size=0px;margin:0'>"));
+    wm.setCustomMenuHTML("<div style='font-size:9px;margin-left:auto;margin-right:auto;text-align:center;'>Version " TC_VERSION "(" TC_VERSION_EXTRA ")</div>");
 
     // Static IP info is not saved by WiFiManager,
     // have to do this "manually". Hence ipsettings.
