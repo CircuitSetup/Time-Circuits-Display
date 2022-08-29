@@ -100,6 +100,6 @@
 // Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino >= 2.x)
 // As long as SPIFFS is around, and LittleFS does not support wear leveling,
 // we go with SPIFFS.
-#define USE_SPIFFS
+//#define USE_SPIFFS
 
 #endif
