@@ -1,12 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
  * 
- * Code based on Marmoset Electronics 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
- *
- * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-
 #ifndef _TC_GLOBAL_H
 #define _TC_GLOBAL_H
 
@@ -33,23 +32,22 @@
 //#define TWPRIVATE     // A10001986's private customizations
 
 // Version strings. 
-// These must not contain any characters other than '0'-'9', 'A'-'Z' or space
-// Max length 12 characters
+// These must not contain any characters other than 
+// '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION "V2 0 0"
-#ifdef TWPRIVATE
-#define TC_VERSION_EXTRA "A10001986P"
-#elif defined(TWSOUND)
-#define TC_VERSION_EXTRA "A10001986"
-#else
-#define TC_VERSION_EXTRA "AUG262022"
-#endif
+#define TC_VERSION "V2.0.0"           // 13 chars max
+#define TC_VERSION_EXTRA "AUG282022"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "A CAR"
+#define TC_VERSION "V2.0.0_A-CAR"     // 12 chars max
+#define TC_VERSION_EXTRA "08282022"   // 12 chars max
 #endif
 
-#ifndef TC_VERSION_EXTRA
-#define TC_VERSION_EXTRA "VANILLA"
+#ifdef TWPRIVATE
+#undef TC_VERSION
+#define TC_VERSION "A10001986P"
+#elif defined(TWSOUND)
+#undef TC_VERSION
+#define TC_VERSION "A10001986"
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -58,8 +56,8 @@
 
 #define STATUS_LED_PIN     2      // Status LED (on ESP)
 #define SECONDS_IN_PIN    15      // SQW Monitor 1Hz from the DS3231
-#define ENTER_BUTTON_PIN  16      // GPIO that enter key is connected to
-#define WHITE_LED_PIN     17      // GPIO that white led is connected to
+#define ENTER_BUTTON_PIN  16      // enter key
+#define WHITE_LED_PIN     17      // white led
 
 // I2S audio pins
 #define I2S_BCLK_PIN      26
@@ -75,13 +73,13 @@
 #define VOLUME_PIN        32      // analog input pin
 
 // Fake Power On:
-// Attach an active-low switch to io13 or io14; firmware will start network and 
+// Attach an active-low switch to io13; firmware will start network and 
 // sync time, but not enable displays until the switch is activated.
 // The white led will flash for 0.5 seconds when the unit is ready to be "fake"
 // powered on. De-activating the switch "fake" powers down the device (ie the
 // displays are switched off, and no keypad input is accepted)
 #define FAKE_POWER_ON             // Wait for switch on io13/io14 before starting displays
-#define FAKE_POWER_BUTTON_PIN 13  // GPIO that fake power switch is connected to; 13 or 14
+#define FAKE_POWER_BUTTON_PIN 13  // GPIO that fake power switch is connected to
 
 // External time travel
 // If the defined pin goes low a time travel is triggered (eg when 88mph is reached)
@@ -89,7 +87,7 @@
 // place in the new time. So the external time travel should be initiated when
 // the present-time part of time travel is over.
 #define EXTERNAL_TIMETRAVEL         // Initiate time travel is pin is activated
-#define EXTERNAL_TIMETRAVEL_PIN 14  // GPIO that is polled (13 or 14, see fake power)
+#define EXTERNAL_TIMETRAVEL_PIN 14  // GPIO that is polled
 
 // EEPROM map
 // We use 2(padded to 8) + 10*3 + 4 bytes of EEPROM space at 0x0. 
