@@ -1,12 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
  * 
- * Code based on Marmoset Electronics 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
- *
- * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- * 
  */
 
 /*
@@ -46,6 +45,13 @@
 
 /* Changelog 
  *  
+  *  2022/08/28 (A10001986)
+ *    - Cancel enter-animation correctly when other anim is initiated
+ *    - Shutdown sound for fake power off
+ *    - Minor tweaks to long time travel display "disruption"
+ *    - Timetravel un-interruptible by enter key
+ *    - Re-do hack to show version on Config Portal
+ *    - Add GPL-compliant (C) info
  *  2022/08/26 (A10001986)
  *    - Attempt to beautify the Config Portal by using checkboxes instead of
  *      text input for boolean options
