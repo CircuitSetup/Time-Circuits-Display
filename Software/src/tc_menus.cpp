@@ -1,12 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
  * 
- * Code based on Marmoset Electronics 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
- *
- * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,87 +20,141 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- * 
  */
 
-/* 
+/*
  * The keypad menu
  * 
  * The menu is controlled by "pressing" or "holding" the ENTER key on the keypad.
- * Note: A "press" is shorter than 2 seconds, a "hold" is 2 seconds or longer.
- * Data entry is done via the keypad's number keys.
+ * 
+ * A "press" is shorter than 2 seconds, a "hold" is 2 seconds or longer. 
+ * Data entry is done by pressing the keypad's number keys.
  * 
  * The menu is involked by holding the ENTER button.
+ * 
  * First step is to choose a menu item. The available "items" are
- *    - enter custom dates/times for the three displays
- *    - set the audio volume ("VOL-UME")
- *    - set the alarm ("ALA-RM")
- *    - select the Time-Rotation Interval ("ROT-INT")
- *    - select the brightness for the three displays ("BRI-GHT")
- *    - view network info: IP address, WiFi status ("NET-WRK")
- *    - install the default audio files ("INSTALL AUDIO FILES")
- *    - quit the menu ("END")
- *  Pressing ENTER cycles through the list, holding ENTER selects an item, ie a mode.
- *  How to to enter custom dates/times or set the RTC (real time clock):
- *      - Note that the pre-set for destination and last time departed will be the previous 
- *        date/time stored in the EEPROM, not the date/time that was shown before entering 
- *        the menu. The pre-set for the present time display is the time stored in the RTC 
- *        (real time clock).
- *      - the field to enter data into is shown (exclusively)
- *      - data entry works as follows: 
- *        ) a pre-set is shown in the field
- *        ) if you want to keep this pre-set, press ENTER to proceed to next field.
- *        ) if you enter a digit, the pre-set is overwritten
- *        ) if you enter 2 (for year: 4) digits, the menu proceeds to the next field
- *        ) if you enter less than the maximum digits, you can press ENTER to proceed
- *          to the next field.
- *        Note that the month needs to be entered numerically, and the hour needs to be entered in 24
- *        hour mode, which is then shown in 12 hour mode (if this mode is active).
- *      - After entering data into all fields, the data is saved and the menu is left automatically.
- *      - Note that after entering dates/times into the "destination" or "last time departed" displays,
- *        the time-rotation interval is set to 0 and your entered date/time(s) are shown permanently 
- *        (see below).
- *      - If you entered a date/time into the "present" time display, this time is then stored to
- *        the RTC and used as actual the present time, and continues to run like a clock. (As opposed 
- *        to the "destination" and "last departure" times, which are stale.) If you don't have NTP
- *        (network time) available, this is the way to set the clock to actual present time. If the 
- *        clock is connected to the the network, your entered time will eventually be overwritten
- *        by the time received over the network.
- *  How to set the audio volume:
- *      - First option is "HW" or "SW". "HW" means that the device polls the volume pot, which is
- *        the default. "SW" means the volume is set by manually selecting a numerical level.
- *      - Hold ENTER to save your "HW" or "SW" setting.
- *      - If "SW" was chosen, now press ENTER until the desired level is reached. There are 16
- *        levels available.
- *      - Hold ENTER to save your setting.
- *  How to set the alarm:
- *      - First option is "on" or "off". Press ENTER to toggle, hold ENTER to proceed.
- *      - Next, enter the hour in 24-hour-format. This works in the same way as described above.
- *      - Next, enter the minute.
- *      - "SAVE" is shown briefly, the alarm is saved.
- *      Note that the alarm is a recurring alarm; it will sound every day at the programmed time,
- *      unless switched off through the menu.
- *      The alarm base is configurable in the WiFi-accessible Setup page. It can either be RTC
- *      (ie the actual present time), or "present time", ie whatever is currently displayed in 
- *      present time. 
- *  How to select the Time Rotation Interval (display shows "INT")
- *      - Press ENTER to cycle through the possible settings.
- *      - Hold ENTER for 2 seconds to select the shown value and exit the menu ("SAVE" is displayed briefly)
- *      - 0 makes your custom "destination" and "last time departed" times to be shown permanently.
- *        (CUS-TOM is displayed as a reminder)
- *      - Non-zero values make the clock cycle through a number of pre-programmed times, your
- *        custom times are ignored. The value means "minutes" (hence "MIN-UTES")               
- *  How to select display brightness (display shows "LVL")
- *      - Press ENTER to cycle through the possible levels (1-5)
- *      - Hold ENTER for 2 seconds to use current value and jump to next display
- *      - After the third display, "SAVE" is displayed briefly and the menu is left automatically.
- *  How to display the current IP address ("NETWRK")
- *      - the bottom two displays show the current IP address of the device. If this is 192.168.4.1,
- *        the device very likely could not connect to your WiFi network and runs in AP mode ("TCD-AP")
- *      - Press ENTER to view the WiFi status
- *      - Hold ENTER to quit the menu
- *  How to quit the menu ("END")
- *      - Hold ENTER to quit the menu
+ * 
+ *     - enter dates/times for the three displays,
+ *     - set the audio volume (VOL-UME),
+ *     - set an alarm ("ALA-RM"),
+ *     - select the Time-rotation Interval ("ROT-INT"),
+ *     - select the brightness for the three displays ("BRI-GHT"),
+ *     - show network information ("NET-WRK"),
+ *     - install the default audio files ("INSTALL AUDIO FILES")
+ *     - quit the menu ("END").
+ * 
+ * Pressing ENTER cycles through the list, holding ENTER selects an item, ie a mode.
+ * 
+ * How to enter dates/times for the three displays:
+ * 
+ *     - Hold ENTER to invoke main menu
+ *     - Press ENTER until the desired display is the only one lit
+ *     - Hold ENTER until the display goes off except for the first field to 
+ *       enter data into
+ *     - The field to enter data into is shown (exclusively), pre-set with its current 
+ *       value.
+ *     - Data entry works as follows: If you want to keep the currently shown pre-set, 
+ *       press ENTER to proceed to next field. Otherwise press a digit on the keypad; 
+ *       the pre-set is then overwritten by the value entered. 2 digits can be entered 
+ *       (4 for years), upon which the current value is stored and the next field is 
+ *       activated. You can also enter less than 2/4 digits and press ENTER when done 
+ *       with the field. 
+ *       Note that the month needs to be entered numerically (1-12), and the hour needs 
+ *       to be entered in 24 hour mode, regardless of 12-hour or 24-hour mode as per the 
+ *       Config Portal setting.
+ *     - After entering data into all fields, the data is saved and the menu is left 
+ *       automatically.
+ *     
+ *     Note that when entering dates/times into the destination time or last time departed 
+ *     displays, the Time-rotation Interval is automatically set to 0. Your entered 
+ *     date/time(s) are shown until overwritten by time travels (see below, section 
+ *     How to select the Time-rotation Interval").
+ *     
+ *     By entering a date/time into the present time display, the RTC (real time clock) 
+ *     of the device is adjusted, which is useful if you can't use NTP for time keeping. 
+ *     The time you entered will be overwritten if/when the device has access to network 
+ *     time via NTP.
+ * 
+ * How to set the audio volume:
+ * 
+ *     Basically, and by default, the device uses the hardware volume knob to determine 
+ *     the desired volume. You can change this to a software setting as follows:
+ * 
+ *     - Hold ENTER to invoke main menu
+ *     - Press ENTER until "VOL-UME" is shown
+ *     - Hold ENTER
+ *     - Press ENTER to toggle between "HW" (volume knob) or "SW" (software)
+ *     - Hold ENTER to proceed
+ *     - If you chose "SW", you can now select the desired level by pressing ENTER 
+ *       repeatedly. There are 16 levels available.
+ *     - Hold ENTER to save and quit the menu
+ *
+ * How to set up the alarm:
+ *
+ *     - Hold ENTER to invoke main menu
+ *     - Press ENTER until "ALA-RM" is shown
+ *     - Hold ENTER
+ *     - Press ENTER to toggle the alarm on and off, hold ENTER to proceed
+ *     - Then enter the hour and minutes. This works as described above.
+ *     - The menu is left automatically after entering the minute. "SAVE" is displayed 
+ *       briefly.
+ *
+ *    Under normal operation (ie outside of the menu), holding "1" enables the alarm, 
+ *    holding "2" disables it.
+ *
+ *    Note that the alarm is recurring, ie it rings every day at the programmed time, 
+ *    unless disabled. Also note, as mentioned, that the alarm is by default relative 
+ *    to your actual present time, not the time displayed (eg after a time travel). 
+ *    It can, however, be configured to be based on the time displayed, in the Config 
+ *    Portal.
+ *
+ *    If the alarm is set and enabled, the dot in the present time's minute field is lit.
+ * 
+ * How to select the Time-rotation Interval:
+ *
+ *     - Hold ENTER to invoke main menu
+ *     - Press ENTER until "ROT-INT" is shown
+ *     - Hold ENTER, "INT" is displayed
+ *     - Press ENTER to cycle through the possible Time-rotation Interval values.
+ *
+ *       A value of 0 disables automatic time cycling ("OFF").
+ *
+ *       Non-zero values make the device cycle through a number of pre-programmed times. 
+ *       The value means "minutes" (hence "MIN-UTES") between changes.
+ *
+ *     - Hold ENTER to select the value shown and exit the menu ("SAVE" is displayed briefly)
+ * 
+ * How to adjust the display brightness:
+ * 
+ *     - Hold ENTER to invoke main menu
+ *     - Press ENTER until "BRI-GHT" is shown
+ *     - Hold ENTER, the displays show all elements, the top-most display says "LVL"
+ *     - Press ENTER to cycle through the possible levels (1-5)
+ *     - Hold ENTER to use current value and proceed to next display
+ *     - After the third display, "SAVE" is displayed briefly and the menu is left automatically.
+ * 
+ * How to find out the IP address and WiFi status:
+ * 
+ *     - Hold ENTER to invoke main menu
+ *     - Press ENTER until "NET-WRK" is shown
+ *     - Hold ENTER, the displays shows the IP address
+ *     - Press ENTER to view the WiFi status
+ *     - Hold ENTER to leave the menu
+ * 
+ * How to install the default audio files:
+ * 
+ *     - Hold ENTER to invoke main menu
+ *     - Press ENTER until "INSTALL AUDIO FILES" is shown. If this menu does not appear, 
+ *       the SD card isn't configured properly.
+ *     - Hold ENTER to proceed
+ *     - Press ENTER to toggle between "CANCEL" and "COPY"
+ *     - Hold ENTER to proceed. If "COPY" was chosen, the display will guide you through 
+ *       the rest of the process. The menu is quit automatically afterwards.
+ * 
+ * How to leave the menu:
+ * 
+ *     While the menu is active, press ENTER until "END" is displayed.
+ *     Hold ENTER to leave the menu
  */
 
 #include "tc_menus.h"
@@ -162,8 +216,9 @@ void enter_menu()
 
     // Load the custom times from EEPROM
     // This means that when the user activates the menu while 
-    // autoInterval was > 0, there will be different times
-    // shown in the menu than were outside the menu    
+    // autoInterval was > 0 or after time travels, there will 
+    // be different times shown in the menu than were outside 
+    // the menu.
     destinationTime.load();     
     departedTime.load();
 
@@ -178,7 +233,7 @@ void enter_menu()
     timeout = 0;  
 
     // menuSelect: 
-    // Wait for ENTER to cycle through main menu (displays and modes), 
+    // Wait for ENTER to cycle through main menu, 
     // HOLDing ENTER selects current menu "item"
     // (Also sets displaySet to selected display, if applicable)    
     menuSelect(menuItemNum);  
@@ -218,7 +273,7 @@ void enter_menu()
             // non RTC, get the time info from the object
             // Remember: These are the ones saved in the EEPROM
             // NOT the ones that were possibly shown on the 
-            // display while autoInterval was > 0.
+            // display before invoking the menu
             yearSet = displaySet->getYear();
             monthSet = displaySet->getMonth();
             daySet = displaySet->getDay();
@@ -437,11 +492,7 @@ quitMenu:
 
     mydelay(1000);
 
-    #ifdef TC_DBG
-    Serial.println(F("Menu: Update Present Time"));
-    #endif
-
-    // Set the current time in the display, 2+ seconds gone
+    // Set the current time in the display, 2+ seconds have gone
     presentTime.setDateTimeDiff(myrtcnow()); 
     
     // all displays on and show  
@@ -455,15 +506,10 @@ quitMenu:
     destinationTime.setNightMode(desNM);
     presentTime.setNightMode(preNM);
     departedTime.setNightMode(depNM);
-
-    #ifdef TC_DBG
-    Serial.println(F("Menu: Exiting...."));
-    #endif
 }
 
 /* 
- *  Cycle through main menu:
- *  Select display to update, or mode (alarm, rot-Int, bri, ...)
+ *  Cycle through main menu
  *  
  */
 void menuSelect(int& number) 
@@ -473,46 +519,45 @@ void menuSelect(int& number)
     // Wait for enter
     while(!checkTimeOut()) {
       
-      // If pressed
-      if(digitalRead(ENTER_BUTTON_PIN)) {
-        
-          // wait for release
-          while(!checkTimeOut() && digitalRead(ENTER_BUTTON_PIN)) {
-              
-              myloop();
-
-              // If hold threshold is passed, return false */
-              if(isEnterKeyHeld) {
-                  isEnterKeyHeld = false;
-                  return;              
-              }
-              delay(10); 
-          }
-
-          if(checkTimeOut()) return;
-              
-          timeout = 0;  // button pressed, reset timeout
+        // If pressed
+        if(digitalRead(ENTER_BUTTON_PIN)) {
           
-          number++;
-          if(number == MODE_CPA && !check_allow_CPA()) number++;
-          if(number > MODE_MAX) number = MODE_MIN;
-
-          // Show only the selected display, or menu item text
-          menuShow(number);   
-        
-      } else {
-
-          myloop();
-          delay(50);
+            // wait for release
+            while(!checkTimeOut() && digitalRead(ENTER_BUTTON_PIN)) {
+                
+                myloop();
+  
+                // If hold threshold is passed, return false */
+                if(isEnterKeyHeld) {
+                    isEnterKeyHeld = false;
+                    return;              
+                }
+                delay(10); 
+            }
+  
+            if(checkTimeOut()) return;
+                
+            timeout = 0;  // button pressed, reset timeout
+            
+            number++;
+            if(number == MODE_CPA && !check_allow_CPA()) number++;
+            if(number > MODE_MAX) number = MODE_MIN;
+  
+            // Show only the selected display, or menu item text
+            menuShow(number);   
           
-      }
+        } else {
+  
+            myloop();
+            delay(50);
+            
+        }
       
     }
 }  
 
 /* 
- *  Shows the currently selected menu item, ie it turns on the currently 
- *  selected display, or shows descriptive text
+ *  Displays the current main menu item
  *  
  */ 
 void menuShow(int& number) 
@@ -545,10 +590,10 @@ void menuShow(int& number)
             break;
         case MODE_VOL:   // Software volume
             #ifdef IS_ACAR_DISPLAY
-            destinationTime.showOnlyText("VOLUME");  
+            destinationTime.showOnlyText("VOLUME"); 
             presentTime.off();
             #else
-            destinationTime.showOnlyText("VOL");  // display VOLUME
+            destinationTime.showOnlyText("VOL");    // "M" on 7seg no good, 2 lines
             presentTime.showOnlyText("UME");  
             presentTime.on(); 
             #endif
@@ -561,7 +606,7 @@ void menuShow(int& number)
             destinationTime.showOnlyText("ALARM");  
             presentTime.off();
             #else
-            destinationTime.showOnlyText("ALA");  // display ALA-RM, no numbers, clear rest of screen
+            destinationTime.showOnlyText("ALA");    // "M" on 7seg no good, 2 lines
             presentTime.showOnlyText("RM");  
             presentTime.on(); 
             #endif
@@ -569,30 +614,26 @@ void menuShow(int& number)
             departedTime.off();
             displaySet = &destinationTime;
             break;
-        case MODE_AINT:  // autoInterval
+        case MODE_AINT:  // Time Rotation inverval
             #ifdef IS_ACAR_DISPLAY
             destinationTime.showOnlyText("ROT INT");
             presentTime.off();
-            #else
-            destinationTime.showOnlyText("ROT");  // display ROT-INT, clear rest of screen
-            presentTime.showOnlyText("INT"); 
-            presentTime.on(); 
-            #endif
-            destinationTime.on();                        
             departedTime.off();
+            #else
+            destinationTime.showOnlyText("TIME");
+            presentTime.showOnlyText("ROTATION");
+            departedTime.showOnlyText("INTERVAL"); 
+            presentTime.on(); 
+            departedTime.on();
+            #endif
+            destinationTime.on();                                    
             displaySet = NULL;
             break;
         case MODE_BRI:  // Brightness
-            #ifdef IS_ACAR_DISPLAY
-            destinationTime.showOnlyText("BRIGHT"); 
+            destinationTime.showOnlyText("BRIGHTNESS"); 
             presentTime.off(); 
-            #else
-            destinationTime.showOnlyText("BRI");  // display BRI-GHT, clear rest of screen
-            presentTime.showOnlyText("GHT");  
-            presentTime.on(); 
-            #endif
-            destinationTime.on();                       
-            departedTime.off();
+            departedTime.off();            
+            destinationTime.on();                                   
             displaySet = NULL;
             break;
         case MODE_NET:  // Network info
@@ -601,8 +642,8 @@ void menuShow(int& number)
             destinationTime.on(); 
             presentTime.off(); 
             #else
-            destinationTime.showOnlyText("NET");  // display NET-WRK, clear rest of screen
-            presentTime.showOnlyText("WRK");  
+            destinationTime.showOnlyText("NET");  // "W" on 7seg no good, 2 lines
+            presentTime.showOnlyText("WORK");  
             destinationTime.on();
             presentTime.on();    
             #endif                    
@@ -622,7 +663,7 @@ void menuShow(int& number)
             #endif
             displaySet = NULL;
             break;
-        case MODE_CPA:  // install audio files
+        case MODE_CPA:  // Install audio files
             destinationTime.showOnlyText("INSTALL"); 
             destinationTime.on();
             presentTime.showOnlyText("AUDIO FILES");
@@ -631,7 +672,7 @@ void menuShow(int& number)
             displaySet = NULL;
             break;                     
         case MODE_END:  // end            
-            destinationTime.showOnlyText("END");  // display END, clear rest of screen
+            destinationTime.showOnlyText("END"); 
             destinationTime.on();
             destinationTime.setColon(false);            
             presentTime.off();
@@ -1111,7 +1152,7 @@ void doSetAlarm()
  *  Note: The autoInterval is no longer saved to the EEPROM.
  *  It is written to the config file, which is updated accordingly.
  */
-bool loadAutoInterval() 
+bool loadAutoInterval()
 {
     #ifdef TC_DBG
     Serial.println(F("Load Auto Interval"));
@@ -1119,7 +1160,7 @@ bool loadAutoInterval()
     
     autoInterval = (uint8_t)atoi(settings.autoRotateTimes);
     if(autoInterval > 5) {
-        autoInterval = 1;  
+        autoInterval = 1;
         Serial.println(F("loadAutoInterval: Bad autoInterval, resetting to 1"));
         return false;
     }
@@ -1238,8 +1279,9 @@ void doSetAutoInterval()
 }
 
 /*
- * Adjust the brightness of the selected displaySet and save
+ * Brightness
  */
+ 
 void doSetBrightness(clockDisplay* displaySet) {
   
     int8_t number = displaySet->getBrightness();
@@ -1328,8 +1370,8 @@ void doSetBrightness(clockDisplay* displaySet) {
 
 /*
  * Show network info
- * 
  */
+ 
 void doShowNetInfo() 
 {
     uint8_t a, b, c, d;
@@ -1455,8 +1497,9 @@ void doShowNetInfo()
 }
 
 /*
- * Copy audio files from SD to flash FS
+ * Install default audio files from SD to flash FS
  */
+ 
 void doCopyAudioFiles()
 {
     bool doCancDone = false;
