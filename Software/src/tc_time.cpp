@@ -1,12 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
  * 
- * Code based on Marmoset Electronics 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
- *
- * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- * 
  */
 
 
@@ -106,8 +105,6 @@ clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
 
 int8_t autoTime = 0;  // Selects date/time from array below
 
-#ifndef TWPRIVATE //  ----------------- OFFICIAL
-
 dateStruct destinationTimes[NUM_AUTOTIMES] = {
     //YEAR, MONTH, DAY, HOUR, MIN 
     {1985, 10, 26,  1, 21},   // Einstein 1:20 -> 1:21
@@ -135,10 +132,6 @@ dateStruct departedTimes[NUM_AUTOTIMES] = {
     {1955, 11, 15, 11, 11},   // Marty -> 1885 (Date shown in movie 11/5 - wrong! Must be after 11/12! Date&time guessed)
     {1885,  9,  7,  8, 22}    // Marty -> 1985 (time guessed/assumed)
 };
-
-#else //  --------------------------- TWPRIVATE
-
-#endif  // ------------------------------------
 
 #ifdef FAKE_POWER_ON
 OneButton fakePowerOnKey = OneButton(FAKE_POWER_BUTTON_PIN,
@@ -342,8 +335,8 @@ void time_setup()
 
     if((int)atoi(settings.playIntro)) {
         const char *t1 = "             BACK";
-        const char *t2 = "TO";
-        const char *t3 = "THE FUTURE";  
+        const char *t2 = "TO THE";
+        const char *t3 = "FUTURE";  
         int oldBriDest = destinationTime.getBrightness();
         int oldBriPres = presentTime.getBrightness();
         int oldBriDep = departedTime.getBrightness();
@@ -439,7 +432,10 @@ void time_loop()
                 if(!FPBUnitIsOn) {                                 
                     startup = true;
                     startupSound = true;                    
-                    FPBUnitIsOn = true;                    
+                    FPBUnitIsOn = true;   
+                    destinationTime.setBrightness(255); // restore brightnesses
+                    presentTime.setBrightness(255);     // in case we got switched
+                    departedTime.setBrightness(255);    // off during time travel
                 }
             } else {
                 if(FPBUnitIsOn) {       
@@ -448,7 +444,11 @@ void time_loop()
                     timeTraveled = false;  
                     timeTravelP1 = 0;            
                     FPBUnitIsOn = false;
+                    cancelEnterAnim();
+                    play_file("/shutdown.mp3", 1.0, true, 0);  
+                    mydelay(130);                  
                     allOff();
+                    waitAudioDone();
                     stopAudio();
                 }
             }
@@ -469,7 +469,7 @@ void time_loop()
         animate();
         startup = false;        
         #ifdef TC_DBG
-        Serial.println(F("time_loop: Startup animate triggered"));
+        Serial.println(F("time_loop: Startup animation triggered"));
         #endif
     }
 
@@ -508,6 +508,9 @@ void time_loop()
             Serial.println(F("long time travel phase 6 - re-entry"));
             #endif
             timeTravelP1 = 0;
+            destinationTime.setBrightness(255); // restore
+            presentTime.setBrightness(255);
+            departedTime.setBrightness(255);
             timeTravel(false);
         }
     }
@@ -763,10 +766,6 @@ void time_loop()
                     destinationTime.setFromStruct(&destinationTimes[autoTime]);
                     departedTime.setFromStruct(&departedTimes[autoTime]);
 
-                    //destinationTime.setColon(true);
-                    //presentTime.setColon(true);
-                    //departedTime.setColon(true);
-
                     allOff();
 
                     // Blank on second 59, display when new minute begins
@@ -806,12 +805,12 @@ void time_loop()
         x = y;  
 
         if(timeTravelP1 > 1) {  
-            int ii = 5, tt, obdt, obpt, obld;       
+            int ii = 5, tt;       
             switch(timeTravelP1) { 
             case 2:
-                ((rand() % 10) > 8) ? presentTime.off() : presentTime.on();
-                ((rand() % 10) > 8) ? destinationTime.off() : destinationTime.on();
-                ((rand() % 10) > 8) ? departedTime.off() : departedTime.on();                
+                ((rand() % 10) > 7) ? presentTime.off() : presentTime.on();
+                (((rand()+millis()) % 10) > 7) ? destinationTime.off() : destinationTime.on();
+                ((rand() % 10) > 7) ? departedTime.off() : departedTime.on();                
                 break;
             case 3:
                 presentTime.off();
@@ -822,46 +821,39 @@ void time_loop()
                 destinationTime.show();  
                 presentTime.show();                       
                 departedTime.show();
-                obdt = destinationTime.getBrightness();
-                obpt = presentTime.getBrightness();
-                obld = departedTime.getBrightness();
+                destinationTime.on();
+                presentTime.on();
+                departedTime.on();
                 while(ii--) {
-                    destinationTime.on();
-                    ((rand() % 10) < 7) ? destinationTime.showOnlyText("MALFUNCTION") : destinationTime.show();
-                    if(ii % 2) destinationTime.setBrightness((1+(rand() % 10)) & 0x0b);
-                    presentTime.on();
-                    if(ii % 2) presentTime.setBrightness((1+(rand() % 10)) & 0x0b);
-                    departedTime.on();
-                    ((rand() % 10) < 3) ? departedTime.showOnlyText("KHDW2011GIDUW") : departedTime.show();
-                    if(ii % 2) departedTime.setBrightness((1+(rand() % 10)) & 0x0b);
-                    mysdelay(5);
-                    allOff();
-                    mysdelay(10);
+                    ((rand() % 10) < 5) ? destinationTime.showOnlyText("MALFUNCTION") : destinationTime.show();
+                    destinationTime.setBrightnessDirect((1+(rand() % 10)) & 0x0a);
+                    presentTime.setBrightnessDirect((1+(rand() % 10)) & 0x0b);
+                    ((rand() % 10) < 3) ? departedTime.showOnlyText(">ACS2011GIDUW") : departedTime.show();
+                    departedTime.setBrightnessDirect((1+(rand() % 10)) & 0x07);
+                    mysdelay(20);               
                 }
-                destinationTime.setBrightness(obdt);
-                presentTime.setBrightness(obpt);
-                departedTime.setBrightness(obld);
+                //allOff();
                 break;       
-            case 5:          
-                obdt = destinationTime.getBrightness();
+            case 5:                   
+                departedTime.setBrightness(255);       
                 while(ii--) {   
                     tt = rand() % 10; 
+                    presentTime.setBrightnessDirect(1+(rand() % 8));
                     if(tt < 3)      { presentTime.lampTest(); }
                     else if(tt < 7) { presentTime.show(); presentTime.on(); }
                     else            { presentTime.off(); }
                     tt = (rand() + millis()) % 10;
                     if(tt < 2)      { destinationTime.lampTest(); }
                     else if(tt < 6) { destinationTime.show(); destinationTime.on(); }
-                    else            { destinationTime.setBrightness(1+(rand() % 10)); }  
+                    else            { destinationTime.setBrightnessDirect(1+(rand() % 8)); }  
                     tt = (rand() + millis()) % 10; 
                     if(tt < 4)      { departedTime.lampTest(); }
                     else if(tt < 8) { departedTime.showOnlyText("00000000000000"); departedTime.on(); }
                     else            { departedTime.off(); }
-                    mysdelay(5);
+                    mysdelay(10);
                 }
-                destinationTime.setBrightness(obdt);
                 break;
-            default:
+            default:                
                 allOff();
             }
         }
@@ -881,13 +873,15 @@ void time_loop()
  *  -) copy present time into departed time (where it freezes)
  *  -) copy destination time to present time (where it continues to run as a clock)
  *
- *  This is called from tc_keypad.cpp 
+ *  This is also called from tc_keypad.cpp 
  */
 
 void timeTravel(bool makeLong) 
 {
     int tyr = 0;
-    int tyroffs = 0;    
+    int tyroffs = 0;  
+
+    cancelEnterAnim();
 
     // Pause autoInterval-cycling so user can play undisturbed
     pauseAuto();
@@ -970,6 +964,8 @@ void resetPresentTime()
     if(timeDifference) {
         play_file("/timetravel.mp3", 1.0, true, 0);
     }
+
+    cancelEnterAnim();
   
     allOff();
     
