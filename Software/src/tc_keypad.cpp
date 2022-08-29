@@ -1,12 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
  * 
- * Code based on Marmoset Electronics 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
- *
- * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- * 
  */
 
 #include "tc_keypad.h"
@@ -286,15 +285,23 @@ void keypad_loop()
         dateIndex = 0;
     }
 
-    if(!FPBUnitIsOn) {
+    // Bail out if sequence played or device is fake-"off"
+    if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP1) {
+
+        isEnterKeyHeld = false;     
+        isEnterKeyPressed = false;
+        #ifdef EXTERNAL_TIMETRAVEL
         isEttKeyPressed = false; 
+        #endif
+        
         return;
+        
     }
 
 #ifdef EXTERNAL_TIMETRAVEL
     if(isEttKeyPressed) {
-        timeTravel(false);    // make short time travel
-        isEttKeyPressed = false;     
+        timeTravel(false);   // make short time travel (reentry)
+        isEttKeyPressed = false;
     }
 #endif    
 
@@ -303,6 +310,7 @@ void keypad_loop()
              
         isEnterKeyHeld = false;     
         isEnterKeyPressed = false;
+        cancelEnterAnim();
         
         timeIndex = yearIndex = 0;
         timeBuffer[0] = '\0';
@@ -331,7 +339,7 @@ void keypad_loop()
         // Turn on white LED
         digitalWrite(WHITE_LED_PIN, HIGH); 
 
-        // Turn off destination time only
+        // Turn off destination time
         destinationTime.off(); 
                  
         timeNow = millis();        
@@ -423,10 +431,20 @@ void keypad_loop()
         mysdelay(80);                     // Wait 80ms
         destinationTime.showAnimate2();   // turn on month
         
-        digitalWrite(WHITE_LED_PIN, LOW);     // turn off white LED
+        digitalWrite(WHITE_LED_PIN, LOW); // turn off white LED
         
         enterWasPressed = false;          // reset flag
         
+    }
+}
+
+void cancelEnterAnim()
+{
+    if(enterWasPressed) {
+        enterWasPressed = false;
+        digitalWrite(WHITE_LED_PIN, LOW);
+        destinationTime.show();
+        destinationTime.on();
     }
 }
 

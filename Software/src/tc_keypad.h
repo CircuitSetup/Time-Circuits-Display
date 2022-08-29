@@ -1,12 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
  * 
- * Code based on Marmoset Electronics 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
- *
- * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
  * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- * 
  */
 
 #ifndef _TC_KEYPAD_H
@@ -40,22 +39,22 @@
 
 #define KEYPAD_ADDR 0x20        // I2C address of the PCF8574 port expander (keypad)
 
-#define ENTER_DEBOUNCE 50       // enter button debounce time in ms
+#define ENTER_DEBOUNCE    50    // enter button debounce time in ms
 #define ENTER_CLICK_TIME 200    // enter button will register a click 
 #define ENTER_HOLD_TIME 2000    // time in ms holding the enter button will count as a hold
 
-#define ETT_DEBOUNCE 50         // external time travel button debounce time in ms
-#define ETT_CLICK_TIME 250      // external time travel button will register a click (unused)
-#define ETT_HOLD_TIME 200       // external time travel button will register a press (that's the one)
+#define ETT_DEBOUNCE      50    // external time travel button debounce time in ms
+#define ETT_CLICK_TIME   250    // external time travel button will register a click (unused)
+#define ETT_HOLD_TIME    200    // external time travel button will register a press (that's the one)
 
 // When ENTER button is pressed, turn off display for this many ms
-// Must be sync'd to the sound file used! (enter.mp3 and baddate.mp3)
+// Must be sync'd to the sound file used (enter.mp3)
+#define BADDATE_DELAY 400
 #ifdef TWSOUND
-#define ENTER_DELAY   500 
+#define ENTER_DELAY   500       // For TW sound files
 #else
 #define ENTER_DELAY   600         
 #endif
-#define BADDATE_DELAY 400
 
 void keypadEvent(KeypadEvent key);
 extern void keypad_setup();
@@ -64,6 +63,7 @@ extern void recordKey(char key);
 extern void recordSetTimeKey(char key);
 extern void recordSetYearKey(char key);
 extern void resetTimebufIndices();
+extern void cancelEnterAnim();
 
 void nightModeOn();
 void nightModeOff();
