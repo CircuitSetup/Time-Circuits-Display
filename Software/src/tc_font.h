@@ -1,12 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
  * 
- * Code based on Marmoset Electronics 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
- *
- * Enhanced/modified/written in 2022 by Thomas Winischhofer (A10001986)
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,7 +72,7 @@ static const uint16_t alphaChars[] = {
     0b0001001011000000,  // +
     0b0000100000000000,  // ,
     0b0000000011000000,  // -
-    0b0000000000000000,  // .
+    0b0000000000001000,  // .
     0b0000110000000000,  // /
     0b0000110000111111,  // 0
     0b0000000000000110,  // 1
@@ -156,7 +156,7 @@ static const uint16_t alphaChars[] = {
     0b0011111111111111,
 };
 
-static const uint8_t numDigs[36] = {
+static const uint8_t numDigs[40] = {
     0b00111111, // 0
     0b00000110, // 1
     0b01011011, // 2
@@ -193,6 +193,10 @@ static const uint8_t numDigs[36] = {
     0b01110110, // X  33
     0b01101110, // Y  34
     0b01011011, // Z  35
+    0b01000000, // -   36
+    0b00111001, // (/[ 37
+    0b00001111, // )/] 38
+    0b00001000  // _/. 39
 };
 
 #endif
