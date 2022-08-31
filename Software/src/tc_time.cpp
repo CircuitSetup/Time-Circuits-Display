@@ -44,7 +44,12 @@ bool autoIntDone = false;
 bool autoReadjust = false;
 bool alarmDone = false;
 bool hourlySoundDone = false;
+bool autoNMDone = false;
 int8_t minNext;  
+
+bool autoNightMode = false;
+uint8_t autoNMOnHour = 0;
+uint8_t autoNMOffHour = 0;
 
 bool x;  // for tracking second changes
 bool y;  
@@ -54,7 +59,7 @@ bool startup              = false;
 bool startupSound         = false;
 unsigned long startupNow  = 0;
 
-// Pause autoInterval if user played with time travel
+// Pause auto-time-cycling if user played with time travel
 unsigned long pauseNow;                 
 unsigned long pauseDelay = 30*60*1000;  // Pause for 30 minutes
 bool          autoPaused = false;
@@ -67,6 +72,8 @@ int           timeTravelP1 = 0;
 // The timetravel re-entry sequence
 unsigned long timetravelNow = 0;
 bool          timeTraveled = false;
+
+int           specDisp = 0;
 
 struct tm _timeinfo;  //for NTP
 RTC_DS3231 rtc;       //for RTC IC
@@ -142,6 +149,13 @@ bool isFPBKeyChange = false;
 bool isFPBKeyPressed = false;
 bool waitForFakePowerButton = false;
 #endif
+
+#ifdef EXTERNAL_TIMETRAVEL_OUT
+unsigned long ettoDelay = 0;
+bool ettoDelayBefore = false;
+unsigned long ettoNow = 0;
+#endif
+
 bool FPBUnitIsOn = true;
 
 const uint8_t monthDays[] = { 
@@ -198,6 +212,11 @@ void time_setup()
         fakePowerOnKey.attachLongPressStart(fpbKeyPressed);
         fakePowerOnKey.attachLongPressStop(fpbKeyLongPressStop);
     }
+    #endif
+
+    #ifdef EXTERNAL_TIMETRAVEL_OUT
+    pinMode(EXTERNAL_TIMETRAVEL_OUT_PIN, OUTPUT);
+    digitalWrite(EXTERNAL_TIMETRAVEL_OUT_PIN, LOW);  
     #endif
     
     // RTC setup
@@ -308,6 +327,15 @@ void time_setup()
     // Don't care if data invalid, alarm is off in that case
     loadAlarm();
 
+    // Auto-NightMode
+    autoNMOnHour = (int)atoi(settings.autoNMOn);
+    if(autoNMOnHour > 23) autoNMOnHour = 0;
+    autoNMOffHour = (int)atoi(settings.autoNMOff);
+    if(autoNMOffHour > 23) autoNMOffHour = 0;
+    autoNightMode = (autoNMOnHour != autoNMOffHour);
+
+    
+
     // If using auto times, load the first one
     if(autoTimeIntervals[autoInterval]) {                    
         destinationTime.setFromStruct(&destinationTimes[0]); 
@@ -335,8 +363,8 @@ void time_setup()
 
     if((int)atoi(settings.playIntro)) {
         const char *t1 = "             BACK";
-        const char *t2 = "TO THE";
-        const char *t3 = "FUTURE";  
+        const char *t2 = "TO";
+        const char *t3 = "THE FUTURE";  
         int oldBriDest = destinationTime.getBrightness();
         int oldBriPres = presentTime.getBrightness();
         int oldBriDep = departedTime.getBrightness();
@@ -445,6 +473,7 @@ void time_loop()
                     timeTravelP1 = 0;            
                     FPBUnitIsOn = false;
                     cancelEnterAnim();
+                    cancelETTAnim();
                     play_file("/shutdown.mp3", 1.0, true, 0);  
                     mydelay(130);                  
                     allOff();
@@ -481,32 +510,17 @@ void time_loop()
         case 2:            
             allOff();
             timetravelP1Delay = TT_P1_DELAY_P2;
-            #ifdef TC_DBG
-            Serial.println(F("long time travel phase 2"));
-            #endif
             break;
         case 3:
             timetravelP1Delay = TT_P1_DELAY_P3;
-            #ifdef TC_DBG
-            Serial.println(F("long time travel phase 3"));
-            #endif
             break;
         case 4:
             timetravelP1Delay = TT_P1_DELAY_P4;
-            #ifdef TC_DBG
-            Serial.println(F("long time travel phase 4"));
-            #endif
             break;
         case 5:
             timetravelP1Delay = TT_P1_DELAY_P5;
-            #ifdef TC_DBG
-            Serial.println(F("long time travel phase 5"));
-            #endif
             break;
         default:
-            #ifdef TC_DBG
-            Serial.println(F("long time travel phase 6 - re-entry"));
-            #endif
             timeTravelP1 = 0;
             destinationTime.setBrightness(255); // restore
             presentTime.setBrightness(255);
@@ -731,7 +745,25 @@ void time_loop()
                     } else {
                         alarmDone = false;
                     } 
-                }                      
+                }
+
+                // Handle Auto-NightMode
+
+                if(autoNightMode) {                    
+                    if((autoNMOnHour == compHour) && (compMin == 0)) {
+                        if(!autoNMDone) {
+                            nightModeOn();
+                            autoNMDone = true;
+                        }
+                    } else if((autoNMOffHour == compHour) && (compMin == 0)) {
+                        if(!autoNMDone) {
+                            nightModeOff();
+                            autoNMDone = true;
+                        }
+                    } else {
+                        autoNMDone = false;
+                    }
+                }
 
             }
             
@@ -859,8 +891,10 @@ void time_loop()
         }
 
         if(!startup && !timeTraveled && (timeTravelP1 <= 1) && FPBUnitIsOn) {
-            presentTime.show();  
-            destinationTime.show();       
+            if(!specDisp) {
+                destinationTime.show();
+            }
+            presentTime.show();
             departedTime.show();
         }
     }
@@ -882,14 +916,12 @@ void timeTravel(bool makeLong)
     int tyroffs = 0;  
 
     cancelEnterAnim();
+    cancelETTAnim();
 
     // Pause autoInterval-cycling so user can play undisturbed
     pauseAuto();
 
     if(makeLong) {
-        #ifdef TC_DBG
-        Serial.println(F("long time travel phase 1"));
-        #endif
         play_file("/travelstart.mp3", 1.0, true, 0);
         timetravelP1Now = millis();
         timetravelP1Delay = TT_P1_DELAY_P1;
@@ -966,6 +998,7 @@ void resetPresentTime()
     }
 
     cancelEnterAnim();
+    cancelETTAnim();
   
     allOff();
     
@@ -1279,6 +1312,11 @@ void minsToDate(uint64_t total64, int& year, int& month, int& day, int& hour, in
     hour = temp;
     
     minute = total32 - (temp * 60);
+}
+
+uint32_t getHrs1KYrs(int index)
+{
+    return hours1kYears[index];
 }
 
 /*

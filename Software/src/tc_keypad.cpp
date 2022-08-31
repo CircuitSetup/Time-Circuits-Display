@@ -45,8 +45,12 @@ bool isEnterKeyPressed = false;
 bool isEnterKeyHeld = false;
 bool enterWasPressed = false;
 
-#ifdef EXTERNAL_TIMETRAVEL
+#ifdef EXTERNAL_TIMETRAVEL_IN
 bool isEttKeyPressed = false;
+unsigned long ettNow = 0;
+bool ettDelayed = false;
+unsigned long ettDelay = 0; // ms
+bool ettLong;
 #endif
 
 unsigned long timeNow = 0;
@@ -56,6 +60,7 @@ unsigned long lastKeyPressed = 0;
 #define DATELEN_ALL   12   // month, day, year, hour, min
 #define DATELEN_DATE   8   // month, day, year
 #define DATELEN_TIME   4   // hour, minute
+#define DATELEN_CODE   3   // special
 
 char dateBuffer[DATELEN_ALL + 2];
 char timeBuffer[8]; // 4 characters to accommodate date and time settings
@@ -73,8 +78,8 @@ OneButton enterKey = OneButton(ENTER_BUTTON_PIN,
     false     // Disable internal pull-up resistor
 );
 
-#ifdef EXTERNAL_TIMETRAVEL
-OneButton ettKey = OneButton(EXTERNAL_TIMETRAVEL_PIN,
+#ifdef EXTERNAL_TIMETRAVEL_IN
+OneButton ettKey = OneButton(EXTERNAL_TIMETRAVEL_IN_PIN,
     true,     // Button is active LOW
     true      // Enable internal pull-up resistor
 );
@@ -111,12 +116,17 @@ void keypad_setup()
     enterKey.attachClick(enterKeyPressed);    
     enterKey.attachLongPressStart(enterKeyHeld);
 
-#ifdef EXTERNAL_TIMETRAVEL
+#ifdef EXTERNAL_TIMETRAVEL_IN
     // Setup External time travel button
     ettKey.setClickTicks(ETT_CLICK_TIME);   
     ettKey.setPressTicks(ETT_HOLD_TIME); 
     ettKey.setDebounceTicks(ETT_DEBOUNCE);
-    ettKey.attachLongPressStart(ettKeyPressed);    
+    ettKey.attachLongPressStart(ettKeyPressed);   
+
+    ettDelay = (int)atoi(settings.ettDelay);
+    if(ettDelay > 300000) ettDelay = 0;
+
+    ettLong = ((int)atoi(settings.ettLong) > 0);
 #endif
 
     dateBuffer[0] = '\0';
@@ -227,7 +237,7 @@ void enterKeyHeld()
     isEnterKeyHeld = true;
 }
 
-#ifdef EXTERNAL_TIMETRAVEL
+#ifdef EXTERNAL_TIMETRAVEL_IN
 void ettKeyPressed() 
 {
     isEttKeyPressed = true;
@@ -266,7 +276,7 @@ void enterkeytick()
 {
     enterKey.tick();  // manages the enter button (updates flags)
     
-#ifdef EXTERNAL_TIMETRAVEL
+#ifdef EXTERNAL_TIMETRAVEL_IN
     ettKey.tick();    // manages the extern time travel button (updates flags)
 #endif         
 }
@@ -277,6 +287,10 @@ void enterkeytick()
  */
 void keypad_loop() 
 {   
+    char spTxt[16];
+    #define EE1_KL2 12
+    char spTxtS2[EE1_KL2] = { 181, 224, 179, 231, 199, 140, 197, 129, 197, 140, 194, 133 };
+
     enterkeytick();
 
     // Discard keypad input after 5 minutes of inactivity
@@ -290,7 +304,7 @@ void keypad_loop()
 
         isEnterKeyHeld = false;     
         isEnterKeyPressed = false;
-        #ifdef EXTERNAL_TIMETRAVEL
+        #ifdef EXTERNAL_TIMETRAVEL_IN
         isEttKeyPressed = false; 
         #endif
         
@@ -298,10 +312,22 @@ void keypad_loop()
         
     }
 
-#ifdef EXTERNAL_TIMETRAVEL
+#ifdef EXTERNAL_TIMETRAVEL_IN
     if(isEttKeyPressed) {
-        timeTravel(false);   // make short time travel (reentry)
+        if(!ettDelay) {
+            timeTravel(ettLong);
+            ettDelayed = false;          
+        } else {
+            ettNow = millis();
+            ettDelayed = true;
+        }
         isEttKeyPressed = false;
+    }
+    if(ettDelayed) {
+        if(millis() - ettNow >= ettDelay) {
+            timeTravel(ettLong);
+            ettDelayed = false;
+        }
     }
 #endif    
 
@@ -311,6 +337,7 @@ void keypad_loop()
         isEnterKeyHeld = false;     
         isEnterKeyPressed = false;
         cancelEnterAnim();
+        cancelETTAnim();
         
         timeIndex = yearIndex = 0;
         timeBuffer[0] = '\0';
@@ -320,7 +347,7 @@ void keypad_loop()
         isEnterKeyHeld = false;     
         isEnterKeyPressed = false;   
         
-        #ifdef EXTERNAL_TIMETRAVEL
+        #ifdef EXTERNAL_TIMETRAVEL_IN
         // No external tt while in menu mode,
         // so reset flag upon menu exit
         isEttKeyPressed = false;     
@@ -335,31 +362,52 @@ void keypad_loop()
       
         isEnterKeyPressed = false; 
         enterWasPressed = true;
+        
+        cancelETTAnim();
 
         // Turn on white LED
         digitalWrite(WHITE_LED_PIN, HIGH); 
 
         // Turn off destination time
-        destinationTime.off(); 
+        destinationTime.off();
                  
-        timeNow = millis();        
+        timeNow = millis();
         
-        if(strLen != DATELEN_ALL && 
+        if(strLen != DATELEN_ALL  &&
            strLen != DATELEN_DATE &&
-           strLen != DATELEN_TIME) {
+           strLen != DATELEN_TIME &&
+           strLen != DATELEN_CODE) {
             
             Serial.println(F("keypad_loop: Date is too long or too short"));
                         
             play_file("/baddate.mp3", 1.0, true, 0); 
             enterDelay = BADDATE_DELAY;  
                  
+        } else if(strLen == DATELEN_CODE) {
+
+            uint16_t code = atoi(dateBuffer);
+            switch(code) {
+                          
+            // TODO
+
+            default:
+                play_file("/baddate.mp3", 1.0, true, 0);
+                enterDelay = BADDATE_DELAY; 
+            }
+          
         } else {
           
             int _setMonth = -1, _setDay = -1, _setYear = -1;
-            int _setHour = -1, _setMin = -1;            
-        
-            play_file("/enter.mp3", 1.0, true, 0);
-            enterDelay = ENTER_DELAY;  
+            int _setHour = -1, _setMin = -1;
+            int special = 0;
+            uint32_t spTmp;  
+            #ifdef IS_ACAR_DISPLAY 
+            #define EE1_KL1 12
+            char spTxtS1[EE1_KL1] = { 207, 254, 206, 255, 206, 247, 206, 247, 199, 247, 207, 247 };            
+            #else
+            #define EE1_KL1 13
+            char spTxtS1[EE1_KL1] = { 181, 244, 186, 138, 187, 138, 179, 138, 179, 131, 179, 139, 179 };
+            #endif
 
             #ifdef TC_DBG
             Serial.print(F("date entered: ["));
@@ -370,7 +418,7 @@ void keypad_loop()
             // Convert char to String so substring can be used
             String dateBufferString(dateBuffer); 
 
-            // Copy dates in dateBuffer and make ints
+            // Convert dateBuffer to date
             if(strLen == DATELEN_TIME) {
                 _setHour = dateBufferString.substring(0, 2).toInt();
                 _setMin  = dateBufferString.substring(2, 4).toInt();
@@ -395,9 +443,50 @@ void keypad_loop()
     
                 // year: 1-9999 allowed. There is no year "0", for crying out loud.
                 if(_setYear < 1)    _setYear = 1;
+
+                spTmp = (uint32_t)_setYear << 16 | _setMonth << 8 | _setDay;
+                if((spTmp ^ getHrs1KYrs(7)) == 70880781) { 
+                    special = 1;
+                    spTxt[EE1_KL1] = '\0';
+                    for(int i = EE1_KL1-1; i >= 0; i--) {
+                        spTxt[i] = spTxtS1[i] ^ (i == 0 ? 0xff : spTxtS1[i-1]);                    
+                    }
+                } else if((spTmp ^ getHrs1KYrs(8)) == 59652301)  { 
+                    if(_setHour >= 9 && _setHour <=11) {
+                        special = 2;
+                    }
+                } else if((spTmp ^ getHrs1KYrs(6)) == 97637962)  {
+                    special = 3;
+                } else if((spTmp ^ getHrs1KYrs(8)) == 65811679)  {
+                    special = 4;
+                }
             }
 
             // hour and min are checked in clockdisplay
+
+            switch(special) {
+            case 1:                
+                destinationTime.showOnlyText(spTxt);                
+                specDisp = 1;
+                play_file("/enter.mp3", 1.0, true, 0);
+                enterDelay = ENTER_DELAY;
+                break;
+            case 2:
+                play_file("/ee2.mp3", 1.0, true, 0, false);
+                enterDelay = EE2_DELAY; 
+                break;
+            case 3:
+                play_file("/ee3.mp3", 1.0, true, 0, false);
+                enterDelay = EE3_DELAY; 
+                break;
+            case 4:
+                play_file("/ee4.mp3", 1.0, true, 0, false);
+                enterDelay = EE4_DELAY; 
+                break;
+            default:
+                play_file("/enter.mp3", 1.0, true, 0);
+                enterDelay = ENTER_DELAY; 
+            }
 
             // Copy date to destination time
             if(_setYear > 0)    destinationTime.setYear(_setYear);
@@ -426,15 +515,46 @@ void keypad_loop()
     // (might happen in next iteration of loop)
     
     if(enterWasPressed && (millis() - timeNow > enterDelay)) {
-      
-        destinationTime.showAnimate1();   // Show all but month
-        mysdelay(80);                     // Wait 80ms
-        destinationTime.showAnimate2();   // turn on month
+
+        if(specDisp) {
+
+            switch(specDisp++) {
+            case 2:
+                destinationTime.on();
+                digitalWrite(WHITE_LED_PIN, LOW);
+                timeNow = millis();
+                enterWasPressed = true;
+                enterDelay = EE1_DELAY2;
+                break;
+            case 3:
+                spTxt[EE1_KL2] = '\0';
+                for(int i = EE1_KL2-1; i >= 0; i--) {
+                    spTxt[i] = spTxtS2[i] ^ (i == 0 ? 0xff : spTxtS2[i-1]);                    
+                }
+                destinationTime.showOnlyText(spTxt);
+                timeNow = millis();
+                enterWasPressed = true;
+                enterDelay = EE1_DELAY3;
+                play_file("/ee1.mp3", 1.0, true, 0, false);
+                break;
+            case 4:
+                specDisp = 0;
+                break;
+            }
+            
+        } 
+
+        if(!specDisp) {
+          
+            destinationTime.showAnimate1();   // Show all but month
+            mysdelay(80);                     // Wait 80ms
+            destinationTime.showAnimate2();   // turn on month
         
-        digitalWrite(WHITE_LED_PIN, LOW); // turn off white LED
+            digitalWrite(WHITE_LED_PIN, LOW); // turn off white LED
         
-        enterWasPressed = false;          // reset flag
-        
+            enterWasPressed = false;          // reset flag
+       
+        }
     }
 }
 
@@ -445,8 +565,19 @@ void cancelEnterAnim()
         digitalWrite(WHITE_LED_PIN, LOW);
         destinationTime.show();
         destinationTime.on();
+        specDisp = 0;
     }
 }
+
+void cancelETTAnim()
+{
+    #ifdef EXTERNAL_TIMETRAVEL_IN
+    if(ettDelayed) {
+        ettDelayed = false;
+        // ...
+    }
+    #endif
+}    
 
 /*
  * Night mode

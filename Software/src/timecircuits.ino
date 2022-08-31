@@ -45,7 +45,14 @@
 
 /* Changelog 
  *  
-  *  2022/08/28 (A10001986)
+ *  2022/08/30 (A10001986)
+ *    - Added Delay for externally triggered time-travel, configurable in Config Portal
+ *    - Added option to make ext. triggered time-travel long (or short as before)
+ *    - Added Easter Eggs
+ *    - Fix compilation for LittleFS
+ *  2022/08/29 (A10001986)
+ *    - Auto-Night-Mode added
+ *  2022/08/28 (A10001986)
  *    - Cancel enter-animation correctly when other anim is initiated
  *    - Shutdown sound for fake power off
  *    - Minor tweaks to long time travel display "disruption"

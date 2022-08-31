@@ -25,7 +25,6 @@
 #ifndef _TC_WIFI_H
 #define _TC_WIFI_H
 
-#include <FS.h> 
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
 

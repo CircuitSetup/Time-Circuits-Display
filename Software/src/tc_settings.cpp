@@ -45,12 +45,16 @@ bool haveSD = false;
 /* If SD contains all default audio files */
 bool allowCPA = false;
 
-#define NUM_AUDIOFILES 12
+#define NUM_AUDIOFILES 16
 const char *audioFiles[NUM_AUDIOFILES] = {
       "/alarm.mp3\0", 
       "/alarmoff.mp3\0", 
       "/alarmon.mp3\0",
       "/baddate.mp3\0",
+      "/ee1.mp3\0",
+      "/ee2.mp3\0",
+      "/ee3.mp3\0",
+      "/ee4.mp3\0",
       "/enter.mp3\0",
       "/intro.mp3\0",
       "/nmoff.mp3\0",
@@ -222,6 +226,24 @@ void settings_setup()
                         strcpy(settings.playIntro, json["playIntro"]);
                         writedefault |= checkValidNumParm(settings.playIntro, 0, 1, DEF_PLAY_INTRO);
                     } else writedefault = true;
+                    if(json["autoNMOn"]) {
+                        strcpy(settings.autoNMOn, json["autoNMOn"]);
+                        writedefault |= checkValidNumParm(settings.autoNMOn, 0, 23, DEF_AUTONM_ON);
+                    } else writedefault = true;
+                    if(json["autoNMOff"]) {
+                        strcpy(settings.autoNMOff, json["autoNMOff"]);
+                        writedefault |= checkValidNumParm(settings.autoNMOff, 0, 23, DEF_AUTONM_OFF);
+                    } else writedefault = true;
+                    #ifdef EXTERNAL_TIMETRAVEL_IN
+                    if(json["ettDelay"]) {
+                        strcpy(settings.ettDelay, json["ettDelay"]);
+                        writedefault |= checkValidNumParm(settings.ettDelay, 0, 300000, DEF_ETT_DELAY);
+                    } else writedefault = true;
+                    if(json["ettLong"]) {
+                        strcpy(settings.ettLong, json["ettLong"]);
+                        writedefault |= checkValidNumParm(settings.ettLong, 0, 1, DEF_ETT_LONG);
+                    } else writedefault = true;
+                    #endif
                   
                 } else {
                   
@@ -285,11 +307,17 @@ void write_settings()
     json["wifiConTimeout"] = settings.wifiConTimeout;
     json["mode24"] = settings.mode24;
     json["timeTrPers"] = settings.timesPers;
-    #ifdef FAKE_POWER_ON    
-    json["fakePwrOn"] = settings.fakePwrOn;    
+    #ifdef FAKE_POWER_ON
+    json["fakePwrOn"] = settings.fakePwrOn;
     #endif
     json["alarmRTC"] = settings.alarmRTC;
     json["playIntro"] = settings.playIntro;
+    json["autoNMOn"] = settings.autoNMOn;
+    json["autoNMOff"] = settings.autoNMOff;
+    #ifdef EXTERNAL_TIMETRAVEL_IN
+    json["ettDelay"] = settings.ettDelay;
+    json["ettLong"] = settings.ettLong;
+    #endif
   
     File configFile = SPIFFS.open("/config.json", FILE_WRITE);
   
@@ -676,11 +704,13 @@ bool check_if_default_audio_present()
 #ifndef TWSOUND
       4178, 4178, 4178, 4178, 4178, 4178, 3760, 3760, 4596, 3760, // DTMF
       70664, 71500, 60633, 10478,   // alarm, alarmoff, alarmon, baddate
+      15184, 22983, 33364, 51701,   // ee2, ee3, ee4
       13374, 125804, 33853, 47228,  // enter, intro, nmoff, nmon
       3790, 21907, 38899, 135447    // shutdown, startup, timetravel, travelstart
 #else      
       4178, 4178, 4178, 4178, 4178, 4178, 3760, 3760, 4596, 3760, //DTMF
       70664, 71500, 60633, 10478,   // alarm, alarmoff, alarmon, baddate
+      15184, 22983, 33364, 51701,   // ee2, ee3, ee4
       12149, 125804, 33853, 47228,  // enter, intro, nmoff, nmon
       3790, 18419, 38899, 135447    // shutdown, startup, timetravel, travelstart
 #endif      

@@ -32,12 +32,19 @@
 //#define TC_USE_MIXER
 
 // Initialize ESP32 Audio Library classes
+
 AudioGeneratorMP3 *mp3;
+//AudioGeneratorMP3 *beep;
+//AudioGeneratorWAV *beep;
+
 #ifdef USE_SPIFFS
 AudioFileSourceSPIFFS *myFS0;
+//AudioFileSourceSPIFFS *myFS1;
 #else
 AudioFileSourceLittleFS *myFS0;
+//AudioFileSourceLittleFS *myFS1;
 #endif
+
 AudioFileSourceSD *mySD0;
 
 AudioOutputI2S *out;
@@ -92,11 +99,15 @@ void audio_setup()
     #endif
 
     mp3  = new AudioGeneratorMP3();
+    //beep = new AudioGeneratorMP3();
+    //beep = new AudioGeneratorWAV();
 
     #ifdef USE_SPIFFS
     myFS0 = new AudioFileSourceSPIFFS();
+    //myFS1 = new AudioFileSourceSPIFFS();
     #else
     myFS0 = new AudioFileSourceLittleFS();
+    //myFS1 = new AudioFileSourceLittleFS();
     #endif
 
     if(haveSD) {
@@ -105,6 +116,7 @@ void audio_setup()
 
     #ifdef TC_USE_MIXER
     stub[0] = mixer->NewInput();    
+    //stub[1] = mixer->NewInput();
     #endif
 }
 
@@ -212,8 +224,8 @@ void play_file(const char *audio_file, double volumeFactor, bool checkNightMode,
             Serial.println(F("Audio file not found"));
         }
     //} else {        
-    //    mySPIFFS1->open(audio_file);
-    //    beep->begin(mySPIFFS1, stub[1]);
+    //    myFS1->open(audio_file);
+    //    beep->begin(myFS1, stub[1]);
     //}
 }
 

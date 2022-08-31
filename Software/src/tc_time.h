@@ -99,6 +99,7 @@ extern DateTime myrtcnow();
 
 extern uint64_t dateToMins(int year, int month, int day, int hour, int minute);
 extern void minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
+extern uint32_t getHrs1KYrs(int index);
 
 #ifdef FAKE_POWER_ON
 void fpbKeyPressed(); 
@@ -113,6 +114,7 @@ extern bool FPBUnitIsOn;
 extern bool startup;
 extern bool timeTraveled;
 extern int  timeTravelP1;
+extern int  specDisp;
 
 // Our generic timeout when waiting for buttons, in seconds. max 255.
 #define maxTime 240            

@@ -56,6 +56,12 @@
 #define ENTER_DELAY   600         
 #endif
 
+#define EE1_DELAY2   3000
+#define EE1_DELAY3   2000
+#define EE2_DELAY     600
+#define EE3_DELAY     500
+#define EE4_DELAY    3000
+
 void keypadEvent(KeypadEvent key);
 extern void keypad_setup();
 extern char get_key();
@@ -64,6 +70,7 @@ extern void recordSetTimeKey(char key);
 extern void recordSetYearKey(char key);
 extern void resetTimebufIndices();
 extern void cancelEnterAnim();
+extern void cancelETTAnim();
 
 void nightModeOn();
 void nightModeOff();
@@ -77,7 +84,7 @@ void enterkeytick();
 extern bool isEnterKeyPressed;
 extern bool isEnterKeyHeld;
 
-#ifdef EXTERNAL_TIMETRAVEL
+#ifdef EXTERNAL_TIMETRAVEL_IN
 void ettKeyPressed();
 #endif
 
