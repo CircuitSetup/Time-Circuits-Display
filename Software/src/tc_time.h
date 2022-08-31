@@ -30,7 +30,6 @@
 #include <RTClib.h>
 #include <WiFi.h>
 #include <Wire.h>
-#include <EEPROM.h>
 #ifdef FAKE_POWER_ON
 #include <OneButton.h>
 #endif

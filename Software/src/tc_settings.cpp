@@ -237,7 +237,7 @@ void settings_setup()
                     #ifdef EXTERNAL_TIMETRAVEL_IN
                     if(json["ettDelay"]) {
                         strcpy(settings.ettDelay, json["ettDelay"]);
-                        writedefault |= checkValidNumParm(settings.ettDelay, 0, 300000, DEF_ETT_DELAY);
+                        writedefault |= checkValidNumParm(settings.ettDelay, 0, ETT_MAX_DEL, DEF_ETT_DELAY);
                     } else writedefault = true;
                     if(json["ettLong"]) {
                         strcpy(settings.ettLong, json["ettLong"]);
@@ -704,13 +704,13 @@ bool check_if_default_audio_present()
 #ifndef TWSOUND
       4178, 4178, 4178, 4178, 4178, 4178, 3760, 3760, 4596, 3760, // DTMF
       70664, 71500, 60633, 10478,   // alarm, alarmoff, alarmon, baddate
-      15184, 22983, 33364, 51701,   // ee2, ee3, ee4
+      15184, 22983, 33364, 51701,   // ee1, ee2, ee3, ee4
       13374, 125804, 33853, 47228,  // enter, intro, nmoff, nmon
       3790, 21907, 38899, 135447    // shutdown, startup, timetravel, travelstart
 #else      
       4178, 4178, 4178, 4178, 4178, 4178, 3760, 3760, 4596, 3760, //DTMF
       70664, 71500, 60633, 10478,   // alarm, alarmoff, alarmon, baddate
-      15184, 22983, 33364, 51701,   // ee2, ee3, ee4
+      15184, 22983, 33364, 51701,   // ee1, ee2, ee3, ee4
       12149, 125804, 33853, 47228,  // enter, intro, nmoff, nmon
       3790, 18419, 38899, 135447    // shutdown, startup, timetravel, travelstart
 #endif      

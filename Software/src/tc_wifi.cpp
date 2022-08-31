@@ -36,29 +36,29 @@ WiFiManager wm;
 
 WiFiManagerParameter custom_headline("<h2 style='margin-bottom:0px'>TimeCircuits Setup</h2>");
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
-WiFiManagerParameter custom_ttrp("ttrp", "<p></p>Make time travels persistent (0=no, 1=yes)", settings.timesPers, 2);
-WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is RTC (1) or current present time (0)", settings.alarmRTC, 2);
+WiFiManagerParameter custom_ttrp("ttrp", "<p></p>Make time travels persistent (0=no, 1=yes)", settings.timesPers, 2, "title='If disabled, displays are reset after reboot'");
+WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is RTC (1) or displayed \"present\" time (0)", settings.alarmRTC, 2);
 WiFiManagerParameter custom_playIntro("plIn", "Play intro (1=on, 0=off)", settings.playIntro, 2);
 WiFiManagerParameter custom_mode24("md24", "Enable 24-hour clock mode: (0=12hr, 1=24hr)", settings.mode24, 2);
-#ifdef FAKE_POWER_ON
-WiFiManagerParameter custom_fakePwrOn("fpo", "<p></p>Enable fake power switch (0=no, 1=yes)", settings.fakePwrOn, 2);
-#endif
 #ifdef EXTERNAL_TIMETRAVEL_IN
-WiFiManagerParameter custom_ettLong("ettLg", "Long ext.-triggered time travel (1=yes, 0=no)", settings.ettLong, 2);
+WiFiManagerParameter custom_ettLong("ettLg", "Time travel sequence (1=long, 0=short)", settings.ettLong, 2);
+#endif
+#ifdef FAKE_POWER_ON
+WiFiManagerParameter custom_fakePwrOn("fpo", "<p></p>Enable fake power switch (0=no, 1=yes)", settings.fakePwrOn, 2, "title='Use fake power switch to power-up and power-down the device'");
 #endif
 #else // -------------------- Checkbox hack: --------------
-WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is real present time<br>", settings.alarmRTC, 2, "type='checkbox'", WFM_LABEL_AFTER);
-WiFiManagerParameter custom_ttrp("ttrp", "Make time travels persistent<br>", settings.timesPers, 2, "type='checkbox'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_ttrp("ttrp", "Make time travels persistent<br>", settings.timesPers, 2, "title='If disabled, displays are reset after reboot' type='checkbox'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is real present time<br>", settings.alarmRTC, 2, "title='If disabled, Alarm base is displayed \"present\" time' type='checkbox'", WFM_LABEL_AFTER);
 WiFiManagerParameter custom_playIntro("plIn", "Play intro<br>", settings.playIntro, 2, "type='checkbox'", WFM_LABEL_AFTER);
 WiFiManagerParameter custom_mode24("md24", "Enable 24-hour clock mode<br>", settings.mode24, 2, "type='checkbox'", WFM_LABEL_AFTER);
-#ifdef FAKE_POWER_ON
-WiFiManagerParameter custom_fakePwrOn("fpo", "Enable fake power switch<br>", settings.fakePwrOn, 2, "type='checkbox' style='margin-top:16px'", WFM_LABEL_AFTER);
-#endif
 #ifdef EXTERNAL_TIMETRAVEL_IN
-WiFiManagerParameter custom_ettLong("ettLg", "Long ext.-triggered time travel<br>", settings.ettLong, 2, "type='checkbox' style='margin-top:16px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_ettLong("ettLg", "Play long time travel sequence<br>", settings.ettLong, 2, "title='If disabled, short sequence is played' type='checkbox' style='margin-top:4px'", WFM_LABEL_AFTER);
+#endif
+#ifdef FAKE_POWER_ON
+WiFiManagerParameter custom_fakePwrOn("fpo", "Enable fake power switch<br>", settings.fakePwrOn, 2, "title='Use fake power switch to power-up and power-down the device' type='checkbox' style='margin-top:16px'", WFM_LABEL_AFTER);
 #endif
 #endif // -------------------------------------------------
-WiFiManagerParameter custom_autoRotateTimes("rotate_times", "<p></p>Time-rotation interval<br>0=off, 1-5=every 5/15/30/45/60th minute",settings.autoRotateTimes, 3);
+WiFiManagerParameter custom_autoRotateTimes("rotate_times", "<p></p>Time-rotation interval<br>0=off, 1-5=every 5/15/30/45/60th minute",settings.autoRotateTimes, 3, "title='Selects the interval for automatic time-cycling when idle'");
 WiFiManagerParameter custom_wifiConRetries("wifiret", "<p></p>WiFi Connection attempts (1-15)", settings.wifiConRetries, 3, "", WFM_LABEL_BEFORE);
 WiFiManagerParameter custom_wifiConTimeout("wificon", "WiFi Connection timeout in seconds (1-15)", settings.wifiConTimeout, 3);
 WiFiManagerParameter custom_ntpServer("ntp_server", "NTP Server (empty to disable NTP)", settings.ntpServer, 63);
@@ -66,10 +66,10 @@ WiFiManagerParameter custom_timeZone("time_zone", "Timezone (in <a href='https:/
 WiFiManagerParameter custom_destTimeBright("dt_bright", "<p></p>Destination Time display brightness (1-15)", settings.destTimeBright, 3, "", WFM_LABEL_BEFORE);
 WiFiManagerParameter custom_presTimeBright("pt_bright", "Present Time display brightness (1-15)", settings.presTimeBright, 3);
 WiFiManagerParameter custom_lastTimeBright("lt_bright", "Last Time Dep. display brightness (1-15)", settings.lastTimeBright, 3);
-WiFiManagerParameter custom_autoNMOn("anmon", "Auto-NightMode start hour (0-23)", settings.autoNMOn, 3);
-WiFiManagerParameter custom_autoNMOff("anmoff", "Auto-NightMode end hour (0-23)", settings.autoNMOff, 3);
+WiFiManagerParameter custom_autoNMOn("anmon", "Auto-NightMode start hour (0-23)", settings.autoNMOn, 3, "title='To disable, set start and end to same value'");
+WiFiManagerParameter custom_autoNMOff("anmoff", "Auto-NightMode end hour (0-23)", settings.autoNMOff, 3, "title='To disable, set start and end to same value'");
 #ifdef EXTERNAL_TIMETRAVEL_IN
-WiFiManagerParameter custom_ettDelay("ettDe", "<p></p>Delay ext. triggered time travel (ms)", settings.ettDelay, 7);
+WiFiManagerParameter custom_ettDelay("ettDe", "<p></p>Externally triggered time travel:<br>Delay (ms)", settings.ettDelay, 6, "title='Externally triggered time travel will be delayed by specified number of millisecs'");
 #endif
 
 WiFiManagerParameter custom_copyAudio("cpAu", "<p></p>Audio file installation: Write COPY here to copy the original audio files from the SD card to the internal flash file system", settings.copyAudio, 5, "autocomplete='off'");
@@ -431,7 +431,7 @@ void updateConfigPortalValues()
     custom_autoNMOn.setValue(settings.autoNMOn, 3);
     custom_autoNMOff.setValue(settings.autoNMOff, 3);
     #ifdef EXTERNAL_TIMETRAVEL_IN
-    custom_ettDelay.setValue(settings.ettDelay, 7);
+    custom_ettDelay.setValue(settings.ettDelay, 6);
     #endif
     
     custom_copyAudio.setValue("", 5);   // Always clear

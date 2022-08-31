@@ -334,8 +334,6 @@ void time_setup()
     if(autoNMOffHour > 23) autoNMOffHour = 0;
     autoNightMode = (autoNMOnHour != autoNMOffHour);
 
-    
-
     // If using auto times, load the first one
     if(autoTimeIntervals[autoInterval]) {                    
         destinationTime.setFromStruct(&destinationTimes[0]); 

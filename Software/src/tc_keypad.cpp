@@ -124,7 +124,7 @@ void keypad_setup()
     ettKey.attachLongPressStart(ettKeyPressed);   
 
     ettDelay = (int)atoi(settings.ettDelay);
-    if(ettDelay > 300000) ettDelay = 0;
+    if(ettDelay > ETT_MAX_DEL) ettDelay = ETT_MAX_DEL;
 
     ettLong = ((int)atoi(settings.ettLong) > 0);
 #endif

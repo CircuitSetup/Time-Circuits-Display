@@ -118,6 +118,9 @@ struct Settings {
     char copyAudio[6]       = "";   // never loaded or saved!
 };
 
+// Maximum delay for incoming tt trigger
+#define ETT_MAX_DEL 60000
+
 struct IPSettings {
     char ip[20]       = "";
     char gateway[20]  = "";     
