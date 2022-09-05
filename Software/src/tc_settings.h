@@ -1,6 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
+ * 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
+ * https://www.marmosetelectronics.com/time-circuits-clock
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,24 +25,110 @@
 #ifndef _TC_SETTINGS_H
 #define _TC_SETTINGS_H
 
-#include <ArduinoJson.h>  //https://github.com/bblanchon/ArduinoJson
+#include "tc_global.h"
+
+#include <ArduinoJson.h>  // https://github.com/bblanchon/ArduinoJson
+#include <SD.h>
+#include <SPI.h>
 #include <FS.h>
+#ifdef USE_SPIFFS
 #include <SPIFFS.h>
+#else
+#define SPIFFS LittleFS
+#include <LittleFS.h>
+#endif
+#include <EEPROM.h>
 
 extern void settings_setup();
+extern void write_settings();
+bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault);
+extern bool loadAlarm();
+extern void saveAlarm();
+bool loadAlarmEEPROM();
+void saveAlarmEEPROM();
+extern bool loadIpSettings();
+extern void writeIpSettings();
+extern void deleteIpSettings();
 
-//default settings - change settings in the web interface 192.168.4.1
-struct Settings{
-    char ntpServer[32] = "pool.ntp.org";
-    char gmtOffset[7] = "-18000"; //US EST
-    char daylightOffset[7] = "3600";
-    char autoRotateTimes[3] = "1";
-    char destTimeBright[3] = "15";
-    char presTimeBright[3] = "15";
-    char lastTimeBright[3] = "15";
-    char beepSound[3] = "0";
+extern bool copy_audio_files();
+void open_and_copy(const char *fn, int& haveErr);
+bool filecopy(File source, File dest);
+
+extern bool check_allow_CPA();
+bool check_if_default_audio_present();
+extern void start_file_copy();
+extern void file_copy_progress();
+extern void file_copy_done();
+extern void file_copy_error();
+
+extern bool    alarmOnOff;
+extern uint8_t alarmHour;
+extern uint8_t alarmMinute;
+
+extern bool    timetravelPersistent;
+
+extern bool    haveSD;
+
+#define MS(s) XMS(s)
+#define XMS(s) #s
+
+// Default settings - change settings in the web interface 192.168.4.1
+// For list of time zones, see https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+
+#define DEF_TIMES_PERS      1     // 0-1;  Default: 1 = TimeTravel persistent
+#define DEF_ALARM_RTC       1     // 0-1;  Default: 1 = Alarm is RTC-based (otherwise 0 = presentTime-based)
+#define DEF_PLAY_INTRO      1     // 0-1;  Default: 1 = Play intro
+#define DEF_MODE24          0     // 0-1;  Default: 0=12-hour-mode, 1=24-hour-mode
+#define DEF_AUTOROTTIMES    1     // 0-5;  Default: Auto-rotate every 5th minute
+#define DEF_WIFI_RETRY      3     // 1-15; Default: 3 retries
+#define DEF_WIFI_TIMEOUT    7     // 1-15; Default: 7 seconds time-out
+#define DEF_NTP_SERVER      "pool.ntp.org"
+#define DEF_TIMEZONE        "CST6CDT,M3.2.0,M11.1.0"    // Posix format
+#define DEF_BRIGHT_DEST     15    // 1-15; Default: max brightness
+#define DEF_BRIGHT_PRES     15
+#define DEF_BRIGHT_DEPA     15
+#define DEF_AUTONM_ON       0     // Default: Both 0, Auto-Night-Mode disabled
+#define DEF_AUTONM_OFF      0
+#define DEF_FAKE_PWR        0     // 0-1;  Default: 0 = Do not use external fake "power" switch
+#define DEF_ETT_DELAY       0     // in ms; Default 0: ETT immediately
+#define DEF_ETT_LONG        0     // 0: Ext. TT short (reentry), 1: long
+
+struct Settings {
+    char timesPers[4]       = MS(DEF_TIMES_PERS);
+    char alarmRTC[4]        = MS(DEF_ALARM_RTC);
+    char playIntro[4]       = MS(DEF_PLAY_INTRO);
+    char mode24[4]          = MS(DEF_MODE24);
+    char autoRotateTimes[4] = MS(DEF_AUTOROTTIMES);
+    char wifiConRetries[4]  = MS(DEF_WIFI_RETRY);
+    char wifiConTimeout[4]  = MS(DEF_WIFI_TIMEOUT);
+    char ntpServer[64]      = DEF_NTP_SERVER;
+    char timeZone[64]       = DEF_TIMEZONE;
+    char destTimeBright[4]  = MS(DEF_BRIGHT_DEST);
+    char presTimeBright[4]  = MS(DEF_BRIGHT_PRES);
+    char lastTimeBright[4]  = MS(DEF_BRIGHT_DEPA);
+    char autoNMOn[4]        = MS(DEF_AUTONM_ON);
+    char autoNMOff[4]       = MS(DEF_AUTONM_OFF);
+#ifdef FAKE_POWER_ON 
+    char fakePwrOn[4]       = MS(DEF_FAKE_PWR);
+#endif
+#ifdef EXTERNAL_TIMETRAVEL_IN
+    char ettDelay[8]        = MS(DEF_ETT_DELAY);
+    char ettLong[4]         = MS(DEF_ETT_LONG);
+#endif    
+    char copyAudio[6]       = "";   // never loaded or saved!
+};
+
+// Maximum delay for incoming tt trigger
+#define ETT_MAX_DEL 60000
+
+struct IPSettings {
+    char ip[20]       = "";
+    char gateway[20]  = "";     
+    char netmask[20]  = "";
+    char dns[20]      = "";
 };
 
 extern struct Settings settings;
+extern struct IPSettings ipsettings;
 
 #endif

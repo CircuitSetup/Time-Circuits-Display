@@ -1,6 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
+ * 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
+ * https://www.marmosetelectronics.com/time-circuits-clock
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,21 +25,33 @@
 #ifndef _TC_WIFI_H
 #define _TC_WIFI_H
 
-#include <FS.h> 
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
-#include <SPIFFS.h>
-#include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
-#include <clockdisplay.h>
-#include <tc_menus.h>
-#include <tc_time.h>
-#include <tc_settings.h>
+#include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
+
+#include "tc_global.h"
+#include "clockdisplay.h"
+#include "tc_menus.h"
+#include "tc_time.h"
+#include "tc_settings.h"
 
 extern void wifi_setup();
 extern void wifi_loop();
 
 void saveParamsCallback();
 void saveConfigCallback();
+void preSaveConfigCallback();
 
-extern String getParam(String name);
+void setupStaticIP();
+
+extern void updateConfigPortalValues();
+
+extern int wifi_getStatus();
+extern bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d);
+
+bool isIp(char *str);
+void ipToString(char *str, IPAddress ip);
+IPAddress stringToIp(char *str);
+
+//extern String getParam(String name);
 
 #endif

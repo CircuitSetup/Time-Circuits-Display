@@ -1,9 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
+ * 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,168 +24,293 @@
 
 #include "tc_audio.h"
 
-//Initialize ESP32 Audio Library classes
+// Use the mixer, or do not use the mixer.
+// Since we don't use mixing, turn it off.
+// With the current versions of the audio library,
+// turning it on might cause a static after stopping
+// sound play back.
+//#define TC_USE_MIXER
+
+// Initialize ESP32 Audio Library classes
+
 AudioGeneratorMP3 *mp3;
-AudioGeneratorMP3 *beep;
-/*
-AudioGeneratorWAV *wav = new AudioGeneratorWAV();
-AudioFileSourceFunction *genFile;
-*/
-AudioFileSourceSPIFFS *file[2];
+//AudioGeneratorMP3 *beep;
+//AudioGeneratorWAV *beep;
+
+#ifdef USE_SPIFFS
+AudioFileSourceSPIFFS *myFS0;
+//AudioFileSourceSPIFFS *myFS1;
+#else
+AudioFileSourceLittleFS *myFS0;
+//AudioFileSourceLittleFS *myFS1;
+#endif
+
+AudioFileSourceSD *mySD0;
+
 AudioOutputI2S *out;
+
+#ifdef TC_USE_MIXER
 AudioOutputMixer *mixer;
 AudioOutputMixerStub *stub[2];
+#endif
 
-bool beepOn;
+bool audioMute = false;
 
-void audio_setup() {
-    // for SD card
-    pinMode(SD_CS, OUTPUT);
-    digitalWrite(SD_CS, HIGH);
-    pinMode(SPI_SCK, INPUT_PULLUP);
-    pinMode(SPI_MISO, INPUT_PULLUP);
-    pinMode(SPI_MOSI, INPUT_PULLUP);
+double volTable[16] = {
+    0.00, 0.03, 0.06, 0.10, 
+    0.15, 0.20, 0.25, 0.30,
+    0.35, 0.42, 0.50, 0.60,
+    0.70, 0.80, 0.90, 1.00
+};
 
-    //pinMode(VOLUME, INPUT);
+uint8_t curVolume = 4;
 
-    // set up SD card
-    SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
-    SPI.setFrequency(1000000);
-    //delay(1000);
-    /*
-    if (!SD.begin(SD_CS)) {
-        Serial.println("Error talking to SD card!");
-    } else {
-        Serial.println("SD card initialized");
-    }
-    */
-   
-    SPIFFS.begin();
+double curVolFact[2] = { 1.0, 1.0 };
+bool   curChkNM[2]   = { true, true };
 
+int sampleCnt = 0;
+
+#define VOL_SMOOTH_SIZE 4
+int rawVol[VOL_SMOOTH_SIZE] = {  };
+int rawVolIdx = 0;
+int anaReadCount = 0;
+double prev_vol = 10.0;
+
+// Resolution for pot, 9-12 allowed
+#define POT_RESOLUTION 9
+
+/*
+ * audio_setup()
+ */
+void audio_setup() 
+{
     audioLogger = &Serial;
+
+    // Set resolution for volume pot
+    analogReadResolution(POT_RESOLUTION);
+    analogSetWidth(POT_RESOLUTION);
 
     out = new AudioOutputI2S(0, 0, 32, 0);
     out->SetOutputModeMono(true);
-    out->SetPinout(I2S_BCLK, I2S_LRCLK, I2S_DIN);
-    mixer = new AudioOutputMixer(8, out);
-    mp3 = new AudioGeneratorMP3();
-    beep = new AudioGeneratorMP3();
+    out->SetPinout(I2S_BCLK_PIN, I2S_LRCLK_PIN, I2S_DIN_PIN);
+
+    #ifdef TC_USE_MIXER
+    mixer = new AudioOutputMixer(8, out); 
+    #endif
+
+    mp3  = new AudioGeneratorMP3();
+    //beep = new AudioGeneratorMP3();
+    //beep = new AudioGeneratorWAV();
+
+    #ifdef USE_SPIFFS
+    myFS0 = new AudioFileSourceSPIFFS();
+    //myFS1 = new AudioFileSourceSPIFFS();
+    #else
+    myFS0 = new AudioFileSourceLittleFS();
+    //myFS1 = new AudioFileSourceLittleFS();
+    #endif
+
+    if(haveSD) {
+        mySD0 = new AudioFileSourceSD();
+    }
+
+    #ifdef TC_USE_MIXER
+    stub[0] = mixer->NewInput();    
+    //stub[1] = mixer->NewInput();
+    #endif
 }
 
-void play_startup() {
-    play_file("/startup.mp3", getVolume(), 0, true);
-}
-
-void play_keypad_sound(char key) {
-    if (key) {
-        beepOn = false;
-        if (key == '0') play_file("/Dtmf-0.mp3", getVolume(), 0, false);
-        if (key == '1') play_file("/Dtmf-1.mp3", getVolume(), 0, false);
-        if (key == '2') play_file("/Dtmf-2.mp3", getVolume(), 0, false);
-        if (key == '3') play_file("/Dtmf-3.mp3", getVolume(), 0, false);
-        if (key == '4') play_file("/Dtmf-4.mp3", getVolume(), 0, false);
-        if (key == '5') play_file("/Dtmf-5.mp3", getVolume(), 0, false);
-        if (key == '6') play_file("/Dtmf-6.mp3", getVolume(), 0, false);
-        if (key == '7') play_file("/Dtmf-7.mp3", getVolume(), 0, false);
-        if (key == '8') play_file("/Dtmf-8.mp3", getVolume(), 0, false);
-        if (key == '9') play_file("/Dtmf-9.mp3", getVolume(), 0, false);
-        /*
-        if (key == '0') play_DTMF(1336.f, 941.f, getVolume());
-        if (key == '1') play_DTMF(1209.f, 697.f, getVolume());
-        if (key == '2') play_DTMF(1336.f, 697.f, getVolume());
-        if (key == '3') play_DTMF(1477.f, 697.f, getVolume());
-        if (key == '4') play_DTMF(1209.f, 770.f, getVolume());
-        if (key == '5') play_DTMF(1336.f, 770.f, getVolume());
-        if (key == '6') play_DTMF(1477.f, 770.f, getVolume());
-        if (key == '7') play_DTMF(1209.f, 852.f, getVolume());
-        if (key == '8') play_DTMF(1336.f, 852.f, getVolume());
-        if (key == '9') play_DTMF(1477.f, 852.f, getVolume());
-        */
-    }
-}
-
-void audio_loop() {
-    if (mp3->isRunning()) {
-        if (!mp3->loop()) {
-            mp3->stop();
-            stub[0]->stop();
-            stub[0]->flush();
-            out->flush();
-        }
-    }
-    if (beep->isRunning()) {
-        if (!beep->loop()) {
-            beep->stop();
-            stub[1]->stop();
-            stub[1]->flush();
-            out->flush();
-        }
-    }
-    /*
-    if (wav->isRunning()) {
-        if (!wav->loop()) {
-            wav->stop();
-            out->flush();
-            //delete genFile;
-        }
-    }
-    */
+void play_keypad_sound(char key) 
+{
+    char buf[16] = "/Dtmf-0.mp3\0";
     
-}
-
-void play_file(const char *audio_file, double volume, int channel, bool firstStart) {
-    Serial.printf("CH:");
-    Serial.print(channel);
-    Serial.printf("  Playing <");
-    Serial.print(audio_file);
-    Serial.printf("> at volume :");
-    Serial.println(volume);
-
-    if (!firstStart) {
-        //cant do this if playing the first file after startup
-        delete stub[channel];
-        delete file[channel];
-        //if (channel == 0) delete mp3;
-        if (channel == 1) delete beep;
-        firstStart = false;
-    }
-    stub[channel] = mixer->NewInput();
-    stub[channel]->SetGain(volume);
-
-    file[channel] = new AudioFileSourceSPIFFS(audio_file);
-
-    mp3 = new AudioGeneratorMP3();
-
-    if (channel == 0) {
-        mp3 = new AudioGeneratorMP3();
-        mp3->begin(file[0], stub[0]);
-    } else {
-        beep = new AudioGeneratorMP3();
-        beep->begin(file[1], stub[1]);
+    if(key) {
+        buf[6] = key;
+        play_file(buf, 0.6, true, 0, false);
     }
 }
 
 /*
-void play_DTMF(float hz1, float hz2, double volume) {
-    if (genFile) delete genFile;
-    
-    genFile = new AudioFileSourceFunction(8., 1, 16000, 16);
-    genFile->addAudioGenerators([&](const float time) {
-        float v = sin(TWO_PI * hz1 * time);  // generate sine wave
-        v *= fmod(time, 1.f);               // change linear
-        v *= 0.5;                           // scale
-        return v;
-    });
-
-    wav = new AudioGeneratorWAV();
-    wav->begin(genFile, out);
+ * audio_loop()
+ * 
+ */
+void audio_loop() 
+{
+    if(mp3->isRunning()) {
+        if(!mp3->loop()) {
+            mp3->stop();
+            #ifdef TC_USE_MIXER
+            stub[0]->stop();
+            #endif
+        } else {
+            sampleCnt++;
+            if(sampleCnt > 1) {
+                #ifdef TC_USE_MIXER
+                stub[0]->SetGain(getVolume(0));
+                #else
+                out->SetGain(getVolume(0));
+                #endif
+                sampleCnt = 0;
+            }
+        }
+    }
+    /*
+    if(beep->isRunning()) {
+        if(!beep->loop()) {
+            beep->stop();
+            stub[1]->stop();
+        }
+    }
+    */
 }
-*/
 
-double getVolume() {
-    //returns value for volume based on the position of the pot
-    double vol_val = analogRead(VOLUME);
-    vol_val = vol_val * 1/4095;
+void play_file(const char *audio_file, double volumeFactor, bool checkNightMode, int channel, bool allowSD) 
+{
+    if(audioMute) return;
+    
+    if(channel != 0) return;  // For now, only 0 is allowed
+
+    #ifdef TC_DBG
+    Serial.print(F("CH:"));
+    Serial.print(channel);
+    Serial.print(F("  Playing <"));
+    Serial.println(audio_file);    
+    #endif
+
+    // If something is currently on, kill it
+    if((channel == 0) && mp3->isRunning()) {          
+        mp3->stop();
+        #ifdef TC_USE_MIXER
+        stub[0]->stop();        
+        #endif                  
+    }
+
+    /*
+    if((channel == 1) && beep->isRunning()) {          
+        beep->stop();
+        stub[1]->stop();
+    }
+    */
+
+    curVolFact[channel] = volumeFactor;
+    curChkNM[channel] = checkNightMode;
+
+    #ifdef TC_USE_MIXER
+    stub[channel]->SetGain(getVolume(channel));
+    #else
+    out->SetGain(getVolume(channel));
+    #endif
+    
+    //if(channel == 0) { 
+        if(haveSD && allowSD && mySD0->open(audio_file)) {
+            #ifdef TC_USE_MIXER           
+            mp3->begin(mySD0, stub[0]);
+            #else
+            mp3->begin(mySD0, out);
+            #endif
+            #ifdef TC_DBG
+            Serial.println(F("Playing from SD"));
+            #endif
+        } else if(myFS0->open(audio_file)) {             
+            #ifdef TC_USE_MIXER
+            mp3->begin(myFS0, stub[0]);
+            #else
+            mp3->begin(myFS0, out);
+            #endif
+            #ifdef TC_DBG
+            Serial.println(F("Playing from flash FS"));
+            #endif
+        } else {
+            Serial.println(F("Audio file not found"));
+        }
+    //} else {        
+    //    myFS1->open(audio_file);
+    //    beep->begin(myFS1, stub[1]);
+    //}
+}
+
+// Returns value for volume based on the position of the pot
+// Since the values vary we do some noise reduction
+double getRawVolume() 
+{
+    double vol_val; 
+    unsigned long avg = 0;
+    
+    rawVol[rawVolIdx] = analogRead(VOLUME_PIN);
+
+    if(anaReadCount > 1) {
+        avg = 0;
+        for(int i = rawVolIdx; i > rawVolIdx - anaReadCount; i--) {
+            avg += rawVol[i & (VOL_SMOOTH_SIZE-1)];            
+        }
+        avg /= anaReadCount;  
+        if(anaReadCount < VOL_SMOOTH_SIZE) anaReadCount++;    
+    } else {
+        anaReadCount++;
+        avg = rawVol[rawVolIdx];
+    }
+
+    rawVolIdx++;
+    rawVolIdx &= (VOL_SMOOTH_SIZE-1);
+    
+    vol_val = (double)avg / (double)((1<<POT_RESOLUTION)-1); 
+    
+    if(fabs(vol_val - prev_vol) <= 0.015) {
+        vol_val = prev_vol;
+    } else { 
+        prev_vol = vol_val;
+    }
+
+    if(vol_val < 0.02) vol_val = 0.0;    
 
     return vol_val;
+}
+
+double getVolume(int channel) 
+{
+    double vol_val; 
+
+    if(curVolume == 255) {
+        vol_val = getRawVolume();
+    } else {
+        vol_val = (double)volTable[curVolume];
+    }
+     
+    // If user muted, return 0
+    if(vol_val == 0.0) return vol_val;
+
+    vol_val *= curVolFact[channel];
+    // Do not totally mute
+    if(vol_val < 0.03) vol_val = 0.03;
+
+    // Reduce volume in night mode, if requested
+    if(curChkNM[channel] && presentTime.getNightMode()) {
+        vol_val *= 0.3;
+        // Do not totally mute
+        if(vol_val < 0.03) vol_val = 0.03;
+    }
+
+    return vol_val;        
+}
+
+bool checkAudioDone()
+{
+    if( (mp3->isRunning()) /*|| (beep->isRunning())*/ ) return false;
+    return true;
+}
+
+void stopAudio()
+{
+    if(mp3->isRunning()) {          
+        mp3->stop();
+        #ifdef TC_USE_MIXER
+        stub[0]->stop();                
+        #endif         
+    }
+    /*
+    if(beep->isRunning()) {          
+        beep->stop();
+        stub[1]->stop();
+    }
+    */
 }

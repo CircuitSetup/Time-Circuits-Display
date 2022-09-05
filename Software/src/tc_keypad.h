@@ -1,9 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
+ * 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,22 +27,40 @@
 
 #include <Arduino.h>
 #include <Keypad.h>
-#include <Keypad_I2C.h>
 #include <OneButton.h>
 
+#include "tc_global.h"
+#include "tc_keypadi2c.h"
 #include "tc_menus.h"
 #include "tc_audio.h"
 #include "tc_time.h"
 
-//#define GTE_KEYPAD //uncomment if using real GTE/TRW keypad control board
+//#define GTE_KEYPAD // uncomment if using real GTE/TRW keypad control board
 
-#define KEYPAD_ADDR 0x20
-#define WHITE_LED 17 //GPIO that white led is connected to
-#define ENTER_BUTTON 16 //GPIO that enter key is connected to
-#define ENTER_DELAY 400 //when enter key is pressed, turn off display for this many ms
-#define DEBOUNCE 50 //button debounce time in ms
-#define ENTER_HOLD_TIME 2000 //time in ms holding the enter key will count as a hold
-#define ENTER_DOUBLE_TIME 200 //enter key will register a double click if pressed twice within this time
+#define KEYPAD_ADDR 0x20        // I2C address of the PCF8574 port expander (keypad)
+
+#define ENTER_DEBOUNCE    50    // enter button debounce time in ms
+#define ENTER_CLICK_TIME 200    // enter button will register a click 
+#define ENTER_HOLD_TIME 2000    // time in ms holding the enter button will count as a hold
+
+#define ETT_DEBOUNCE      50    // external time travel button debounce time in ms
+#define ETT_CLICK_TIME   250    // external time travel button will register a click (unused)
+#define ETT_HOLD_TIME    200    // external time travel button will register a press (that's the one)
+
+// When ENTER button is pressed, turn off display for this many ms
+// Must be sync'd to the sound file used (enter.mp3)
+#define BADDATE_DELAY 400
+#ifdef TWSOUND
+#define ENTER_DELAY   500       // For TW sound files
+#else
+#define ENTER_DELAY   600         
+#endif
+
+#define EE1_DELAY2   3000
+#define EE1_DELAY3   2000
+#define EE2_DELAY     600
+#define EE3_DELAY     500
+#define EE4_DELAY    3000
 
 void keypadEvent(KeypadEvent key);
 extern void keypad_setup();
@@ -47,22 +68,26 @@ extern char get_key();
 extern void recordKey(char key);
 extern void recordSetTimeKey(char key);
 extern void recordSetYearKey(char key);
-extern void recordSetMonthKey(char key);
+extern void resetTimebufIndices();
+extern void cancelEnterAnim();
+extern void cancelETTAnim();
+
+void nightModeOn();
+void nightModeOff();
 
 extern char timeBuffer[]; 
-extern char yearBuffer[]; 
-extern char monthBuffer[];
 
 void enterKeyPressed();
 void enterKeyHeld();
-void enterKeyDouble();
+void enterkeytick();
+
 extern bool isEnterKeyPressed;
 extern bool isEnterKeyHeld;
-extern bool isEnterKeyDouble;
-extern void keypadLoop();
 
-extern char key;
-extern bool keyPressed;
-extern bool menuFlag;
+#ifdef EXTERNAL_TIMETRAVEL_IN
+void ettKeyPressed();
+#endif
+
+extern void keypad_loop();
 
 #endif

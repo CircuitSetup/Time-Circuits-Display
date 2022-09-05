@@ -1,9 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
+ * 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,43 +25,38 @@
 #ifndef _TC_AUDIO_H
 #define _TC_AUDIO_H
 
+#include "tc_global.h"
+
 #include <Arduino.h>
-#include <SPIFFS.h>
 #include <AudioOutputI2S.h>
+
+#ifdef USE_SPIFFS
+#include <SPIFFS.h>
 #include <AudioFileSourceSPIFFS.h>
+#else
+#include <LittleFS.h>
+#include <AudioFileSourceLittleFS.h>
+#endif
+
 #include <AudioFileSourceSD.h>
 #include <AudioGeneratorMP3.h>
+#include <AudioGeneratorWAV.h>
 #include <AudioOutputMixer.h>
-//#include <AudioFileSourceFunction.h>
-//#include <AudioGeneratorWAV.h>
 
-#include <FS.h>
-#include <SD.h>
-#include <SPI.h>
-
-#include "driver/i2s.h"
 #include "tc_keypad.h"
-
-// SD Card
-#define SD_CS 5
-#define SPI_MOSI 23
-#define SPI_MISO 19
-#define SPI_SCK 18
-
-//I2S audio
-#define I2S_BCLK 26
-#define I2S_LRCLK 25
-#define I2S_DIN 33
-
-#define VOLUME 32
+#include "tc_time.h"
 
 extern void audio_setup();
 extern void play_keypad_sound(char key);
-extern void play_startup();
 extern void audio_loop();
-extern void play_file(const char *audio_file, double volume = 0.1, int channel = 0, bool firstStart = false);
-//extern void play_DTMF(float hz1, float hz2, double volume = 0.1);
-extern double getVolume();
-extern bool beepOn;
+extern void play_file(const char *audio_file, double volumeFactor = 1.0, bool checkNightMode = true, int channel = 0, bool allowSD = true);
+extern double getRawVolume();
+extern double getVolume(int channel);
+extern bool checkAudioDone();
+extern void stopAudio();
+
+extern bool audioMute;
+
+extern uint8_t curVolume;
 
 #endif

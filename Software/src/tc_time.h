@@ -1,9 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
+ * 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,11 +26,15 @@
 #define _TC_TIME_H
 
 #include <Arduino.h>
+#include <time.h>
 #include <RTClib.h>
 #include <WiFi.h>
 #include <Wire.h>
-#include <EEPROM.h>
+#ifdef FAKE_POWER_ON
+#include <OneButton.h>
+#endif
 
+#include "tc_global.h"
 #include "clockdisplay.h"
 #include "tc_keypad.h"
 #include "tc_menus.h"
@@ -36,20 +43,33 @@
 #include "time.h"
 #include "tc_settings.h"
 
-#define SECONDS_IN 15   // SQW Monitor 1Hz from the DS3231
-//#define STATUS_LED 2  // Status LED
-
-#define DEST_TIME_ADDR 0x71
-#define DEST_TIME_PREF 0x10 
+#define DEST_TIME_ADDR 0x71 // i2C address of displays
 #define PRES_TIME_ADDR 0x72
-#define PRES_TIME_PREF 0x18
 #define DEPT_TIME_ADDR 0x74
-#define DEPT_TIME_PREF 0x20 
 
-#define AUTOINTERVAL_PREF 0x00 // autoInterval save location
+// The time between sound being started and the display coming on
+// Must be sync'd to the sound file used! (startup.mp3/timetravel.mp3)
+#ifdef TWSOUND
+#define STARTUP_DELAY 900
+#else
+#define STARTUP_DELAY 1050
+#endif
+#define TIMETRAVEL_DELAY 1500
 
-extern uint8_t autoInterval;
-extern const uint8_t autoTimeIntervals[5];
+// Time between the phases of (long) time travel
+// Sum of all must be 8000
+#define TT_P1_DELAY_P1  1400                                                                    // Normal
+#define TT_P1_DELAY_P2  (4200-TT_P1_DELAY_P1)                                                   // Light flicker
+#define TT_P1_DELAY_P3  (5800-(TT_P1_DELAY_P2+TT_P1_DELAY_P1))                                  // Off
+#define TT_P1_DELAY_P4  (6800-(TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))                   // Random display I
+#define TT_P1_DELAY_P5  (8000-(TT_P1_DELAY_P4+TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))    // Random display II
+
+extern uint8_t        autoInterval;
+extern const uint8_t  autoTimeIntervals[6];
+
+extern bool           alarmOnOff;
+extern uint8_t        alarmHour;
+extern uint8_t        alarmMinute;
 
 extern clockDisplay destinationTime;
 extern clockDisplay presentTime;
@@ -57,18 +77,53 @@ extern clockDisplay departedTime;
 
 extern RTC_DS3231 rtc;
 
-extern dateStruct destinationTimes[8];
-extern dateStruct departedTimes[8];
-extern int8_t autoTime;
+#define NUM_AUTOTIMES 11
+extern dateStruct destinationTimes[NUM_AUTOTIMES];
+extern dateStruct departedTimes[NUM_AUTOTIMES];
+extern int8_t     autoTime;
 
+extern void time_boot();
 extern void time_setup();
 extern void time_loop();
-extern void timeTravel();
+extern void timeTravel(bool makeLong);
+extern void resetPresentTime();
+extern void pauseAuto();
+extern bool checkIfAutoPaused();
 extern bool getNTPTime();
-extern void doGetAutoTimes();
 extern bool checkTimeOut();
 extern void RTCClockOutEnable();
 extern bool isLeapYear(int year);
-extern int daysInMonth(int month, int year);
+extern int  daysInMonth(int month, int year);
+extern DateTime myrtcnow();
+
+extern uint64_t dateToMins(int year, int month, int day, int hour, int minute);
+extern void minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
+extern uint32_t getHrs1KYrs(int index);
+
+#ifdef FAKE_POWER_ON
+void fpbKeyPressed(); 
+void fpbKeyLongPressStop();  
+#endif
+
+void my2delay(unsigned long mydel);
+void waitAudioDoneIntro();
+
+// These block various events
+extern bool FPBUnitIsOn;
+extern bool startup;
+extern bool timeTraveled;
+extern int  timeTravelP1;
+extern int  specDisp;
+
+// Our generic timeout when waiting for buttons, in seconds. max 255.
+#define maxTime 240            
+extern uint8_t timeout;
+
+extern uint64_t timeDifference;
+extern bool     timeDiffUp;
+
+#ifdef FAKE_POWER_ON
+extern bool waitForFakePowerButton;
+#endif
 
 #endif

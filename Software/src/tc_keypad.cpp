@@ -1,9 +1,12 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * Code adapted from Marmoset Electronics 
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2022 Thomas Winischhofer (A10001986)
+ * 
+ * Clockdisplay and keypad menu code based on code by John Monaco
+ * Marmoset Electronics 
  * https://www.marmosetelectronics.com/time-circuits-clock
- * by John Monaco
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,95 +28,198 @@ const char keys[4][3] = {
     {'1', '2', '3'},
     {'4', '5', '6'},
     {'7', '8', '9'},
-    {'*', '0', '#'}};
+    {'*', '0', '#'}
+};
 
 #ifdef GTE_KEYPAD
 byte rowPins[4] = {5, 0, 1, 3};
 byte colPins[3] = {4, 6, 2};
 #else
-byte rowPins[4] = {1, 6, 5, 3}; //connect to the row pinouts of the keypad
-byte colPins[3] = {2, 0, 4};    //connect to the column pinouts of the keypad
+byte rowPins[4] = {1, 6, 5, 3}; // connect to the row pinouts of the keypad  2+64+32+8 = 0x6a  INPUT
+byte colPins[3] = {2, 0, 4};    // connect to the column pinouts of the keypad  4+1+16 = 0x15  OUTPUT
 #endif
 
 Keypad_I2C keypad(makeKeymap(keys), rowPins, colPins, 4, 3, KEYPAD_ADDR, PCF8574);
 
 bool isEnterKeyPressed = false;
 bool isEnterKeyHeld = false;
-bool isEnterKeyDouble = false;
 bool enterWasPressed = false;
-bool dateComplete = false;
-bool menuFlag = false;
 
-int enterVal = 0;
-long timeNow = 0;
+#ifdef EXTERNAL_TIMETRAVEL_IN
+bool isEttKeyPressed = false;
+unsigned long ettNow = 0;
+bool ettDelayed = false;
+unsigned long ettDelay = 0; // ms
+bool ettLong;
+#endif
 
-const int maxDateLength = 12;  //month, day, year, hour, min
-const int minDateLength = 8;   //month, day, year
+unsigned long timeNow = 0;
 
-char dateBuffer[maxDateLength + 1];
-char timeBuffer[2]; // 2 characters to accomodate date and time settings
-char yearBuffer[3]; // 4 characters to accomodate year setting
-char monthBuffer[2];
+unsigned long lastKeyPressed = 0;
+
+#define DATELEN_ALL   12   // month, day, year, hour, min
+#define DATELEN_DATE   8   // month, day, year
+#define DATELEN_TIME   4   // hour, minute
+#define DATELEN_CODE   3   // special
+
+char dateBuffer[DATELEN_ALL + 2];
+char timeBuffer[8]; // 4 characters to accommodate date and time settings
+
 int dateIndex = 0;
 int timeIndex = 0;
 int yearIndex = 0;
-int monthIndex = 0;
 
-byte prevKeyState = HIGH;
+bool doKey = false;
 
-OneButton enterKey = OneButton(ENTER_BUTTON,
-  false,        // Button is active HIGH
-  false         // Enable internal pull-up resistor
+unsigned long enterDelay = 0;
+
+OneButton enterKey = OneButton(ENTER_BUTTON_PIN,
+    false,    // Button is active HIGH
+    false     // Disable internal pull-up resistor
 );
 
-void keypad_setup() {
+#ifdef EXTERNAL_TIMETRAVEL_IN
+OneButton ettKey = OneButton(EXTERNAL_TIMETRAVEL_IN_PIN,
+    true,     // Button is active LOW
+    true      // Enable internal pull-up resistor
+);
+#endif
+
+/*
+ * keypad_setup()
+ * 
+ */
+void keypad_setup() 
+{
+    byte rowMask = (1 << rowPins[0]) | (1 << rowPins[1]) | (1 << rowPins[2]) | (1 << rowPins[3]); // input
+    byte colMask = (1 << colPins[0]) | (1 << colPins[1]) | (1 << colPins[2]);                     // output
+
     keypad.begin(makeKeymap(keys));
-    keypad.addEventListener(keypadEvent);  //add an event listener for this keypad
-    keypad.setHoldTime(ENTER_HOLD_TIME);   // 3 sec hold time
+    
+    keypad.addEventListener(keypadEvent);
+    
+    keypad.setHoldTime(ENTER_HOLD_TIME); 
 
-    //setup pins for white LED and Enter key
-    pinMode(WHITE_LED, OUTPUT);
-    digitalWrite(WHITE_LED, LOW);  //turn on white LEDs
-    pinMode(ENTER_BUTTON, INPUT_PULLDOWN);
-    digitalWrite(ENTER_BUTTON, LOW);
+    keypad.setDebounceTime(20);
 
-    enterKey.attachClick(enterKeyPressed);
-    enterKey.attachDuringLongPress(enterKeyHeld);
-    //enterKey.attachDoubleClick(enterKeyDouble);
+    keypad.colMask = colMask;
+    keypad.rowMask = rowMask;
+
+    // Setup pin for white LED
+    pinMode(WHITE_LED_PIN, OUTPUT);
+    digitalWrite(WHITE_LED_PIN, LOW);  
+
+    // Setup Enter button
+    enterKey.setClickTicks(ENTER_CLICK_TIME);
     enterKey.setPressTicks(ENTER_HOLD_TIME);
-    enterKey.setClickTicks(ENTER_DOUBLE_TIME);
-    enterKey.setDebounceTicks(DEBOUNCE);
+    enterKey.setDebounceTicks(ENTER_DEBOUNCE);
+    enterKey.attachClick(enterKeyPressed);    
+    enterKey.attachLongPressStart(enterKeyHeld);
 
-    Serial.println("Keypad Setup Complete");
+#ifdef EXTERNAL_TIMETRAVEL_IN
+    // Setup External time travel button
+    ettKey.setClickTicks(ETT_CLICK_TIME);   
+    ettKey.setPressTicks(ETT_HOLD_TIME); 
+    ettKey.setDebounceTicks(ETT_DEBOUNCE);
+    ettKey.attachLongPressStart(ettKeyPressed);   
+
+    ettDelay = (int)atoi(settings.ettDelay);
+    if(ettDelay > ETT_MAX_DEL) ettDelay = ETT_MAX_DEL;
+
+    ettLong = ((int)atoi(settings.ettLong) > 0);
+#endif
+
+    dateBuffer[0] = '\0';
+    timeBuffer[0] = '\0';
+  
+    #ifdef TC_DBG
+    Serial.println(F("keypad_setup: Setup Complete"));
+    #endif
 }
 
-char get_key() {
-    char getKey = keypad.getKey();
-    //Serial.print("Key: ");
-    //Serial.println(getKey);
-    return getKey;
+/*
+ * get_key()
+ * 
+ * Do not use keypad.getKey() directly!
+ */
+char get_key() 
+{    
+    char key;    
+
+    keypad.scanKeys = true;                          
+    key = keypad.getKey();  
+    keypad.scanKeys = false;      
+         
+    return key;
 }
 
-//handle different cases for keypresses
-void keypadEvent(KeypadEvent key) {
-    switch (keypad.getState()) {
+/* 
+ *  The keypad event handler
+ */
+void keypadEvent(KeypadEvent key) 
+{
+    if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP1) 
+        return;
+    
+    switch(keypad.getState()) {
         case PRESSED:
-            if (key != '#' || key != '*') {
+            if(key != '#' && key != '*') {
                 play_keypad_sound(key);
-                if (isSetUpdate) {
-                    recordSetTimeKey(key);
+            }
+            doKey = true;            
+            break;        
+        case HOLD:            
+            if(key == '0') {    // "0" held down -> time travel
+                doKey = false;
+                timeTravel(true);     // make long timeTravel             
+            }
+            if(key == '9') {    // "9" held down -> return from time travel                
+                doKey = false;
+                resetPresentTime();                
+            }
+            if(key == '1') {    // "1" held down -> turn alarm on
+                doKey = false;
+                if(alarmOn()) {          
+                    play_file("/alarmon.mp3", 1.0, true, 0);      
                 } else {
-                    recordKey(key);
+                    play_file("/baddate.mp3", 1.0, true, 0); 
                 }
-                break;
+            }
+            if(key == '2') {    // "2" held down -> turn alarm off
+                doKey = false;
+                alarmOff();                
+                play_file("/alarmoff.mp3", 1.0, true, 0);
+            }
+            if(key == '4') {    // "4" held down -> nightmode on
+                doKey = false;
+                nightModeOn();
+                play_file("/nmon.mp3", 1.0, false, 0);                   
+            }
+            if(key == '5') {    // "5" held down -> nightmode off
+                doKey = false;
+                nightModeOff(); 
+                play_file("/nmoff.mp3", 1.0, false, 0);                
+            }
+            if(key == '3') {    // "3" held down -> play audio file "key3"
+                doKey = false;
+                play_file("/key3.mp3", 1.0, true, 0);                
+            }
+            if(key == '6') {    // "6" held down -> play audio file "key6"
+                doKey = false;
+                play_file("/key6.mp3", 1.0, true, 0);                
             }
             break;
         case RELEASED:
-            break;
-        case HOLD:
-            if (key == '0') {
-                timeTravel();
-                break;
+            if(doKey && key != '#' && key != '*') {
+                if(isSetUpdate) {
+                    if(isYearUpdate) {
+                        recordSetYearKey(key);                        
+                    } else {
+                        recordSetTimeKey(key);                        
+                    }
+                } else {                    
+                    recordKey(key);
+                }
             }
             break;
         case IDLE:
@@ -121,129 +227,372 @@ void keypadEvent(KeypadEvent key) {
     }
 }
 
-void enterKeyPressed() {
-    Serial.println("Enter Key Pressed");
-    Serial.print("menuFlag: ");
-    Serial.println(menuFlag);
+void enterKeyPressed() 
+{
     isEnterKeyPressed = true;
 }
 
-void enterKeyHeld() {
-    Serial.println("Enter Key held");
-    Serial.print("menuFlag: ");
-    Serial.println(menuFlag);
+void enterKeyHeld() 
+{
     isEnterKeyHeld = true;
 }
 
-void enterKeyDouble() {
-    Serial.println("Enter Key double click");
-    isEnterKeyDouble = true;
+#ifdef EXTERNAL_TIMETRAVEL_IN
+void ettKeyPressed() 
+{
+    isEttKeyPressed = true;
 }
+#endif
 
-void recordKey(char key) {
+void recordKey(char key) 
+{
     dateBuffer[dateIndex++] = key;
-    if (dateIndex >= maxDateLength) dateIndex = maxDateLength - 1;  // don't overflow, will overwrite end of date next time
-    Serial.println(dateIndex);
+    dateBuffer[dateIndex] = '\0'; 
+    if(dateIndex >= DATELEN_ALL) dateIndex = DATELEN_ALL - 1;  // don't overflow, will overwrite end of date next time
+    lastKeyPressed = millis();
 }
 
-void recordSetTimeKey(char key) {
-    if (timeIndex == 0) timeBuffer[0] = key;
-    if (timeIndex == 1) timeBuffer[1] = key;
-    timeIndex++;
-    Serial.println(timeIndex);
-    if (timeIndex == 2) timeIndex = 0; // don't overflow, and return to start after buffer has 2 chars in it
+void recordSetTimeKey(char key) 
+{
+    timeBuffer[timeIndex++] = key;  
+    timeBuffer[timeIndex] = '\0';      
+    if(timeIndex == 2) timeIndex = 0;       
 }
 
-void recordSetYearKey(char key) {
-    yearBuffer[yearIndex++] = key;
-    Serial.println(yearIndex);
-    if (yearIndex >= 4) yearIndex = 0;  // don't overflow
+void recordSetYearKey(char key) 
+{
+    timeBuffer[yearIndex++] = key;
+    timeBuffer[yearIndex] = '\0';    
+    if(yearIndex == 4) yearIndex = 0;   
 }
 
-void recordSetMonthKey(char key) {
-    monthBuffer[monthIndex++] = key;
-    Serial.println(monthIndex);
-    if (monthIndex >= 3) monthIndex = 0;  // don't overflow
+void resetTimebufIndices() 
+{
+    timeIndex = yearIndex = 0;
+    // Do NOT clear the timeBuffer, might be pre-set
 }
 
-void keypadLoop() {
-    enterKey.tick(); //manages the enter key
+void enterkeytick() 
+{
+    enterKey.tick();  // manages the enter button (updates flags)
+    
+#ifdef EXTERNAL_TIMETRAVEL_IN
+    ettKey.tick();    // manages the extern time travel button (updates flags)
+#endif         
+}
 
-    if (isEnterKeyHeld && !menuFlag) {
-        //if enter key is held go into settings menu
-        isEnterKeyHeld = false; //reset
-        isEnterKeyPressed = false;
-        menuFlag = true;
-        enter_menu(); //in tc_menu.cpp
+/*
+ * keypad_loop()
+ * 
+ */
+void keypad_loop() 
+{   
+    char spTxt[16];
+    #define EE1_KL2 12
+    char spTxtS2[EE1_KL2] = { 181, 224, 179, 231, 199, 140, 197, 129, 197, 140, 194, 133 };
+
+    enterkeytick();
+
+    // Discard keypad input after 5 minutes of inactivity
+    if(millis() - lastKeyPressed >= 5*60*1000) {
+        dateBuffer[0] = '\0'; 
+        dateIndex = 0;
     }
 
-    if (isEnterKeyPressed && !menuFlag) {
-        isEnterKeyPressed = false; //reset
-        play_file("/enter.mp3", getVolume());
-        digitalWrite(WHITE_LED, HIGH);  //turn on white LEDs
-        destinationTime.off(); //turn off destination time only
-        timeNow = millis();
-        enterWasPressed = true;
+    // Bail out if sequence played or device is fake-"off"
+    if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP1) {
 
-        if (strlen(dateBuffer) > maxDateLength) {
-            Serial.println(F("Date is too long, try again"));
-            dateIndex = 0;  //reset
-        } else if (strlen(dateBuffer) < minDateLength) {
-            Serial.println(F("Date is too short, try again"));
-            dateIndex = 0;  //reset
+        isEnterKeyHeld = false;     
+        isEnterKeyPressed = false;
+        #ifdef EXTERNAL_TIMETRAVEL_IN
+        isEttKeyPressed = false; 
+        #endif
+        
+        return;
+        
+    }
+
+#ifdef EXTERNAL_TIMETRAVEL_IN
+    if(isEttKeyPressed) {
+        if(!ettDelay) {
+            timeTravel(ettLong);
+            ettDelayed = false;          
         } else {
-            dateComplete = true;
+            ettNow = millis();
+            ettDelayed = true;
+        }
+        isEttKeyPressed = false;
+    }
+    if(ettDelayed) {
+        if(millis() - ettNow >= ettDelay) {
+            timeTravel(ettLong);
+            ettDelayed = false;
+        }
+    }
+#endif    
+
+    // if enter key is held go into keypad menu
+    if(isEnterKeyHeld) { 
+             
+        isEnterKeyHeld = false;     
+        isEnterKeyPressed = false;
+        cancelEnterAnim();
+        cancelETTAnim();
+        
+        timeIndex = yearIndex = 0;
+        timeBuffer[0] = '\0';
+        
+        enter_menu();     // enter menu mode; in tc_menu.cpp
+        
+        isEnterKeyHeld = false;     
+        isEnterKeyPressed = false;   
+        
+        #ifdef EXTERNAL_TIMETRAVEL_IN
+        // No external tt while in menu mode,
+        // so reset flag upon menu exit
+        isEttKeyPressed = false;     
+        #endif 
+        
+    }
+
+    // if enter key is merely pressed, copy dateBuffer to destination time (if valid)
+    if(isEnterKeyPressed) {
+
+        int strLen = strlen(dateBuffer);
+      
+        isEnterKeyPressed = false; 
+        enterWasPressed = true;
+        
+        cancelETTAnim();
+
+        // Turn on white LED
+        digitalWrite(WHITE_LED_PIN, HIGH); 
+
+        // Turn off destination time
+        destinationTime.off();
+                 
+        timeNow = millis();
+        
+        if(strLen != DATELEN_ALL  &&
+           strLen != DATELEN_DATE &&
+           strLen != DATELEN_TIME &&
+           strLen != DATELEN_CODE) {
+            
+            Serial.println(F("keypad_loop: Date is too long or too short"));
+                        
+            play_file("/baddate.mp3", 1.0, true, 0); 
+            enterDelay = BADDATE_DELAY;  
+                 
+        } else if(strLen == DATELEN_CODE) {
+
+            uint16_t code = atoi(dateBuffer);
+            switch(code) {
+                          
+            // TODO
+
+            default:
+                play_file("/baddate.mp3", 1.0, true, 0);
+                enterDelay = BADDATE_DELAY; 
+            }
+          
+        } else {
+          
+            int _setMonth = -1, _setDay = -1, _setYear = -1;
+            int _setHour = -1, _setMin = -1;
+            int special = 0;
+            uint32_t spTmp;  
+            #ifdef IS_ACAR_DISPLAY 
+            #define EE1_KL1 12
+            char spTxtS1[EE1_KL1] = { 207, 254, 206, 255, 206, 247, 206, 247, 199, 247, 207, 247 };            
+            #else
+            #define EE1_KL1 13
+            char spTxtS1[EE1_KL1] = { 181, 244, 186, 138, 187, 138, 179, 138, 179, 131, 179, 139, 179 };
+            #endif
+
+            #ifdef TC_DBG
             Serial.print(F("date entered: ["));
             Serial.print(dateBuffer);
             Serial.println(F("]"));
+            #endif
 
-            String dateBufferString(dateBuffer);  //convert char to String so substring can be used
+            // Convert char to String so substring can be used
+            String dateBufferString(dateBuffer); 
 
-            //copy dates in dateBuffer and make ints
-            int _setMonth = dateBufferString.substring(0, 2).toInt();
-            int _setDay = dateBufferString.substring(2, 4).toInt();
-            int _setYear = dateBufferString.substring(4, 8).toInt();
-            int _setHour = dateBufferString.substring(8, 10).toInt();
-            int _setMin = dateBufferString.substring(10, 12).toInt();
+            // Convert dateBuffer to date
+            if(strLen == DATELEN_TIME) {
+                _setHour = dateBufferString.substring(0, 2).toInt();
+                _setMin  = dateBufferString.substring(2, 4).toInt();
+            } else {         
+                _setMonth = dateBufferString.substring(0, 2).toInt();
+                _setDay = dateBufferString.substring(2, 4).toInt();
+                _setYear = dateBufferString.substring(4, 8).toInt();
+                if(strLen == DATELEN_ALL) {
+                    _setHour = dateBufferString.substring(8, 10).toInt();
+                    _setMin = dateBufferString.substring(10, 12).toInt();
+                }
+    
+                // Fix month
+                if (_setMonth < 1)  _setMonth = 1;
+                if (_setMonth > 12) _setMonth = 12;            
+    
+                // Check if day makes sense for the month entered 
+                if(_setDay < 1)     _setDay = 1;
+                if(_setDay > daysInMonth(_setMonth, _setYear)) {
+                    _setDay = daysInMonth(_setMonth, _setYear); //set to max day in that month
+                }
+    
+                // year: 1-9999 allowed. There is no year "0", for crying out loud.
+                if(_setYear < 1)    _setYear = 1;
 
-            //do this first in case the month entered is wrong
-            if (_setMonth > 12) _setMonth = 12;
-            if (_setMonth == 0) _setMonth = 1;
-
-            //check if day makes sense for the month entered accounting for a leap year.
-            if (_setDay > daysInMonth(_setMonth, _setYear)) {
-                _setDay = daysInMonth(_setMonth, _setYear); //set to max day in that month
+                spTmp = (uint32_t)_setYear << 16 | _setMonth << 8 | _setDay;
+                if((spTmp ^ getHrs1KYrs(7)) == 70880781) { 
+                    special = 1;
+                    spTxt[EE1_KL1] = '\0';
+                    for(int i = EE1_KL1-1; i >= 0; i--) {
+                        spTxt[i] = spTxtS1[i] ^ (i == 0 ? 0xff : spTxtS1[i-1]);                    
+                    }
+                } else if((spTmp ^ getHrs1KYrs(8)) == 59652301)  { 
+                    if(_setHour >= 9 && _setHour <=11) {
+                        special = 2;
+                    }
+                } else if((spTmp ^ getHrs1KYrs(6)) == 97637962)  {
+                    special = 3;
+                } else if((spTmp ^ getHrs1KYrs(8)) == 65811679)  {
+                    special = 4;
+                }
             }
 
-            //hour and min are checked in clockdisplay
+            // hour and min are checked in clockdisplay
 
-            //set date to destination time
-            destinationTime.setMonth(_setMonth);
-            destinationTime.setDay(_setDay);
-            destinationTime.setYear(_setYear);
-            destinationTime.setHour(_setHour);
-            destinationTime.setMinute(_setMin);
-            destinationTime.save();
+            switch(special) {
+            case 1:                
+                destinationTime.showOnlyText(spTxt);                
+                specDisp = 1;
+                play_file("/enter.mp3", 1.0, true, 0);
+                enterDelay = ENTER_DELAY;
+                break;
+            case 2:
+                play_file("/ee2.mp3", 1.0, true, 0, false);
+                enterDelay = EE2_DELAY; 
+                break;
+            case 3:
+                play_file("/ee3.mp3", 1.0, true, 0, false);
+                enterDelay = EE3_DELAY; 
+                break;
+            case 4:
+                play_file("/ee4.mp3", 1.0, true, 0, false);
+                enterDelay = EE4_DELAY; 
+                break;
+            default:
+                play_file("/enter.mp3", 1.0, true, 0);
+                enterDelay = ENTER_DELAY; 
+            }
 
-            dateIndex = 0;  // prepare for next time
-            dateBufferString[0] = '\0';
+            // Copy date to destination time
+            if(_setYear > 0)    destinationTime.setYear(_setYear);
+            if(_setMonth > 0)   destinationTime.setMonth(_setMonth);
+            if(_setDay > 0)     destinationTime.setDay(_setDay);            
+            if(_setHour >= 0)   destinationTime.setHour(_setHour);
+            if(_setMin >= 0)    destinationTime.setMinute(_setMin);
+
+            // We only save the new time to the EEPROM if user wants persistence.
+            // Might not be preferred; first, this messes with the user's custom
+            // times. Secondly, it wears the flash memory.
+            if(timetravelPersistent) {
+                destinationTime.save();      
+            }     
+
+            // Pause autoInterval-cycling so user can play undisturbed
+            pauseAuto();
         }
+
+        // Prepare for next input
+        dateIndex = 0;              
+        dateBuffer[0] = '\0';
     }
-    if (isEnterKeyHeld && menuFlag) {
-        isEnterKeyHeld = false; //reset
-        isEnterKeyPressed = false;
-        //save current setting and exit to full display
-    }
-    //turn everything back on after entering date
-    if ((millis() > timeNow + ENTER_DELAY) && enterWasPressed) {
-        destinationTime.showAnimate1();
-        timeNow = millis();
-        while (millis() < timeNow + 80){
-            //wait 80ms
-        }
-        destinationTime.showAnimate2(); //turn on month
+    
+    // Turn everything back on after entering date
+    // (might happen in next iteration of loop)
+    
+    if(enterWasPressed && (millis() - timeNow > enterDelay)) {
+
+        if(specDisp) {
+
+            switch(specDisp++) {
+            case 2:
+                destinationTime.on();
+                digitalWrite(WHITE_LED_PIN, LOW);
+                timeNow = millis();
+                enterWasPressed = true;
+                enterDelay = EE1_DELAY2;
+                break;
+            case 3:
+                spTxt[EE1_KL2] = '\0';
+                for(int i = EE1_KL2-1; i >= 0; i--) {
+                    spTxt[i] = spTxtS2[i] ^ (i == 0 ? 0xff : spTxtS2[i-1]);                    
+                }
+                destinationTime.showOnlyText(spTxt);
+                timeNow = millis();
+                enterWasPressed = true;
+                enterDelay = EE1_DELAY3;
+                play_file("/ee1.mp3", 1.0, true, 0, false);
+                break;
+            case 4:
+                specDisp = 0;
+                break;
+            }
+            
+        } 
+
+        if(!specDisp) {
+          
+            destinationTime.showAnimate1();   // Show all but month
+            mysdelay(80);                     // Wait 80ms
+            destinationTime.showAnimate2();   // turn on month
         
-        digitalWrite(WHITE_LED, LOW);  //turn off white LEDs
-        enterWasPressed = false;       //reset flag
+            digitalWrite(WHITE_LED_PIN, LOW); // turn off white LED
+        
+            enterWasPressed = false;          // reset flag
+       
+        }
     }
+}
+
+void cancelEnterAnim()
+{
+    if(enterWasPressed) {
+        enterWasPressed = false;
+        digitalWrite(WHITE_LED_PIN, LOW);
+        destinationTime.show();
+        destinationTime.on();
+        specDisp = 0;
+    }
+}
+
+void cancelETTAnim()
+{
+    #ifdef EXTERNAL_TIMETRAVEL_IN
+    if(ettDelayed) {
+        ettDelayed = false;
+        // ...
+    }
+    #endif
+}    
+
+/*
+ * Night mode
+ * 
+ */
+void nightModeOn() 
+{
+    destinationTime.setNightMode(true);
+    presentTime.setNightMode(true);
+    departedTime.setNightMode(true);
+}
+
+void nightModeOff()
+{
+    destinationTime.setNightMode(false);
+    presentTime.setNightMode(false);
+    departedTime.setNightMode(false);
 }
