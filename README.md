@@ -33,21 +33,19 @@ This Time Circuits Display has been meticulously reproduced to be as accurate as
 - Get accurate time from NTP (network time) when connected to a WiFi network
 - Support for time zones and automatic DST
 - Alarm function (sounds customizable with an SD card)
+#### Support for external power on/off & other prop control
+- Trigger an external time travel event on other props
+- Trigger a time travel event (on the TCD) from another prop
+- Fake power on & off - TCD will boot, setup WiFi, sync time with NTP, but not start/turn off displays until an active-low button is pressed (useful for turning on/off the displays with a TFC drive switch)
 #### Other features
 - Settings interface web portal
 - Keypad menu for adjusting various settings, viewing IP address, and WiFi status
 - Configurable WiFi connection timeouts and retries
+- Set a static IP
 - Optional power-up intro with sound
-- Optional sound on the hour
-- Optional external fake "power switch"
-- Optional external trigger for a time travel event (for other props)
-- Option to make time travels persistent over reboots
+- Support for playing a custom sound on the hour
 - SD card support for custom audio files
 - 24-hour clock mode for non-Americans
-- Night mode (displays off or dimmed)
-- Option to make time travels persistent over reboots
+- Night mode (displays off or dimmed) & ability to automatically turn on/off by Present Time
+- Option to make time travels persistent over reboots (dates entered stay there instead of rotating)
 - Built-in installer for default audio files in addition to OTA firmware updates
-
-
-
-
