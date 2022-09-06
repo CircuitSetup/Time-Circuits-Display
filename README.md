@@ -27,12 +27,12 @@ This Time Circuits Display has been meticulously reproduced to be as accurate as
 - Enter any date via keypad
 - Time travel to the Destination Time with display effects
 - Return from time travel
-- Automatic rotation of times gone to or displayed in the movie (optional rotation intervals, or off)
+- Automatic rotation of times displayed in the movie (optional rotation intervals, or off)
 #### Present Time as a clock
 - On-board Real Time Clock (RTC)
 - Get accurate time from NTP (network time) when connected to a WiFi network
 - Support for time zones and automatic DST
-- Alarm function (sounds customizable with an SD card)
+- Alarm function (sounds customizable with a SD card)
 #### Support for external power on/off & other prop control
 - Trigger an external time travel event on other props
 - Trigger a time travel event (on the TCD) from another prop
