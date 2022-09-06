@@ -33,6 +33,7 @@ This Time Circuits Display has been meticulously reproduced to be as accurate as
 - Get accurate time from NTP (network time) when connected to a WiFi network
 - Support for time zones and automatic DST
 - Alarm function (sounds customizable with a SD card)
+- Play a sound every hour (optional)
 #### Support for external power on/off & other prop control
 - Trigger an external time travel event on other props
 - Trigger a time travel event (on the TCD) from another prop
@@ -43,7 +44,6 @@ This Time Circuits Display has been meticulously reproduced to be as accurate as
 - Configurable WiFi connection timeouts and retries
 - Set a static IP
 - Optional power-up intro with sound
-- Support for playing a custom sound on the hour
 - SD card support for custom audio files
 - 24-hour clock mode for non-Americans
 - Night mode (displays off or dimmed) & ability to automatically turn on/off by Present Time
