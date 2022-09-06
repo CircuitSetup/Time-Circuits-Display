@@ -73,6 +73,7 @@ The menu is involked by holding the ENTER button.
 #### Setting the Present Time
 This can be done in several ways:
 - Enter a date/time, and time travel to that time (see above)
+
 OR
 1. Hold down the Enter button to enter the keypad menu
 1. Press the Enter button once to highlight the Present Time display ("RTC" will show in the Destination Time display)
@@ -80,6 +81,7 @@ OR
 1. Press the Enter button to select the field you would like to change for the Date/Time or use the keypad to start entering values
 1. To change the month, enter the month's corresponding number
 1. Press the Enter button until "SAVE" appears to save and exit the menu
+
 OR
 - If [connected to a WiFi network](https://github.com/CircuitSetup/Time-Circuits-Display/wiki/8.-WiFi-Connection-&-TCD-Settings#connecting-to-your-wifi-network), time will be fetched from the internet (NTP server is set in the web config portal)
 
