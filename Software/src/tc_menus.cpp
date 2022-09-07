@@ -163,7 +163,7 @@ int menuItemNum;
 
 // array element of autoTimeIntervals[], set's time between automatically displayed times
 uint8_t autoInterval = 1;                                     
-const uint8_t autoTimeIntervals[6] = {0, 5, 15, 30, 45, 60};  // first must be 0 (=off)
+const uint8_t autoTimeIntervals[6] = {0, 5, 10, 15, 30, 60};  // first must be 0 (=off)
 
 bool isSetUpdate = false;
 bool isYearUpdate = false;
@@ -492,7 +492,7 @@ quitMenu:
 
     mydelay(1000);
 
-    // Set the current time in the display, 2+ seconds have gone
+    // Restore present time, 2+ seconds have gone
     presentTime.setDateTimeDiff(myrtcnow()); 
     
     // all displays on and show  

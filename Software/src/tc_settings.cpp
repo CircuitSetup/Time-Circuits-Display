@@ -122,6 +122,21 @@ void settings_setup()
     #endif
 
     if(SPIFFS.begin()) {
+      
+        haveFS = true;
+
+    } else {
+
+        #ifdef TC_DBG
+        Serial.println(F("settings_setup: Mounting flash FS failed, formatting..."));
+        #endif
+
+        SPIFFS.format();
+        if(SPIFFS.begin()) haveFS = true;
+
+    }        
+
+    if(haveFS) {
   
         #ifdef TC_DBG
         Serial.println(F("settings_setup: Mounted flash FS"));
@@ -234,6 +249,18 @@ void settings_setup()
                         strcpy(settings.autoNMOff, json["autoNMOff"]);
                         writedefault |= checkValidNumParm(settings.autoNMOff, 0, 23, DEF_AUTONM_OFF);
                     } else writedefault = true;
+                    if(json["dtNmOff"]) {
+                        strcpy(settings.dtNmOff, json["dtNmOff"]);
+                        writedefault |= checkValidNumParm(settings.dtNmOff, 0, 1, DEF_DT_OFF);
+                    } else writedefault = true;
+                    if(json["ptNmOff"]) {
+                        strcpy(settings.ptNmOff, json["ptNmOff"]);
+                        writedefault |= checkValidNumParm(settings.ptNmOff, 0, 1, DEF_PT_OFF);
+                    } else writedefault = true;
+                    if(json["ltNmOff"]) {
+                        strcpy(settings.ltNmOff, json["ltNmOff"]);
+                        writedefault |= checkValidNumParm(settings.ltNmOff, 0, 1, DEF_LT_OFF);
+                    } else writedefault = true;
                     #ifdef EXTERNAL_TIMETRAVEL_IN
                     if(json["ettDelay"]) {
                         strcpy(settings.ettDelay, json["ettDelay"]);
@@ -242,6 +269,20 @@ void settings_setup()
                     if(json["ettLong"]) {
                         strcpy(settings.ettLong, json["ettLong"]);
                         writedefault |= checkValidNumParm(settings.ettLong, 0, 1, DEF_ETT_LONG);
+                    } else writedefault = true;
+                    #endif
+                    #ifdef TC_HAVESPEEDO
+                    if(json["useSpeedo"]) {
+                        strcpy(settings.useSpeedo, json["useSpeedo"]);
+                        writedefault |= checkValidNumParm(settings.useSpeedo, 0, 1, DEF_USE_SPEEDO);
+                    } else writedefault = true;
+                    if(json["speedoBright"]) {
+                        strcpy(settings.speedoBright, json["speedoBright"]);
+                        writedefault |= checkValidNumParm(settings.speedoBright, 0, 15, DEF_BRIGHT_SPEEDO);
+                    } else writedefault = true;
+                    if(json["speedoFact"]) {
+                        strcpy(settings.speedoFact, json["speedoFact"]);
+                        writedefault |= checkValidNumParmF(settings.speedoFact, 0.5, 5.0, DEF_SPEEDO_FACT);
                     } else writedefault = true;
                     #endif
                   
@@ -302,7 +343,7 @@ void write_settings()
     json["autoRotateTimes"] = settings.autoRotateTimes;
     json["destTimeBright"] = settings.destTimeBright;
     json["presTimeBright"] = settings.presTimeBright;
-    json["lastTimeBright"] = settings.lastTimeBright;    
+    json["lastTimeBright"] = settings.lastTimeBright;
     json["wifiConRetries"] = settings.wifiConRetries;
     json["wifiConTimeout"] = settings.wifiConTimeout;
     json["mode24"] = settings.mode24;
@@ -314,9 +355,17 @@ void write_settings()
     json["playIntro"] = settings.playIntro;
     json["autoNMOn"] = settings.autoNMOn;
     json["autoNMOff"] = settings.autoNMOff;
+    json["dtNmOff"] = settings.dtNmOff;
+    json["ptNmOff"] = settings.ptNmOff;
+    json["ltNmOff"] = settings.ltNmOff;
     #ifdef EXTERNAL_TIMETRAVEL_IN
     json["ettDelay"] = settings.ettDelay;
     json["ettLong"] = settings.ettLong;
+    #endif
+    #ifdef TC_HAVESPEEDO
+    json["useSpeedo"] = settings.useSpeedo;
+    json["speedoBright"] = settings.speedoBright;
+    json["speedoFact"] = settings.speedoFact;
     #endif
   
     File configFile = SPIFFS.open("/config.json", FILE_WRITE);
@@ -359,6 +408,37 @@ bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault)
     }
     if(i > upperLim) {
         sprintf(text, "%d", upperLim);
+        return true;
+    }
+
+    return false;
+}
+
+bool checkValidNumParmF(char *text, double lowerLim, double upperLim, double setDefault)
+{
+    int i, len = strlen(text);
+    double f;
+
+    if(len == 0) {
+        sprintf(text, "%1.1f", setDefault);
+        return true;
+    }
+
+    for(i = 0; i < len; i++) {
+        if(text[i] != '.' && (text[i] < '0' || text[i] > '9')) {
+            sprintf(text, "%1.1f", setDefault);
+            return true;
+        }        
+    }
+    
+    f = (double)(atof(text));
+    
+    if(f < lowerLim) {
+        sprintf(text, "%1.1f", lowerLim);
+        return true;
+    }
+    if(f > upperLim) {
+        sprintf(text, "%1.1f", upperLim);
         return true;
     }
 

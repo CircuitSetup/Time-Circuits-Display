@@ -40,16 +40,31 @@
  * 
  * 
  * Detailed installation and compilation instructions are here:
- * https://github.com/CircuitSetup/Time-Circuits-Display/wiki/Programming-the-ESP32-Module
+ * https://github.com/CircuitSetup/Time-Circuits-Display/wiki/9.-Programming-&-Upgrading-the-Firmware-(ESP32)
  */
 
 /* Changelog 
  *  
+ *  2022/09/5-6 (A10001986)
+ *    - Fix TC settings corruption when changing WiFi settings
+ *    - Format flash file system if mounting fails
+ *    - Reduce WiFi transmit power in AP mode (to avoid power issues with volume
+ *      pot if not at minimum)
+ *    - Nightmode: Displays can be individually configured to be dimmed or 
+ *      switched off in night mode
+ *    - Fix logic screw-up in autoTimes, changed intervals to 5, 10, 15, 30, 60.
+ *    - More Config Portal beauty enhancements
+ *    - Clockdisplay: Remove dependency on settings.h
+ *    - Fix static ip parameter handling (make sure strings are 0-terminated)
+ *    [- I2C-Speedo integration; still inactive]
+ *  2022/08/31 (A10001986)
+ *    - Add some tool tips to Config Portal
  *  2022/08/30 (A10001986)
- *    - Added Delay for externally triggered time-travel, configurable in Config Portal
+ *    - Added delay for externally triggered time-travel, configurable in Config Portal
  *    - Added option to make ext. triggered time-travel long (or short as before)
- *    - Added Easter Eggs
+ *    - Added some easter eggs
  *    - Fix compilation for LittleFS
+ *    - Added a little gfx to Config Portal
  *  2022/08/29 (A10001986)
  *    - Auto-Night-Mode added
  *  2022/08/28 (A10001986)

@@ -158,7 +158,7 @@ char get_key()
  */
 void keypadEvent(KeypadEvent key) 
 {
-    if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP1) 
+    if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP0 || timeTravelP1) 
         return;
     
     switch(keypad.getState()) {
@@ -171,7 +171,7 @@ void keypadEvent(KeypadEvent key)
         case HOLD:            
             if(key == '0') {    // "0" held down -> time travel
                 doKey = false;
-                timeTravel(true);     // make long timeTravel             
+                timeTravel(true, true);     // make long timeTravel, with speedo (if available)            
             }
             if(key == '9') {    // "9" held down -> return from time travel                
                 doKey = false;
@@ -300,7 +300,7 @@ void keypad_loop()
     }
 
     // Bail out if sequence played or device is fake-"off"
-    if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP1) {
+    if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP0 || timeTravelP1) {
 
         isEnterKeyHeld = false;     
         isEnterKeyPressed = false;
@@ -588,6 +588,9 @@ void nightModeOn()
     destinationTime.setNightMode(true);
     presentTime.setNightMode(true);
     departedTime.setNightMode(true);
+    #ifdef TC_HAVESPEEDO
+    speedo.setNightMode(true);
+    #endif
 }
 
 void nightModeOff()
@@ -595,4 +598,7 @@ void nightModeOff()
     destinationTime.setNightMode(false);
     presentTime.setNightMode(false);
     departedTime.setNightMode(false);
+    #ifdef TC_HAVESPEEDO
+    speedo.setNightMode(false);
+    #endif
 }

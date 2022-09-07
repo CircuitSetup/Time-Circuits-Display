@@ -31,7 +31,6 @@
 #include <EEPROM.h>
 
 #include "tc_global.h"
-#include "tc_settings.h"
 
 #define DS3231_I2CADDR 0x68
 
@@ -96,7 +95,7 @@ class clockDisplay {
         void clear();
         
         uint8_t setBrightness(uint8_t level);
-        uint8_t setBrightnessDirect(uint8_t level) ;
+        uint8_t setBrightnessDirect(uint8_t level);
         uint8_t getBrightness();
     
         void set1224(bool hours24);
@@ -104,6 +103,7 @@ class clockDisplay {
     
         void setNightMode(bool mode);
         bool getNightMode();
+        void setNMOff(bool NMOff);
     
         void setRTC(bool rtc);  // make this an RTC display
         bool isRTC();
@@ -144,7 +144,7 @@ class clockDisplay {
     
         bool save();
         bool saveYOffs();
-        bool load();
+        bool load(int initialBrightness = -1);
         int16_t loadYOffs();
         
         void setDS3232time(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year);    
@@ -164,9 +164,11 @@ class clockDisplay {
         uint8_t _minute = 0;
         bool _colon = false;        // should colon be on?
         bool _rtc = false;          // will this be displaying real time
-        uint8_t _brightness = 15;   // display brightness
-        bool _mode24 = false;       // true = 24 hour mode, false 12 hour mode
+        uint8_t _brightness = 15;   // current display brightness
+        uint8_t _origBrightness = 15; // value from settings
+        bool _mode24 = false;       // true = 24 hour mode, false = 12 hour mode
         bool _nightmode = false;    // true = dest/dept times off
+        bool _NmOff = false;        // true = off during night mode, false = dimmed
         int _oldnm = -1;
     
         uint8_t  getLED7NumChar(uint8_t value);

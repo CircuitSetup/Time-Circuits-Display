@@ -52,6 +52,6 @@ bool isIp(char *str);
 void ipToString(char *str, IPAddress ip);
 IPAddress stringToIp(char *str);
 
-//extern String getParam(String name);
+void getParam(String name, char *destBuf, size_t length);
 
 #endif

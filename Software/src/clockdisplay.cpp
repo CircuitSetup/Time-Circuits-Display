@@ -138,6 +138,11 @@ bool clockDisplay::getNightMode(void)
     return _nightmode;
 }
 
+void clockDisplay::setNMOff(bool NMOff)
+{
+    _NmOff = NMOff;
+}
+
 // Track if this is will be holding real time.
 void clockDisplay::setRTC(bool rtc) 
 {
@@ -228,9 +233,8 @@ void clockDisplay::showAnimate1()
 // Show month, assumes showAnimate1() was already called
 void clockDisplay::showAnimate2() 
 {
-    if(_nightmode && !isRTC()) {
+    if(_nightmode && _NmOff)
         return;
-    }
     
     Wire.beginTransmission(_address);
     Wire.write(0x00);  // start at address 0x0
@@ -709,7 +713,7 @@ bool clockDisplay::saveYOffs()
  * Load saved date/time from eeprom 
  * 
  */
-bool clockDisplay::load() 
+bool clockDisplay::load(int initialBrightness) 
 {
     uint8_t loadBuf[10];
     uint16_t sum = 0;
@@ -717,8 +721,15 @@ bool clockDisplay::load()
 
     if(_saveAddress < 0) 
         return false;
+
+    if(initialBrightness >= 0) {
+        if(initialBrightness > 15)
+            initialBrightness = 15;
+
+        _origBrightness = initialBrightness;
+    }
         
-    if(!isRTC()) {  
+    if(!isRTC()) {
 
         for(i = 0; i < 10; i++) {
             loadBuf[i] = EEPROM.read(_saveAddress + i);
@@ -729,9 +740,9 @@ bool clockDisplay::load()
         // 16bit sum cannot be zero; if it is, the data
         // is clear, which means it is invalid.
 
-        if( (sum != 0) && ((sum & 0xff) == loadBuf[9])) { 
+        if( (sum != 0) && ((sum & 0xff) == loadBuf[9])) {
                                    
-            #ifdef TC_DBG  
+            #ifdef TC_DBG
             Serial.println(F("Clockdisplay: Loading non-RTC settings from EEPROM"));
             #endif
             
@@ -742,15 +753,11 @@ bool clockDisplay::load()
             setHour(loadBuf[6]);
             setMinute(loadBuf[7]);
 
-            // Reinstate _brightness to keep old behavior
-            if (_saveAddress == DEST_TIME_PREF) { 
-                setBrightness((int)atoi(settings.destTimeBright));  
-            } else if (_saveAddress == DEPT_TIME_PREF) {
-                setBrightness((int)atoi(settings.lastTimeBright));
-            }
-            
+            // Set initial _brightness
+            setBrightness(_origBrightness);
+
             return true;
-            
+
         } 
 
     } else {
@@ -789,7 +796,7 @@ bool clockDisplay::load()
         }
 
         // Reinstate _brightness to keep old behavior
-        setBrightness((int)atoi(settings.presTimeBright));        
+        setBrightness(_origBrightness);        
 
         return true;             
     }
@@ -832,7 +839,7 @@ int16_t clockDisplay::loadYOffs()
 void clockDisplay::setDS3232time(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year) 
 {
     Wire.beginTransmission(DS3231_I2CADDR);
-    Wire.write(0);                     // sends 00h - seconds register
+    Wire.write(0);                     // sends 00h - time register
     Wire.write(decToBcd(second));      // set seconds
     Wire.write(decToBcd(minute));      // set minutes
     Wire.write(decToBcd(hour));        // set hours
@@ -894,7 +901,7 @@ uint16_t clockDisplay::getLEDAlphaChar(uint8_t value)
 }
 #endif
 
-// Make a 2 digit number from the array and place it in the buffer at pos
+// Make a 2 digit number from the array and return the segment data
 // (makes leading 0s)
 uint16_t clockDisplay::makeNum(uint8_t num) 
 {
@@ -908,7 +915,7 @@ uint16_t clockDisplay::makeNum(uint8_t num)
     return segments;
 }
 
-// Make a 2 digit number from the array and place it in the buffer at pos
+// Make a 2 digit number from the array and return the segment data
 // (no leading 0s)
 uint16_t clockDisplay::makeNumN0(uint8_t num) 
 {    
@@ -951,22 +958,22 @@ void clockDisplay::clearDisplay()
 // Show the buffer 
 void clockDisplay::showInt(bool animate) 
 {
-    int i = 0; 
+    int i = 0;
 
-    if(_nightmode) {        
-        if(!isRTC()) {    
-            off();   
-            _oldnm = 1;         
+    if(_nightmode) {    
+        if(_NmOff) {
+            off();
+            _oldnm = 1;
             return;
-        } else {          
-            if(_oldnm < 1) { 
-                setBrightness(0); 
+        } else {
+            if(_oldnm < 1) {
+                setBrightness(0);
             }
             _oldnm = 1;
         }
-    } else if(isRTC()) {
+    } else if(!_NmOff) {
         if(_oldnm > 0) {
-            setBrightness((int)atoi(settings.presTimeBright));             
+            setBrightness(_origBrightness);         
         }
         _oldnm = 0;
     }
@@ -975,7 +982,7 @@ void clockDisplay::showInt(bool animate)
 
     if(!_mode24) {
         (_hour < 12) ? AM() : PM();
-    } else {    
+    } else {
         AMPMoff();
     }
 
@@ -988,20 +995,20 @@ void clockDisplay::showInt(bool animate)
         for(i = 0; i < CD_MONTH_SIZE; i++) {
             Wire.write(0x00);  // blank month
             Wire.write(0x00);
-        }        
+        }
         i = CD_DAY_POS;
     }
-    
+
     for(; i < CD_BUF_SIZE; i++) {
         Wire.write(_displayBuffer[i] & 0xFF);
         Wire.write(_displayBuffer[i] >> 8);
     }
-    
+
     Wire.endTransmission();
 
-    if(animate || (!isRTC() && (_oldnm > 0)) ) on();
-    
-    if(!isRTC()) _oldnm = 0;
+    if(animate || (_NmOff && (_oldnm > 0)) ) on();
+
+    if(_NmOff) _oldnm = 0;
 }
 
 void clockDisplay::colonOn() 

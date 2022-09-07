@@ -42,6 +42,7 @@
 extern void settings_setup();
 extern void write_settings();
 bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault);
+bool checkValidNumParmF(char *text, double lowerLim, double upperLim, double setDefault);
 extern bool loadAlarm();
 extern void saveAlarm();
 bool loadAlarmEEPROM();
@@ -89,9 +90,15 @@ extern bool    haveSD;
 #define DEF_BRIGHT_DEPA     15
 #define DEF_AUTONM_ON       0     // Default: Both 0, Auto-Night-Mode disabled
 #define DEF_AUTONM_OFF      0
+#define DEF_DT_OFF          1     // Default: Dest. time off in night mode
+#define DEF_PT_OFF          0     // Default: Present time dimmed in night mode
+#define DEF_LT_OFF          1     // Default: Last dep. time off in night mode
 #define DEF_FAKE_PWR        0     // 0-1;  Default: 0 = Do not use external fake "power" switch
 #define DEF_ETT_DELAY       0     // in ms; Default 0: ETT immediately
 #define DEF_ETT_LONG        0     // 0: Ext. TT short (reentry), 1: long
+#define DEF_USE_SPEEDO      0     // 0: Don't use speedo part of time travel sequence
+#define DEF_SPEEDO_FACT     1.0   // Speedo factor (>1.0 faster, <1.0 slower)
+#define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness
 
 struct Settings {
     char timesPers[4]       = MS(DEF_TIMES_PERS);
@@ -108,13 +115,21 @@ struct Settings {
     char lastTimeBright[4]  = MS(DEF_BRIGHT_DEPA);
     char autoNMOn[4]        = MS(DEF_AUTONM_ON);
     char autoNMOff[4]       = MS(DEF_AUTONM_OFF);
+    char dtNmOff[4]         = MS(DEF_DT_OFF);
+    char ptNmOff[4]         = MS(DEF_PT_OFF);
+    char ltNmOff[4]         = MS(DEF_LT_OFF);
 #ifdef FAKE_POWER_ON 
     char fakePwrOn[4]       = MS(DEF_FAKE_PWR);
 #endif
 #ifdef EXTERNAL_TIMETRAVEL_IN
     char ettDelay[8]        = MS(DEF_ETT_DELAY);
     char ettLong[4]         = MS(DEF_ETT_LONG);
-#endif    
+#endif
+#ifdef TC_HAVESPEEDO
+    char useSpeedo[4]       = MS(DEF_USE_SPEEDO);
+    char speedoBright[4]    = MS(DEF_BRIGHT_SPEEDO);
+    char speedoFact[6]      = MS(DEF_SPEEDO_FACT);
+#endif
     char copyAudio[6]       = "";   // never loaded or saved!
 };
 

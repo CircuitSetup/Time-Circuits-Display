@@ -65,6 +65,18 @@ unsigned long pauseDelay = 30*60*1000;  // Pause for 30 minutes
 bool          autoPaused = false;
 
 // The timetravel sequence
+int           timeTravelP0 = 0;
+int           timeTravelP2 = 0;
+#ifdef TC_HAVESPEEDO
+bool          useSpeedo = false;
+unsigned long timetravelP0Now = 0;
+unsigned long timetravelP0Delay = 0;
+uint8_t       timeTravelP0Speed = 0;
+unsigned long pointOfP1 = 0;
+unsigned long currTotDur = 0;
+bool          didTriggerP1 = false;
+double        ttP0TimeFactor = 1.0;
+#endif
 unsigned long timetravelP1Now = 0;
 unsigned long timetravelP1Delay = 0;
 int           timeTravelP1 = 0;
@@ -107,6 +119,10 @@ uint8_t timeout = 0;
 clockDisplay destinationTime(DEST_TIME_ADDR, DEST_TIME_PREF);
 clockDisplay presentTime(PRES_TIME_ADDR, PRES_TIME_PREF);
 clockDisplay departedTime(DEPT_TIME_ADDR, DEPT_TIME_PREF);
+
+#ifdef TC_HAVESPEEDO
+speedDisplay speedo(SPEEDO_ADDR);
+#endif
 
 // Automatic times ("decorative mode")
 
@@ -177,6 +193,33 @@ const uint32_t hours1kYears[] =
       2627474400/60, 3153074400/60, 3678674400/60, 4204274400/60, 4729874400/60 
 };
 
+#ifdef TC_HAVESPEEDO
+const uint8_t tt_p0_delays[88] = 
+{
+      200,  10,  10,   9,   8,   8,   8,   8,   8,   8,     // 0 - 9  10mph 0.8s    0.8=800ms
+        8,   8,   8,   8,   8,   8,   8,   8,   8,   8,     // 10-19  20mph 1.6s    0.8
+        9,  10,  11,  11,  11,  11,  11,  11,  12,  12,     // 20-29  30mph 2.7s    1.1
+       12,  13,  13,  13,  13,  13,  13,  13,  13,  14,     // 30-39  40mph 4.0s    1.3
+       15,  16,  19,  19,  19,  19,  19,  19,  21,  23,     // 40-49  50mph 5.9s    1.9
+       23,  23,  24,  24,  24,  24,  24,  24,  25,  25,     // 50-59  60mph 8.3s    2.4
+       25,  25,  26,  26,  27,  27,  27,  28,  29,  30,     // 60-69  70mph 11.0s   2.7
+       32,  33,  35,  37,  37,  38,  38,  39,  40,  41,     // 70-79  80mph 14.7s   3.7
+       41,  41,  41,  41,  41,  41,  41,  41                // 80-87  90mph 18.8s   4,1
+};
+
+#if 0
+       200,  10,  8,  20,  19,  19,  19,  18,  18,  18,     // 0 - 9
+       17,  17,  17,  16,  16,  15,  15,  15,  14,  14,     // 10-19
+       14,  13,  13,  12,  12,  12,  12,  12,  12,  12,     // 20-29
+       11,  11,  10,  10,  10,  10,  10,  10,  10,  10,     // 30-39
+       10,  10,  10,  10,  10,  10,  10,  10,  10,  10,     // 40-49
+       10,  10,  10,  10,  10,  10,  10,  10,  10,  10,     // 50-59
+       10,  10,  10,  10,  10,  12,  12,  12,  13,  13,     // 60-69
+       13,  15,  17,  17,  19,  20,  22,  23,  24,  24,     // 70-79
+       25,  26,  27,  29,  32,  36,  40,  45                // 80-87
+#endif
+#endif
+
 /*
  * time_boot()
  * 
@@ -187,6 +230,10 @@ void time_boot()
     presentTime.begin();
     destinationTime.begin();
     departedTime.begin();
+
+    #ifdef TC_HAVESPEEDO
+    speedo.begin();
+    #endif
 }
 
 /*
@@ -264,11 +311,16 @@ void time_setup()
     // Configure presentTime as a display that will hold real time
     presentTime.setRTC(true);  
 
+    // Configure behavior in night mode
+    destinationTime.setNMOff(((int)atoi(settings.dtNmOff) > 0));
+    presentTime.setNMOff(((int)atoi(settings.ptNmOff) > 0));
+    departedTime.setNMOff(((int)atoi(settings.ltNmOff) > 0));
+
     // Determine if user wanted Time Travels to be persistent
     timetravelPersistent = (int)atoi(settings.timesPers) ? true : false;
 
     // Load present time settings (yearOffs, timeDifference)
-    presentTime.load();
+    presentTime.load((int)atoi(settings.presTimeBright));
     if(!timetravelPersistent) {
         timeDifference = 0;
     } 
@@ -276,7 +328,6 @@ void time_setup()
     if(rtcbad) {        
         presentTime.setYearOffset(0);
         timeDifference = 0;
-        // FIXME  .. anything else?
     }
 
     // Set RTC with NTP time
@@ -295,7 +346,7 @@ void time_setup()
     }
 
     // Load destination time (and set to default if invalid)
-    if(!destinationTime.load()) {
+    if(!destinationTime.load((int)atoi(settings.destTimeBright))) {
         validLoad = false;  
         destinationTime.setYearOffset(0);
         destinationTime.setYear(destinationTimes[0].year);   
@@ -308,7 +359,7 @@ void time_setup()
     }
 
     // Load departed time (and set to default if invalid)
-    if(!departedTime.load()) {
+    if(!departedTime.load((int)atoi(settings.lastTimeBright))) {
         validLoad = false; 
         departedTime.setYearOffset(0);
         departedTime.setYear(departedTimes[0].year);
@@ -344,6 +395,25 @@ void time_setup()
     }
 
     alarmRTC = ((int)atoi(settings.alarmRTC) > 0) ? true : false;
+
+    #ifdef TC_HAVESPEEDO    
+    useSpeedo = ((int)atoi(settings.useSpeedo) > 0) ? true : false;
+    speedo.setBrightness((int)atoi(settings.speedoBright), true);
+    speedo.setDots(false, true);
+    ttP0TimeFactor = (double)atof(settings.speedoFact);
+    if(ttP0TimeFactor < 0.5) ttP0TimeFactor = 0.5;
+    if(ttP0TimeFactor > 5.0) ttP0TimeFactor = 5.0;
+    
+    for(int i = 1; i < 88; i++) {
+        pointOfP1 += (unsigned long)(((double)(tt_p0_delays[i] * 10)) / ttP0TimeFactor);
+    }
+    pointOfP1 -= 1000;
+    speedo.off();
+    
+    speedo.showOnlyText("TEST");
+    speedo.on();
+    
+    #endif
 
     // Show "RESET" message if data loaded was invalid somehow
     if(!validLoad) {      
@@ -408,9 +478,9 @@ void time_setup()
     }
 
     // Load the time for initial animation show
-    presentTime.setDateTimeDiff(myrtcnow()); 
+    presentTime.setDateTimeDiff(myrtcnow());
 
-#ifdef FAKE_POWER_ON    
+#ifdef FAKE_POWER_ON
     if(waitForFakePowerButton) { 
         digitalWrite(WHITE_LED_PIN, HIGH);  
         delay(500);
@@ -466,15 +536,20 @@ void time_loop()
             } else {
                 if(FPBUnitIsOn) {       
                     startup = false;
-                    startupSound = false; 
-                    timeTraveled = false;  
-                    timeTravelP1 = 0;            
+                    startupSound = false;
+                    timeTraveled = false;
+                    timeTravelP0 = 0;
+                    timeTravelP1 = 0;
+                    timeTravelP2 = 0;
                     FPBUnitIsOn = false;
                     cancelEnterAnim();
                     cancelETTAnim();
-                    play_file("/shutdown.mp3", 1.0, true, 0);  
-                    mydelay(130);                  
+                    play_file("/shutdown.mp3", 1.0, true, 0);
+                    mydelay(130);
                     allOff();
+                    #ifdef TC_HAVESPEEDO
+                    speedo.off();
+                    #endif
                     waitAudioDone();
                     stopAudio();
                 }
@@ -500,12 +575,49 @@ void time_loop()
         #endif
     }
 
-    // Time travel animation
-    if(timeTravelP1 && (millis() - timetravelP1Now >= timetravelP1Delay)) {  
+    // Time travel animation, part 0
+    #ifdef TC_HAVESPEEDO
+    if(timeTravelP0 && (millis() - timetravelP0Now >= timetravelP0Delay)) {
+        timeTravelP0Speed++;
+        speedo.setSpeed(timeTravelP0Speed);
+        speedo.show();
+        //Serial.println(timeTravelP0Speed, DEC);  //
+        if(timeTravelP0Speed < 88) {            
+            timetravelP0Delay = (unsigned long)(((double)(tt_p0_delays[timeTravelP0Speed] * 10)) / ttP0TimeFactor);
+            currTotDur += timetravelP0Delay;
+            if(!didTriggerP1 && currTotDur >= pointOfP1) {            
+                timeTravel(true);
+                didTriggerP1 = true;
+            }
+            timetravelP0Now = millis();            
+        } else {
+            timeTravelP0 = 0;
+            currTotDur = 0;
+            didTriggerP1 = false;
+        }
+    }
+
+    if(timeTravelP2 && (millis() - timetravelP0Now >= timetravelP0Delay)) {        
+        if(timeTravelP0Speed == 0) {
+            timeTravelP2 = 0;
+            speedo.off();
+        } else {
+            timeTravelP0Speed--;
+            speedo.setSpeed(timeTravelP0Speed);
+            speedo.show();
+            //Serial.println(timeTravelP0Speed, DEC);  //
+            timetravelP0Delay = (timeTravelP0Speed == 0) ? 4000 : 30;
+            timetravelP0Now = millis(); 
+        }        
+    }
+    #endif
+
+    // Time travel animation, part 1
+    if(timeTravelP1 && (millis() - timetravelP1Now >= timetravelP1Delay)) {
         timeTravelP1++;
         timetravelP1Now = millis();
         switch(timeTravelP1) {
-        case 2:            
+        case 2:
             allOff();
             timetravelP1Delay = TT_P1_DELAY_P2;
             break;
@@ -550,7 +662,9 @@ void time_loop()
             DateTime dt = myrtcnow(); 
 
             // Re-adjust time periodically using NTP
-            if(dt.second() == 10 && dt.minute() == 1) {
+            // (Do not interrupt sequences though)
+            if( (dt.second() == 10 && dt.minute() == 1) &&
+                !timeTraveled && !timeTravelP0 && !timeTravelP1 && !timeTravelP2 ) {
               
                 if(!autoReadjust) {     
 
@@ -719,8 +833,9 @@ void time_loop()
                     if(presentTime.getNightMode() || 
                        !FPBUnitIsOn || 
                        startup || 
-                       timeTraveled || 
-                       timeTravelP1 || 
+                       timeTraveled ||
+                       timeTravelP0 ||
+                       timeTravelP1 ||
                        (alarmOnOff && (alarmHour == compHour) && (alarmMinute == compMin))) {
                         hourlySoundDone = true;
                     }                                
@@ -908,7 +1023,7 @@ void time_loop()
  *  This is also called from tc_keypad.cpp 
  */
 
-void timeTravel(bool makeLong) 
+void timeTravel(bool makeLong, bool withSpeedo) 
 {
     int tyr = 0;
     int tyroffs = 0;  
@@ -919,6 +1034,24 @@ void timeTravel(bool makeLong)
     // Pause autoInterval-cycling so user can play undisturbed
     pauseAuto();
 
+    #ifdef TC_HAVESPEEDO
+    if(withSpeedo && useSpeedo) {
+        #ifdef TC_DBG
+        Serial.println("Using speedo");
+        #endif
+        timeTravelP0Speed = 0;
+        timetravelP0Delay = tt_p0_delays[timeTravelP0Speed] * 10;
+        speedo.setSpeed(timeTravelP0Speed);
+        speedo.show();
+        speedo.on();
+        timetravelP0Now = millis();
+        timeTravelP0 = 1; 
+        didTriggerP1 = false;
+        timeTravelP2 = 0;      
+        return;
+    }
+    #endif
+    
     if(makeLong) {
         play_file("/travelstart.mp3", 1.0, true, 0);
         timetravelP1Now = millis();
@@ -977,6 +1110,14 @@ void timeTravel(bool makeLong)
     if(timetravelPersistent) {
         presentTime.save();       
     }
+
+    #ifdef TC_HAVESPEEDO
+    if(useSpeedo && (timeTravelP0Speed == 88)) {
+        timeTravelP2 = 1; 
+        timetravelP0Now = millis();
+        timetravelP0Delay = 2000;
+    }
+    #endif
 
     #ifdef TC_DBG
     Serial.println(F("timeTravel: Success, good luck!"));
@@ -1171,7 +1312,7 @@ void RTCClockOutEnable()
     Wire.requestFrom(DS3231_I2CADDR, 1);
     readValue = Wire.read();
     // enable squarewave and set to 1Hz,
-    // Bit 2 INTCN - 0 enables OSC
+    // Bit 2 INTCN - 0 enables wave output
     // Bit 3 and 4 - 0 0 sets 1Hz
     readValue = readValue & B11100011;  
     

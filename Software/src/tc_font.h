@@ -25,7 +25,7 @@
 #ifndef _TC_FONT_H
 #define _TC_FONT_H
 
-static const uint16_t alphaChars[] = {
+static const uint16_t alphaChars[128] = {
     0b0000000000000001,
     0b0000000000000010,
     0b0000000000000100,
@@ -103,7 +103,7 @@ static const uint16_t alphaChars[] = {
     0b0000000000011110,  // J
     0b0010010001110000,  // K
     0b0000000000111000,  // L
-    0b0000001000110111,  //0b0000010100110110,  // M
+    0b0000001000110111,  // M
     0b0010000100110110,  // N
     0b0000000000111111,  // O
     0b0000000011110011,  // P
@@ -163,10 +163,10 @@ static const uint8_t numDigs[40] = {
     0b01001111, // 3
     0b01100110, // 4
     0b01101101, // 5
-    0b01111100, // 6 - edited to take out top serif
+    0b01111100, // 6
     0b00000111, // 7
     0b01111111, // 8
-    0b01100111, // 9 - edited to take out bottom serif
+    0b01100111, // 9
     0b01110111, // A  10
     0b01111100, // B  11
     0b00111001, // C  12

@@ -28,6 +28,9 @@
 // Uncomment if month is 2 digits (7-seg), as in the original A-Car display.
 //#define IS_ACAR_DISPLAY 
 
+// Uncomment if you have a speedo-display connected via i2c
+//#define TC_HAVESPEEDO
+
 //#define TC_DBG              // debug output on Serial
 
 // Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino >= 2.x)
@@ -43,10 +46,10 @@
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
 #ifndef IS_ACAR_DISPLAY
 #define TC_VERSION "V2.0.0"           // 13 chars max
-#define TC_VERSION_EXTRA "AUG312022"  // 13 chars max
+#define TC_VERSION_EXTRA "SEP062022"  // 13 chars max
 #else   // A-Car
 #define TC_VERSION "V2.0.0_A-CAR"     // 12 chars max
-#define TC_VERSION_EXTRA "08312022"   // 12 chars max
+#define TC_VERSION_EXTRA "09062022"   // 12 chars max
 #endif
 
 #ifdef TWPRIVATE

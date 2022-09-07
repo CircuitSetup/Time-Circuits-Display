@@ -36,6 +36,9 @@
 
 #include "tc_global.h"
 #include "clockdisplay.h"
+#ifdef TC_HAVESPEEDO
+#include "speeddisplay.h"
+#endif
 #include "tc_keypad.h"
 #include "tc_menus.h"
 #include "tc_audio.h"
@@ -43,9 +46,11 @@
 #include "time.h"
 #include "tc_settings.h"
 
-#define DEST_TIME_ADDR 0x71 // i2C address of displays
+#define DEST_TIME_ADDR 0x71  // i2C address of displays
 #define PRES_TIME_ADDR 0x72
 #define DEPT_TIME_ADDR 0x74
+
+#define SPEEDO_ADDR    0x70
 
 // The time between sound being started and the display coming on
 // Must be sync'd to the sound file used! (startup.mp3/timetravel.mp3)
@@ -74,6 +79,9 @@ extern uint8_t        alarmMinute;
 extern clockDisplay destinationTime;
 extern clockDisplay presentTime;
 extern clockDisplay departedTime;
+#ifdef TC_HAVESPEEDO
+extern speedDisplay speedo;
+#endif
 
 extern RTC_DS3231 rtc;
 
@@ -85,7 +93,7 @@ extern int8_t     autoTime;
 extern void time_boot();
 extern void time_setup();
 extern void time_loop();
-extern void timeTravel(bool makeLong);
+extern void timeTravel(bool makeLong, bool withSpeedo = false);
 extern void resetPresentTime();
 extern void pauseAuto();
 extern bool checkIfAutoPaused();
@@ -112,7 +120,9 @@ void waitAudioDoneIntro();
 extern bool FPBUnitIsOn;
 extern bool startup;
 extern bool timeTraveled;
+extern int  timeTravelP0;
 extern int  timeTravelP1;
+extern int  timeTravelP2;
 extern int  specDisp;
 
 // Our generic timeout when waiting for buttons, in seconds. max 255.
