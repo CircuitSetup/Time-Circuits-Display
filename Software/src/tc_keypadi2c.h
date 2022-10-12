@@ -1,7 +1,7 @@
 /*
 ||
 || @file Keypad_I2C.h
-|| @version 3.0tc - Time Circuits Special Edition by A10001986
+|| @version 3.xtc - Time Circuits Special Edition by A10001986
 || @version 3.0 - multiple WireX support
 || @version 2.0 - PCF8575 support added by Paul Williamson
 || @author G. D. (Joe) Young, ptw
@@ -50,28 +50,31 @@
 class Keypad_I2C : public Keypad {
 public:
 	Keypad_I2C(char* userKeymap, byte* row, byte* col, byte numRows, byte numCols, byte address,
-               byte width = 1, TwoWire * awire=&Wire) 
-		: Keypad(userKeymap, row, col, numRows, numCols) { 
-                i2caddr = address; 
-                i2cwidth = width; 
-                _wire = awire; 
+               byte width = 1, TwoWire * awire=&Wire)
+		: Keypad(userKeymap, row, col, numRows, numCols) {
+                i2caddr = address;
+                i2cwidth = width;
+                _wire = awire;
                 rowCnt = numRows;
-		  } 
-	
+		  }
+
   	// Keypad function
   	void begin(char *userKeymap);
-   
+
   	// Wire function
   	void begin(void);
-   
+
+    // Setter for custom delay function
+    void setCustomDelayFunc(void (*myDelay)(unsigned int));
+
   	// Wire functions
   	void pin_mode(byte pinNum, byte mode) {}
   	void pin_write(byte pinNum, boolean level);
   	int  pin_read(byte pinNum);
-   
+
   	// read initial value for pinState
   	word pinState_set( );
-   
+
   	// write a whole byte or word (depending on the port expander chip) to i2c port
   	void port_write(word i2cportval);
 
@@ -81,6 +84,7 @@ public:
     bool scanKeys = false;
 
 private:
+
     // I2C device address
     byte i2caddr;
     // I2C port expander device width in bytes (1 for 8574, 2 for 8575)
@@ -88,19 +92,22 @@ private:
     // I2C pin_write state persistant storage
     // least significant byte is used for 8-bit port expanders
     word pinState;
-    TwoWire *_wire;  
+    TwoWire *_wire;
 
     word pinValBuf;
     int count = 0;
     int rowCnt = 0;
+
+    // Ptr to custom delay function
+    void (*_customDelayFunc)(unsigned int) = NULL;
 };
 
 #endif
 
 /*
 || @changelog
-|| |
-|| | 3.0tc 2022-08-11 - A10001986; Read twice to catch ghost key presses,and
+|| | 3.01tc 2022-09-22 - A10001986 add custom delay function; read three times.
+|| | 3.0tc 2022-08-11  - A10001986; Read twice to catch ghost key presses,and
 || |                    reduce i2c traffic by buffering row pin status
 || | 3.0 2020-04-06 - Joe Young : support multiple I2C port WireX objects in constructor
 || | 2.0 2013-08-31 - Paul Williamson : Added i2cwidth parameter for PCF8575 support

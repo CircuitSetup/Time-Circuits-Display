@@ -3,24 +3,31 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2022 Thomas Winischhofer (A10001986)
  *
- * Optional Speedo Display
- * This is an example implementation, designed for a HT16K33-based 
- * display, like the "Grove - 0.54" Dual Alphanumeric Display" or
- * some display with the Adafruit i2c backpack, as long as the
- * display is either 7 or 14 segments.
+ * Speedo Display
+ *
+ * This is designed for HT16K33-based displays, like the "Grove - 0.54"
+ * Dual/Quad Alphanumeric Display" or some displays with the Adafruit
+ * i2c backpack (878, 1911, 1270; product numbers vary with color).
  * -------------------------------------------------------------------
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * License: MIT
  * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 #ifndef _speedDisplay_H
@@ -29,216 +36,139 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-// Type displays
-// Only one may be active/uncommented
-#define SP_ADAF_7x4         // Adafruit 4 digits, 7-segment (7x4) (ADA-878)     [tested]
-//#define SP_ADAF_14x4      // Adafruit 4 digits, 14-segment (14x4) (ADA-2157)  [TODO]
-//#define SP_GROVE_2DIG14   // Grove 0.54" Dual Alphanumeric Display            [tested]
-//#define SP_TCD_TEST7      // TimeCircuits Display 7 (for testing)             [tested]
-//#define SP_TCD_TEST14     // TimeCircuits Display 14 (for testing)            [tested]
-
-//#define SP_ALIGN_LEFT       // If more than 2 digits, align left (default right)
-
-// Display configuration
-
-#ifdef SP_ADAF_7x4          // ##### ADAFRUIT 7x4 ############################
-
-#define IS_SPEED_7SEG       //      7-segment tubes
-
-#ifdef SP_ALIGN_LEFT
-#define SD_SPEED_POS10 0    //      Speed's 10s position in 16bit buffer
-#define SD_SPEED_POS01 1    //      Speed's 1s position in 16bit buffer
-#define SD_DIG10_SHIFT 0    //      Shift 10s to align in buffer
-#define SD_DIG01_SHIFT 0    //      Shift 01s to align in buffer
-#define SD_DOT10_POS   0    //      10s dot position in 16bit buffer
-#define SD_DOT01_POS   1    //      1s dot position in 16bit buffer
-#define SD_DOT10_SHIFT 0    //      10s dot shift to align in buffer
-#define SD_DOT01_SHIFT 0    //      01s dot shift to align in buffer
-#else
-#define SD_SPEED_POS10 3    //      Speed's 10s position in 16bit buffer
-#define SD_SPEED_POS01 4    //      Speed's 1s position in 16bit buffer
-#define SD_DIG10_SHIFT 0    //      Shift 10s to align in buffer
-#define SD_DIG01_SHIFT 0    //      Shift 01s to align in buffer
-#define SD_DOT10_POS   3    //      10s dot position in 16bit buffer
-#define SD_DOT01_POS   4    //      1s dot position in 16bit buffer
-#define SD_DOT10_SHIFT 0    //      10s dot shift to align in buffer
-#define SD_DOT01_SHIFT 0    //      01s dot shift to align in buffer
+// The supported display types:
+// The speedo is a 2-digit 7-segment display, with the bottom/right dot lit
+// in the movies. I have not found a readily made one that fits exactly.
+// CircuitSetup have yet to design one, all other supported ones are either
+// 4-digit, and/or use 14-segment tubes, and/or lack the dot.
+// For 4-digit displays, there are two entries in this list, one to display
+// the speed right-aligned, one for left-aligned.
+// If you have the skills, you could also remove the 4-tube display from
+// the pcb and connect a 2-tube one. Unfortunately, the pin assignments
+// usually do not match, which makes some re-wiring necessary.
+// Displays with a TM1637 are not supported because this chip is not really
+// i2c compatible as it has no slave address, and therefore cannot be part
+// of a i2c chain.
+//
+// The display's i2c slave address is 0x70 (defined in tc_time.h).
+//
+enum dispTypes : int {
+    SP_CIRCSETUP,     // Original CircuitSetup.us speedo                        [yet to be designed]
+    SP_ADAF_7x4,      // Adafruit 0.56" 4 digits, 7-segment (7x4) (ADA-878)
+    SP_ADAF_7x4L,     // " " " (left-aligned)
+    SP_ADAF_B7x4,     // Adafruit 1.2" 4 digits, 7-segment (7x4) (ADA-1270)
+    SP_ADAF_B7x4L,    // " " " (left-aligned)
+    SP_ADAF_14x4,     // Adafruit 0.56" 4 digits, 14-segment (14x4) (ADA-1911)
+    SP_ADAF_14x4L,    // " " " (left-aligned)
+    SP_GROVE_2DIG14,  // Grove 0.54" Dual Alphanumeric Display
+    SP_GROVE_4DIG14,  // Grove 0.54" Quad Alphanumeric Display
+    SP_GROVE_4DIG14L, // " " " (left aligned)
+#ifdef TWPRIVATE
+    SP_TWCUSTOM1,     // Like SP_ADAF_14x4, but with only left hand side tube soldered on
+    SP_TWCUSTOM2,     // Like SP_ADAF_7x4L, but only 2 digits soldered on
 #endif
+// ----- do not use the ones below ----
+    SP_TCD_TEST7,     // TimeCircuits Display 7 (for testing)
+    SP_TCD_TEST14,    // TimeCircuits Display 14 (for testing)
+    SP_TCD_TEST14L    // " " " (left-aligned)
+};
 
-#define SD_BUF_SIZE    8    //      total buffer size in words (16bit)
+// If new displays are added, SP_NUM_TYPES in global.h needs to be adapted.
 
-#define SD_NUM_DIGS    4    //      total number of digits/letters
-#define SD_BUF_PACKED  0    //      2 digits in one buffer pos? (0=no, 1=yes)
-#define SD_BUF_ARR     uint8_t bufPosArr[SD_NUM_DIGS / (1<<SD_BUF_PACKED)] = { 0, 1, 3, 4};
-#endif
-
-#ifdef SP_GROVE_2DIG14      // ##### Grove 0.56" 14x2 ################
-
-#define SD_SPEED_POS10 2    //      Speed's 10s position in 16bit buffer
-#define SD_SPEED_POS01 1    //      Speed's 1s position in 16bit buffer
-#define SD_DOT10_POS   2    //      10s dot position in 16bit buffer
-#define SD_DOT01_POS   1    //      1s dot position in 16bit buffer
-
-#define SD_BUF_SIZE    8    //      total buffer size in words (16bit)
-
-#define SD_NUM_DIGS    2    //      total number of digits/letters
-#define SD_BUF_ARR     uint8_t bufPosArr[SD_NUM_DIGS] = {2, 1};
-#endif
-
-#ifdef SP_ADAF_14x4         // ##### ADAFRUIT 14x4 ###################
-
-#ifdef SP_ALIGN_LEFT
-#define SD_SPEED_POS10 0    //      Speed's 10s position in 16bit buffer
-#define SD_DOT10_POS01 1    //      Speed's 1s position in 16bit buffer
-#define SD_DOT10_POS   0    //      10s dot position in 16bit buffer
-#define SD_DOT01_POS   1    //      1s dot position in 16bit buffer
-#else
-#define SD_SPEED_POS10 2    //      Speed's 10s position in 16bit buffer
-#define SD_DOT10_POS01 3    //      Speed's 1s position in 16bit buffer
-#define SD_DOT10_POS   2    //      10s dot position in 16bit buffer
-#define SD_DOT01_POS   3    //      1s dot position in 16bit buffer
-#endif
-
-#define SD_BUF_SIZE    8    //      total buffer size in words (16bit)
-
-#define SD_NUM_DIGS    4    //      total number of digits/letters
-#define SD_BUF_ARR     uint8_t bufPosArr[SD_NUM_DIGS] = {0, 1, 2, 3};
-#endif
-
-#ifdef SP_TCD_TEST7         // ##### TCD 7 (for testing, in min) ###########
-
-#define IS_SPEED_7SEG
-
-#define SD_SPEED_POS10 7    //      Speed's 10s position in 16bit buffer
-#define SD_SPEED_POS01 7    //      Speed's 1s position in 16bit buffer
-
-#define SD_DIG10_SHIFT 0    //      Shift 10s to align in buffer
-#define SD_DIG01_SHIFT 8    //      Shift 01s to align in buffer
-
-#define SD_DOT10_POS   7    //      10s dot position in 16bit buffer
-#define SD_DOT01_POS   7    //      1s dot position in 16bit buffer
-#define SD_DOT10_SHIFT 0    //      10s dot shift to align in buffer
-#define SD_DOT01_SHIFT 8    //      1s dot shift to align in buffer
-
-#define SD_BUF_SIZE    8    //      total buffer size in words (16bit)
-
-#define SD_NUM_DIGS    2    //      total number of digits/letters
-#define SD_BUF_PACKED  1    //      2 digits in one buffer pos? (0=no, 1=yes)
-#define SD_BUF_ARR     uint8_t bufPosArr[SD_NUM_DIGS / (1<<SD_BUF_PACKED)] = {7};
-#endif
-
-#ifdef SP_TCD_TEST14        // ##### TCD 14 (for testing, in month) ########
-
-#ifdef SP_ALIGN_LEFT
-#define SD_SPEED_POS10 0    //      Speed's 10s position in 16bit buffer
-#define SD_SPEED_POS01 1    //      Speed's 1s position in 16bit buffer
-#define SD_DOT10_POS   0    //      10s dot position in 16bit buffer
-#define SD_DOT01_POS   1    //      1s dot position in 16bit buffer
-#else
-#define SD_SPEED_POS10 1    //      Speed's 10s position in 16bit buffer
-#define SD_SPEED_POS01 2    //      Speed's 1s position in 16bit buffer
-#define SD_DOT10_POS   1    //      10s dot position in 16bit buffer
-#define SD_DOT01_POS   2    //      1s dot position in 16bit buffer
-#endif
-
-#define SD_BUF_SIZE    8    //      total buffer size in words (16bit)
-
-#define SD_NUM_DIGS    3    //      total number of digits/letters
-#define SD_BUF_ARR     uint8_t bufPosArr[SD_NUM_DIGS] = { 0, 1, 2 };
-#endif
-
+struct dispConf {
+    bool     is7seg;         //   7- or 14-segment-display?
+    uint8_t  speed_pos10;    //   Speed's 10s position in 16bit buffer
+    uint8_t  speed_pos01;    //   Speed's 1s position in 16bit buffer
+    uint8_t  dig10_shift;    //   Shift 10s to align in buffer
+    uint8_t  dig01_shift;    //   Shift 1s to align in buffer
+    uint8_t  dot_pos01;      //   1s dot position in 16bit buffer
+    uint8_t  dot01_shift;    //   1s dot shift to align in buffer
+    uint8_t  colon_pos;      //   Pos of colon in 16bit buffer
+    uint8_t  colon_shift;    //   Colon shift to align in buffer
+    uint16_t colon_bit;      //   The bitmask for the colon
+    uint8_t  buf_size;       //   total buffer size in words (16bit)
+    uint8_t  num_digs;       //   total number of digits/letters
+    uint8_t  buf_packed;     //   2 digits in one buffer pos? (0=no, 1=yes) (for 7seg only)
+    uint8_t  bufPosArr[8];   //   The buffer positions of each of the digits from left to right
+    const uint16_t *fontSeg; //   Pointer to font
+};
 
 // The segments' wiring to buffer bits
-// This needs to be adapted to actual hardware wiring
+// This reflects the actual hardware wiring
 
-// 7 segment displays 
+// 7 segment displays
 
-#ifdef SP_ADAF_7x4
-#define S7_T   0b00000001        // top
-#define S7_TR  0b00000010        // top right
-#define S7_BR  0b00000100        // bottom right
-#define S7_B   0b00001000        // bottom
-#define S7_BL  0b00010000        // bottom left
-#define S7_TL  0b00100000        // top left
-#define S7_M   0b01000000        // middle 
-#define S7_DOT 0b10000000        // dot
-#endif
-
-#ifdef SP_TCD_TEST7
-#define S7_T   0b00000001        // top
-#define S7_TR  0b00000010        // top right
-#define S7_BR  0b00000100        // bottom right
-#define S7_B   0b00001000        // bottom
-#define S7_BL  0b00010000        // bottom left
-#define S7_TL  0b00100000        // top left
-#define S7_M   0b01000000        // middle 
-#define S7_DOT 0b10000000        // dot
-#endif
+// 7 seg generic
+#define S7G_T   0b00000001    // top
+#define S7G_TR  0b00000010    // top right
+#define S7G_BR  0b00000100    // bottom right
+#define S7G_B   0b00001000    // bottom
+#define S7G_BL  0b00010000    // bottom left
+#define S7G_TL  0b00100000    // top left
+#define S7G_M   0b01000000    // middle
+#define S7G_DOT 0b10000000    // dot
 
 // 14 segment displays
 
-#ifdef SP_GROVE_2DIG14
-#define S14_T   0x0400        // top
-#define S14_TL  0x4000        // top left
-#define S14_TLD 0x2000        // top left diag
-#define S14_TR  0x0100        // top right
-#define S14_TRD 0x0800        // top right diagonal
-#define S14_TV  0x1000        // top vertical
-#define S14_ML  0x0200        // middle left
-#define S14_MR  0x0010        // middle right
-#define S14_B   0x0020        // bottom
-#define S14_BL  0x0001        // bottom left
-#define S14_BLD 0x0002        // bottom left diag
-#define S14_BR  0x0080        // bottom right
-#define S14_BRD 0x0008        // bottom right diag
-#define S14_BV  0x0004        // bottom vertical
-#define S14_DOT 0x0040        // dot
-#endif
+// Generic
+#define S14_T   0b0000000000000001    // top
+#define S14_TR  0b0000000000000010    // top right
+#define S14_BR  0b0000000000000100    // bottom right
+#define S14_B   0b0000000000001000    // bottom
+#define S14_BL  0b0000000000010000    // bottom left
+#define S14_TL  0b0000000000100000    // top left
+#define S14_ML  0b0000000001000000    // middle left
+#define S14_MR  0b0000000010000000    // middle right
+#define S14_TLD 0b0000000100000000    // top left diag
+#define S14_TV  0b0000001000000000    // top vertical
+#define S14_TRD 0b0000010000000000    // top right diagonal
+#define S14_BLD 0b0000100000000000    // bottom left diag
+#define S14_BV  0b0001000000000000    // bottom vertical
+#define S14_BRD 0b0010000000000000    // bottom right diag
+#define S14_DOT 0b0100000000000000    // dot
 
-#ifdef SP_ADAF_14x4
-#define S14_T   0b0000000000000001        // top
-#define S14_TR  0b0000000000000010        // top right
-#define S14_BR  0b0000000000000100        // bottom right
-#define S14_B   0b0000000000001000        // bottom
-#define S14_BL  0b0000000000010000        // bottom left
-#define S14_TL  0b0000000000100000        // top left
-#define S14_ML  0b0000000001000000        // middle left
-#define S14_MR  0b0000000010000000        // middle right
-#define S14_TLD 0b0000000100000000        // top left diag
-#define S14_TV  0b0000001000000000        // top vertical
-#define S14_TRD 0b0000010000000000        // top right diagonal
-#define S14_BLD 0b0000100000000000        // bottom left diag
-#define S14_BV  0b0001000000000000        // bottom vertical
-#define S14_BRD 0b0010000000000000        // bottom right diag
-#define S14_DOT 0b0100000000000000        // dot
-#endif
+// Grove 2-dig
+#define S14GR_T    0x0400     // top
+#define S14GR_TL   0x4000     // top left
+#define S14GR_TLD  0x2000     // top left diag
+#define S14GR_TR   0x0100     // top right
+#define S14GR_TRD  0x0800     // top right diagonal
+#define S14GR_TV   0x1000     // top vertical
+#define S14GR_ML   0x0200     // middle left
+#define S14GR_MR   0x0010     // middle right
+#define S14GR_B    0x0020     // bottom
+#define S14GR_BL   0x0001     // bottom left
+#define S14GR_BLD  0x0002     // bottom left diag
+#define S14GR_BR   0x0080     // bottom right
+#define S14GR_BRD  0x0008     // bottom right diag
+#define S14GR_BV   0x0004     // bottom vertical
+#define S14GR_DOT  0x0040     // dot
 
-#ifdef SP_TCD_TEST14
-#define S14_T   0b0000000000000001        // top
-#define S14_TR  0b0000000000000010        // top right
-#define S14_BR  0b0000000000000100        // bottom right
-#define S14_B   0b0000000000001000        // bottom
-#define S14_BL  0b0000000000010000        // bottom left
-#define S14_TL  0b0000000000100000        // top left
-#define S14_ML  0b0000000001000000        // middle left
-#define S14_MR  0b0000000010000000        // middle right
-#define S14_TLD 0b0000000100000000        // top left diag
-#define S14_TV  0b0000001000000000        // top vertical
-#define S14_TRD 0b0000010000000000        // top right diagonal
-#define S14_BLD 0b0000100000000000        // bottom left diag
-#define S14_BV  0b0001000000000000        // bottom vertical
-#define S14_BRD 0b0010000000000000        // bottom right diag
-#define S14_DOT 0                         // dot (has none)
-#endif
+// Grove 4-dig
+#define S14GR4_T   0x0010     // top
+#define S14GR4_TL  0x4000     // top left
+#define S14GR4_TLD 0x0080     // top left diag
+#define S14GR4_TR  0x0040     // top right
+#define S14GR4_TRD 0x0002     // top right diagonal
+#define S14GR4_TV  0x2000     // top vertical
+#define S14GR4_ML  0x0200     // middle left
+#define S14GR4_MR  0x0100     // middle right
+#define S14GR4_B   0x0400     // bottom
+#define S14GR4_BL  0x0008     // bottom left
+#define S14GR4_BLD 0x1000     // bottom left diag
+#define S14GR4_BR  0x0020     // bottom right
+#define S14GR4_BRD 0x0004     // bottom right diag
+#define S14GR4_BV  0x0800     // bottom vertical
+#define S14GR4_DOT 0x0000     // dot (has none)
 
 // ------
 
 class speedDisplay {
-  
+
     public:
 
         speedDisplay(uint8_t address);
-        void begin();    
+        void begin(int dispType);
         void on();
         void off();
         void lampTest();
@@ -254,36 +184,59 @@ class speedDisplay {
 
         void show();
 
+        void setText(const char *text);
         void setSpeed(uint8_t speedNum);
-        void setDots(bool dot10 = false, bool dot01 = true);
+        #ifdef TC_HAVETEMP
+        void setTemperature(double temp);
+        #endif
+        void setDot(bool dot01 = true);
+        void setColon(bool colon);
 
         uint8_t getSpeed();
+        bool getDot();
+        bool getColon();
 
-        void showOnlyText(const char *text);
+        void showTextDirect(const char *text);
+        void setColonDirect(bool colon);
 
     private:
 
         uint8_t _address;
-        uint16_t _displayBuffer[8]; // Segments to make current speed
+        uint16_t _displayBuffer[8];
 
-        bool _dot10 = false;
         bool _dot01 = false;
+        bool _colon = false;
 
         uint8_t _speed = 1;
 
-        uint8_t _brightness = 15;   // display brightness
+        uint8_t _brightness = 15;
         uint8_t _origBrightness = 15;
-        bool _nightmode = false;    // true = dest/dept times off
-        int _oldnm = -1;
+        bool    _nightmode = false;
+        int     _oldnm = -1;
 
-        #ifdef IS_SPEED_7SEG
-        uint8_t  getLED7Char(uint8_t value);
-        #else
-        uint16_t getLED14Char(uint8_t value);
-        #endif
+        int      _dispType;
+        bool     _is7seg;         //      7- or 14-segment-display?
+        uint8_t  _speed_pos10;    //      Speed's 10s position in 16bit buffer
+        uint8_t  _speed_pos01;    //      Speed's 1s position in 16bit buffer
+        uint8_t  _dig10_shift;    //      Shift 10s to align in buffer
+        uint8_t  _dig01_shift;    //      Shift 1s to align in buffer
+        uint8_t  _dot_pos01;      //      1s dot position in 16bit buffer
+        uint8_t  _dot01_shift;    //      1s dot shift to align in buffer
+        uint8_t  _colon_pos;      //      Pos of colon in 16bit buffer (255 = no colon)
+        uint8_t  _colon_shift;    //      Colon shift to align in buffer
+        uint16_t _colon_bm;       //      bitmask for colon
+        uint8_t  _buf_size;       //      total buffer size in words (16bit)
+        uint8_t  _num_digs;       //      total number of digits/letters
+        uint8_t  _buf_packed;     //      2 digits in one buffer pos? (0=no, 1=yes)
+        uint8_t *_bufPosArr;      //      Array of buffer positions for digits left->right
 
+        const uint16_t *_fontXSeg;
+
+        uint16_t _lastBufPosCol;
+
+        void handleColon();
+        uint16_t getLEDChar(uint8_t value);
         void directCol(int col, int segments);  // directly writes column RAM
-
         void clearDisplay();                    // clears display RAM
 };
 

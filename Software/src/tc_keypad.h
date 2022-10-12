@@ -1,23 +1,22 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022 Thomas Winischhofer (A10001986)
- * 
- * Clockdisplay and keypad menu code based on code by John Monaco
- * Marmoset Electronics 
- * https://www.marmosetelectronics.com/time-circuits-clock
+ *
+ * Keypad handling
+ *
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
@@ -40,7 +39,7 @@
 #define KEYPAD_ADDR 0x20        // I2C address of the PCF8574 port expander (keypad)
 
 #define ENTER_DEBOUNCE    50    // enter button debounce time in ms
-#define ENTER_CLICK_TIME 200    // enter button will register a click 
+#define ENTER_CLICK_TIME 200    // enter button will register a click
 #define ENTER_HOLD_TIME 2000    // time in ms holding the enter button will count as a hold
 
 #define ETT_DEBOUNCE      50    // external time travel button debounce time in ms
@@ -53,7 +52,7 @@
 #ifdef TWSOUND
 #define ENTER_DELAY   500       // For TW sound files
 #else
-#define ENTER_DELAY   600         
+#define ENTER_DELAY   600
 #endif
 
 #define EE1_DELAY2   3000
@@ -71,11 +70,12 @@ extern void recordSetYearKey(char key);
 extern void resetTimebufIndices();
 extern void cancelEnterAnim();
 extern void cancelETTAnim();
+void mykpddelay(unsigned int mydel);
 
 void nightModeOn();
 void nightModeOff();
 
-extern char timeBuffer[]; 
+extern char timeBuffer[];
 
 void enterKeyPressed();
 void enterKeyHeld();

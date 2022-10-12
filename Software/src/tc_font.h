@@ -1,23 +1,22 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022 Thomas Winischhofer (A10001986)
- * 
- * Clockdisplay and keypad menu code based on code by John Monaco
- * Marmoset Electronics 
- * https://www.marmosetelectronics.com/time-circuits-clock
+ *
+ * Font for TC LED segment displays
+ *
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
@@ -180,7 +179,7 @@ static const uint8_t numDigs[40] = {
     0b01110101, // K  20
     0b00111000, // L  21
     0b00010101, // M  22
-    0b00110111, // N  23    
+    0b00110111, // N  23
     0b00111111, // O  24
     0b01110011, // P  25
     0b01101011, // Q  26

@@ -1,23 +1,24 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022 Thomas Winischhofer (A10001986)
- * 
- * Clockdisplay and keypad menu code based on code by John Monaco
- * Marmoset Electronics 
+ *
+ * Keypad Menu handling
+ *
+ * Based on code by John Monaco, Marmoset Electronics
  * https://www.marmosetelectronics.com/time-circuits-clock
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
@@ -50,9 +51,9 @@
 #define MODE_MIN  MODE_DEST
 #define MODE_MAX  MODE_END
 
-#define FIELD_MONTH   0 
-#define FIELD_DAY     1 
-#define FIELD_YEAR    2 
+#define FIELD_MONTH   0
+#define FIELD_DAY     1
+#define FIELD_YEAR    2
 #define FIELD_HOUR    3
 #define FIELD_MINUTE  4
 
@@ -79,6 +80,7 @@ void doSetBrightness(clockDisplay* displaySet);
 void doShowNetInfo();
 void doCopyAudioFiles();
 void waitForEnterRelease();
+bool checkEnterPress();
 void prepareInput(uint16_t& number);
 void waitAudioDone();
 
@@ -96,7 +98,7 @@ extern bool isYearUpdate;
 extern uint8_t timeout;
 
 extern void mydelay(unsigned long mydel);
-extern void mysdelay(unsigned long mydel);
+extern void myssdelay(unsigned long mydel);
 extern void enterkeytick();
 extern void myloop();
 

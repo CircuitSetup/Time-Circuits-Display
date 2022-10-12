@@ -1,23 +1,22 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2021-2022 John deGlavina https://circuitsetup.us 
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022 Thomas Winischhofer (A10001986)
- * 
- * Clockdisplay and keypad menu code based on code by John Monaco
- * Marmoset Electronics 
- * https://www.marmosetelectronics.com/time-circuits-clock
+ *
+ * Settings handling
+ *
  * -------------------------------------------------------------------
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
@@ -62,6 +61,8 @@ extern void file_copy_progress();
 extern void file_copy_done();
 extern void file_copy_error();
 
+extern void formatFlashFS();
+
 extern bool    alarmOnOff;
 extern uint8_t alarmHour;
 extern uint8_t alarmMinute;
@@ -83,6 +84,8 @@ extern bool    haveSD;
 #define DEF_AUTOROTTIMES    1     // 0-5;  Default: Auto-rotate every 5th minute
 #define DEF_WIFI_RETRY      3     // 1-15; Default: 3 retries
 #define DEF_WIFI_TIMEOUT    7     // 1-15; Default: 7 seconds time-out
+#define DEF_WIFI_OFFDELAY   0     // 0/10-99: Default 0 = Never power down WiFi in STA-mode
+#define DEF_WIFI_APOFFDELAY 0     // 0/10-99: Default 0 = Never power down WiFi in AP-mode
 #define DEF_NTP_SERVER      "pool.ntp.org"
 #define DEF_TIMEZONE        "CST6CDT,M3.2.0,M11.1.0"    // Posix format
 #define DEF_BRIGHT_DEST     15    // 1-15; Default: max brightness
@@ -97,8 +100,14 @@ extern bool    haveSD;
 #define DEF_ETT_DELAY       0     // in ms; Default 0: ETT immediately
 #define DEF_ETT_LONG        0     // 0: Ext. TT short (reentry), 1: long
 #define DEF_USE_SPEEDO      0     // 0: Don't use speedo part of time travel sequence
-#define DEF_SPEEDO_FACT     1.0   // Speedo factor (>1.0 faster, <1.0 slower)
+#define DEF_SPEEDO_TYPE     SP_MIN_TYPE  // Default display type
+#define DEF_SPEEDO_FACT     2.0   // Speedo factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
 #define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness
+#define DEF_USE_GPS         0     // 0: No i2c GPS module
+#define DEF_USE_TEMP        0     // 0: No i2c thermometer
+#define DEF_TEMP_BRIGHT     3     // Default temp brightness
+#define DEF_TEMP_UNIT       0     // Default: temp unit Fahrenheit
+#define DEF_USE_ETTO        0     // 0: No external props
 
 struct Settings {
     char timesPers[4]       = MS(DEF_TIMES_PERS);
@@ -108,6 +117,8 @@ struct Settings {
     char autoRotateTimes[4] = MS(DEF_AUTOROTTIMES);
     char wifiConRetries[4]  = MS(DEF_WIFI_RETRY);
     char wifiConTimeout[4]  = MS(DEF_WIFI_TIMEOUT);
+    char wifiOffDelay[4]    = MS(DEF_WIFI_OFFDELAY);
+    char wifiAPOffDelay[4]  = MS(DEF_WIFI_APOFFDELAY);
     char ntpServer[64]      = DEF_NTP_SERVER;
     char timeZone[64]       = DEF_TIMEZONE;
     char destTimeBright[4]  = MS(DEF_BRIGHT_DEST);
@@ -118,7 +129,7 @@ struct Settings {
     char dtNmOff[4]         = MS(DEF_DT_OFF);
     char ptNmOff[4]         = MS(DEF_PT_OFF);
     char ltNmOff[4]         = MS(DEF_LT_OFF);
-#ifdef FAKE_POWER_ON 
+#ifdef FAKE_POWER_ON
     char fakePwrOn[4]       = MS(DEF_FAKE_PWR);
 #endif
 #ifdef EXTERNAL_TIMETRAVEL_IN
@@ -127,10 +138,22 @@ struct Settings {
 #endif
 #ifdef TC_HAVESPEEDO
     char useSpeedo[4]       = MS(DEF_USE_SPEEDO);
+    char speedoType[4]      = MS(DEF_SPEEDO_TYPE);
     char speedoBright[4]    = MS(DEF_BRIGHT_SPEEDO);
     char speedoFact[6]      = MS(DEF_SPEEDO_FACT);
+#ifdef TC_HAVEGPS
+    char useGPS[4]          = MS(DEF_USE_GPS);
 #endif
-    char copyAudio[6]       = "";   // never loaded or saved!
+#ifdef TC_HAVETEMP
+    char useTemp[4]         = MS(DEF_USE_TEMP);
+    char tempBright[4]      = MS(DEF_TEMP_BRIGHT);
+    char tempUnit[4]        = MS(DEF_TEMP_UNIT);
+#endif
+#endif
+#ifdef EXTERNAL_TIMETRAVEL_OUT
+    char useETTO[4]         = MS(DEF_USE_ETTO);
+#endif
+    char copyAudio[12]      = "";   // never loaded or saved!
 };
 
 // Maximum delay for incoming tt trigger
@@ -138,7 +161,7 @@ struct Settings {
 
 struct IPSettings {
     char ip[20]       = "";
-    char gateway[20]  = "";     
+    char gateway[20]  = "";
     char netmask[20]  = "";
     char dns[20]      = "";
 };

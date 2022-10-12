@@ -31,8 +31,6 @@
  *   (Tested with 2.0.4)
  * - ESP8266Audio: https://github.com/earlephilhower/ESP8266Audio
  *   (1.9.7 and later for esp-arduino 2.x; 1.9.5 for 1.x)
- * - RTClib (Adafruit): https://github.com/adafruit/RTClib
- *   (Tested with 2.1.1)
  * - WifiManager (tablatronix, tzapu; v0.16 and later) https://github.com/tzapu/WiFiManager
  *   (Tested with 2.1.12beta)
  * - Keypad ("by Community; Mark Stanley, Alexander Brevig): https://github.com/Chris--A/Keypad
@@ -43,8 +41,96 @@
  * https://github.com/CircuitSetup/Time-Circuits-Display/wiki/9.-Programming-&-Upgrading-the-Firmware-(ESP32)
  */
 
-/* Changelog 
- *  
+/*  Changelog 
+ *  2022/10/11 (A10001986)
+ *    - IMPORTANT BUGFIX: Due to some (IMHO) compiler idiocy and my sloppyness, in 
+ *      this case presenting itself in trusting Serial output instead of checking 
+ *      the actual result of a function, the entire leap-year-detection was de-funct. 
+ *      IOW: The clock didn't support leap years for time travels and some other
+ *      functions.
+ *    - New and now centralized logic to keep RTC within its supported time span 
+ *      when we and our descendants cross over to 2100 or fun loving folks set their 
+ *      RTC to years <1900 or >2099.
+ *    - Throw out more unused code from DateTime class
+ *    - Use Sakamoto's method for day-of-week determination
+ *    - Clarification: The clock only supports the Gregorian Calendar, of which it
+ *      pretends to have been used since year 1. The Julian Calendar is not taken
+ *      into account. As a result, some years that, in the Julian Calendar, were leap 
+ *      years between years 1 and 1582 in most of today's Europe, 1700 in DK/NO/NL
+ *      (except Holland and Zeeland), 1752 in the British Empire, 1753 in Sweden, 
+ *      1760 in Lorraine, 1872 in Japan, 1912 in China, 1915 in Bulgaria, 1917 in 
+ *      the Ottoman Empire, 1918 in Russia and Serbia and 1923 in Greece, are 
+ *      normal years in the Gregorian one. As a result, dates do not match in those 
+ *      two calender systems, the Julian calendar is currently 13 days behind. 
+ *      I wonder if Doc's TC took all this into account. Then again, he wanted to
+ *      see Christ's birth on Dec 25, 0. Luckily, he didn't actually try to travel
+ *      to that date. Assuming a negative roll-over, he might have ended up in
+ *      eternity.
+ *  2022/10/08 (A10001986)
+ *    - Integrate cut-down version of RTCLib's DateTime to reduce bloat
+ *    - Remove RTCLib dependency; add native RTC support for DS3231 and PCF2129 RTCs
+ *  2022/10/06 (A10001986)
+ *    - Add unit selector for temperature in Config Portal
+ *  2022/10/05 (A10001986)
+ *    - Important: The external time travel trigger button is now no longer
+ *      on IO14, but IO27. This will require some soldering on existing TC
+ *      boards, see https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ *      Also, externally triggered time travels will now include the speedo
+ *      sequence as part of the time travel sequence, if a speedo is
+ *      connected and activated in the Config Portal. If, in the Config Portal,
+ *      "Play complete time travel sequence" is unchecked, only the re-entry
+ *      part will be played (as before).
+ *    - Add trigger signal for future external props (IO14). If you don't
+ *      have any compatible external props connected (which is likely since 
+ *      those do not yet exist), please leave this disabled in the Config 
+ *      Portal as it might delay the time travel sequence unnecessarily.
+ *    - Activate support code for temperature sensor. This is for home setups
+ *      with a speedo display connected; the speedo will show the ambient
+ *      temperature as read from this sensor while idle.
+ *    - [Add support for GPS for speed and time. This is yet inactive as it
+ *      is partly untested.]
+ *  2022/09/23 (A10001986)
+ *    - Minor fixes
+ *  2022/09/20 (A10001986)
+ *    - Minor bug fixes (speedo)
+ *    - [temperature sensor enhanced and fixed; inactive]
+ *  2022/09/12 (A10001986)
+ *    - Fix brightness logic if changed in menu, and night mode activated
+ *      afterwards.
+ *    - No longer call .save() on display when changing brightness in menu
+ *    - [A10001986 wallclock customization: temperature sensor; inactive]
+ *  2022/09/08-10 (A10001986)
+ *    - Keypadi2c: Custom delay function to support uninterrupted audio during
+ *      key scanning; i2c is now read three times in order to properly
+ *      debounce.
+ *    - Keypad/menu: Properly debounce enter key in menu (where we cannot
+ *      use the keypad lib).
+ *    - Menu: Volume setter now plays demo sound with delay (1s)
+ *    - Added WiFi-off timers for power saving. After a configurable number of
+ *      minutes, WiFi is powered-down. There are separate options for WiFi
+ *      in station mode (ie when connected to a WiFi network), and in AP mode
+ *      (ie when the device acts as an Access Point).
+ *      The timer starts at power-up. To re-connect/re-enable the AP, hold
+ *      '7' on the keypad for 2 seconds. WiFi will be re-enabled for the
+ *      configured amount of minutes, then powered-down again.
+ *      For NTP re-syncs, the firmware will automatically reconnect for a
+ *      short period of time.
+ *      Reduces power consumption by 0.2W.
+ *    - Added CPU power save: The device reduces the CPU speed to 80MHz if
+ *      idle and while WiFi is powered-down. (Reducing the CPU speed while
+ *      WiFi is active leads to WiFi errors.)
+ *      Reduces power consumption by 0.1W.
+ *    - Added option to re-format the flash FS in case of FS corruption.
+ *      In the Config Portal, write "FORMAT" into the audio file installer
+ *      section instead of "COPY". This forces the flash FS to be formatted,
+ *      all settings files to be rewritten and the audio files (re-)copied
+ *      from SD. Prerequisite: A properly set-up SD card is in the SD card
+ *      slot (ie one that contains all original files from the "data" folder
+ *      of this repository)
+ *  2022/09/07 (A10001986)
+ *    - Speedo module re-written to make speedo type configurable at run-time
+ *    - WiFi Menu: Params over Info
+ *    - time: end autopause regardless of autoInt setting (avoid overflow)
  *  2022/09/5-6 (A10001986)
  *    - Fix TC settings corruption when changing WiFi settings
  *    - Format flash file system if mounting fails
