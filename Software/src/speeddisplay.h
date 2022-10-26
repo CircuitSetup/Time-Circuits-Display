@@ -33,9 +33,6 @@
 #ifndef _speedDisplay_H
 #define _speedDisplay_H
 
-#include <Arduino.h>
-#include <Wire.h>
-
 // The supported display types:
 // The speedo is a 2-digit 7-segment display, with the bottom/right dot lit
 // in the movies. I have not found a readily made one that fits exactly.
@@ -75,94 +72,6 @@ enum dispTypes : int {
 
 // If new displays are added, SP_NUM_TYPES in global.h needs to be adapted.
 
-struct dispConf {
-    bool     is7seg;         //   7- or 14-segment-display?
-    uint8_t  speed_pos10;    //   Speed's 10s position in 16bit buffer
-    uint8_t  speed_pos01;    //   Speed's 1s position in 16bit buffer
-    uint8_t  dig10_shift;    //   Shift 10s to align in buffer
-    uint8_t  dig01_shift;    //   Shift 1s to align in buffer
-    uint8_t  dot_pos01;      //   1s dot position in 16bit buffer
-    uint8_t  dot01_shift;    //   1s dot shift to align in buffer
-    uint8_t  colon_pos;      //   Pos of colon in 16bit buffer
-    uint8_t  colon_shift;    //   Colon shift to align in buffer
-    uint16_t colon_bit;      //   The bitmask for the colon
-    uint8_t  buf_size;       //   total buffer size in words (16bit)
-    uint8_t  num_digs;       //   total number of digits/letters
-    uint8_t  buf_packed;     //   2 digits in one buffer pos? (0=no, 1=yes) (for 7seg only)
-    uint8_t  bufPosArr[8];   //   The buffer positions of each of the digits from left to right
-    const uint16_t *fontSeg; //   Pointer to font
-};
-
-// The segments' wiring to buffer bits
-// This reflects the actual hardware wiring
-
-// 7 segment displays
-
-// 7 seg generic
-#define S7G_T   0b00000001    // top
-#define S7G_TR  0b00000010    // top right
-#define S7G_BR  0b00000100    // bottom right
-#define S7G_B   0b00001000    // bottom
-#define S7G_BL  0b00010000    // bottom left
-#define S7G_TL  0b00100000    // top left
-#define S7G_M   0b01000000    // middle
-#define S7G_DOT 0b10000000    // dot
-
-// 14 segment displays
-
-// Generic
-#define S14_T   0b0000000000000001    // top
-#define S14_TR  0b0000000000000010    // top right
-#define S14_BR  0b0000000000000100    // bottom right
-#define S14_B   0b0000000000001000    // bottom
-#define S14_BL  0b0000000000010000    // bottom left
-#define S14_TL  0b0000000000100000    // top left
-#define S14_ML  0b0000000001000000    // middle left
-#define S14_MR  0b0000000010000000    // middle right
-#define S14_TLD 0b0000000100000000    // top left diag
-#define S14_TV  0b0000001000000000    // top vertical
-#define S14_TRD 0b0000010000000000    // top right diagonal
-#define S14_BLD 0b0000100000000000    // bottom left diag
-#define S14_BV  0b0001000000000000    // bottom vertical
-#define S14_BRD 0b0010000000000000    // bottom right diag
-#define S14_DOT 0b0100000000000000    // dot
-
-// Grove 2-dig
-#define S14GR_T    0x0400     // top
-#define S14GR_TL   0x4000     // top left
-#define S14GR_TLD  0x2000     // top left diag
-#define S14GR_TR   0x0100     // top right
-#define S14GR_TRD  0x0800     // top right diagonal
-#define S14GR_TV   0x1000     // top vertical
-#define S14GR_ML   0x0200     // middle left
-#define S14GR_MR   0x0010     // middle right
-#define S14GR_B    0x0020     // bottom
-#define S14GR_BL   0x0001     // bottom left
-#define S14GR_BLD  0x0002     // bottom left diag
-#define S14GR_BR   0x0080     // bottom right
-#define S14GR_BRD  0x0008     // bottom right diag
-#define S14GR_BV   0x0004     // bottom vertical
-#define S14GR_DOT  0x0040     // dot
-
-// Grove 4-dig
-#define S14GR4_T   0x0010     // top
-#define S14GR4_TL  0x4000     // top left
-#define S14GR4_TLD 0x0080     // top left diag
-#define S14GR4_TR  0x0040     // top right
-#define S14GR4_TRD 0x0002     // top right diagonal
-#define S14GR4_TV  0x2000     // top vertical
-#define S14GR4_ML  0x0200     // middle left
-#define S14GR4_MR  0x0100     // middle right
-#define S14GR4_B   0x0400     // bottom
-#define S14GR4_BL  0x0008     // bottom left
-#define S14GR4_BLD 0x1000     // bottom left diag
-#define S14GR4_BR  0x0020     // bottom right
-#define S14GR4_BRD 0x0004     // bottom right diag
-#define S14GR4_BV  0x0800     // bottom vertical
-#define S14GR4_DOT 0x0000     // dot (has none)
-
-// ------
-
 class speedDisplay {
 
     public:
@@ -185,7 +94,7 @@ class speedDisplay {
         void show();
 
         void setText(const char *text);
-        void setSpeed(uint8_t speedNum);
+        void setSpeed(int8_t speedNum);
         #ifdef TC_HAVETEMP
         void setTemperature(double temp);
         #endif

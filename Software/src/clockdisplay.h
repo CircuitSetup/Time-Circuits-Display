@@ -26,52 +26,7 @@
 #ifndef _CLOCKDISPLAY_H
 #define _CLOCKDISPLAY_H
 
-#include <Arduino.h>
-#include <Wire.h>
-#include <EEPROM.h>
-
-#include "tc_global.h"
 #include "rtc.h"
-
-#ifdef IS_ACAR_DISPLAY      // A-Car (2-digit-month) ---------------------
-#define CD_MONTH_POS  0     //      possibly needs to be adapted
-#define CD_DAY_POS    3
-#define CD_YEAR_POS   4
-#define CD_HOUR_POS   6
-#define CD_MIN_POS    7
-
-#define CD_AMPM_POS   CD_DAY_POS
-#define CD_COLON_POS  CD_YEAR_POS
-
-#define CD_MONTH_SIZE 1     //      number of words
-#define CD_MONTH_DIGS 2     //      number of digits/letters
-
-#define CD_BUF_SIZE   8     //      in words (16bit)
-#else                       // All others (3-char month) -----------------
-#define CD_MONTH_POS  0
-#define CD_DAY_POS    3
-#define CD_YEAR_POS   4
-#define CD_HOUR_POS   6
-#define CD_MIN_POS    7
-
-#define CD_AMPM_POS   CD_DAY_POS
-#define CD_COLON_POS  CD_YEAR_POS
-
-#define CD_MONTH_SIZE 3     //      number of words
-#define CD_MONTH_DIGS 3     //      number of digits/letters
-
-#define CD_BUF_SIZE   8     //      in words (16bit)
-#endif                      // -------------------------------------------
-
-extern bool alarmOnOff;
-
-extern uint64_t timeDifference;
-extern bool     timeDiffUp;
-
-extern uint64_t dateToMins(int year, int month, int day, int hour, int minute);
-extern void     minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
-
-extern int      daysInMonth(int month, int year);
 
 struct dateStruct {
     uint16_t year;
@@ -85,7 +40,7 @@ class clockDisplay {
 
     public:
 
-        clockDisplay(uint8_t address, int saveAddress);
+        clockDisplay(uint8_t did, uint8_t address, int saveAddress);
         void begin();
         void on();
         void off();
@@ -121,6 +76,7 @@ class clockDisplay {
         void setYear(uint16_t yearNum);
         void setHour(uint16_t hourNum);
         void setMinute(int minNum);
+        void setDST(int8_t isDST);
 
         void setColon(bool col);
 
@@ -131,6 +87,7 @@ class clockDisplay {
         uint16_t getDisplayYear();
         uint8_t getHour();
         uint8_t getMinute();
+        int8_t getDST();
 
         void showOnlyMonth(int monthNum);
         void showOnlyDay(int dayNum);
@@ -146,15 +103,22 @@ class clockDisplay {
         bool saveYOffs();
         bool load(int initialBrightness = -1);
         int16_t loadYOffs();
+        int8_t loadDST();
+
+        bool saveLastYear(uint16_t theYear);
+        int16_t loadLastYear();
 
     private:
 
-        uint8_t _address;
-        int _saveAddress;
+        uint8_t  _did = 0;
+        uint8_t  _address = 0;
+        int      _saveAddress = -1;
         uint16_t _displayBuffer[8]; // Segments to make current time.
 
         uint16_t _year = 2021;      // keep track of these
-        int16_t  _yearoffset = 0;   // Offset for faking years < 2000 or > 2159
+        int16_t  _yearoffset = 0;   // Offset for faking years < 2000, > 2098
+
+        int8_t  _isDST = 0;        // DST active? -1:dunno 0:no 1:yes
 
         uint8_t _month = 1;
         uint8_t _day = 1;

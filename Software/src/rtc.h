@@ -37,9 +37,6 @@
 #ifndef _RTC_H_
 #define _RTC_H_
 
-#include <Arduino.h>
-#include <Wire.h>
-
 /*****************************************************************
  * DateTime Class
  * 
@@ -117,7 +114,7 @@ class tcRTC
 
     private:
 
-        int     _numTypes;
+        int     _numTypes = 0;
         uint8_t _addrArr[2*2];
         uint8_t _address;
         uint8_t _rtcType = RTCT_DS3231;

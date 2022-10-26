@@ -23,8 +23,57 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "tc_global.h"
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <EEPROM.h>
+
 #include "clockdisplay.h"
 #include "tc_font.h"
+
+#ifdef IS_ACAR_DISPLAY      // A-Car (2-digit-month) ---------------------
+#define CD_MONTH_POS  0     //      possibly needs to be adapted
+#define CD_DAY_POS    3
+#define CD_YEAR_POS   4
+#define CD_HOUR_POS   6
+#define CD_MIN_POS    7
+
+#define CD_AMPM_POS   CD_DAY_POS
+#define CD_COLON_POS  CD_YEAR_POS
+
+#define CD_MONTH_SIZE 1     //      number of words
+#define CD_MONTH_DIGS 2     //      number of digits/letters
+
+#define CD_BUF_SIZE   8     //      in words (16bit)
+#else                       // All others (3-char month) -----------------
+#define CD_MONTH_POS  0
+#define CD_DAY_POS    3
+#define CD_YEAR_POS   4
+#define CD_HOUR_POS   6
+#define CD_MIN_POS    7
+
+#define CD_AMPM_POS   CD_DAY_POS
+#define CD_COLON_POS  CD_YEAR_POS
+
+#define CD_MONTH_SIZE 3     //      number of words
+#define CD_MONTH_DIGS 3     //      number of digits/letters
+
+#define CD_BUF_SIZE   8     //      in words (16bit)
+#endif                      // -------------------------------------------
+
+extern bool     alarmOnOff;
+#ifdef TC_HAVEGPS
+extern bool     gpsHaveFix();
+#endif
+
+extern uint64_t timeDifference;
+extern bool     timeDiffUp;
+
+extern uint64_t dateToMins(int year, int month, int day, int hour, int minute);
+extern void     minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
+
+extern int      daysInMonth(int month, int year);
 
 const char months[12][4] = {
       "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
@@ -32,8 +81,9 @@ const char months[12][4] = {
 };
 
 // Store i2c address and eeprom data location
-clockDisplay::clockDisplay(uint8_t address, int saveAddress)
+clockDisplay::clockDisplay(uint8_t did, uint8_t address, int saveAddress)
 {
+    _did = did;
     _address = address;
     _saveAddress = saveAddress;
 }
@@ -123,7 +173,7 @@ uint8_t clockDisplay::getBrightness()
 
 void clockDisplay::set1224(bool hours24)
 {
-    _mode24 = hours24 ? true : false;
+    _mode24 = hours24;
 }
 
 bool clockDisplay::get1224(void)
@@ -133,7 +183,7 @@ bool clockDisplay::get1224(void)
 
 void clockDisplay::setNightMode(bool mymode)
 {
-    _nightmode = mymode ? true : false;
+    _nightmode = mymode;
 }
 
 bool clockDisplay::getNightMode(void)
@@ -257,8 +307,10 @@ void clockDisplay::setYearOffset(int16_t yearOffs)
 {
     _yearoffset = yearOffs;
     #ifdef TC_DBG
-    Serial.print("ClockDisplay: _yearoffset set to ");
-    Serial.println(yearOffs, DEC);
+    if(isRTC()) {
+        Serial.print("ClockDisplay: _yearoffset set to ");
+        Serial.println(yearOffs, DEC);
+    }
     #endif
 }
 
@@ -281,6 +333,13 @@ void clockDisplay::setYear(uint16_t yearNum)
 
     _displayBuffer[CD_YEAR_POS]     = makeNum(yearNum / 100);
     _displayBuffer[CD_YEAR_POS + 1] = makeNum(yearNum % 100);
+
+    #ifdef TC_HAVEGPS
+    if(_did == DISP_PRES) {
+        if(gpsHaveFix())
+            _displayBuffer[CD_YEAR_POS + 1] |= 0x8000;
+    }
+    #endif
 }
 
 // Place LED pattern in month position in buffer
@@ -371,9 +430,18 @@ void clockDisplay::setMinute(int minNum)
 
     _displayBuffer[CD_MIN_POS] = makeNum(minNum);
 
-    if(isRTC()) {
+    switch(_did) {
+    case DISP_PRES:
         if(alarmOnOff)
             _displayBuffer[CD_MIN_POS] |= 0x8000;
+        break;
+    }
+}
+
+void clockDisplay::setDST(int8_t isDST)
+{
+    if(isRTC()) {
+        _isDST = isDST;
     }
 }
 
@@ -422,6 +490,10 @@ uint8_t clockDisplay::getMinute()
     return _minute;
 }
 
+int8_t clockDisplay::getDST()
+{
+    return _isDST;
+}
 
 // Put data directly on display (bypass buffer) --------------------------------
 
@@ -655,7 +727,8 @@ bool clockDisplay::save()
         Serial.println(F("Clockdisplay: Saving RTC settings to EEPROM"));
         #endif
 
-        savBuf[0] = 0; // unused
+        savBuf[0] = _isDST + 1;
+        
         savBuf[1] = _yearoffset & 0xff;
         savBuf[2] = (_yearoffset >> 8) & 0xff;
 
@@ -685,7 +758,7 @@ bool clockDisplay::save()
     return true;
 }
 
-// Save YOffs and clear timeDifference in EEPROM
+// Save YOffs and isDST, and clear timeDifference in EEPROM
 bool clockDisplay::saveYOffs()
 {
     uint8_t savBuf[10];
@@ -701,7 +774,8 @@ bool clockDisplay::saveYOffs()
     Serial.println(F("Clockdisplay: Saving RTC/YOffs setting to EEPROM"));
     #endif
 
-    savBuf[0] = 0;
+    savBuf[0] = _isDST + 1;
+    
     savBuf[1] = _yearoffset & 0xff;
     savBuf[2] = (_yearoffset >> 8) & 0xff;
 
@@ -725,13 +799,44 @@ bool clockDisplay::saveYOffs()
     return true;
 }
 
+// Save given Year as "lastYear" for previous time state at boot
+bool clockDisplay::saveLastYear(uint16_t theYear)
+{
+    uint8_t savBuf[4];
+    int i;
+
+    if(!isRTC())
+        return false;
+
+    // Read to check if value identical to currently stored (reduce wear)
+    int16_t testFirst = loadLastYear();
+    if(testFirst == theYear) return true;
+
+    #ifdef TC_DBG
+    Serial.println(F("Clockdisplay: Saving RTC/LastYear to EEPROM"));
+    #endif
+    
+    savBuf[0] = theYear & 0xff;
+    savBuf[1] = (theYear >> 8) & 0xff;    
+    savBuf[2] = savBuf[0] ^ 0xff;
+    savBuf[3] = savBuf[1] ^ 0xff;
+    
+    for(i = 0; i < 4; i++) {
+        EEPROM.write(PRES_LY + i, savBuf[i]);
+    }
+
+    EEPROM.commit();
+
+    return true;
+}
+
 /*
  * Load saved date/time from eeprom
  *
  */
 bool clockDisplay::load(int initialBrightness)
 {
-    uint8_t loadBuf[10];
+    uint8_t loadBuf[16];
     uint16_t sum = 0;
     int i;
 
@@ -787,6 +892,8 @@ bool clockDisplay::load(int initialBrightness)
 
         if((sum & 0xff) == loadBuf[9]) {
 
+              _isDST = (int8_t)loadBuf[0] - 1;
+
               setYearOffset((loadBuf[2] << 8) | loadBuf[1]);
 
               timeDifference = ((uint64_t)loadBuf[3] << 32) |  // Dumb casts for
@@ -802,6 +909,8 @@ bool clockDisplay::load(int initialBrightness)
               #endif
 
         } else {
+
+              _isDST = -1;
 
               setYearOffset(0);
 
@@ -845,6 +954,53 @@ int16_t clockDisplay::loadYOffs()
     if((sum & 0xff) == loadBuf[9]) {
 
           return ((loadBuf[2] << 8) | loadBuf[1]);
+
+    }
+
+    return -1;
+}
+
+// Only load isDST from EEPROM
+// !!! Does not *SET* it, just returns it !!!
+int8_t clockDisplay::loadDST()
+{
+    uint8_t loadBuf[10];
+    uint16_t sum = 0;
+    int i;
+
+    if(_saveAddress < 0 || !isRTC())
+        return -2;
+
+    for(i = 0; i < 10; i++) {
+        loadBuf[i] = EEPROM.read(_saveAddress + i);
+        if(i < 9) sum += loadBuf[i] ^ 0x55;
+    }
+
+    if((sum & 0xff) == loadBuf[9]) {
+
+          return (int8_t)loadBuf[0] - 1;
+
+    }
+
+    return -1;
+}
+
+int16_t clockDisplay::loadLastYear()
+{
+    uint8_t loadBuf[4];
+    int i;
+
+    if(!isRTC())
+        return -2;
+
+    for(i = 0; i < 4; i++) {
+        loadBuf[i] = EEPROM.read(PRES_LY + i);
+    }
+
+    if( (loadBuf[0] == (loadBuf[2] ^ 0xff)) &&
+        (loadBuf[1] == (loadBuf[3] ^ 0xff)) ) {
+
+          return (int16_t)((loadBuf[1] << 8) | loadBuf[0]);
 
     }
 

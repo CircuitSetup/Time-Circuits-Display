@@ -35,6 +35,9 @@
  */
 
 #include "tc_global.h"
+
+#include <Arduino.h>
+#include <Wire.h>
 #include "rtc.h"
 
 // Registers
@@ -64,30 +67,6 @@
  * 
  * Supports dates in the range from 1 Jan 2000 to 31 Dec 2099.
  ****************************************************************/
-
-/*
- * Given a date, return number of days since 2000/01/01,
- * valid for 2000-2099
- */
-/* 
-static uint16_t date2days(uint16_t yr, uint8_t mo, uint8_t da)
-{
-    const uint16_t daysToMonth[] = {
-          0,  31,  59,  90, 120, 151,
-        181, 212, 243, 273, 304, 334
-    };
-
-    uint16_t days = da + daysToMonth[mo-1];
-    
-    if(yr >= 2000U)
-        yr -= 2000U;
-
-    if((yr % 4 == 0) && (mo > 2))
-        days++;
-
-    return days + (365 * yr) + ((yr + 3) / 4) - 1;
-}
-*/
 
 /*
  * Convert a string containing two digits to uint8_t
@@ -159,7 +138,7 @@ DateTime::DateTime(uint16_t year, uint8_t month, uint8_t day,
 
 /*
  * Constructor for generating the build time
- * from strings
+ * from C strings
  */
 DateTime::DateTime(const char *date, const char *time)
 {
@@ -211,10 +190,6 @@ uint8_t DateTime::dayOfTheWeek() const
     int y = yOff + 2000;
     if(m < 3) y -= 1;
     return (y + y/4 - y/100 + y/400 + t[m-1] + d) % 7;
-
-    //uint16_t day = date2days(yOff, m, d);
-    // Jan 1, 2000 was a Saturday, so that's our offset
-    //return (day + 6) % 7; 
 }
 
 
@@ -224,9 +199,9 @@ uint8_t DateTime::dayOfTheWeek() const
 
 tcRTC::tcRTC(int numTypes, uint8_t addrArr[])
 {
-    _numTypes = numTypes;
+    _numTypes = min(2, numTypes);
 
-    for(int i = 0; i < min(2, numTypes) * 2; i++) {
+    for(int i = 0; i < _numTypes * 2; i++) {
         _addrArr[i] = addrArr[i];
     }
 
@@ -239,7 +214,7 @@ tcRTC::tcRTC(int numTypes, uint8_t addrArr[])
  */
 bool tcRTC::begin()
 {
-    for(int i = 0; i < min(2, _numTypes) * 2; i += 2) {
+    for(int i = 0; i < _numTypes * 2; i += 2) {
 
         // Check for RTC on i2c bus
         Wire.beginTransmission(_addrArr[i]);

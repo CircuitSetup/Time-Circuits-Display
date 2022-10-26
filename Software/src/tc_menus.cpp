@@ -158,25 +158,92 @@
  *     Hold ENTER to leave the menu
  */
 
+#include "tc_global.h"
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <EEPROM.h>
+
+#include "clockdisplay.h"
+#include "tc_keypad.h"
+#include "tc_time.h"
+#include "tc_audio.h"
+#include "tc_settings.h"
+#include "tc_wifi.h"
+
 #include "tc_menus.h"
 
-int menuItemNum;
+#define MODE_DEST 0
+#define MODE_PRES 1
+#define MODE_DEPT 2
+#define MODE_VOL  3
+#define MODE_ALRM 4
+#define MODE_AINT 5
+#define MODE_BRI  6
+#define MODE_NET  7
+#define MODE_VER  8
+#define MODE_CPA  9
+#define MODE_END  10
+#define MODE_MIN  MODE_DEST
+#define MODE_MAX  MODE_END
+
+#define FIELD_MONTH   0
+#define FIELD_DAY     1
+#define FIELD_YEAR    2
+#define FIELD_HOUR    3
+#define FIELD_MINUTE  4
 
 // array element of autoTimeIntervals[], set's time between automatically displayed times
 uint8_t autoInterval = 1;
 const uint8_t autoTimeIntervals[6] = {0, 5, 10, 15, 30, 60};  // first must be 0 (=off)
 
-bool isSetUpdate = false;
-bool isYearUpdate = false;
-
-clockDisplay* displaySet;
-
 bool    alarmOnOff = false;
 uint8_t alarmHour = 255;
 uint8_t alarmMinute = 255;
 
-bool fcprog = false;
-unsigned long fcstart = 0;
+static int menuItemNum;
+
+bool isSetUpdate = false;
+bool isYearUpdate = false;
+
+static clockDisplay* displaySet;
+
+// File copy progress
+static bool fcprog = false;
+static unsigned long fcstart = 0;
+
+// For tracking second changes
+static bool xx;  
+static bool yy;
+
+// Our generic timeout when waiting for buttons, in seconds. max 255.
+#define maxTime 240
+static uint8_t timeout = 0;
+
+static void menuSelect(int& number);
+static void menuShow(int& number);
+static void setUpdate(uint16_t& number, int field);
+static void setField(uint16_t& number, uint8_t field, int year, int month);
+static void saveCurVolume();
+static bool loadCurVolume();
+static void showCurVolHWSW();
+static void showCurVol();
+static void doSetVolume();
+static void doSetAlarm();
+
+static void saveAutoInterval();
+static void doSetAutoInterval();
+static void doSetBrightness(clockDisplay* displaySet);
+static void doShowNetInfo();
+static void doCopyAudioFiles();
+static void waitForEnterRelease();
+static bool checkEnterPress();
+static void prepareInput(uint16_t& number);
+
+static bool checkTimeOut();
+
+static void myssdelay(unsigned long mydel);
+static void myloop();
 
 /*
  * menu_setup()
@@ -350,12 +417,28 @@ void enter_menu()
                 uint16_t newYear = yearSet;
                 int16_t tyroffs = 0;
 
+                // Set up DST data for now current year
+                if(!(parseTZ(settings.timeZone, yearSet))) {
+                    #ifdef TC_DBG
+                    Serial.println(F("Menu: Failed to parse TZ"));
+                    #endif
+                }
+
                 // Get RTC-fit year plus offs for given real year
                 correctYr4RTC(newYear, tyroffs);
 
                 displaySet->setYearOffset(tyroffs);
 
                 rtc.adjust(0, minSet, hourSet, dayOfWeek(daySet, monthSet, yearSet), daySet, monthSet, newYear-2000U);
+
+                // User entered current local time; set DST flag to current DST status
+                if(couldDST) {
+                    int currTimeMins;
+                    presentTime.setDST(timeIsDST(yearSet, monthSet, daySet, hourSet, minSet, currTimeMins));
+                    // Saved below
+                } else {
+                    presentTime.setDST(0);
+                }
 
                 // Avoid immediate re-adjustment in time_loop
                 lastYear = yearSet;
@@ -538,7 +621,7 @@ quitMenu:
  *  Cycle through main menu
  *
  */
-void menuSelect(int& number)
+static void menuSelect(int& number)
 {
     isEnterKeyHeld = false;
 
@@ -585,7 +668,7 @@ void menuSelect(int& number)
  *  Displays the current main menu item
  *
  */
-void menuShow(int& number)
+static void menuShow(int& number)
 {
     switch (number) {
         case MODE_DEST:  // Destination Time
@@ -715,7 +798,7 @@ void menuShow(int& number)
  * field = field to show it in
  *
  */
-void setUpdate(uint16_t& number, int field)
+static void setUpdate(uint16_t& number, int field)
 {
     switch (field) {
         case FIELD_MONTH:
@@ -737,7 +820,7 @@ void setUpdate(uint16_t& number, int field)
 }
 
 // Prepare timeBuffer
-void prepareInput(uint16_t& number)
+static void prepareInput(uint16_t& number)
 {
     // Write pre-set into buffer, reset index to 0
     // Upon first key input, the pre-set will be overwritten
@@ -755,7 +838,7 @@ void prepareInput(uint16_t& number)
  * year, month - check checking maximum day number
  *
  */
-void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0)
+static void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0)
 {
     int upperLimit;
     int lowerLimit;
@@ -853,14 +936,14 @@ void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0)
  *  Volume ###################################################
  */
 
-void saveCurVolume()
+static void saveCurVolume()
 {
     EEPROM.write(SWVOL_PREF, (uint8_t)curVolume);
     EEPROM.write(SWVOL_PREF + 1, (uint8_t)((curVolume ^ 0xff) & 0xff));
     EEPROM.commit();
 }
 
-bool loadCurVolume()
+static bool loadCurVolume()
 {
     uint8_t loadBuf[2];
 
@@ -884,7 +967,7 @@ bool loadCurVolume()
     return true;
 }
 
-void showCurVolHWSW()
+static void showCurVolHWSW()
 {
     if(curVolume == 255) {
         destinationTime.showOnlyText("HW");
@@ -901,7 +984,7 @@ void showCurVolHWSW()
     }
 }
 
-void showCurVol()
+static void showCurVol()
 {
     #ifdef IS_ACAR_DISPLAY
     destinationTime.showOnlySettingVal("LV", curVolume, true);
@@ -918,7 +1001,7 @@ void showCurVol()
     departedTime.off();
 }
 
-void doSetVolume()
+static void doSetVolume()
 {
     bool volDone = false;
     uint8_t oldVol = curVolume;
@@ -1077,7 +1160,7 @@ bool alarmOn()
 }
 
 // Set Alarm
-void doSetAlarm()
+static void doSetAlarm()
 {
     bool alarmDone = false;
 
@@ -1201,7 +1284,7 @@ bool loadAutoInterval()
  *
  *  It is written to the config file, which is updated accordingly.
  */
-void saveAutoInterval()
+static void saveAutoInterval()
 {
     // Convert 'autoInterval' to string, write to settings, write settings file
     sprintf(settings.autoRotateTimes, "%d", autoInterval);
@@ -1211,7 +1294,7 @@ void saveAutoInterval()
 /*
  * Adjust the autoInverval and save
  */
-void doSetAutoInterval()
+static void doSetAutoInterval()
 {
     bool autoDone = false;
 
@@ -1306,7 +1389,7 @@ void doSetAutoInterval()
  * Brightness ###################################################
  */
 
-void doSetBrightness(clockDisplay* displaySet) {
+static void doSetBrightness(clockDisplay* displaySet) {
 
     int8_t number = displaySet->getBrightness();
     bool briDone = false;
@@ -1379,7 +1462,7 @@ void doSetBrightness(clockDisplay* displaySet) {
  * Show network info ##################################
  */
 
-void doShowNetInfo()
+static void doShowNetInfo()
 {
     uint8_t a, b, c, d;
     int number = 0;
@@ -1506,7 +1589,7 @@ void doShowNetInfo()
  * Install default audio files from SD to flash FS #################
  */
 
-void doCopyAudioFiles()
+static void doCopyAudioFiles()
 {
     bool doCancDone = false;
     bool newCanc = false;
@@ -1638,7 +1721,7 @@ void file_copy_error()
  * Check if ENTER is pressed
  * (and properly debounce)
  */
-bool checkEnterPress()
+static bool checkEnterPress()
 {
     if(digitalRead(ENTER_BUTTON_PIN)) {
         myssdelay(50);
@@ -1654,7 +1737,7 @@ bool checkEnterPress()
  * Call myloop() to allow other stuff to proceed
  *
  */
-void waitForEnterRelease()
+static void waitForEnterRelease()
 {
     while(digitalRead(ENTER_BUTTON_PIN)) {
         mydelay(10);
@@ -1673,6 +1756,25 @@ void waitAudioDone()
 }
 
 /*
+ * Call this frequently while waiting for button presses,
+ * increments timeout each second, returns true when 
+ * maxtime reached.
+ *
+ */
+static bool checkTimeOut()
+{
+    yy = digitalRead(SECONDS_IN_PIN);
+    if(xx != yy) {
+        xx = yy;
+        if(yy == 0) {
+            timeout++;
+        }
+    }
+
+    return (timeout >= maxTime);
+}
+
+/*
  * MyDelay:
  * Calls myloop() periodically
  */
@@ -1687,13 +1789,16 @@ void mydelay(unsigned long mydel)
 
 /*
  * Special case for very short, non-recurring delays
- * Only calls audio_loop while waiting
+ * Only calls essential loops while waiting
  */
-void myssdelay(unsigned long mydel)
+static void myssdelay(unsigned long mydel)
 {
     unsigned long startNow = millis();
     while(millis() - startNow < mydel) {
         audio_loop();
+        #ifndef OLDNTP
+        ntp_short_loop();
+        #endif
         delay(10);
     }
 }
@@ -1702,9 +1807,15 @@ void myssdelay(unsigned long mydel)
  *  Do this during enter_menu whenever we are caught in a while() loop
  *  This allows other stuff to proceed
  */
-void myloop()
+static void myloop()
 {
     enterkeytick();
     wifi_loop();
     audio_loop();
+    #ifndef OLDNTP
+    ntp_loop();
+    #endif
+    #ifdef TC_HAVEGPS
+    gps_loop();
+    #endif
 }

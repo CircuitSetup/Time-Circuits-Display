@@ -21,7 +21,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "tc_global.h"
+
+#include <ArduinoJson.h>  // https://github.com/bblanchon/ArduinoJson
+#include <SD.h>
+#include <SPI.h>
+#include <FS.h>
+#ifdef USE_SPIFFS
+#include <SPIFFS.h>
+#else
+#define SPIFFS LittleFS
+#include <LittleFS.h>
+#endif
+#include <EEPROM.h>
+
 #include "tc_settings.h"
+#include "tc_menus.h"
 
 /*
  * Mount SPIFFS/LittleFS, und SD (if available)
@@ -36,16 +51,16 @@
  */
 
 /* If SPIFFS/LittleFS is mounted */
-bool haveFS = false;
+static bool haveFS = false;
 
 /* If a SD card is found */
 bool haveSD = false;
 
 /* If SD contains all default audio files */
-bool allowCPA = false;
+static bool allowCPA = false;
 
 #define NUM_AUDIOFILES 17
-const char *audioFiles[NUM_AUDIOFILES] = {
+static const char *audioFiles[NUM_AUDIOFILES] = {
       "/alarm.mp3\0",
       "/alarmoff.mp3\0",
       "/alarmon.mp3\0",
@@ -64,6 +79,21 @@ const char *audioFiles[NUM_AUDIOFILES] = {
       "/timetravel.mp3\0",
       "/travelstart.mp3\0"
 };
+
+static bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault);
+static bool checkValidNumParmF(char *text, double lowerLim, double upperLim, double setDefault);
+
+static bool loadAlarmEEPROM();
+static void saveAlarmEEPROM();
+
+static void open_and_copy(const char *fn, int& haveErr);
+static bool filecopy(File source, File dest);
+static bool check_if_default_audio_present();
+
+extern void start_file_copy();
+extern void file_copy_progress();
+extern void file_copy_done();
+extern void file_copy_error();
 
 /*
  * settings_setup()
@@ -279,6 +309,12 @@ void settings_setup()
                         writedefault |= checkValidNumParm(settings.ettLong, 0, 1, DEF_ETT_LONG);
                     } else writedefault = true;
                     #endif
+                    #ifdef TC_HAVEGPS
+                    if(json["useGPS"]) {
+                        strcpy(settings.useGPS, json["useGPS"]);
+                        writedefault |= checkValidNumParm(settings.useGPS, 0, 1, DEF_USE_GPS);
+                    } else writedefault = true;
+                    #endif
                     #ifdef TC_HAVESPEEDO
                     if(json["useSpeedo"]) {
                         strcpy(settings.useSpeedo, json["useSpeedo"]);
@@ -297,9 +333,9 @@ void settings_setup()
                         writedefault |= checkValidNumParmF(settings.speedoFact, 0.5, 5.0, DEF_SPEEDO_FACT);
                     } else writedefault = true;
                     #ifdef TC_HAVEGPS
-                    if(json["useGPS"]) {
-                        strcpy(settings.useGPS, json["useGPS"]);
-                        writedefault |= checkValidNumParm(settings.useGPS, 0, 1, DEF_USE_GPS);
+                    if(json["useGPSSpeed"]) {
+                        strcpy(settings.useGPSSpeed, json["useGPSSpeed"]);
+                        writedefault |= checkValidNumParm(settings.useGPSSpeed, 0, 1, DEF_USE_GPS_SPEED);
                     } else writedefault = true;
                     #endif
                     #ifdef TC_HAVETEMP
@@ -402,13 +438,16 @@ void write_settings()
     json["ettDelay"] = settings.ettDelay;
     json["ettLong"] = settings.ettLong;
     #endif
+    #ifdef TC_HAVEGPS
+    json["useGPS"] = settings.useGPS;
+    #endif
     #ifdef TC_HAVESPEEDO
     json["useSpeedo"] = settings.useSpeedo;
     json["speedoType"] = settings.speedoType;
     json["speedoBright"] = settings.speedoBright;
     json["speedoFact"] = settings.speedoFact;
     #ifdef TC_HAVEGPS
-    json["useGPS"] = settings.useGPS;
+    json["useGPSSpeed"] = settings.useGPSSpeed;
     #endif
     #ifdef TC_HAVETEMP
     json["useTemp"] = settings.useTemp;
@@ -436,7 +475,7 @@ void write_settings()
 }
 
 // Helper for checking validity of numerical user-entered parameters
-bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault)
+static bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault)
 {
     int i, len = strlen(text);
 
@@ -466,7 +505,7 @@ bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault)
     return false;
 }
 
-bool checkValidNumParmF(char *text, double lowerLim, double upperLim, double setDefault)
+static bool checkValidNumParmF(char *text, double lowerLim, double upperLim, double setDefault)
 {
     int i, len = strlen(text);
     double f;
@@ -523,7 +562,7 @@ bool loadAlarm()
             Serial.println(F("loadAlarm: Opened alarmconfig file"));
             #endif
 
-            StaticJsonDocument<1024> json;
+            StaticJsonDocument<512> json;
             DeserializationError error = deserializeJson(json, configFile);
 
             #ifdef TC_DBG
@@ -588,7 +627,7 @@ bool loadAlarm()
     return true;
 }
 
-bool loadAlarmEEPROM()
+static bool loadAlarmEEPROM()
 {
     #ifdef TC_DBG
     Serial.println(F("Load Alarm EEPROM"));
@@ -625,7 +664,7 @@ void saveAlarm()
     char hourBuf[8];
     char minBuf[8];
 
-    StaticJsonDocument<1024> json;
+    StaticJsonDocument<512> json;
 
     #ifdef TC_DBG
     Serial.println(F("Save Alarm"));
@@ -662,7 +701,7 @@ void saveAlarm()
     }
 }
 
-void saveAlarmEEPROM()
+static void saveAlarmEEPROM()
 {
     uint8_t savBuf[4];    // on/off, hour, minute, checksum
     uint16_t sum = 0;
@@ -704,7 +743,7 @@ bool loadIpSettings()
             Serial.println(F("loadIpSettings: Opened ip config file"));
             #endif
 
-            StaticJsonDocument<1024> json;
+            StaticJsonDocument<512> json;
             DeserializationError error = deserializeJson(json, configFile);
 
             #ifdef TC_DBG
@@ -767,7 +806,7 @@ bool loadIpSettings()
 
 void writeIpSettings()
 {
-    StaticJsonDocument<1024> json;
+    StaticJsonDocument<512> json;
 
     if(!haveFS) {
         Serial.println(F("writeIpSettings: Cannot write ip settings, flash FS not mounted"));
@@ -826,7 +865,7 @@ bool check_allow_CPA()
     return allowCPA;
 }
 
-bool check_if_default_audio_present()
+static bool check_if_default_audio_present()
 {
     File file;
     size_t ts;
@@ -942,7 +981,7 @@ bool copy_audio_files()
     return (haveErr == 0);
 }
 
-void open_and_copy(const char *fn, int& haveErr)
+static void open_and_copy(const char *fn, int& haveErr)
 {
     File sFile, dFile;
 
@@ -973,7 +1012,7 @@ void open_and_copy(const char *fn, int& haveErr)
     }
 }
 
-bool filecopy(File source, File dest)
+static bool filecopy(File source, File dest)
 {
     uint8_t buffer[1024];
     size_t bytesr, bytesw;

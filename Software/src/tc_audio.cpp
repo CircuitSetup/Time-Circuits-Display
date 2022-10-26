@@ -21,6 +21,26 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "tc_global.h"
+
+#include <Arduino.h>
+#include <AudioOutputI2S.h>
+#ifdef USE_SPIFFS
+#include <SPIFFS.h>
+#include <AudioFileSourceSPIFFS.h>
+#else
+#include <LittleFS.h>
+#include <AudioFileSourceLittleFS.h>
+#endif
+#include <AudioFileSourceSD.h>
+#include <AudioGeneratorMP3.h>
+#include <AudioGeneratorWAV.h>
+#include <AudioOutputMixer.h>
+
+#include "tc_settings.h"
+#include "tc_keypad.h"
+#include "tc_time.h"
+
 #include "tc_audio.h"
 
 // Use the mixer, or do not use the mixer.
@@ -32,30 +52,30 @@
 
 // Initialize ESP32 Audio Library classes
 
-AudioGeneratorMP3 *mp3;
-//AudioGeneratorMP3 *beep;
-//AudioGeneratorWAV *beep;
+static AudioGeneratorMP3 *mp3;
+//static AudioGeneratorMP3 *beep;
+//static AudioGeneratorWAV *beep;
 
 #ifdef USE_SPIFFS
-AudioFileSourceSPIFFS *myFS0;
-//AudioFileSourceSPIFFS *myFS1;
+static AudioFileSourceSPIFFS *myFS0;
+//static AudioFileSourceSPIFFS *myFS1;
 #else
-AudioFileSourceLittleFS *myFS0;
-//AudioFileSourceLittleFS *myFS1;
+static AudioFileSourceLittleFS *myFS0;
+//static AudioFileSourceLittleFS *myFS1;
 #endif
 
-AudioFileSourceSD *mySD0;
+static AudioFileSourceSD *mySD0;
 
-AudioOutputI2S *out;
+static AudioOutputI2S *out;
 
 #ifdef TC_USE_MIXER
-AudioOutputMixer *mixer;
-AudioOutputMixerStub *stub[2];
+static AudioOutputMixer *mixer;
+static AudioOutputMixerStub *stub[2];
 #endif
 
 bool audioMute = false;
 
-double volTable[16] = {
+static const double volTable[16] = {
     0.00, 0.03, 0.06, 0.10,
     0.15, 0.20, 0.25, 0.30,
     0.35, 0.42, 0.50, 0.60,
@@ -64,19 +84,22 @@ double volTable[16] = {
 
 uint8_t curVolume = 4;
 
-double curVolFact[2] = { 1.0, 1.0 };
-bool   curChkNM[2]   = { true, true };
+double  curVolFact[2] = { 1.0, 1.0 };
+bool    curChkNM[2]   = { true, true };
 
-int sampleCnt = 0;
+static int sampleCnt = 0;
 
 #define VOL_SMOOTH_SIZE 4
-int rawVol[VOL_SMOOTH_SIZE] = {  };
-int rawVolIdx = 0;
-int anaReadCount = 0;
-double prev_vol = 10.0;
+static int rawVol[VOL_SMOOTH_SIZE];
+static int rawVolIdx = 0;
+static int anaReadCount = 0;
+static double prev_vol = 10.0;
 
 // Resolution for pot, 9-12 allowed
 #define POT_RESOLUTION 9
+
+static double getRawVolume();
+static double getVolume(int channel);
 
 /*
  * audio_setup()

@@ -41,7 +41,38 @@
  * https://github.com/CircuitSetup/Time-Circuits-Display/wiki/9.-Programming-&-Upgrading-the-Firmware-(ESP32)
  */
 
-/*  Changelog 
+/*  Changelog
+ *
+ *  2022/10/24 (A10001986)
+ *    - Defer starting the Config Portal during boot: Starting with 2.0.13beta,
+ *      WiFiManager triggers an async WiFi Scan when the CP is started, which 
+ *      interferes with our NTP traffic during the boot process. Start CP after NTP 
+ *      is done.
+ *  2022/10/14-23 (A10001986)
+ *    - Fix time travel with speedo: Added forgotten code after re-write.
+ *    - Added support for MTK3333 based GPS receivers connected through i2c. These
+ *      can act as a source of authoritative time (just like NTP), as well as for
+ *      calculating current speed, to be displayed on a speedo display (which only
+ *      really makes sense in a car/boat/whatevermoves).
+ *    - Due to the system's time library's inability to handle some time zones
+ *      correctly (eg Lord Howe and Iran) and its unawareness of the well-known facts  
+ *      that NTP will roll-over in 2036 and unix time in 2038 (for which the system 
+ *      as it stands is not prepared and will fail), all ties with time library were 
+ *      cut, and a completely native time system was implemented, handling NTP/GPS, 
+ *      time zones and DST calculation all by itself.
+ *      This allows using this firmware with correct clocking until the year 9999 
+ *      (at which point it rolls over to 1), with NTP support until around
+ *      2150. Also, DST is now automatically switched in stand-alone mode
+ *      (ie without NTP or GPS).
+ *      For all this to work, it is essential that the user configures his time
+ *      zone in the Config Portal, and, for GPS and stand-alone, adjusts the TC's
+ *      RTC (real time clock) to current local time using the keypad menu.
+ *    - General cleanup (declarations, header files, etc)
+ *  2022/10/13 (A10001986)
+ *    - Implement own DST management (TZ string parsing, DST time adjustments)
+ *      This system is only active, if no authoritative time source is available.
+ *      As long as NTP or GPS deliver time, we rely on their assessments.
+ *    - Clean up declarations & definitions all over
  *  2022/10/11 (A10001986)
  *    - IMPORTANT BUGFIX: Due to some (IMHO) compiler idiocy and my sloppyness, in 
  *      this case presenting itself in trusting Serial output instead of checking 
@@ -318,19 +349,25 @@
  *    - various bug fixes
  */
 
+#include "tc_global.h"
+
 #include <Arduino.h>
-#include "clockdisplay.h"
+#include <Wire.h>
+
 #include "tc_audio.h"
 #include "tc_keypad.h"
 #include "tc_menus.h"
+#include "tc_settings.h"
 #include "tc_time.h"
 #include "tc_wifi.h"
-#include "tc_settings.h"
 
 void setup() 
 {
+    powerupMillis = millis();
+
     Serial.begin(115200);    
 
+    // PCF8574 only supports 100kHz, can't go to 400 here - Wire.begin(-1, -1, 100000);
     Wire.begin();
     // scan();
     Serial.println();
@@ -350,6 +387,9 @@ void loop()
 {
     keypad_loop();
     get_key();
+    #ifndef OLDNTP
+    ntp_loop();
+    #endif
     time_loop();
     wifi_loop();
     audio_loop();

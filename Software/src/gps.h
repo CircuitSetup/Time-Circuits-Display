@@ -34,27 +34,20 @@
 #ifndef _tcGPS_H
 #define _tcGPS_H
 
-#include <Arduino.h>
-#include <Wire.h>
-
 #define GPS_MAX_I2C_LEN   255
+#define GPS_MAXLINELEN    256
 
-#define MAXLINELENGTH     256
-
-#define GPS_MPH_PER_KNOT  1.15077945
-#define GPS_KMPH_PER_KNOT 1.852
-
-class tcGPS : public Print {
+class tcGPS {
 
     public:
 
         tcGPS(uint8_t address);
-        bool begin();
+        bool    begin(unsigned long powerupTime, bool quickUpdates);
 
         // Setter for custom delay function
-        void setCustomDelayFunc(void (*myDelay)(unsigned int));
+        void    setCustomDelayFunc(void (*myDelay)(unsigned int));
 
-        void loop();
+        void    loop(bool doDelay);
 
         int16_t getSpeed();
         bool    getDateTime(struct tm *timeInfo, time_t *fixAge);
@@ -65,6 +58,13 @@ class tcGPS : public Print {
 
     private:
 
+        bool    readAndParse(bool doDelay = true);
+
+        void    sendCommand(const char *);
+
+        bool    parseNMEA(char *nmea, unsigned long nmeaTS);
+        bool    checkNMEA(char *nmea);
+
         uint8_t _address;
 
         uint8_t _lenArr[32] = { 32, 32, 32, 32, 32, 32, 32, 31 };
@@ -73,14 +73,13 @@ class tcGPS : public Print {
         char    _buffer[GPS_MAX_I2C_LEN];
         char    _last_char = 0;
 
-        char    _line1[MAXLINELENGTH];
-        char    _line2[MAXLINELENGTH];
+        char    _line1[GPS_MAXLINELEN];
+        char    _line2[GPS_MAXLINELEN];
+        char    *_lineBufArr[4] = { _line1, _line2 };
+        int     _lineBufIdx = 0;
         char    *_currentline;
-        char    *_lastline;
         uint8_t _lineidx = 0;
-        bool    _lineready = false;
         unsigned long _currentTS = 0;
-        unsigned long _lastTS = 0;
 
         bool    _haveSpeed = false;
         unsigned long _curspdTS = 0;
@@ -97,14 +96,6 @@ class tcGPS : public Print {
         unsigned long _curTS2 = 0;
         bool    _haveDateTime = false;
         bool    _haveDateTime2 = false;
-
-        bool    read(void);
-        size_t  write(uint8_t);
-
-        void    sendCommand(const char *);
-
-        bool    parseNMEA(char *nmea, unsigned long nmeaTS);
-        bool    checkNMEA(char *nmea);
 
         // Ptr to custom delay function
         void (*_customDelayFunc)(unsigned int) = NULL;

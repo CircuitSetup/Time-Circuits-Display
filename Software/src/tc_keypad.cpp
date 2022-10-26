@@ -21,9 +21,52 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "tc_keypad.h"
 
-const char keys[4][3] = {
+#include "tc_global.h"
+
+#include <Arduino.h>
+#include <Keypad.h>
+#include <OneButton.h>
+
+#include "tc_keypadi2c.h"
+#include "tc_menus.h"
+#include "tc_audio.h"
+#include "tc_time.h"
+#include "tc_keypad.h"
+#include "tc_menus.h"
+#include "tc_settings.h"
+#include "tc_time.h"
+#include "tc_wifi.h"
+
+//#define GTE_KEYPAD // uncomment if using real GTE/TRW keypad control board
+
+#define KEYPAD_ADDR     0x20    // I2C address of the PCF8574 port expander (keypad)
+
+#define ENTER_DEBOUNCE    50    // enter button debounce time in ms
+#define ENTER_CLICK_TIME 200    // enter button will register a click
+#define ENTER_HOLD_TIME 2000    // time in ms holding the enter button will count as a hold
+
+#define ETT_DEBOUNCE      50    // external time travel button debounce time in ms
+#define ETT_CLICK_TIME   250    // external time travel button will register a click (unused)
+#define ETT_HOLD_TIME    200    // external time travel button will register a press (that's the one)
+
+// When ENTER button is pressed, turn off display for this many ms
+// Must be sync'd to the sound file used (enter.mp3)
+#define BADDATE_DELAY 400
+#ifdef TWSOUND
+#define ENTER_DELAY   500       // For TW sound files
+#else
+#define ENTER_DELAY   600
+#endif
+
+#define EE1_DELAY2   3000
+#define EE1_DELAY3   2000
+#define EE2_DELAY     600
+#define EE3_DELAY     500
+#define EE4_DELAY    3000
+
+
+static const char keys[4][3] = {
     {'1', '2', '3'},
     {'4', '5', '6'},
     {'7', '8', '9'},
@@ -31,58 +74,72 @@ const char keys[4][3] = {
 };
 
 #ifdef GTE_KEYPAD
-byte rowPins[4] = {5, 0, 1, 3};
-byte colPins[3] = {4, 6, 2};
+static byte rowPins[4] = {5, 0, 1, 3};
+static byte colPins[3] = {4, 6, 2};
 #else
-byte rowPins[4] = {1, 6, 5, 3}; // connect to the row pinouts of the keypad  2+64+32+8 = 0x6a  INPUT
-byte colPins[3] = {2, 0, 4};    // connect to the column pinouts of the keypad  4+1+16 = 0x15  OUTPUT
+static byte rowPins[4] = {1, 6, 5, 3}; // connect to the row pinouts of the keypad  2+64+32+8 = 0x6a  INPUT
+static byte colPins[3] = {2, 0, 4};    // connect to the column pinouts of the keypad  4+1+16 = 0x15  OUTPUT
 #endif
 
-Keypad_I2C keypad(makeKeymap(keys), rowPins, colPins, 4, 3, KEYPAD_ADDR, PCF8574);
+static Keypad_I2C keypad(makeKeymap(keys), rowPins, colPins, 4, 3, KEYPAD_ADDR, PCF8574);
 
 bool isEnterKeyPressed = false;
 bool isEnterKeyHeld = false;
-bool enterWasPressed = false;
+static bool enterWasPressed = false;
 
 #ifdef EXTERNAL_TIMETRAVEL_IN
-bool isEttKeyPressed = false;
-unsigned long ettNow = 0;
-bool ettDelayed = false;
-unsigned long ettDelay = 0; // ms
-bool ettLong;
+static bool isEttKeyPressed = false;
+static unsigned long ettNow = 0;
+static bool ettDelayed = false;
+static unsigned long ettDelay = 0; // ms
+static bool ettLong = DEF_ETT_LONG;
 #endif
 
-unsigned long timeNow = 0;
+static unsigned long timeNow = 0;
 
-unsigned long lastKeyPressed = 0;
+static unsigned long lastKeyPressed = 0;
 
 #define DATELEN_ALL   12   // month, day, year, hour, min
 #define DATELEN_DATE   8   // month, day, year
 #define DATELEN_TIME   4   // hour, minute
 #define DATELEN_CODE   3   // special
 
-char dateBuffer[DATELEN_ALL + 2];
-char timeBuffer[8]; // 4 characters to accommodate date and time settings
+static char dateBuffer[DATELEN_ALL + 2];
+char        timeBuffer[8]; // 4 characters to accommodate date and time settings
 
-int dateIndex = 0;
-int timeIndex = 0;
-int yearIndex = 0;
+static int dateIndex = 0;
+static int timeIndex = 0;
+static int yearIndex = 0;
 
-bool doKey = false;
+static bool doKey = false;
 
-unsigned long enterDelay = 0;
+static unsigned long enterDelay = 0;
 
-OneButton enterKey = OneButton(ENTER_BUTTON_PIN,
+static OneButton enterKey = OneButton(ENTER_BUTTON_PIN,
     false,    // Button is active HIGH
     false     // Disable internal pull-up resistor
 );
 
 #ifdef EXTERNAL_TIMETRAVEL_IN
-OneButton ettKey = OneButton(EXTERNAL_TIMETRAVEL_IN_PIN,
+static OneButton ettKey = OneButton(EXTERNAL_TIMETRAVEL_IN_PIN,
     true,     // Button is active LOW
     true      // Enable internal pull-up resistor
 );
 #endif
+
+static void keypadEvent(KeypadEvent key);
+static void recordKey(char key);
+static void recordSetTimeKey(char key);
+static void recordSetYearKey(char key);
+
+static void enterKeyPressed();
+static void enterKeyHeld();
+
+#ifdef EXTERNAL_TIMETRAVEL_IN
+static void ettKeyPressed();
+#endif
+
+static void mykpddelay(unsigned int mydel);
 
 /*
  * keypad_setup()
@@ -160,7 +217,7 @@ char get_key()
 /*
  *  The keypad event handler
  */
-void keypadEvent(KeypadEvent key)
+static void keypadEvent(KeypadEvent key)
 {
     if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP0 || timeTravelP1)
         return;
@@ -240,27 +297,27 @@ void keypadEvent(KeypadEvent key)
     }
 }
 
-void enterKeyPressed()
+static void enterKeyPressed()
 {
     isEnterKeyPressed = true;
     pwrNeedFullNow();
 }
 
-void enterKeyHeld()
+static void enterKeyHeld()
 {
     isEnterKeyHeld = true;
     pwrNeedFullNow();
 }
 
 #ifdef EXTERNAL_TIMETRAVEL_IN
-void ettKeyPressed()
+static void ettKeyPressed()
 {
     isEttKeyPressed = true;
     pwrNeedFullNow();
 }
 #endif
 
-void recordKey(char key)
+static void recordKey(char key)
 {
     dateBuffer[dateIndex++] = key;
     dateBuffer[dateIndex] = '\0';
@@ -268,14 +325,14 @@ void recordKey(char key)
     lastKeyPressed = millis();
 }
 
-void recordSetTimeKey(char key)
+static void recordSetTimeKey(char key)
 {
     timeBuffer[timeIndex++] = key;
     timeBuffer[timeIndex] = '\0';
     if(timeIndex == 2) timeIndex = 0;
 }
 
-void recordSetYearKey(char key)
+static void recordSetYearKey(char key)
 {
     timeBuffer[yearIndex++] = key;
     timeBuffer[yearIndex] = '\0';
@@ -598,11 +655,14 @@ void cancelETTAnim()
 /*
  * Custom delay funktion for key scan in i2ckeypad
  */
-void mykpddelay(unsigned int mydel)
+static void mykpddelay(unsigned int mydel)
 {
     unsigned long startNow = millis();
     while(millis() - startNow < mydel) {
         audio_loop();
+        #ifndef OLDNTP
+        ntp_short_loop();
+        #endif
         delay(1);
     }
 }

@@ -21,6 +21,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "tc_global.h"
+
+#include <Arduino.h>
+#include <ArduinoJson.h>
+
+#include "clockdisplay.h"
+#include "tc_menus.h"
+#include "tc_time.h"
+#include "tc_settings.h"
 #include "tc_wifi.h"
 
 // If undefined, use the checkbox/dropdown-hacks.
@@ -33,25 +42,25 @@ IPSettings ipsettings;
 
 WiFiManager wm;
 
-char aintCustHTML[768] = "";
-const char aintCustHTML1[] = "<div style='margin:0;padding:0;'><label for='rotate_times'>Time-rotation interval</label><select style='width:auto;margin-left:10px;vertical-align:baseline;' value='";
-const char aintCustHTML2[] = "' name='rotate_times' id='rotate_times' autocomplete='off' title='Selects the interval for automatic time-cycling when idle'><option value='0'";
-const char aintCustHTML3[] = ">Off</option><option value='1'";
-const char aintCustHTML4[] = ">Every 5th minute</option><option value='2'";
-const char aintCustHTML5[] = ">Every 10th minute</option><option value='3'";
-const char aintCustHTML6[] = ">Every 15th minute</option><option value='4'";
-const char aintCustHTML7[] = ">Every 30th minute</option><option value='5'";
-const char aintCustHTML8[] = ">Every 60th minute</option></select></div>";
+static char aintCustHTML[768] = "";
+static const char aintCustHTML1[] = "<div style='margin:0;padding:0;'><label for='rotate_times'>Time-rotation interval</label><select style='width:auto;margin-left:10px;vertical-align:baseline;' value='";
+static const char aintCustHTML2[] = "' name='rotate_times' id='rotate_times' autocomplete='off' title='Selects the interval for automatic time-cycling when idle'><option value='0'";
+static const char aintCustHTML3[] = ">Off</option><option value='1'";
+static const char aintCustHTML4[] = ">Every 5th minute</option><option value='2'";
+static const char aintCustHTML5[] = ">Every 10th minute</option><option value='3'";
+static const char aintCustHTML6[] = ">Every 15th minute</option><option value='4'";
+static const char aintCustHTML7[] = ">Every 30th minute</option><option value='5'";
+static const char aintCustHTML8[] = ">Every 60th minute</option></select></div>";
 
 #ifdef TC_HAVESPEEDO
-char spTyCustHTML[1024] = "";
-const char spTyCustHTML1[] = "<div style='margin:0;padding:0;'><label for='speedo_type'>Display type</label><select style='width:auto;margin-left:10px;vertical-align:baseline;' value='";
-const char spTyCustHTML2[] = "' name='speedo_type' id='speedo_type' autocomplete='off' title='Selects type of speedo display'>";
-const char spTyCustHTMLE[] = "</select></div>";
-const char spTyOptP1[] = "<option value='";
-const char spTyOptP2[] = "'>";
-const char spTyOptP3[] = "</option>";
-const char *dispTypeNames[SP_NUM_TYPES] = {
+static char spTyCustHTML[1024] = "";
+static const char spTyCustHTML1[] = "<div style='margin:0;padding:0;'><label for='speedo_type'>Display type</label><select style='width:auto;margin-left:10px;vertical-align:baseline;' value='";
+static const char spTyCustHTML2[] = "' name='speedo_type' id='speedo_type' autocomplete='off' title='Selects type of speedo display'>";
+static const char spTyCustHTMLE[] = "</select></div>";
+static const char spTyOptP1[] = "<option value='";
+static const char spTyOptP2[] = "'>";
+static const char spTyOptP3[] = "</option>";
+static const char *dispTypeNames[SP_NUM_TYPES] = {
   "CircuitSetup.us\0",
   "Adafruit 878 (4x7)\0",
   "Adafruit 878 (4x7;left)\0",
@@ -84,10 +93,13 @@ WiFiManagerParameter custom_ettLong("ettLg", "Time travel sequence (0=short, 1=c
 #ifdef FAKE_POWER_ON
 WiFiManagerParameter custom_fakePwrOn("fpo", "Use fake power switch (0=no, 1=yes)", settings.fakePwrOn, 1, "autocomplete='off' title='Enable to use a switch to fake-power-up and fake-power-down the device'");
 #endif
+#ifdef TC_HAVEGPS
+WiFiManagerParameter custom_useGPS("uGPS", "Use GPS as time source (0=no, 1=yes)", settings.useGPS, 1, "autocomplete='off' title='Enable to use a MT3333-based GPS receiver as a time source'");
+#endif
 #ifdef TC_HAVESPEEDO
 WiFiManagerParameter custom_useSpeedo("uSpe", "Use speedometer display (0=no, 1=yes)", settings.useSpeedo, 1, "autocomplete='off' title='Enable to use a speedo display'");
 #ifdef TC_HAVEGPS
-WiFiManagerParameter custom_useGPS("uGPS", "Use GPS receiver (0=no, 1=yes)", settings.useGPS, 1, "autocomplete='off' title='Enable to use a MT3333-based GPS receiver to display actual speed on speedo display'");
+WiFiManagerParameter custom_useGPSS("uGPSS", "Display GPS speed (0=no, 1=yes)", settings.useGPSSpeed, 1, "autocomplete='off' title='Enable to use a MT3333-based GPS receiver to display actual speed on speedo display'");
 #endif
 #ifdef TC_HAVETEMP
 WiFiManagerParameter custom_useTemp("uTem", "Use temperatur sensor (0=no, 1=yes)", settings.useTemp, 1, "autocomplete='off' title='Enable to use a MCP9808-based temperature sensor to display temperature on speedo display while idle'");
@@ -112,18 +124,21 @@ WiFiManagerParameter custom_ettLong("ettLg", "Play complete time travel sequence
 #ifdef FAKE_POWER_ON
 WiFiManagerParameter custom_fakePwrOn("fpo", "Use fake power switch", settings.fakePwrOn, 1, "title='Check to use a switch to fake-power-up and fake-power-down the device' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
 #endif
+#ifdef TC_HAVEGPS
+WiFiManagerParameter custom_useGPS("uGPS", "Use GPS as time source", settings.useGPS, 1, "autocomplete='off' title='Check to use a MT3333-based GPS receiver as a time source' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
+#endif
 #ifdef TC_HAVESPEEDO
 WiFiManagerParameter custom_useSpeedo("uSpe", "Use speedometer display", settings.useSpeedo, 1, "title='Check to use a speedo display' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
 #ifdef TC_HAVEGPS
-WiFiManagerParameter custom_useGPS("uGPS", "Use GPS receiver", settings.useGPS, 1, "autocomplete='off' title='Enable to use a MT3333-based GPS receiver to display actual speed on speedo display' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_useGPSS("uGPSS", "Display GPS speed", settings.useGPSSpeed, 1, "autocomplete='off' title='Check to use a MT3333-based GPS receiver to display actual speed on speedo display' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
 #endif
 #ifdef TC_HAVETEMP
-WiFiManagerParameter custom_useTemp("uTem", "Use temperature sensor", settings.useTemp, 1, "title='Enable to use a MCP9808-based temperature sensor to display temperature on speedo display while idle' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
-WiFiManagerParameter custom_tempUnit("temUnt", "Display in °Celsius", settings.tempUnit, 1, "title='Temperature displayed in Fahrenheit if unchecked' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_useTemp("uTem", "Use temperature sensor", settings.useTemp, 1, "title='Check to use a MCP9808-based temperature sensor to display temperature on speedo display while idle' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_tempUnit("temUnt", "Display in °Celsius", settings.tempUnit, 1, "title='If unchecked, temperature is displayed in Fahrenheit' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
 #endif
 #endif
 #ifdef EXTERNAL_TIMETRAVEL_OUT
-WiFiManagerParameter custom_useETTO("uEtto", "Use compatible external props", settings.useETTO, 1, "autocomplete='off' title='Enable to use compatible external props to be part of the time travel sequence, eg. Flux Capacitor, SID, etc.' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_useETTO("uEtto", "Use compatible external props", settings.useETTO, 1, "autocomplete='off' title='Check to use compatible external props to be part of the time travel sequence, eg. Flux Capacitor, SID, etc.' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
 #endif
 #endif // -------------------------------------------------
 WiFiManagerParameter custom_autoRotateTimes(aintCustHTML);
@@ -132,15 +147,15 @@ WiFiManagerParameter custom_wifiConTimeout("wificon", "WiFi connection timeout i
 WiFiManagerParameter custom_wifiOffDelay("wifioff", "WiFi power save timer<br>(10-99[minutes];0=off)", settings.wifiOffDelay, 2, "type='number' min='0' max='99' title='If in station mode, WiFi will be shut down after chosen number of minutes after power-on. 0 means never.'");
 WiFiManagerParameter custom_wifiAPOffDelay("wifiAPoff", "WiFi power save timer (AP-mode)<br>(10-99[minutes];0=off)", settings.wifiAPOffDelay, 2, "type='number' min='0' max='99' title='If in AP mode, WiFi will be shut down after chosen number of minutes after power-on. 0 means never.'");
 WiFiManagerParameter custom_wifiHint("<div style='margin:0px 0px 15px 0px;padding:0px'>Hold '7' to re-enable Wifi when in power save mode.</div>");
-WiFiManagerParameter custom_ntpServer("ntp_server", "NTP Server (empty to disable NTP)", settings.ntpServer, 63);
-WiFiManagerParameter custom_timeZone("time_zone", "Timezone (in <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target=_blank>Posix</a> format)", settings.timeZone, 63);
+WiFiManagerParameter custom_ntpServer("ntp_server", "NTP Server (empty to disable NTP)", settings.ntpServer, 63, "placeholder='Example: pool.ntp.org'");
+WiFiManagerParameter custom_timeZone("time_zone", "Timezone (in <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target=_blank>Posix</a> format)", settings.timeZone, 63, "placeholder='Example: CST6CDT,M3.2.0,M11.1.0'");
 WiFiManagerParameter custom_destTimeBright("dt_bright", "Destination Time display brightness (0-15)", settings.destTimeBright, 2, "type='number' min='0' max='15' autocomplete='off'", WFM_LABEL_BEFORE);
 WiFiManagerParameter custom_presTimeBright("pt_bright", "Present Time display brightness (0-15)", settings.presTimeBright, 2, "type='number' min='0' max='15' autocomplete='off'");
 WiFiManagerParameter custom_lastTimeBright("lt_bright", "Last Time Dep. display brightness (0-15)", settings.lastTimeBright, 2, "type='number' min='0' max='15' autocomplete='off'");
 WiFiManagerParameter custom_autoNMOn("anmon", "Auto-NightMode start hour (0-23)", settings.autoNMOn, 2, "type='number' min='0' max='23' autocomplete='off' title='To disable, set start and end to same value'");
 WiFiManagerParameter custom_autoNMOff("anmoff", "Auto-NightMode end hour (0-23)", settings.autoNMOff, 2, "type='number' min='0' max='23' autocomplete='off' title='To disable, set start and end to same value'");
 #ifdef EXTERNAL_TIMETRAVEL_IN
-WiFiManagerParameter custom_ettDelay("ettDe", "External time travel button:<br>Delay (ms)", settings.ettDelay, 5, "type='number' min='0' max='60000' title='Externally triggered time travel will be delayed by specified number of millisecs'");
+WiFiManagerParameter custom_ettDelay("ettDe", "External time travel button<br>Delay (ms)", settings.ettDelay, 5, "type='number' min='0' max='60000' title='Externally triggered time travel will be delayed by specified number of millisecs'");
 #endif
 #ifdef TC_HAVESPEEDO
 WiFiManagerParameter custom_speedoType(spTyCustHTML);
@@ -156,13 +171,13 @@ WiFiManagerParameter custom_footer("<p></p>");
 WiFiManagerParameter custom_sectstart("<div style='background-color:#eee;border-radius:5px;margin-bottom:20px;padding-bottom:7px;padding-top:7px'>");
 WiFiManagerParameter custom_sectend("</div>");
 
-int  shouldSaveConfig = 0;
-bool shouldSaveIPConfig = false;
-bool shouldDeleteIPConfig = false;
+static int  shouldSaveConfig = 0;
+static bool shouldSaveIPConfig = false;
+static bool shouldDeleteIPConfig = false;
 
 // WiFi power management in AP mode
-bool wifiInAPMode = false;
-bool wifiAPIsOff = false;
+bool          wifiInAPMode = false;
+bool          wifiAPIsOff = false;
 unsigned long wifiAPModeNow;
 unsigned long wifiAPOffDelay = 0;     // default: never
 
@@ -171,6 +186,20 @@ bool          wifiIsOff = false;
 unsigned long wifiOnNow = 0;
 unsigned long wifiOffDelay     = 0;   // default: never
 unsigned long origWiFiOffDelay = 0;
+
+static void wifiConnect(bool deferConfigPortal = false);
+static void saveParamsCallback();
+static void saveConfigCallback();
+static void preSaveConfigCallback();
+
+static void setupStaticIP();
+static bool isIp(char *str);
+static void ipToString(char *str, IPAddress ip);
+static IPAddress stringToIp(char *str);
+
+static void getParam(String name, char *destBuf, size_t length);
+static bool myisspace(char mychar);
+static char* strcpytrim(char* destination, const char* source);
 
 /*
  * wifi_setup()
@@ -243,6 +272,9 @@ void wifi_setup()
     wm.addParameter(&custom_wifiHint);
     wm.addParameter(&custom_ntpServer);
     wm.addParameter(&custom_timeZone);
+    #ifdef TC_HAVEGPS
+    wm.addParameter(&custom_useGPS);
+    #endif
     wm.addParameter(&custom_sectend);
     wm.addParameter(&custom_sectstart);
     wm.addParameter(&custom_destTimeBright);
@@ -272,7 +304,7 @@ void wifi_setup()
     wm.addParameter(&custom_speedoBright);
     wm.addParameter(&custom_speedoFact);
     #ifdef TC_HAVEGPS
-    wm.addParameter(&custom_useGPS);
+    wm.addParameter(&custom_useGPSS);
     #endif
     #ifdef TC_HAVETEMP
     wm.addParameter(&custom_useTemp);
@@ -316,7 +348,8 @@ void wifi_setup()
         setupStaticIP();
     }
 
-    wifiConnect();
+    // Connect, but defer starting the CP
+    wifiConnect(true);
 }
 
 /*
@@ -389,8 +422,8 @@ void wifi_loop()
               settings.autoRotateTimes[0] = DEF_AUTOROTTIMES + '0';
               settings.autoRotateTimes[1] = '\0';
             }
-            strcpy(settings.ntpServer, custom_ntpServer.getValue());
-            strcpy(settings.timeZone, custom_timeZone.getValue());
+            strcpytrim(settings.ntpServer, custom_ntpServer.getValue());
+            strcpytrim(settings.timeZone, custom_timeZone.getValue());
             strcpy(settings.destTimeBright, custom_destTimeBright.getValue());
             strcpy(settings.presTimeBright, custom_presTimeBright.getValue());
             strcpy(settings.lastTimeBright, custom_lastTimeBright.getValue());
@@ -431,10 +464,13 @@ void wifi_loop()
             #ifdef EXTERNAL_TIMETRAVEL_IN
             strcpy(settings.ettLong, custom_ettLong.getValue());
             #endif
+            #ifdef TC_HAVEGPS
+            strcpy(settings.useGPS, custom_useGPS.getValue());
+            #endif
             #ifdef TC_HAVESPEEDO
             strcpy(settings.useSpeedo, custom_useSpeedo.getValue());
             #ifdef TC_HAVEGPS
-            strcpy(settings.useGPS, custom_useGPS.getValue());
+            strcpy(settings.useGPSSpeed, custom_useGPSS.getValue());
             #endif
             #ifdef TC_HAVETEMP
             strcpy(settings.useTemp, custom_useTemp.getValue());
@@ -460,10 +496,13 @@ void wifi_loop()
             #ifdef EXTERNAL_TIMETRAVEL_IN
             strcpy(settings.ettLong, ((int)atoi(custom_ettLong.getValue()) > 0) ? "1" : "0");
             #endif
+            #ifdef TC_HAVEGPS
+            strcpy(settings.useGPS, ((int)atoi(custom_useGPS.getValue()) > 0) ? "1" : "0");
+            #endif
             #ifdef TC_HAVESPEEDO
             strcpy(settings.useSpeedo, ((int)atoi(custom_useSpeedo.getValue()) > 0) ? "1" : "0");
             #ifdef TC_HAVEGPS
-            strcpy(settings.useGPS, ((int)atoi(custom_useGPS.getValue()) > 0) ? "1" : "0");
+            strcpy(settings.useGPSSpeed, ((int)atoi(custom_useGPSS.getValue()) > 0) ? "1" : "0");
             #endif
             #ifdef TC_HAVETEMP
             strcpy(settings.useTemp, ((int)atoi(custom_useTemp.getValue()) > 0) ? "1" : "0");
@@ -544,7 +583,7 @@ void wifi_loop()
 
 }
 
-void wifiConnect()
+static void wifiConnect(bool deferConfigPortal)
 {
     // Automatically connect using saved credentials if they exist
     // If connection fails it starts an access point with the specified name
@@ -552,7 +591,14 @@ void wifiConnect()
         #ifdef TC_DBG
         Serial.println(F("WiFi connected"));
         #endif
-        wm.startWebPortal();  // start config portal in STA mode
+
+        // Since WM 2.0.13beta, starting the CP invokes an async
+        // WiFi scan. This interferes with network access for a 
+        // few seconds after connecting. So, during boot, we start
+        // the CP later, to allow a quick NTP update.
+        if(!deferConfigPortal) {
+            wm.startWebPortal();
+        }
 
         // Allow modem sleep:
         // WIFI_PS_MIN_MODEM is the default, and activated when calling this
@@ -655,7 +701,15 @@ void wifiOn(unsigned long newDelay, bool alsoInAPMode)
 
     WiFi.mode(WIFI_MODE_STA);
 
-    wifiConnect();
+    wifiConnect(false);
+}
+
+void wifiStartCP()
+{
+    if(wifiInAPMode || wifiIsOff)
+        return;
+
+    wm.startWebPortal();
 }
 
 // This is called when the WiFi config changes, so it has
@@ -664,14 +718,14 @@ void wifiOn(unsigned long newDelay, bool alsoInAPMode)
 // configures WiFi, a default settings file exists upon reboot.
 // Also, this causes a reboot, so if the user entered static
 // IP data, it becomes active after this reboot.
-void saveConfigCallback()
+static void saveConfigCallback()
 {
     shouldSaveConfig = 1;
 }
 
 // This is the callback from the actual Params page. In this
 // case, we really read out the server parms and save them.
-void saveParamsCallback()
+static void saveParamsCallback()
 {
     shouldSaveConfig = 2;
 }
@@ -679,7 +733,7 @@ void saveParamsCallback()
 // Grab static IP parameters from WiFiManager's server.
 // Since there is no public method for this, we steal
 // the html form parameters in this callback.
-void preSaveConfigCallback()
+static void preSaveConfigCallback()
 {
     char ipBuf[20] = "";
     char gwBuf[20] = "";
@@ -741,7 +795,7 @@ void preSaveConfigCallback()
     }
 }
 
-void setupStaticIP()
+static void setupStaticIP()
 {
     IPAddress ip;
     IPAddress gw;
@@ -815,10 +869,13 @@ void updateConfigPortalValues()
     #ifdef EXTERNAL_TIMETRAVEL_IN
     custom_ettLong.setValue(settings.ettLong, 1);
     #endif
+    #ifdef TC_HAVEGPS
+    custom_useGPS.setValue(settings.useGPS, 1);
+    #endif
     #ifdef TC_HAVESPEEDO
     custom_useSpeedo.setValue(settings.useSpeedo, 1);
     #ifdef TC_HAVEGPS
-    custom_useGPS.setValue(settings.useGPS, 1);
+    custom_useGPSS.setValue(settings.useGPSSpeed, 1);
     #endif
     #ifdef TC_HAVETEMP
     custom_useTemp.setValue(settings.useTemp, 1);
@@ -844,10 +901,13 @@ void updateConfigPortalValues()
     #ifdef EXTERNAL_TIMETRAVEL_IN
     custom_ettLong.setValue(((int)atoi(settings.ettLong) > 0) ? makeCheck : "1", 14);
     #endif
+    #ifdef TC_HAVEGPS
+    custom_useGPS.setValue(((int)atoi(settings.useGPS) > 0) ? makeCheck : "1", 14);
+    #endif
     #ifdef TC_HAVESPEEDO
     custom_useSpeedo.setValue(((int)atoi(settings.useSpeedo) > 0) ? makeCheck : "1", 14);
     #ifdef TC_HAVEGPS
-    custom_useGPS.setValue(((int)atoi(settings.useGPS) > 0) ? makeCheck : "1", 14);
+    custom_useGPSS.setValue(((int)atoi(settings.useGPSSpeed) > 0) ? makeCheck : "1", 14);
     #endif
     #ifdef TC_HAVETEMP
     custom_useTemp.setValue(((int)atoi(settings.useTemp) > 0) ? makeCheck : "1", 14);
@@ -933,7 +993,7 @@ bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d)
 }
 
 // Check if String is a valid IP address
-bool isIp(char *str)
+static bool isIp(char *str)
 {
     int segs = 0;
     int digcnt = 0;
@@ -967,13 +1027,13 @@ bool isIp(char *str)
 }
 
 // IPAddress to string
-void ipToString(char *str, IPAddress ip)
+static void ipToString(char *str, IPAddress ip)
 {
     sprintf(str, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 }
 
 // String to IPAddress
-IPAddress stringToIp(char *str)
+static IPAddress stringToIp(char *str)
 {
     int ip1, ip2, ip3, ip4;
 
@@ -985,10 +1045,29 @@ IPAddress stringToIp(char *str)
 /*
  * read parameter from server, for customhmtl input
  */
-void getParam(String name, char *destBuf, size_t length)
+static void getParam(String name, char *destBuf, size_t length)
 {
     memset(destBuf, 0, length+1);
     if(wm.server->hasArg(name)) {
         strncpy(destBuf, wm.server->arg(name).c_str(), length);
     }
+}
+
+static bool myisspace(char mychar)
+{
+    return (mychar == ' ' || mychar == '\n' || mychar == '\t' || mychar == '\v' || mychar == '\f' || mychar == '\r');
+}
+
+static char* strcpytrim(char* destination, const char* source)
+{
+    char *ret = destination;
+    
+    do {
+        if(!isspace(*source)) *destination++ = *source;
+        source++;
+    } while(*source);
+    
+    *destination = 0;
+    
+    return ret;
 }

@@ -24,40 +24,21 @@
 #ifndef _TC_WIFI_H
 #define _TC_WIFI_H
 
-#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
-#include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
-
-#include "tc_global.h"
-#include "clockdisplay.h"
-#include "tc_menus.h"
-#include "tc_time.h"
-#include "tc_settings.h"
-
-extern void wifi_setup();
-extern void wifi_loop();
-void wifiConnect();
-void wifiOff();
-void wifiOn(unsigned long newDelay = 0, bool alsoInAPMode = false);
-
-void saveParamsCallback();
-void saveConfigCallback();
-void preSaveConfigCallback();
-
-void setupStaticIP();
-
-extern void updateConfigPortalValues();
-
-extern int wifi_getStatus();
-extern bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d);
-
-bool isIp(char *str);
-void ipToString(char *str, IPAddress ip);
-IPAddress stringToIp(char *str);
-
-void getParam(String name, char *destBuf, size_t length);
+#include <WiFiManager.h>
 
 extern bool wifiIsOff;
 extern bool wifiAPIsOff;
 extern bool wifiInAPMode;
+
+void wifi_setup();
+void wifi_loop();
+void wifiOff();
+void wifiOn(unsigned long newDelay = 0, bool alsoInAPMode = false);
+void wifiStartCP();
+
+void updateConfigPortalValues();
+
+int  wifi_getStatus();
+bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d);
 
 #endif

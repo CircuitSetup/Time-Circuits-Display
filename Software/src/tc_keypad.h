@@ -24,70 +24,23 @@
 #ifndef _TC_KEYPAD_H
 #define _TC_KEYPAD_H
 
-#include <Arduino.h>
-#include <Keypad.h>
-#include <OneButton.h>
+extern bool isEnterKeyPressed;
+extern bool isEnterKeyHeld;
 
-#include "tc_global.h"
-#include "tc_keypadi2c.h"
-#include "tc_menus.h"
-#include "tc_audio.h"
-#include "tc_time.h"
+extern char timeBuffer[];
 
-//#define GTE_KEYPAD // uncomment if using real GTE/TRW keypad control board
+void keypad_setup();
+char get_key();
 
-#define KEYPAD_ADDR 0x20        // I2C address of the PCF8574 port expander (keypad)
+void keypad_loop();
 
-#define ENTER_DEBOUNCE    50    // enter button debounce time in ms
-#define ENTER_CLICK_TIME 200    // enter button will register a click
-#define ENTER_HOLD_TIME 2000    // time in ms holding the enter button will count as a hold
-
-#define ETT_DEBOUNCE      50    // external time travel button debounce time in ms
-#define ETT_CLICK_TIME   250    // external time travel button will register a click (unused)
-#define ETT_HOLD_TIME    200    // external time travel button will register a press (that's the one)
-
-// When ENTER button is pressed, turn off display for this many ms
-// Must be sync'd to the sound file used (enter.mp3)
-#define BADDATE_DELAY 400
-#ifdef TWSOUND
-#define ENTER_DELAY   500       // For TW sound files
-#else
-#define ENTER_DELAY   600
-#endif
-
-#define EE1_DELAY2   3000
-#define EE1_DELAY3   2000
-#define EE2_DELAY     600
-#define EE3_DELAY     500
-#define EE4_DELAY    3000
-
-void keypadEvent(KeypadEvent key);
-extern void keypad_setup();
-extern char get_key();
-extern void recordKey(char key);
-extern void recordSetTimeKey(char key);
-extern void recordSetYearKey(char key);
-extern void resetTimebufIndices();
-extern void cancelEnterAnim();
-extern void cancelETTAnim();
-void mykpddelay(unsigned int mydel);
+void resetTimebufIndices();
+void cancelEnterAnim();
+void cancelETTAnim();
 
 void nightModeOn();
 void nightModeOff();
 
-extern char timeBuffer[];
-
-void enterKeyPressed();
-void enterKeyHeld();
 void enterkeytick();
-
-extern bool isEnterKeyPressed;
-extern bool isEnterKeyHeld;
-
-#ifdef EXTERNAL_TIMETRAVEL_IN
-void ettKeyPressed();
-#endif
-
-extern void keypad_loop();
 
 #endif

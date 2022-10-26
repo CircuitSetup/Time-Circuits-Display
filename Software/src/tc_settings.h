@@ -24,51 +24,6 @@
 #ifndef _TC_SETTINGS_H
 #define _TC_SETTINGS_H
 
-#include "tc_global.h"
-
-#include <ArduinoJson.h>  // https://github.com/bblanchon/ArduinoJson
-#include <SD.h>
-#include <SPI.h>
-#include <FS.h>
-#ifdef USE_SPIFFS
-#include <SPIFFS.h>
-#else
-#define SPIFFS LittleFS
-#include <LittleFS.h>
-#endif
-#include <EEPROM.h>
-
-extern void settings_setup();
-extern void write_settings();
-bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault);
-bool checkValidNumParmF(char *text, double lowerLim, double upperLim, double setDefault);
-extern bool loadAlarm();
-extern void saveAlarm();
-bool loadAlarmEEPROM();
-void saveAlarmEEPROM();
-extern bool loadIpSettings();
-extern void writeIpSettings();
-extern void deleteIpSettings();
-
-extern bool copy_audio_files();
-void open_and_copy(const char *fn, int& haveErr);
-bool filecopy(File source, File dest);
-
-extern bool check_allow_CPA();
-bool check_if_default_audio_present();
-extern void start_file_copy();
-extern void file_copy_progress();
-extern void file_copy_done();
-extern void file_copy_error();
-
-extern void formatFlashFS();
-
-extern bool    alarmOnOff;
-extern uint8_t alarmHour;
-extern uint8_t alarmMinute;
-
-extern bool    timetravelPersistent;
-
 extern bool    haveSD;
 
 #define MS(s) XMS(s)
@@ -104,6 +59,7 @@ extern bool    haveSD;
 #define DEF_SPEEDO_FACT     2.0   // Speedo factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
 #define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness
 #define DEF_USE_GPS         0     // 0: No i2c GPS module
+#define DEF_USE_GPS_SPEED   0     // 0: Do not use GPS speed on speedo display
 #define DEF_USE_TEMP        0     // 0: No i2c thermometer
 #define DEF_TEMP_BRIGHT     3     // Default temp brightness
 #define DEF_TEMP_UNIT       0     // Default: temp unit Fahrenheit
@@ -136,13 +92,16 @@ struct Settings {
     char ettDelay[8]        = MS(DEF_ETT_DELAY);
     char ettLong[4]         = MS(DEF_ETT_LONG);
 #endif
+#ifdef TC_HAVEGPS
+    char useGPS[4]          = MS(DEF_USE_GPS);
+#endif
 #ifdef TC_HAVESPEEDO
     char useSpeedo[4]       = MS(DEF_USE_SPEEDO);
     char speedoType[4]      = MS(DEF_SPEEDO_TYPE);
     char speedoBright[4]    = MS(DEF_BRIGHT_SPEEDO);
     char speedoFact[6]      = MS(DEF_SPEEDO_FACT);
 #ifdef TC_HAVEGPS
-    char useGPS[4]          = MS(DEF_USE_GPS);
+    char useGPSSpeed[4]     = MS(DEF_USE_GPS_SPEED);
 #endif
 #ifdef TC_HAVETEMP
     char useTemp[4]         = MS(DEF_USE_TEMP);
@@ -168,5 +127,21 @@ struct IPSettings {
 
 extern struct Settings settings;
 extern struct IPSettings ipsettings;
+
+void settings_setup();
+void write_settings();
+
+bool loadAlarm();
+void saveAlarm();
+
+bool loadIpSettings();
+void writeIpSettings();
+void deleteIpSettings();
+
+bool copy_audio_files();
+
+bool check_allow_CPA();
+
+void formatFlashFS();
 
 #endif

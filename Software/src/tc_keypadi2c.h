@@ -41,8 +41,8 @@
 #ifndef _TCKEYPAD_I2C_H
 #define _TCKEYPAD_I2C_H
 
-#include "Keypad.h"
-#include "Wire.h"
+#include <Keypad.h>
+#include <Wire.h>
 
 #define PCF8574 1 // PCF8574 I/O expander device is 1 byte wide
 #define PCF8575 2 // PCF8575 I/O expander device is 2 bytes wide

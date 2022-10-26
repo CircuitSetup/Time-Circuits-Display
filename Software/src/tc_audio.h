@@ -24,38 +24,15 @@
 #ifndef _TC_AUDIO_H
 #define _TC_AUDIO_H
 
-#include "tc_global.h"
-
-#include <Arduino.h>
-#include <AudioOutputI2S.h>
-
-#ifdef USE_SPIFFS
-#include <SPIFFS.h>
-#include <AudioFileSourceSPIFFS.h>
-#else
-#include <LittleFS.h>
-#include <AudioFileSourceLittleFS.h>
-#endif
-
-#include <AudioFileSourceSD.h>
-#include <AudioGeneratorMP3.h>
-#include <AudioGeneratorWAV.h>
-#include <AudioOutputMixer.h>
-
-#include "tc_keypad.h"
-#include "tc_time.h"
-
-extern void audio_setup();
-extern void play_keypad_sound(char key);
-extern void audio_loop();
-extern void play_file(const char *audio_file, double volumeFactor = 1.0, bool checkNightMode = true, int channel = 0, bool allowSD = true);
-extern double getRawVolume();
-extern double getVolume(int channel);
-extern bool checkAudioDone();
-extern void stopAudio();
-
 extern bool audioMute;
 
 extern uint8_t curVolume;
+
+void audio_setup();
+void play_keypad_sound(char key);
+void audio_loop();
+void play_file(const char *audio_file, double volumeFactor = 1.0, bool checkNightMode = true, int channel = 0, bool allowSD = true);
+bool checkAudioDone();
+void stopAudio();
 
 #endif

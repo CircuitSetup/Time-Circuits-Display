@@ -35,10 +35,15 @@
 
 #ifdef TC_HAVEGPS
 
+#include <Arduino.h>
+#include <Wire.h>
 #include "gps.h"
 
+#define GPS_MPH_PER_KNOT  1.15077945
+#define GPS_KMPH_PER_KNOT 1.852
+
 #ifdef TC_DBG
-int DBGloopCnt = 0;
+static int DBGloopCnt = 0;
 #endif
 
 static uint8_t parseHex(char c);
@@ -51,12 +56,12 @@ tcGPS::tcGPS(uint8_t address)
 }
 
 // Start and init the GPS module
-bool tcGPS::begin()
+bool tcGPS::begin(unsigned long powerupTime, bool quickUpdates)
 {
     _customDelayFunc = defaultDelay;
 
-    _currentline = _line1;
-    _lastline = _line2;
+    _lineBufIdx = 0;
+    _currentline = _lineBufArr[_lineBufIdx];
 
     _lenIdx = 0;
 
@@ -71,6 +76,21 @@ bool tcGPS::begin()
     if(Wire.endTransmission(true))
         return false;
 
+    // Give the receiver some time to boot
+    unsigned long millisNow = millis();
+    if(millisNow - powerupTime < 1000) {
+        delay(1000 - (millisNow - powerupTime));
+    }
+
+    // Send xxRMC and xxZDA only
+    // If we use GPS speed, we need more frequent updates.
+    if(quickUpdates) {
+        sendCommand("$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0*30");
+    } else {
+        sendCommand("$PMTK314,0,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0*34");
+    }
+    delay(30);
+
     // Set update rate to 1Hz
     sendCommand("$PMTK220,1000*1F");
     delay(30);
@@ -79,10 +99,16 @@ bool tcGPS::begin()
     sendCommand("$PGCMD,33,0*6D");
     delay(30);
 
-    // Send xxRMC and xxZDA only
-    //sendCommand("$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0*28");
-    sendCommand("$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0*30");
+    // Search for GPS, GLONASS, Galileo satellites
+    //sendCommand("$PMTK353,1,1,1,0,0*2A");   // GPS, GLONASS, Galileo
+    sendCommand("$PMTK353,1,1,0,0,0*2B");     // GPS, GLONASS
+    //sendCommand("$PMTK353,1,0,0,0,0*2A");   // GPS
     delay(30);
+
+    // Send "hot start" (to clear i2c buffer)
+    // No, not required. 
+    //sendCommand("$PMTK101*32");
+    //delay(800);
 
     return true;
 }
@@ -91,39 +117,21 @@ bool tcGPS::begin()
  * loop()
  *
  */
-void tcGPS::loop()
+void tcGPS::loop(bool doDelay)
 {
     unsigned long myNow = millis();
     #ifdef TC_DBG
-    unsigned long myLater, myLater2;
+    unsigned long myLater;
     #endif
 
-    //read();
+    readAndParse(doDelay);
 
-    #ifdef TC_DBG
+    #ifdef TC_DBG1
     myLater = millis();
-    #endif
-
-    // Test
-    //strcpy(_lastline, "$GPRMC,150619,A,4807.038,N,01131.000,E,022.4,084.4,151022,003.1,W*67");
-    //strcpy(_lastline, "$GPRMC,150619,A,4807.038,N,01131.000,E,,084.4,151022,003.1,W*4D");
-    //_lineready = true;
-    //
-
-    if(_lineready) {
-        _lineready = false;
-        parseNMEA(_lastline, _lastTS);
-    }
-
-    #ifdef TC_DBG
-    myLater2 = millis();
-
     DBGloopCnt++;
-    if(!(DBGloopCnt % 20)) {
-        Serial.print("GPS loop(): read ");
-        Serial.print(myLater-myNow, DEC);
-        Serial.print(" parse ");
-        Serial.println(myLater2-myLater, DEC);
+    if(!(DBGloopCnt % 40)) {
+        Serial.print("GPS loop(): readAndParse ");
+        Serial.println(myLater-myNow, DEC);
     }
     #endif
 
@@ -157,18 +165,6 @@ bool tcGPS::getDateTime(struct tm *timeinfo, time_t *fixAge)
 {
     char tmp[4] = { 0, 0, 0, 0 };
 
-    /*
-    timeinfo->tm_mday = 4;
-    timeinfo->tm_mon = 4 - 1;
-    timeinfo->tm_year = 2013 - 1900;
-    timeinfo->tm_hour  = 14;
-    timeinfo->tm_min = 32;
-    timeinfo->tm_sec = 11;
-    timeinfo->tm_wday = 0;
-    *fixAge = 0;
-    return true;
-    */
-
     if(_haveDateTime) {
 
         timeinfo->tm_mday = atoi(_curDay);
@@ -196,6 +192,9 @@ bool tcGPS::getDateTime(struct tm *timeinfo, time_t *fixAge)
         timeinfo->tm_mday = atoi(_curDay2);
         timeinfo->tm_mon = atoi(_curMonth2) - 1;
         timeinfo->tm_year = atoi(_curYear2) - 1900;
+        
+        if(timeinfo->tm_year < (TCEPOCH-1900))
+            timeinfo->tm_year += 100;
 
         tmp[0] = _curTime2[0];
         tmp[1] = _curTime2[1];
@@ -221,14 +220,27 @@ bool tcGPS::getDateTime(struct tm *timeinfo, time_t *fixAge)
 /*
  * Set GPS' RTC time
  * timeinfo needs to be in UTC
+ * 
+ * Different formwares support different packet types. 
+ * We send both to make sure. If the GPS has updated 
+ * its RTC from the GPS signal, "supported, but failed" 
+ * is returned; so there is no danger of overwriting 
+ * the GPS's RTC with less accurate time.
+ * 
  */
 bool tcGPS::setDateTime(struct tm *timeinfo)
 {
-    char pkt335[64];
+    char pkt335[64] = "$PMTK335";
+    char pkt740[64] = "$PMTK740";
+    char pktgen[64];
     char temp[8];
     int checksum = 0;
 
-    sprintf(pkt335, "$PMTK335,%d,%d,%d,%d,%d,%d",
+    // If the date is clearly invalid, bail
+    if(timeinfo->tm_year + 1900 < TCEPOCH)
+        return false;
+
+    sprintf(pktgen, ",%d,%d,%d,%d,%d,%d",
                   timeinfo->tm_year + 1900,
                   timeinfo->tm_mon + 1,
                   timeinfo->tm_mday,
@@ -236,20 +248,34 @@ bool tcGPS::setDateTime(struct tm *timeinfo)
                   timeinfo->tm_min,
                   timeinfo->tm_sec);
 
+    strcat(pkt335, pktgen);
+    strcat(pkt740, pktgen);
+    
     for(int i = 1; pkt335[i] != 0; i++) {
         checksum ^= pkt335[i];
     }
-
-    sprintf(temp, "*%02x\r\n", (checksum & 0xff));
+    sprintf(temp, "*%02x", (checksum & 0xff));
     strcat(pkt335, temp);
 
+    checksum = 0;
+    for(int i = 1; pkt740[i] != 0; i++) {
+        checksum ^= pkt740[i];
+    }
+    sprintf(temp, "*%02x", (checksum & 0xff));
+    strcat(pkt740, temp);
+    
     #ifdef TC_DBG
-    Serial.println("SetGPStime():");
-    Serial.println(pkt335);
+    Serial.print("GPS setDateTime(): ");
+    Serial.println(pkt740);    
     #endif
+
+    sendCommand(pkt740);
+    (*_customDelayFunc)(30);
 
     sendCommand(pkt335);
     (*_customDelayFunc)(30);
+
+    return true;
 }
 
 void tcGPS::setCustomDelayFunc(void (*myDelay)(unsigned int))
@@ -257,27 +283,32 @@ void tcGPS::setCustomDelayFunc(void (*myDelay)(unsigned int))
     _customDelayFunc = myDelay;
 }
 
-
 // Private functions ###########################################################
 
 
 void tcGPS::sendCommand(const char *str)
-{
-    println(str);
+{ 
+    Wire.beginTransmission(_address);
+    for(int i = 0; i < strlen(str); i++) {
+        Wire.write((uint8_t)(str[i] & 0xff));
+    }
+    Wire.write(0x0d);
+    Wire.write(0x0a);
+    Wire.endTransmission(true);
 }
 
-bool tcGPS::read()
+bool tcGPS::readAndParse(bool doDelay)
 {
     char   curr_char = 0;
-    char   c = 0;
     size_t i2clen = 0;
     int8_t buff_max = 0;
     int8_t buff_idx = 0;
+    bool   haveParsedSome = false;
 
     // Read i2c data in small blocks, call delay between
-    // transfers to allow uninterrupted sound playback
+    // transfers to allow uninterrupted sound playback.
 
-    for(int j = 0; j < 1; j++) {    // TESTME
+    for(int j = 0; j < 1; j++) {    // 1 iteration is enough
 
         i2clen = Wire.requestFrom(_address, _lenArr[_lenIdx++]);
         _lenIdx &= 0x07;
@@ -289,70 +320,53 @@ bool tcGPS::read()
             curr_char = Wire.read();
             // Skip "empty data" (ie LF if not preceeded by CR)
             if((curr_char != 0x0A) || (_last_char == 0x0D)) {
-                 _buffer[buff_max++] = _last_char = curr_char;
+                 _buffer[buff_max++] = curr_char;
             }
+            _last_char = curr_char;
         }
 
-        (*_customDelayFunc)(5);
+        if(doDelay) (*_customDelayFunc)(5);
 
-    }
-
-    // Check if we read "empty data" (ie only 0x0As)
-
-    buff_max--;
-    if((buff_max == 0) && (_buffer[0] == 0x0A)) {
-        buff_max = -1;
-    }
+    }  
 
     // Form line(s) out of buffer data
 
+    buff_max--;
     buff_idx = 0;
     while(buff_idx <= buff_max) {
       
         if(!_lineidx) _currentTS = millis();
         
-        c = _currentline[_lineidx++] = _buffer[buff_idx++];
+        curr_char = _currentline[_lineidx++] = _buffer[buff_idx++];
 
-        if(_lineidx >= MAXLINELENGTH) {
-            _lineidx = MAXLINELENGTH - 1;
+        if(_lineidx >= GPS_MAXLINELEN) {
+            _lineidx = GPS_MAXLINELEN - 1;
         }
 
         // Finish a line on LF
-        if(c == 0x0A) {
+        if(curr_char == 0x0A) {
+
+            // terminate current line
             _currentline[_lineidx] = 0;
 
-            // Swap line buffers
-            if(_currentline == _line1) {
-                _currentline = _line2;
-                _lastline = _line1;
-            } else {
-                _currentline = _line1;
-                _lastline = _line2;
-            }
+            // parse this line
+            parseNMEA(_currentline, _currentTS);
+            haveParsedSome = true;
 
-            _lastTS = _currentTS;
+            // Shift line buffers
+            _currentline = _lineBufArr[_lineBufIdx++];
+            _lineBufIdx &= 0x01;
+            
             _lineidx = 0;
-            _lineready = true;
-
-            #ifdef TC_DBG
-            Serial.println(_lastline);
-            #endif
         }
 
         // Continue loop and write remaining data into new line
 
     }
 
-    return true;
+    return haveParsedSome;
 }
 
-size_t tcGPS::write(uint8_t value)
-{
-    Wire.beginTransmission(_address);
-    Wire.write((uint8_t)(value & 0xff));
-    Wire.endTransmission(true);
-    return 1;
-}
 
 bool tcGPS::parseNMEA(char *nmea, unsigned long nmeaTS)
 {
@@ -360,19 +374,32 @@ bool tcGPS::parseNMEA(char *nmea, unsigned long nmeaTS)
     char buf[16];
     char *bufp = buf;
 
-    if(!checkNMEA(nmea))
+    if(!checkNMEA(nmea)) {
+        #ifdef TC_DBG
+        Serial.print(F("parseNMEA: Bad NMEA "));
+        Serial.print(nmea);
+        //for(int i = 0; i < strlen(nmea); i++) {
+        //    Serial.print(nmea[i], HEX);
+        //    Serial.print(" ");
+        //}
+        //Serial.println(" ");
+        #endif
         return false;
+    }
+
+    #ifdef TC_DBG
+    Serial.print(nmea);
+    #endif
 
     if(*(t+3) == 'R') {   // RMC
 
         t = strchr(t, ',') + 1;  // Skip to time
         strncpy(_curTime2, t, 6);
         t = strchr(t, ',') + 1;  // Skip to validity
-        if(*t == 'A') fix = true;
-        else {
-            fix = false;
-            return true;
-        }
+        fix = (*t == 'A');
+
+        if(!fix) return true;
+
         t = strchr(t, ',') + 1;  // Skip to lat
         t = strchr(t, ',') + 1;  // Skip to n/s
         t = strchr(t, ',') + 1;  // Skip to long
@@ -380,13 +407,12 @@ bool tcGPS::parseNMEA(char *nmea, unsigned long nmeaTS)
         t2 = t = strchr(t, ',') + 1;  // Skip to speed
 
         *bufp = 0;
-        while(*t2 && *t2 != ',' && bufp - 16 < buf)
+        while(*t2 && *t2 != ',' && (bufp - 16 < buf))
             *bufp++ = *t2++;
         *bufp = 0;
-        if(!*buf) {
-            _haveSpeed = false;
-        } else {
+        if(*buf) {
             speed = (int16_t)(round(atof(buf) * GPS_MPH_PER_KNOT));
+            if(speed <= 2) speed = 0;
             _haveSpeed = true;
             _curspdTS = nmeaTS;
         }
@@ -396,14 +422,14 @@ bool tcGPS::parseNMEA(char *nmea, unsigned long nmeaTS)
         strncpy(_curDay2, t, 2);
         strncpy(_curMonth2, t+2, 2);
         strncpy(&_curYear2[2], t+4, 2);
-        
+          
         _curTS2 = nmeaTS;
         _haveDateTime2 = true;
 
     } else {      // ZDA
 
-        // Only use ZDA if we have a fix, no point in
-        // reading back the GPS' very own RTC time.
+        // Only use ZDA if we have a fix, no point in reading back
+        // the GPS' own RTC.
         if(fix) {
             t = strchr(t, ',') + 1; // Skip to time
             strncpy(_curTime, t, 6);
@@ -413,7 +439,6 @@ bool tcGPS::parseNMEA(char *nmea, unsigned long nmeaTS)
             strncpy(_curMonth, t, 2);
             t = strchr(t, ',') + 1; // Skip to year
             strncpy(_curYear, t, 4);
-
             _curTS = nmeaTS;
             _haveDateTime = true;
         }
@@ -454,10 +479,7 @@ bool tcGPS::checkNMEA(char *nmea)
     for(char *p1 = p + 1; p1 < ast; p1++)
         sum ^= *p1;
 
-    if(sum != 0)
-        return false;
-
-    return true;
+    return (sum == 0);
 }
 
 static uint8_t parseHex(char c)
