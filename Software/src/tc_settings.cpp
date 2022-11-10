@@ -3,6 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022 Thomas Winischhofer (A10001986)
+ * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * Settings handling
  *
@@ -37,6 +38,7 @@
 
 #include "tc_settings.h"
 #include "tc_menus.h"
+#include "tc_time.h"
 
 /*
  * Mount SPIFFS/LittleFS, und SD (if available)
@@ -107,13 +109,14 @@ void settings_setup()
     pinMode(ENTER_BUTTON_PIN, INPUT_PULLUP);
     delay(20);
 
+    // Init our EEPROM
+    EEPROM.begin(512);
+
     #ifdef TC_DBG
     Serial.println(F("settings_setup: Mounting SD..."));
     #endif
 
-    EEPROM.begin(512);
-
-    // set up SD card
+    // Set up SD card
     SPI.begin(SPI_SCK_PIN, SPI_MISO_PIN, SPI_MOSI_PIN);
 
     haveSD = false;
@@ -247,7 +250,7 @@ void settings_setup()
                     } else writedefault = true;
                     if(json["wifiConTimeout"]) {
                         strcpy(settings.wifiConTimeout, json["wifiConTimeout"]);
-                        writedefault |= checkValidNumParm(settings.wifiConTimeout, 1, 15, DEF_WIFI_TIMEOUT);
+                        writedefault |= checkValidNumParm(settings.wifiConTimeout, 7, 25, DEF_WIFI_TIMEOUT);
                     } else writedefault = true;
                     if(json["wifiOffDelay"]) {
                         strcpy(settings.wifiOffDelay, json["wifiOffDelay"]);
@@ -278,6 +281,14 @@ void settings_setup()
                     if(json["playIntro"]) {
                         strcpy(settings.playIntro, json["playIntro"]);
                         writedefault |= checkValidNumParm(settings.playIntro, 0, 1, DEF_PLAY_INTRO);
+                    } else writedefault = true;
+                    if(json["autoNM"]) {
+                        strcpy(settings.autoNM, json["autoNM"]);
+                        writedefault |= checkValidNumParm(settings.autoNM, 0, 1, DEF_AUTONM);
+                    } else writedefault = true;
+                    if(json["autoNMPreset"]) {
+                        strcpy(settings.autoNMPreset, json["autoNMPreset"]);
+                        writedefault |= checkValidNumParm(settings.autoNMPreset, 0, AUTONM_NUM_PRESETS, DEF_AUTONM_PRESET);
                     } else writedefault = true;
                     if(json["autoNMOn"]) {
                         strcpy(settings.autoNMOn, json["autoNMOn"]);
@@ -359,6 +370,10 @@ void settings_setup()
                         writedefault |= checkValidNumParm(settings.useETTO, 0, 1, DEF_USE_ETTO);
                     } else writedefault = true;
                     #endif
+                    if(json["playTTsnds"]) {
+                        strcpy(settings.playTTsnds, json["playTTsnds"]);
+                        writedefault |= checkValidNumParm(settings.playTTsnds, 0, 1, DEF_PLAY_TT_SND);
+                    } else writedefault = true;
 
                 } else {
 
@@ -429,6 +444,8 @@ void write_settings()
     #endif
     json["alarmRTC"] = settings.alarmRTC;
     json["playIntro"] = settings.playIntro;
+    json["autoNM"] = settings.autoNM;
+    json["autoNMPreset"] = settings.autoNMPreset;
     json["autoNMOn"] = settings.autoNMOn;
     json["autoNMOff"] = settings.autoNMOff;
     json["dtNmOff"] = settings.dtNmOff;
@@ -458,6 +475,7 @@ void write_settings()
     #ifdef EXTERNAL_TIMETRAVEL_OUT
     json["useETTO"] = settings.useETTO;
     #endif
+    json["playTTsnds"] = settings.playTTsnds;
 
     File configFile = SPIFFS.open("/config.json", FILE_WRITE);
 
@@ -577,7 +595,10 @@ bool loadAlarm()
                 #endif
 
                 if(json["alarmonoff"]) {
-                    alarmOnOff = (atoi(json["alarmonoff"]) != 0) ? true : false;
+                    int aoo = atoi(json["alarmonoff"]);
+                    alarmOnOff = ((aoo & 0x0f) != 0);
+                    alarmWeekday = (aoo & 0xf0) >> 4;
+                    if(alarmWeekday > 9) alarmWeekday = 0;
                 } else {
                     writedefault = true;
                 }
@@ -648,11 +669,14 @@ static bool loadAlarmEEPROM()
 
         alarmOnOff = false;
         alarmHour = alarmMinute = 255;    // means "unset"
+        alarmWeekday = 0;
 
         return false;
     }
 
-    alarmOnOff = loadBuf[0] ? true : false;
+    alarmOnOff = ((loadBuf[0] & 0x0f) != 0);
+    alarmWeekday = (loadBuf[0] & 0xf0) >> 4;
+    if(alarmWeekday > 9) alarmWeekday = 0;
     alarmHour = loadBuf[1];
     alarmMinute = loadBuf[2];
 
@@ -661,6 +685,7 @@ static bool loadAlarmEEPROM()
 
 void saveAlarm()
 {
+    char aooBuf[8];
     char hourBuf[8];
     char minBuf[8];
 
@@ -678,7 +703,8 @@ void saveAlarm()
         return;
     }
 
-    json["alarmonoff"] = (char *)(alarmOnOff ? "1" : "0");
+    sprintf(aooBuf, "%d", (alarmWeekday * 16) + (alarmOnOff ? 1 : 0));
+    json["alarmonoff"] = (char *)aooBuf;
 
     sprintf(hourBuf, "%d", alarmHour);
     sprintf(minBuf, "%d", alarmMinute);
@@ -703,11 +729,11 @@ void saveAlarm()
 
 static void saveAlarmEEPROM()
 {
-    uint8_t savBuf[4];    // on/off, hour, minute, checksum
+    uint8_t savBuf[4];    // on/off/wd, hour, minute, checksum
     uint16_t sum = 0;
     int i;
 
-    savBuf[0] = alarmOnOff ? 1 : 0;
+    savBuf[0] = (alarmWeekday * 16) + (alarmOnOff ? 1 : 0);
     savBuf[1] = alarmHour;
     savBuf[2] = alarmMinute;
 

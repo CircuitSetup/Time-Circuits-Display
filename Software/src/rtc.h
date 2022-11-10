@@ -2,36 +2,34 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2022 Thomas Winischhofer (A10001986)
- * DateTime part: Based on code Copyright (C) 2019 Adafruit Industries
+ * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  * 
- * DS3231/PCF2129 RTC handling and DateTime Class
+ * RTC Class (DS3231/PCF2129 RTC handling) and DateTime Class
  * 
- * Note: DateTime mirrors the features of RTC; it only works for
- * dates from 1/1/2000 to 31/12/2099.
- * 
- * DateTime is a cut-down and customized fork of Adafruit's RTClib
- * The original version can be found here:
- * https://github.com/adafruit/RTClib
+ * DateTime mirrors the features of RTC; it only works for dates
+ * from 1/1/2000 to 31/12/2099. Idea taken from RTCLib by
+ * Adafruit.
  * -------------------------------------------------------------------
  * License: MIT
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef _RTC_H_
@@ -40,11 +38,8 @@
 /*****************************************************************
  * DateTime Class
  * 
- * Minimum general-purpose date/time class 
- * (no TZ / DST / leap seconds)
- * 
- * Used as a vehicle to pass date between functions only; all
- * other features have been removed.
+ * Rudimentary general-purpose date/time class, used as a 
+ * vehicle to pass date/time between functions.
  * 
  * Supports dates in the range from 1 Jan 2000 to 31 Dec 2099.
  ****************************************************************/
@@ -56,19 +51,17 @@ class DateTime {
         DateTime();
         DateTime(uint16_t year, uint8_t month, uint8_t day, 
                  uint8_t hour = 0, uint8_t min = 0, uint8_t sec = 0);
-        DateTime(const char *date, const char *time);
-        DateTime(const __FlashStringHelper *date, const __FlashStringHelper *time);
         DateTime(const DateTime &copy);
 
-        uint16_t year() const { return 2000U + yOff; }
-        uint8_t month() const { return m; }
-        uint8_t day() const { return d; }
-        uint8_t hour() const { return hh; }
+        uint16_t year()   const { return 2000U + yOff; }
+        uint8_t  month()  const { return m; }
+        uint8_t  day()    const { return d; }
+        uint8_t  hour()   const { return hh; }
 
-        uint8_t minute() const { return mm; }
-        uint8_t second() const { return ss; }
+        uint8_t  minute() const { return mm; }
+        uint8_t  second() const { return ss; }
 
-        uint8_t dayOfTheWeek() const;
+        uint8_t  dayOfTheWeek() const;
 
     protected:
 
@@ -126,4 +119,4 @@ class tcRTC
         void    write_register(uint8_t reg, uint8_t val);
 };
 
-#endif // _RTC_H_
+#endif

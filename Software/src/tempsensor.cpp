@@ -2,30 +2,32 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2022 Thomas Winischhofer (A10001986)
+ * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
- * Temperature Sensor handling
+ * tempSensor Class: Temperature Sensor handling
  *
  * This is designed for MCP9808-based sensors.
  * -------------------------------------------------------------------
  * License: MIT
  * 
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #include "tc_global.h"
@@ -62,32 +64,61 @@ static void defaultDelay(unsigned int mydelay);
 //  1    0.25°C      65 ms
 //  2    0.125°C     130 ms
 //  3    0.0625°C    250 ms
-#define TC_TEMP_RESOLUTION 2
-const uint16_t wakeDelay[4] = { 30, 65, 130, 250 };
+#define TC_TEMP_RES_MCP9808 2
+static const uint16_t wakeDelayMCP9808[4] = { 30, 65, 130, 250 };
 
 
 // Store i2c address
-tempSensor::tempSensor(uint8_t address)
+tempSensor::tempSensor(int numTypes, uint8_t addrArr[])
 {
-    _address = address;
+    _numTypes = min(2, numTypes);
+
+    for(int i = 0; i < _numTypes * 2; i++) {
+        _addrArr[i] = addrArr[i];
+    }
+
+    _address = addrArr[0];
+    _st = addrArr[1];
 }
 
 // Start the display
 bool tempSensor::begin()
 {
+    bool foundSt = false;
     _customDelayFunc = defaultDelay;
 
-    // Check if supported sensor is connected
-    if(read16(MCP9808_REG_MANUF_ID) != 0x0054)
-        return false;
-    if(read16(MCP9808_REG_DEVICE_ID) != 0x0400)
-        return false;
+    for(int i = 0; i < _numTypes * 2; i += 2) {
 
-    // Write config register
-    write16(MCP9808_REG_CONFIG, 0x0);
+        _address = _addrArr[i];
+        _st = _addrArr[i+1];
+        
+        switch(_st) {
+        case MCP9808:
+            if( (read16(MCP9808_REG_MANUF_ID)  == 0x0054) && 
+                (read16(MCP9808_REG_DEVICE_ID) == 0x0400) ) {
+                foundSt = true;
+                #ifdef TC_DBG
+                Serial.println("tempSensor: Detected MCP9808 temperature sensor");
+                #endif
+            }
+            break;
+        /*...*/
+        }
 
-    // Set resolution
-    write8(MCP9808_REG_RESOLUTION, TC_TEMP_RESOLUTION & 0x03);
+        if(foundSt) break;
+    }
+
+    switch(_st) {
+    case MCP9808:
+        // Write config register
+        write16(MCP9808_REG_CONFIG, 0x0);
+
+        // Set resolution
+        write8(MCP9808_REG_RESOLUTION, TC_TEMP_RES_MCP9808 & 0x03);
+        break;
+    default:
+        return false;
+    }
 
     on();
 
@@ -111,16 +142,21 @@ void tempSensor::off()
     onoff(true);
 }
 
-
+// Read temperature
 double tempSensor::readTemp(bool celsius)
 {
     double temp = NAN;
-    uint16_t t = read16(MCP9808_REG_AMBIENT_TEMP);
 
-    if(t != 0xffff) {
-        temp = ((double)(t & 0x0fff)) / 16.0;
-        if(t & 0x1000) temp = 256.0 - temp;
-        if(!celsius) temp = temp * 9.0 / 5.0 + 32.0;
+    switch(_st) {
+    case MCP9808:
+        uint16_t t = read16(MCP9808_REG_AMBIENT_TEMP);
+
+        if(t != 0xffff) {
+            temp = ((double)(t & 0x0fff)) / 16.0;
+            if(t & 0x1000) temp = 256.0 - temp;
+            if(!celsius) temp = temp * 9.0 / 5.0 + 32.0;
+        }
+        break;
     }
 
     #ifdef TC_DBG
@@ -135,20 +171,31 @@ double tempSensor::readTemp(bool celsius)
 
 void tempSensor::onoff(bool shutDown)
 {
-    uint16_t temp = read16(MCP9808_REG_CONFIG);
-
-    if(shutDown) {
-        temp |= MCP9808_CONFIG_SHUTDOWN;
-    } else {
-        temp &= ~MCP9808_CONFIG_SHUTDOWN;
+    uint16_t mydelay = 0;
+    uint16_t temp;
+    
+    switch(_st) {
+    case MCP9808:
+        temp = read16(MCP9808_REG_CONFIG);
+    
+        if(shutDown) {
+            temp |= MCP9808_CONFIG_SHUTDOWN;
+        } else {
+            temp &= ~MCP9808_CONFIG_SHUTDOWN;
+        }
+    
+        temp &= ~(MCP9808_CONFIG_CRITLOCKED|MCP9808_CONFIG_WINLOCKED);
+    
+        write16(MCP9808_REG_CONFIG, temp);
+        
+        mydelay = wakeDelayMCP9808[TC_TEMP_RES_MCP9808];
+        break;
+    default:
+        return;
     }
 
-    temp &= ~(MCP9808_CONFIG_CRITLOCKED|MCP9808_CONFIG_WINLOCKED);
-
-    write16(MCP9808_REG_CONFIG, temp);
-
-    if(!shutDown) {
-        (*_customDelayFunc)(wakeDelay[TC_TEMP_RESOLUTION]);
+    if(!shutDown && mydelay) {
+        (*_customDelayFunc)(mydelay);
     }
 }
 

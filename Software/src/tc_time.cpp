@@ -3,6 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022 Thomas Winischhofer (A10001986)
+ * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * Time and Main Controller
  *
@@ -27,9 +28,6 @@
 #include <time.h>
 #include <WiFi.h>
 #include <Wire.h>
-#ifdef FAKE_POWER_ON
-#include <OneButton.h>
-#endif
 #include <Udp.h>
 #include <WiFiUdp.h>
 
@@ -38,6 +36,9 @@
 #include "tc_audio.h"
 #include "tc_wifi.h"
 #include "tc_settings.h"
+#ifdef FAKE_POWER_ON
+#include "input.h"
+#endif
 
 #include "tc_time.h"
 
@@ -46,8 +47,10 @@
 #define DEPT_TIME_ADDR 0x74
 
 #define SPEEDO_ADDR    0x70 // i2C address of speedo display
+
 #define GPS_ADDR       0x10 // i2C address of GPS receiver
-#define TEMP_ADDR      0x18 // i2C address of temperature sensor
+
+#define MCP9808_ADDR   0x18 // i2C address of temperature sensor
 
 #define DS3231_ADDR    0x68 // i2C address of DS3231 RTC
 #define PCF2129_ADDR   0x51 // i2C address of PCF2129 RTC
@@ -89,13 +92,13 @@
 #define NTP_PACKET_SIZE 48
 #define NTP_DEFAULT_LOCAL_PORT 1337
 
+unsigned long  powerupMillis = 0;
 
-unsigned long powerupMillis = 0;
-
-static bool           couldHaveAuthTime = false;
-static bool           haveAuthTime = false;
-static unsigned long  haveAuthTimeNow = 0;
-uint16_t              lastYear = 0;
+static bool    couldHaveAuthTime = false;
+static bool    haveAuthTime = false;
+uint16_t       lastYear = 0;
+static uint8_t resyncInt = 5;
+static uint8_t dstChkInt = 5;
 
 // For tracking second changes
 static bool x = false;  
@@ -112,6 +115,7 @@ static unsigned long pauseNow = 0;
 static unsigned long pauseDelay = 30*60*1000;  // Pause for 30 minutes
 
 // The timetravel sequence: Timers, triggers, state
+static bool          playTTsounds = true;
 int                  timeTravelP0 = 0;
 int                  timeTravelP2 = 0;
 #ifdef TC_HAVESPEEDO
@@ -123,7 +127,7 @@ static uint8_t       timeTravelP0Speed = 0;
 static long          pointOfP1 = 0;
 static bool          didTriggerP1 = false;
 static double        ttP0TimeFactor = 1.0;
-bool                 useTemp = DEF_USE_TEMP;
+bool                 useTemp = false;
 #ifdef TC_HAVEGPS
 static unsigned long dispGPSnow = 0;
 #endif
@@ -149,9 +153,6 @@ static unsigned long triggerETTONow = 0;
 static bool          ettoPulse = false;
 static unsigned long ettoPulseNow = 0;
 static long          ettoLeadPoint = 0;
-#ifdef TC_DBG
-static unsigned long ettope, ettops;
-#endif
 #endif
 
 // The timetravel re-entry sequence
@@ -190,7 +191,7 @@ bool useGPS      = false;
 bool useGPSSpeed = false;
 
 // TZ/DST status & data
-bool        useDST       = false; // Do use own DST management (and DST is defined in TZ)
+static bool useDST       = false; // Do use own DST management (and DST is defined in TZ)
 bool        couldDST     = false; // Could use own DST management (and DST is defined in TZ)
 static int  tzForYear    = 0;     // Parsing done for this very year
 static bool tzIsValid    = false;
@@ -210,12 +211,15 @@ static unsigned long NTPUpdateNow = 0;
 static unsigned long NTPTSAge = 0;
 static unsigned long NTPTSRQAge = 0;
 static uint32_t      NTPsecsSinceTCepoch = 0;
+static uint32_t      NTPmsSinceSecond = 0;
 static bool          NTPPacketDue = false;
 static bool          NTPWiFiUp = false;
+static uint8_t       NTPfailCount = 0;
+static uint8_t       NTPUDPID[4] = { 0, 0, 0, 0};
  
 // The RTC object
-tcRTC rtc(2, (uint8_t[2*2]){ DS3231_ADDR,  RTCT_DS3231, 
-                             PCF2129_ADDR, RTCT_PCF2129 });
+tcRTC rtc(2, (uint8_t[2*2]){ PCF2129_ADDR, RTCT_PCF2129, 
+                             DS3231_ADDR,  RTCT_DS3231 });
 
 // The GPS object
 #ifdef TC_HAVEGPS
@@ -234,7 +238,7 @@ clockDisplay departedTime(DISP_LAST, DEPT_TIME_ADDR, DEPT_TIME_PREF);
 #ifdef TC_HAVESPEEDO
 speedDisplay speedo(SPEEDO_ADDR);
 #ifdef TC_HAVETEMP
-static tempSensor tempSens(TEMP_ADDR);
+static tempSensor tempSens(1, (uint8_t[1*2]){ MCP9808_ADDR, MCP9808 });
 static bool tempOldNM = false;
 #endif
 #endif
@@ -245,7 +249,6 @@ static int8_t minNext  = 0;
 int8_t        autoTime = 0;  // Selects date/time from array below
 
 dateStruct destinationTimes[NUM_AUTOTIMES] = {
-    //YEAR, MONTH, DAY, HOUR, MIN
     {1985, 10, 26,  1, 21},   // Einstein 1:20 -> 1:21
     {1955, 11,  5,  6,  0},   // Marty -> 1955
     {1985, 10, 26,  1, 24},   // Marty -> 1985
@@ -272,15 +275,65 @@ dateStruct departedTimes[NUM_AUTOTIMES] = {
     {1885,  9,  7,  8, 22}    // Marty -> 1985 (time guessed/assumed)
 };
 
+// Alarm weekday masks
+static const uint8_t alarmWDmasks[10] = { 
+    0b01111111, 0b00111110, 0b01000001, 0b00000010, 0b00000100,
+    0b00001000, 0b00010000, 0b00100000, 0b01000000, 0b00000001
+};
+                
+// Night mode
 static bool    autoNightMode = false;
-static uint8_t autoNMOnHour = 0;
+static uint8_t autoNightModeMode = 0;   // 0 = daily hours, 1-4 presets
+static uint8_t autoNMOnHour  = 0;
 static uint8_t autoNMOffHour = 0;
+static const uint32_t autoNMhomePreset[7] = {     // Mo-Th 5pm-11pm, Fr 1pm-1am, Sa 9am-1am, Su 9am-11pm
+        0b011111111000000000000001,   //Sun
+        0b111111111111111110000001,   //Mon
+        0b111111111111111110000001,   //Tue
+        0b111111111111111110000001,   //Wed
+        0b111111111111111110000001,   //Thu
+        0b111111111111100000000000,   //Fri
+        0b011111111000000000000000    //Sat
+};
+static const uint32_t autoNMofficePreset[7] = {   // Mo-Fr 9am-5pm
+        0b111111111111111111111111,   //Sun
+        0b111111111000000001111111,   //Mon
+        0b111111111000000001111111,   //Tue
+        0b111111111000000001111111,   //Wed
+        0b111111111000000001111111,   //Thu
+        0b111111111000000001111111,   //Fri
+        0b111111111111111111111111    //Sat
+};
+static const uint32_t autoNMoffice2Preset[7] = {  // Mo-Th 7am-5pm, Fr 7am-2pm
+        0b111111111111111111111111,   //Sun
+        0b111111100000000001111111,   //Mon
+        0b111111100000000001111111,   //Tue
+        0b111111100000000001111111,   //Wed
+        0b111111100000000001111111,   //Thu
+        0b111111100000001111111111,   //Fri
+        0b111111111111111111111111    //Sat
+};
+static const uint32_t autoNMshopPreset[7] = {     // Mo-We 8am-8pm, Th-Fr 8am-9pm, Sa 8am-5pm
+        0b111111111111111111111111,   //Sun
+        0b111111110000000000001111,   //Mon
+        0b111111110000000000001111,   //Tue
+        0b111111110000000000001111,   //Wed
+        0b111111110000000000000111,   //Thu
+        0b111111110000000000000111,   //Fri
+        0b111111110000000001111111    //Sat
+};
+const uint32_t *autoNMPresets[AUTONM_NUM_PRESETS] = {
+    autoNMhomePreset, autoNMofficePreset, 
+    autoNMoffice2Preset, autoNMshopPreset
+};
 
 // State flags
 static bool DSTcheckDone = false;
 static bool autoIntDone = false;
 static int  autoIntAnimRunning = 0;
 static bool autoReadjust = false;
+static unsigned long lastAuthTime = 0;
+static bool authTimeExpired = false;
 static bool alarmDone = false;
 static bool hourlySoundDone = false;
 static bool autoNMDone = false;
@@ -288,7 +341,7 @@ static bool autoNMDone = false;
 // Fake "power" switch
 bool FPBUnitIsOn = true;
 #ifdef FAKE_POWER_ON
-static OneButton fakePowerOnKey = OneButton(FAKE_POWER_BUTTON_PIN,
+static TCButton fakePowerOnKey = TCButton(FAKE_POWER_BUTTON_PIN,
     true,    // Button is active LOW
     true     // Enable internal pull-up resistor
 );
@@ -315,31 +368,31 @@ static const unsigned int mon_ydayt24t60[2][13] =
 };
 static const uint64_t mins1kYears[] =
 {
-             0,  262448640,  525422880,  788397120, 1051371360, 
-    1314347040, 1577321280, 1840295520, 2103269760, 2366245440, 
-    2629219680, 2892193920, 3155168160, 3418143840, 3681118080, 
-    3944092320, 4207066560, 4470042240, 4733016480, 4995990720
+             0,  262975680,  525949920,  788924160, 1051898400,
+    1314874080, 1577848320, 1840822560, 2103796800, 2366772480,
+    2629746720, 2892720960, 3155695200, 3418670880, 3681645120,
+    3944619360, 4207593600, 4470569280, 4733543520, 4996517760
 };
 static const uint32_t hours1kYears[] =
 {
-                0,  262448640/60,  525422880/60,  788397120/60, 1051371360/60, 
-    1314347040/60, 1577321280/60, 1840295520/60, 2103269760/60, 2366245440/60, 
-    2629219680/60, 2892193920/60, 3155168160/60, 3418143840/60, 3681118080/60, 
-    3944092320/60, 4207066560/60, 4470042240/60, 4733016480/60, 4995990720/60
+                0,  262975680/60,  525949920/60,  788924160/60, 1051898400/60,
+    1314874080/60, 1577848320/60, 1840822560/60, 2103796800/60, 2366772480/60, 
+    2629746720/60, 2892720960/60, 3155695200/60, 3418670880/60, 3681645120/60, 
+    3944619360/60, 4207593600/60, 4470569280/60, 4733543520/60, 4996517760/60  
 };
 
 #ifdef TC_HAVESPEEDO
 static const int16_t tt_p0_delays[88] =
 {
-         0, 100, 100,  90,  80,  80,  80,  80,  80,  80,  // 0 - 9  10mph 0.8s    0.8=800ms
-        80,  80,  80,  80,  80,  80,  80,  80,  80,  80,  // 10-19  20mph 1.6s    0.8
-        90, 100, 110, 110, 110, 110, 110, 110, 120, 120,  // 20-29  30mph 2.7s    1.1
-       120, 130, 130, 130, 130, 130, 130, 130, 130, 140,  // 30-39  40mph 4.0s    1.3
-       150, 160, 190, 190, 190, 190, 190, 190, 210, 230,  // 40-49  50mph 5.9s    1.9
-       230, 230, 240, 240, 240, 240, 240, 240, 250, 250,  // 50-59  60mph 8.3s    2.4
-       250, 250, 260, 260, 270, 270, 270, 280, 290, 300,  // 60-69  70mph 11.0s   2.7
-       320, 330, 350, 370, 370, 380, 380, 390, 400, 410,  // 70-79  80mph 14.7s   3.7
-       410, 410, 410, 410, 410, 410, 410, 410             // 80-87  90mph 18.8s   4,1
+      0, 100, 100,  90,  80,  80,  80,  80,  80,  80,  // 0 - 9  10mph 0.8s    0.8=800ms
+     80,  80,  80,  80,  80,  80,  80,  80,  80,  80,  // 10-19  20mph 1.6s    0.8
+     90, 100, 110, 110, 110, 110, 110, 110, 120, 120,  // 20-29  30mph 2.7s    1.1
+    120, 130, 130, 130, 130, 130, 130, 130, 130, 140,  // 30-39  40mph 4.0s    1.3
+    150, 160, 190, 190, 190, 190, 190, 190, 210, 230,  // 40-49  50mph 5.9s    1.9
+    230, 230, 240, 240, 240, 240, 240, 240, 250, 250,  // 50-59  60mph 8.3s    2.4
+    250, 250, 260, 260, 270, 270, 270, 280, 290, 300,  // 60-69  70mph 11.0s   2.7
+    320, 330, 350, 370, 370, 380, 380, 390, 400, 410,  // 70-79  80mph 14.7s   3.7
+    410, 410, 410, 410, 410, 410, 410, 410             // 80-87  90mph 18.8s   4,1
 };
 static long tt_p0_totDelays[88];
 #endif
@@ -348,14 +401,14 @@ static void myCustomDelay(unsigned int mydel);
 static void myIntroDelay(unsigned int mydel, bool withGPS = true);
 static void waitAudioDoneIntro();
 
-static bool getNTPOrGPSTime();
-static bool getNTPTime();
-static bool getNTPTimeNew();
+static bool getNTPOrGPSTime(bool weHaveAuthTime);
+static bool getNTPTime(bool weHaveAuthTime);
 #ifdef TC_HAVEGPS
 static bool getGPStime();
 static bool setGPStime();
-static void dispGPSSpeed(bool force = false);
 bool        gpsHaveFix();
+static bool gpsHaveTime();
+static void dispGPSSpeed(bool force = false);
 #endif
 
 #ifdef TC_HAVESPEEDO
@@ -373,8 +426,9 @@ static void ettoPulseEnd();
 
 // Time calculations
 static int  mins2Date(int year, int month, int day, int hour, int mins);
-static void handleDSTFlag(struct tm *ti, int nisDST = -1);
 static bool blockDSTChange(int currTimeMins);
+static void localToDST(int& year, int& month, int& day, int& hour, int& minute, int& isDST);
+static void handleDSTFlag(struct tm *ti, int nisDST = -1);
 
 /// Native NTP
 static void ntp_setup();
@@ -406,6 +460,7 @@ void time_setup()
 {
     bool validLoad = true;
     bool rtcbad = false;
+    bool tzbad = false;
     #ifdef TC_HAVEGPS
     bool haveAuthTimeGPS = false;
     #endif
@@ -418,22 +473,25 @@ void time_setup()
     #endif
     pwrNeedFullNow(true);
 
-    pinMode(SECONDS_IN_PIN, INPUT_PULLDOWN);  // for monitoring seconds
+    // Pin for monitoring seconds from RTC
+    pinMode(SECONDS_IN_PIN, INPUT_PULLDOWN);  
 
-    pinMode(STATUS_LED_PIN, OUTPUT);          // Status LED
+    // Status LED
+    pinMode(STATUS_LED_PIN, OUTPUT);          
 
+    // Init fake power switch
     #ifdef FAKE_POWER_ON
     waitForFakePowerButton = ((int)atoi(settings.fakePwrOn) > 0);
-
     if(waitForFakePowerButton) {
-        fakePowerOnKey.setClickTicks(10);     // millisec after single click is assumed (default 400)
-        fakePowerOnKey.setPressTicks(50);     // millisec after press is assumed (default 800)
-        fakePowerOnKey.setDebounceTicks(50);  // millisec after safe click is assumed (default 50)
+        fakePowerOnKey.setPressTicks(10);     // ms after short press is assumed (default 400)
+        fakePowerOnKey.setLongPressTicks(50); // ms after long press is assumed (default 800)
+        fakePowerOnKey.setDebounceTicks(50);
         fakePowerOnKey.attachLongPressStart(fpbKeyPressed);
         fakePowerOnKey.attachLongPressStop(fpbKeyLongPressStop);
     }
     #endif
 
+    // Init external time travel output ("etto")
     #ifdef EXTERNAL_TIMETRAVEL_OUT
     pinMode(EXTERNAL_TIMETRAVEL_OUT_PIN, OUTPUT);
     ettoPulseEnd();
@@ -444,31 +502,31 @@ void time_setup()
 
         Serial.println(F("time_setup: Couldn't find RTC. Panic!"));
 
-        // Setup pins for white LED
+        // Blink white LED forever
         pinMode(WHITE_LED_PIN, OUTPUT);
-
-        // Blink forever
         while (1) {
             digitalWrite(WHITE_LED_PIN, HIGH);
             delay(1000);
             digitalWrite(WHITE_LED_PIN, LOW);
             delay(1000);
         }
-
     }
 
-    if(rtc.lostPower() && WiFi.status() != WL_CONNECTED) {
-
-        // Lost power and battery didn't keep time, so set current time to compile time
-        rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-
+    if(rtc.lostPower()) {
+      
+        // Lost power and battery didn't keep time, so set current time to 
+        // default time 1/1/2022, 0:0
+        rtc.adjust(0, 0, 0, dayOfWeek(1, 1, 2022), 1, 1, 22);
+       
+        #ifdef TC_DBG
         Serial.println(F("time_setup: RTC lost power, setting default time. Change battery!"));
+        #endif
 
         rtcbad = true;
-
     }
 
-    rtc.clockOutEnable();  // Turn on the 1Hz clock output
+    // Turn on the RTC's 1Hz clock output
+    rtc.clockOutEnable();  
 
     // Start the displays
     presentTime.begin();
@@ -494,13 +552,14 @@ void time_setup()
 
     // Load present time settings (yearOffs, timeDifference, isDST)
     presentTime.load((int)atoi(settings.presTimeBright));
+
     if(!timetravelPersistent) {
         timeDifference = 0;
     }
 
     if(rtcbad) {
         presentTime.setYearOffset(0);
-        presentTime.setDST(-1);
+        presentTime.setDST(0);
     }
 
     // See if speedo display is to be used
@@ -511,6 +570,7 @@ void time_setup()
     // Set up GPS receiver
     #ifdef TC_HAVEGPS
     useGPS = ((int)atoi(settings.useGPS) > 0);
+    
     #ifdef TC_HAVESPEEDO
     if(useSpeedo) {
         useGPSSpeed = ((int)atoi(settings.useGPSSpeed) > 0);
@@ -524,15 +584,15 @@ void time_setup()
             myGPS.setCustomDelayFunc(myCustomDelay);
 
             // ms between GPS polls
-            // needs more updates if speed is to be displayed
-            GPSupdateFreq    = useGPSSpeed ? 250 : 1000;
-            GPSupdateFreqMin = useGPSSpeed ? 300 : 1000;
+            // need more updates if speed is to be displayed
+            GPSupdateFreq    = useGPSSpeed ? 250 : 500;
+            GPSupdateFreqMin = useGPSSpeed ? 500 : 500;
             
-            // Now we know we have a possible source for auth time
+            // We know now we have a possible source for auth time
             couldHaveAuthTime = true;
             
-            // Fetch data already in Receiver's i2c buffer
-            for(int i = 0; i < 5; i++) myGPS.loop(true);
+            // Fetch data already in Receiver's buffer [120ms]
+            for(int i = 0; i < 10; i++) myGPS.loop(true);
             
             #ifdef TC_DBG
             Serial.println(F("time_setup: GPS Receiver found and initialized"));
@@ -548,22 +608,17 @@ void time_setup()
     }
     #endif
 
-    // If NTP server configured, we might have a source for auth time
-    // (Do not involve WiFi status here; might change during run time)
-    if(settings.ntpServer[0] != 0)
+    // If NTP server configured and we are not in WiFi-AccessPoint-Mode, 
+    // we might have a source for auth time.
+    // (Do not involve WiFi connection status here; might change later)
+    if((settings.ntpServer[0] != 0) && (!wifiInAPMode))
         couldHaveAuthTime = true;
     
     // Try to obtain initial authoritative time
-#ifdef OLDNTP
-    configTime(0, 0, settings.ntpServer);
-    setenv("TZ", settings.timeZone, 1);   
-    tzset();
 
-    if(getNTPTime()) {
-#else
     ntp_setup();
     if((settings.ntpServer[0] != 0) && (WiFi.status() == WL_CONNECTED)) {
-        int timeout = 20;
+        int timeout = 50;
         do {
             ntp_loop();
             delay(100);
@@ -575,29 +630,41 @@ void time_setup()
     // Year does not matter at this point. We only parse 
     // the actual time zone for the first calculations.
     if(!(parseTZ(settings.timeZone, 2022, false))) {
+        tzbad = true;
         #ifdef TC_DBG
         Serial.println(F("time_setup: Failed to parse TZ"));
         #endif
     }
 
     // Set RTC with NTP time
-    if(getNTPTimeNew()) {
-#endif
+    if(getNTPTime(true)) {
+
         // So we have authoritative time now
         haveAuthTime = true;
+        lastAuthTime = millis();
+        
         #ifdef TC_DBG
-        Serial.println(F("time_setup: RTC set through NTP"));
+        Serial.println(F("time_setup: RTC set through NTP"));        
         #endif
+        
     } else {
-        // Try GPS
+      
+        // GPS might have a fix, so try fetching time from GPS
         #ifdef TC_HAVEGPS
         if(useGPS) {
-            // GPS might have a fix, so try fetching time from GPS
+
+            // Pull old data from buffer
+            for(int i = 0; i < 10; i++) myGPS.loop(true);
+
             for(int i = 0; i < 10; i++) {
                 for(int j = 0; j < 4; j++) myGPS.loop(true);
+                #ifdef TC_DBG
+                if(i == 0) Serial.println(F("time_setup: First attempt to read time from GPS"));
+                #endif
                 if(getGPStime()) {
                     // So we have authoritative time now
                     haveAuthTime = true;
+                    lastAuthTime = millis();
                     haveAuthTimeGPS = true;
                     #ifdef TC_DBG
                     Serial.println(F("time_setup: RTC set through GPS"));
@@ -607,16 +674,17 @@ void time_setup()
                 yield();
                 delay(100);
             }
+            // If we haven't managed to get time here, try
+            // a sync in shorter intervals in time_loop.
+            if(!haveAuthTimeGPS) resyncInt = 2;
         }
         #endif
     }
 
     if(haveAuthTime) {
-        haveAuthTimeNow = millis();
-
         // Save YearOffs & isDST to EEPROM if change is detected
         if( (presentTime.getYearOffset() != presentTime.loadYOffs()) ||
-            (presentTime.getDST() != presentTime.loadDST()) ) {
+            (presentTime.getDST()        != presentTime.loadDST()) ) {
             presentTime.save();
         }
     }
@@ -633,11 +701,11 @@ void time_setup()
         wifiStartCP();
     }
 
-    // Load the time for initial animation show
+    // Load the time for initial display
+    
     DateTime dt = myrtcnow();
-    presentTime.setDateTimeDiff(dt);
 
-    // Current year as read from RTC
+    // rtcYear: Current year as read from the RTC
     uint16_t rtcYear = dt.year() - presentTime.getYearOffset();
 
     // lastYear: The year when the RTC was adjusted for the last time.
@@ -652,6 +720,7 @@ void time_setup()
     // Parse (complete) TZ and set TZ/DST parameters
     // (sets/clears couldDST)
     if(!(parseTZ(settings.timeZone, rtcYear))) {
+        tzbad = true;
         #ifdef TC_DBG
         Serial.println(F("time_setup: Failed to parse TZ"));
         #endif
@@ -661,7 +730,7 @@ void time_setup()
     // RTC year-translation.
     if(lastYear != rtcYear) {
 
-        // Get RTC-fit year plus offs for real year
+        // Get RTC-fit year & offs for real year
         int16_t yOffs = 0;
         uint16_t newYear = rtcYear;
         correctYr4RTC(newYear, yOffs);
@@ -700,41 +769,19 @@ void time_setup()
         }
     }
 
-    // Decide wether to do own DST management
-    if(couldDST && !haveAuthTime) {
-        // If we have no authoritative time, do it
-        useDST = true;
-        #ifdef TC_DBG
-        Serial.println(F("time_setup: DST handled internally"));
-        #endif
-    } else {
-        useDST = false;
-        #ifdef TC_DBG
-        if(couldDST) {
-            Serial.println(F("time_setup: DST handled by time authority"));
-        } else {
-            Serial.println(F("time_setup: No DST definition in TZ"));
-        }
-        #endif
-    }
-    
-    // If DST status is unknown, determine DST status from current local time and date
-    // (This should only ever happen if rtc is bad and we have no auth time source)
-    if(useDST && (presentTime.getDST() == -1)) {
-        int currTimeMins;
-        int myDST = timeIsDST(rtcYear, dt.month(), dt.day(), dt.hour(), dt.minute(), currTimeMins);
-        // We must not make a determination during 'time-loop-hour'
-        if(!(blockDSTChange(currTimeMins))) {
-            presentTime.setDST(myDST);
-            presentTime.save();
-            #ifdef TC_DBG
-            Serial.print(F("time_setup: DST status was -1, is now "));
-            Serial.println(presentTime.getDST(), DEC);
-            #endif
-        }
-    }
+    // Load to display
+    presentTime.setDateTimeDiff(dt);
+
+    // If we don't have authTime, DST status (time & flag) might be 
+    // wrong at this point if we're switched on after a long time. 
+    // We leave DST determination to time_loop; just cut short the 
+    // check interval here.
+    if(!haveAuthTime) dstChkInt = 1;
 
     // Set GPS RTC
+    // It does not matter, if DST status (time & flag) is wrong here,
+    // as long as time matches DST flag setting (which it does even
+    // if we have no authTime).
     #ifdef TC_HAVEGPS
     if(useGPS || useGPSSpeed) {
         if(!haveAuthTimeGPS && (haveAuthTime || !rtcbad)) {
@@ -747,11 +794,7 @@ void time_setup()
     if(!destinationTime.load((int)atoi(settings.destTimeBright))) {
         validLoad = false;
         destinationTime.setYearOffset(0);
-        destinationTime.setYear(destinationTimes[0].year);
-        destinationTime.setMonth(destinationTimes[0].month);
-        destinationTime.setDay(destinationTimes[0].day);
-        destinationTime.setHour(destinationTimes[0].hour);
-        destinationTime.setMinute(destinationTimes[0].minute);
+        destinationTime.setFromStruct(&destinationTimes[0]);
         destinationTime.setBrightness((int)atoi(settings.destTimeBright));
         destinationTime.save();
     }
@@ -760,11 +803,7 @@ void time_setup()
     if(!departedTime.load((int)atoi(settings.lastTimeBright))) {
         validLoad = false;
         departedTime.setYearOffset(0);
-        departedTime.setYear(departedTimes[0].year);
-        departedTime.setMonth(departedTimes[0].month);
-        departedTime.setDay(departedTimes[0].day);
-        departedTime.setHour(departedTimes[0].hour);
-        departedTime.setMinute(departedTimes[0].minute);
+        departedTime.setFromStruct(&departedTimes[0]);
         departedTime.setBrightness((int)atoi(settings.lastTimeBright));
         departedTime.save();
     }
@@ -777,11 +816,16 @@ void time_setup()
     loadAlarm();
 
     // Auto-NightMode
+    autoNightMode = (int)atoi(settings.autoNM);
+    autoNightModeMode = (int)atoi(settings.autoNMPreset);
+    if(autoNightModeMode > AUTONM_NUM_PRESETS) autoNightModeMode = 0;
     autoNMOnHour = (int)atoi(settings.autoNMOn);
     if(autoNMOnHour > 23) autoNMOnHour = 0;
     autoNMOffHour = (int)atoi(settings.autoNMOff);
     if(autoNMOffHour > 23) autoNMOffHour = 0;
-    autoNightMode = (autoNMOnHour != autoNMOffHour);
+    if(autoNightMode && (autoNightModeMode == 0)) {
+        autoNightMode = (autoNMOnHour != autoNMOffHour);
+    }
 
     // If using auto times, put up the first one
     if(autoTimeIntervals[autoInterval]) {
@@ -792,6 +836,9 @@ void time_setup()
     // Set up alarm base: RTC or current "present time"
     alarmRTC = ((int)atoi(settings.alarmRTC) > 0);
 
+    // Set up option to play/mute time travel sounds
+    playTTsounds = ((int)atoi(settings.playTTsnds) > 0);
+    
     // Set up speedo display & temperature sensor
     #ifdef TC_HAVESPEEDO
     if(useSpeedo) {
@@ -829,9 +876,11 @@ void time_setup()
 
         #ifdef FAKE_POWER_ON
         if(!waitForFakePowerButton) {
+        #endif
             speedo.setSpeed(0);
             speedo.on();
             speedo.show();
+        #ifdef FAKE_POWER_ON
         }
         #endif
 
@@ -843,26 +892,27 @@ void time_setup()
         }
         #endif
 
+        // Set up temperature sensor
         #ifdef TC_HAVETEMP
         useTemp = ((int)atoi(settings.useTemp) > 0);
         if(useTemp && !useGPSSpeed) {
             tempUnit = ((int)atoi(settings.tempUnit) > 0);
             if(tempSens.begin()) {
                 tempSens.setCustomDelayFunc(myCustomDelay);
-
                 tempBrightness = (int)atoi(settings.tempBright);
-
                 #ifdef FAKE_POWER_ON
                 if(!waitForFakePowerButton) {
+                #endif
                     dispTemperature(true);
+                #ifdef FAKE_POWER_ON
                 }
                 #endif
             } else {
                 useTemp = false;
             }
+        } else {
+            useTemp = false;
         }
-        #else
-        useTemp = false;
         #endif
     }
     #endif
@@ -884,6 +934,15 @@ void time_setup()
     if(rtcbad || rtc.battLow()) {
         destinationTime.showOnlyText("REPLACE");
         presentTime.showOnlyText("BATTERY");
+        destinationTime.on();
+        presentTime.on();
+        myIntroDelay(3000);
+        allOff();
+    }
+
+    if(tzbad) {
+        destinationTime.showOnlyText("BAD");
+        presentTime.showOnlyText("TIMEZONE");
         destinationTime.on();
         presentTime.on();
         myIntroDelay(3000);
@@ -941,7 +1000,7 @@ void time_setup()
 #ifdef FAKE_POWER_ON
     if(waitForFakePowerButton) {
         digitalWrite(WHITE_LED_PIN, HIGH);
-        delay(500);
+        myIntroDelay(500);
         digitalWrite(WHITE_LED_PIN, LOW);
         isFPBKeyChange = false;
         FPBUnitIsOn = false;
@@ -974,7 +1033,7 @@ void time_loop()
 
     #ifdef FAKE_POWER_ON
     if(waitForFakePowerButton) {
-        fakePowerOnKey.tick();
+        fakePowerOnKey.scan();
 
         if(isFPBKeyChange) {
             if(isFPBKeyPressed) {
@@ -1025,7 +1084,7 @@ void time_loop()
 
     // Power management: CPU speed
     // Can only reduce when GPS is not used and WiFi is off
-    if(!pwrLow &&
+    if(!pwrLow && checkAudioDone() &&
                   #ifdef TC_HAVEGPS
                   !useGPS && !useGPSSpeed &&
                   #endif
@@ -1119,13 +1178,6 @@ void time_loop()
 
             timeTravelP0 = 0;
 
-            #ifdef TC_DBG
-            #ifdef EXTERNAL_TIMETRAVEL_OUT
-            ettope = univNow;
-            Serial.print(F("##### ETTO total elapsed lead time: "));
-            Serial.println(ettope - ettops, DEC);
-            #endif
-            #endif
         }
 
         speedo.setSpeed(timeTravelP0Speed);
@@ -1190,17 +1242,6 @@ void time_loop()
         timeTraveled = false;
     }
 
-    // Re-determine whether to use own DST management. If authoritative
-    // time is more than 24 hours old, switch it on.
-    if(couldDST) {
-        if(haveAuthTime && (millis() - haveAuthTimeNow >= 24*60*60*1000)) {
-            haveAuthTime = false;
-        }
-        useDST = !haveAuthTime;
-    } else {
-        useDST = false;
-    }
-
     // Read GPS, and display GPS speed or temperature
 
     #ifdef TC_HAVEGPS
@@ -1231,18 +1272,45 @@ void time_loop()
             presentTime.setColon(true);
             departedTime.setColon(true);
 
+            // Prepare for time re-adjustment through NTP/GPS
+
+            if(millis() - lastAuthTime >= 7*24*60*60*1000) {
+                authTimeExpired = true;
+            }
+
+            #ifdef TC_HAVEGPS
+            bool GPShasTime = gpsHaveTime();
+            #else
+            bool GPShasTime = false;
+            #endif
+
             DateTime dt = myrtcnow();
 
             // Re-adjust time periodically through NTP/GPS
-            // This is normally done on every hour, but with some restrictions:
-            // - If Wifi is in power-save, update only during night hours. We don't want
-            //   a stalled display due to WiFi re-connect during day time.
-            // - However, ignore rule above if we have no authoritative time yet. In 
-            //   that case, try every 5th minute.
+            // This is normally done hourly between hour:01 and hour:02. However:
+            // - If no GPS time is available and Wifi is in power-save, update only once 
+            //   a week during night hours. We don't want a stalled display due to 
+            //   WiFi re-connect during day time or too often.
+            // - Then again, ignore rule above if we have no authoritative time yet. In 
+            //   that case, try every 5th+1 and 5th+2 (resyncInt) minute. Frozen displays
+            //   are avoided by setting the WiFi off-timer to a period longer than the
+            //   period between two attempts; this in essence defeats WiFi power-save, 
+            //   but accurate time is more important.
             // - In any case, do not interrupt any running sequences.
-            if( couldHaveAuthTime                                                   &&
-                (!haveAuthTime || !wifiIsOff || (dt.hour() <= 6))                   &&
-                ((dt.minute() == 0) || (!haveAuthTime && ((dt.minute() % 5) == 0))) &&
+
+            bool itsTime = ( (dt.minute() == 1) || 
+                             (dt.minute() == 2) ||
+                             (!haveAuthTime && 
+                              ( ((dt.minute() % resyncInt) == 1) || 
+                                ((dt.minute() % resyncInt) == 2)) )
+                           );
+            
+            if( couldHaveAuthTime                       &&
+                itsTime                                 &&
+                (!haveAuthTime  || 
+                 GPShasTime     || 
+                 !wifiIsOff     || 
+                 (authTimeExpired && (dt.hour() <= 6))) &&
                 !timeTraveled && !timeTravelP0 && !timeTravelP1 && !timeTravelP2 ) {
 
                 if(!autoReadjust) {
@@ -1254,17 +1322,26 @@ void time_loop()
                                        dt.month(), dt.day(), dt.hour(), dt.minute());
                     }
 
-                    if(getNTPOrGPSTime()) {
+                    // Note that the following call will fail if getNTPtime reconnects
+                    // WiFi; no current NTP time stamp will be available. Repeated calls
+                    // will eventually succeed.
+
+                    if(getNTPOrGPSTime(haveAuthTime)) {
 
                         bool wasFakeRTC = false;
                         uint64_t allowedDiff = 61;
 
                         autoReadjust = true;
+                        resyncInt = 5;
+
+                        // We have current DST determination, skip it below
+                        useDST = false;
 
                         if(couldDST) allowedDiff = abs(tzDiff) + 1;
 
                         haveAuthTime = true;
-                        haveAuthTimeNow = millis();
+                        lastAuthTime = millis();
+                        authTimeExpired = false;
 
                         dt = myrtcnow();
 
@@ -1282,7 +1359,7 @@ void time_loop()
 
                             // User played with RTC; return to actual present time
                             // (Allow a difference of 'allowedDiff' minutes to keep
-                            //  timeDifference in the event of a DST change)
+                            // timeDifference in the event of a DST change)
                             if(wasFakeRTC) timeDifference = 0;
                         }
 
@@ -1299,16 +1376,36 @@ void time_loop()
 
                     } else {
 
+                        // No auth time at this point, do DST check below
+                        useDST = couldDST;
+
                         #ifdef TC_DBG
                         Serial.println(F("time_loop: RTC re-adjustment via NTP/GPS failed"));
                         #endif
 
                     }
+
+                } else {
+
+                    // We have current DST determination, skip it below
+                    useDST = false;
+
                 }
 
             } else {
 
                 autoReadjust = false;
+
+                // If GPS is used for time, resyncInt is possibly set to 2 during boot;
+                // reset it to 5 after 5 minutes since boot.
+                if(resyncInt != 5) {
+                    if(millis() - powerupMillis > 5*60*1000) {
+                        resyncInt = 5;
+                    }
+                }
+
+                // No auth time at this point, do DST check below
+                useDST = couldDST;
 
             }
 
@@ -1326,13 +1423,19 @@ void time_loop()
                         #ifdef TC_DBG
                         Serial.println(F("time_loop: Rollover 9999->1 detected"));
                         #endif
-    
+
+                        // We do not roll over to year "0".
+                        // TZ calc doesn't cope with y0.
                         thisYear = 1;
     
                         if(timeDifference) {
-                            // Correct timeDifference
-                            timeDifference = 5255474400 - timeDifference;
-                            timeDiffUp = !timeDiffUp;
+                            // Correct timeDifference [r-o to 0: 5259492000]
+                            if(timeDifference >= 5258964960) {
+                                timeDifference -= 5258964960;
+                            } else {
+                                timeDifference = 5258964960 - timeDifference;
+                                timeDiffUp = !timeDiffUp;
+                            }
                         }
                     }
     
@@ -1381,14 +1484,17 @@ void time_loop()
 
             // Check if we need to switch from/to DST
 
-            if(useDST && !DSTcheckDone && ((dt.minute() % 5) == 0)) {
+            if(useDST && !DSTcheckDone && ((dt.minute() % dstChkInt) == 0)) {
 
+                int oldDST = presentTime.getDST();
                 int currTimeMins = 0;
-                int myDST = timeIsDST(dt.year() - presentTime.getYearOffset(), dt.month(), dt.day(), dt.hour(), dt.minute(), currTimeMins);
+                int myDST = timeIsDST(dt.year() - presentTime.getYearOffset(), dt.month(), 
+                                            dt.day(), dt.hour(), dt.minute(), currTimeMins);
 
                 DSTcheckDone = true;
+                dstChkInt = 5;
 
-                if( (myDST != presentTime.getDST()) &&
+                if( (myDST != oldDST) &&
                     (!(blockDSTChange(currTimeMins))) ) {
                   
                     int nyear, nmonth, nday, nhour, nminute;
@@ -1404,33 +1510,39 @@ void time_loop()
                     Serial.println(myDST, DEC);
                     #endif
 
-                    if(myDST == 0) myDiff *= -1;
-
                     presentTime.setDST(myDST);
 
-                    dt = myrtcnow();
+                    // If DST status is -1 (unknown), do not adjust clock,
+                    // only save corrected flag
+                    if(oldDST >= 0) {
 
-                    rtcTime = dateToMins(dt.year() - presentTime.getYearOffset(),
-                                       dt.month(), dt.day(), dt.hour(), dt.minute());
+                        if(myDST == 0) myDiff *= -1;
 
-                    rtcTime += myDiff;
+                        dt = myrtcnow();
+    
+                        rtcTime = dateToMins(dt.year() - presentTime.getYearOffset(),
+                                           dt.month(), dt.day(), dt.hour(), dt.minute());
+    
+                        rtcTime += myDiff;
+    
+                        minsToDate(rtcTime, nyear, nmonth, nday, nhour, nminute);
+    
+                        // Get RTC-fit year & offs for our real year
+                        rtcYear = nyear;
+                        correctYr4RTC(rtcYear, yOffs);
+    
+                        rtc.adjust(dt.second(), 
+                                   nminute, 
+                                   nhour, 
+                                   dayOfWeek(nday, nmonth, nyear),
+                                   nday, 
+                                   nmonth, 
+                                   rtcYear-2000
+                        );
+    
+                        presentTime.setYearOffset(yOffs);
 
-                    minsToDate(rtcTime, nyear, nmonth, nday, nhour, nminute);
-
-                    // Get RTC-fit year & offs for our real year
-                    rtcYear = nyear;
-                    correctYr4RTC(rtcYear, yOffs);
-
-                    rtc.adjust(dt.second(), 
-                               nminute, 
-                               nhour, 
-                               dayOfWeek(nday, nmonth, nyear),
-                               nday, 
-                               nmonth, 
-                               rtcYear-2000
-                    );
-
-                    presentTime.setYearOffset(yOffs);
+                    }
 
                     // Save yearOffset & isDTS to EEPROM
                     if(timetravelPersistent) {
@@ -1456,48 +1568,17 @@ void time_loop()
             lastYear = dt.year() - presentTime.getYearOffset();
             presentTime.saveLastYear(lastYear);
 
-            // Logging beacon
+            // Debug log beacon
             #ifdef TC_DBG
             if((dt.second() == 0) && (dt.minute() != dbgLastMin)) {
-                int ttt;
-                Serial.print(dt.year());
-                Serial.print(F("/"));
-                Serial.print(dt.month());
-                Serial.print(F(" "));
+                char dbgBuf[128];
                 dbgLastMin = dt.minute();
-                Serial.print(dbgLastMin);
-                Serial.print(F(":"));
-                Serial.print(dt.second());
-                Serial.print(F(" Chip Temp: "));
-                Serial.println(rtc.getTemperature());
-                ttt = dayOfWeek(presentTime.getDay(), presentTime.getMonth(), presentTime.getDisplayYear());
-                Serial.print("Weekday of current presentTime: ");
-                Serial.println(ttt);
-
-                int nyear, nmonth, nday, nhour, nmin, nsecond, nisDST;
-                unsigned long gtt = millis();
-                if(NTPGetLocalTime(nyear, nmonth, nday, nhour, nmin, nsecond, nisDST)) {
-                    unsigned long gtt2 = millis();
-                    Serial.print("tcNTP: ");
-                    Serial.print(nyear);
-                    Serial.print("-");
-                    Serial.print(nmonth);
-                    Serial.print("-");
-                    Serial.print(nday);
-                    Serial.print(" ");
-                    Serial.print(nhour);
-                    Serial.print(":");
-                    Serial.print(nmin);
-                    Serial.print(":");
-                    Serial.print(nsecond);
-                    Serial.print(" DST:");
-                    Serial.print(nisDST, DEC);
-                    Serial.print(" Took: ");
-                    Serial.print(gtt2-gtt, DEC);
-                    Serial.println("ms");
-                } else {
-                    Serial.println("tcNTP: Fail");
-                }
+                sprintf(dbgBuf, "%d[%d-(%d)]/%02d/%02d %02d:%02d:00 (Chip Temp %.2f) / WD of PT: %d (%d)",
+                      lastYear, dt.year(), presentTime.getYearOffset(), dt.month(), dt.day(), dt.hour(), dbgLastMin,
+                      rtc.getTemperature(),
+                      dayOfWeek(presentTime.getDay(), presentTime.getMonth(), presentTime.getDisplayYear()),
+                      dayOfWeek(dt.day(), dt.month(), dt.year() - presentTime.getYearOffset()));
+                Serial.println(dbgBuf);
             }
             #endif
 
@@ -1506,23 +1587,23 @@ void time_loop()
             {
                 int compHour = alarmRTC ? dt.hour()   : presentTime.getHour();
                 int compMin  = alarmRTC ? dt.minute() : presentTime.getMinute();
-                int weekDay =  alarmRTC ? dayOfWeek(dt.year() - presentTime.getYearOffset(), 
+                int weekDay =  alarmRTC ? dayOfWeek(dt.day(), 
                                                     dt.month(), 
-                                                    dt.day()) 
+                                                    dt.year() - presentTime.getYearOffset())
                                           : 
-                                          dayOfWeek(presentTime.getDisplayYear(), 
+                                          dayOfWeek(presentTime.getDay(), 
                                                     presentTime.getMonth(), 
-                                                    presentTime.getDay());
+                                                    presentTime.getDisplayYear());
 
                 // Sound to play hourly (if available)
-                // Follows setting for alarm as regards the options
+                // Follows setting for alarm as regards the option
                 // of "real actual present time" vs whatever is currently
                 // displayed on presentTime.
 
                 if(compMin == 0) {
                     if(presentTime.getNightMode() ||
                        !FPBUnitIsOn ||
-                       startup ||
+                       startup      ||
                        timeTraveled ||
                        timeTravelP0 ||
                        timeTravelP1 ||
@@ -1540,7 +1621,8 @@ void time_loop()
                 // Handle alarm
 
                 if(alarmOnOff) {
-                    if((alarmHour == compHour) && (alarmMinute == compMin) ) {
+                    if((alarmHour == compHour) && (alarmMinute == compMin) && 
+                                  (alarmWDmasks[alarmWeekday] & (1 << weekDay))) {
                         if(!alarmDone) {
                             play_file("/alarm.mp3", 1.0, false, 0);
                             alarmDone = true;
@@ -1553,14 +1635,24 @@ void time_loop()
                 // Handle Auto-NightMode
 
                 if(autoNightMode) {
-                    if((autoNMOnHour == compHour) && (compMin == 0)) {
-                        if(!autoNMDone) {
-                            nightModeOn();
-                            autoNMDone = true;
+                    if(autoNightModeMode == 0) {
+                        if((autoNMOnHour == compHour) && (compMin == 0)) {
+                            if(!autoNMDone) {
+                                nightModeOn();
+                                autoNMDone = true;
+                            }
+                        } else if((autoNMOffHour == compHour) && (compMin == 0)) {
+                            if(!autoNMDone) {
+                                nightModeOff();
+                                autoNMDone = true;
+                            }
+                        } else {
+                            autoNMDone = false;
                         }
-                    } else if((autoNMOffHour == compHour) && (compMin == 0)) {
+                    } else if(compMin == 0) {
                         if(!autoNMDone) {
-                            nightModeOff();
+                            const uint32_t *myField = autoNMPresets[autoNightModeMode - 1];
+                            (myField[weekDay] & (1 << (23 - compHour))) ? nightModeOn() : nightModeOff();
                             autoNMDone = true;
                         }
                     } else {
@@ -1570,12 +1662,12 @@ void time_loop()
 
             }
 
-            // Handle autoInterval
+            // Handle autoInterval ("decorative mode")
 
             // Do this on previous minute:59
             minNext = (dt.minute() == 59) ? 0 : dt.minute() + 1;
 
-            // End autoPause if run out
+            // Check if autoPause has run out
             if(autoPaused && (millis() - pauseNow >= pauseDelay)) {
                 autoPaused = false;
             }
@@ -1694,8 +1786,7 @@ void time_loop()
             departedTime.show();
             
         }
-    }
-
+    } 
 }
 
 
@@ -1891,7 +1982,7 @@ void timeTravel(bool doComplete, bool withSpeedo)
     timetravelNow = ttUnivNow;
     timeTraveled = true;
 
-    play_file("/timetravel.mp3", 1.0, true, 0);
+    if(playTTsounds) play_file("/timetravel.mp3", 1.0, true, 0);
 
     allOff();
 
@@ -1958,7 +2049,7 @@ void timeTravel(bool doComplete, bool withSpeedo)
 
 static void triggerLongTT()
 {
-    play_file("/travelstart.mp3", 1.0, true, 0);
+    if(playTTsounds) play_file("/travelstart.mp3", 1.0, true, 0);
     timetravelP1Now = millis();
     timetravelP1Delay = TT_P1_DELAY_P1;
     timeTravelP1 = 1;
@@ -1970,7 +2061,6 @@ static void ettoPulseStart()
     digitalWrite(EXTERNAL_TIMETRAVEL_OUT_PIN, HIGH);
     #ifdef TC_DBG
     digitalWrite(WHITE_LED_PIN, HIGH);
-    ettops = millis();
     #endif
 }
 static void ettoPulseEnd()
@@ -1993,7 +2083,7 @@ void resetPresentTime()
     timetravelNow = millis();
     timeTraveled = true;
     if(timeDifference) {
-        play_file("/timetravel.mp3", 1.0, true, 0);
+        if(playTTsounds) play_file("/timetravel.mp3", 1.0, true, 0);
     }
 
     cancelEnterAnim();
@@ -2048,6 +2138,167 @@ bool checkIfAutoPaused()
     return true;
 }
 
+/*
+ * Callbacks for fake power switch
+ */
+#ifdef FAKE_POWER_ON
+void fpbKeyPressed()
+{
+    isFPBKeyPressed = true;
+    isFPBKeyChange = true;
+}
+void fpbKeyLongPressStop()
+{
+    isFPBKeyPressed = false;
+    isFPBKeyChange = true;
+}
+#endif
+
+/*
+ * Delay function for keeping essential stuff alive
+ * during Intro playback
+ * 
+ */
+static void myIntroDelay(unsigned int mydel, bool withGPS)
+{
+    unsigned long startNow = millis();
+    while(millis() - startNow < mydel) {
+        delay(5);
+        audio_loop();
+        ntp_short_loop();
+        #ifdef TC_HAVEGPS
+        if(withGPS) gps_loop();
+        #endif
+    }
+}
+
+static void waitAudioDoneIntro()
+{
+    int timeout = 100;
+
+    while(!checkAudioDone() && timeout--) {
+        audio_loop();
+        ntp_short_loop();
+        #ifdef TC_HAVEGPS
+        gps_loop();
+        #endif
+        delay(10);
+    }
+}
+
+/*
+ * Delay function for external modules
+ * (gsp, temp sensor). 
+ * Do not call gps_loop() here!
+ */
+static void myCustomDelay(unsigned int mydel)
+{
+    unsigned long startNow = millis();
+    audio_loop();
+    while(millis() - startNow < mydel) {
+        delay(5);
+        ntp_short_loop();
+        audio_loop();
+    }
+}
+
+
+// Call this to get full CPU speed
+void pwrNeedFullNow(bool force)
+{
+    if(pwrLow || force) {
+        setCpuFrequencyMhz(240);
+        #ifdef TC_DBG
+        Serial.print("Setting CPU speed to ");
+        Serial.println(getCpuFrequencyMhz());
+        #endif
+    }
+    pwrFullNow = millis();
+    pwrLow = false;
+}
+
+/*
+ * Internal replacement for RTC.now()
+ * RTC sometimes loses sync and does not send data,
+ * which is interpreted as 2165/165/165 etc
+ * Check for this and retry in case.
+ */
+DateTime myrtcnow()
+{
+    DateTime dt = rtc.now();
+    int retries = 0;
+
+    while ((dt.month() < 1 || dt.month() > 12 ||
+            dt.day()   < 1 || dt.day()   > 31 ||
+            dt.hour() > 23 ||
+            dt.minute() < 0 || dt.minute() > 59) &&
+            retries < 30 ) {
+
+            mydelay((retries < 5) ? 50 : 100);
+            dt = rtc.now();
+            retries++;
+    }
+
+    if(retries > 0) {
+        Serial.print(F("myrtcnow: "));
+        Serial.print(retries, DEC);
+        Serial.println(F(" retries needed to read RTC"));
+    }
+
+    return dt;
+}
+
+#ifdef TC_HAVESPEEDO
+#ifdef TC_HAVEGPS
+static void dispGPSSpeed(bool force)
+{
+    if(!useSpeedo || !useGPSSpeed)
+        return;
+
+    if(timeTraveled || timeTravelP0 || timeTravelP1 || timeTravelP2)
+        return;
+
+    if(force || (millis() - dispGPSnow >= 500)) {
+
+        speedo.setSpeed(myGPS.getSpeed());
+        speedo.show();
+        speedo.on();
+        dispGPSnow = millis();
+
+    }
+}
+#endif
+#ifdef TC_HAVETEMP
+static void dispTemperature(bool force)
+{
+    int temp;
+
+    if(!useSpeedo || !useTemp || useGPSSpeed)
+        return;
+
+    if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP0 || timeTravelP1 || timeTravelP2)
+        return;
+
+    if(speedo.getNightMode()) {
+        speedo.off();
+        tempOldNM = true;
+        return;
+    }
+
+    if(tempOldNM || (force || (millis() - tempReadNow >= 2*60*1000))) {
+        tempOldNM = false;
+        tempSens.on();
+        speedo.setTemperature(tempSens.readTemp(tempUnit));
+        speedo.show();
+        speedo.setBrightnessDirect(tempBrightness); // after show b/c brightness
+        speedo.on();
+        tempSens.off();
+        tempReadNow = millis();
+    }
+
+}
+#endif
+#endif
 
 /**************************************************************
  ***                                                        ***
@@ -2062,124 +2313,33 @@ bool checkIfAutoPaused()
  *  DateTime uses 1-12 for months
  *  tm (_timeinfo) uses 0-11 for months
  *  Hardware RTC uses 1-12 for months
- *  Xprintf treats "%B" substition as from timeinfo, hence 0-11
+ *  Xprintf treats "%B" substition as from timeinfo, ie 0-11
  */
 
 /*
- * Get time from NTP or GPS.
- * Try NTP first.
+ * Get time from NTP or GPS
+ * 
  */
-static bool getNTPOrGPSTime()
+static bool getNTPOrGPSTime(bool weHaveAuthTime)
 {
-    #ifdef OLDNTP
-    if(getNTPTime()) return true;
-    #else
-    if(getNTPTimeNew()) return true;
+    // If GPS has a time and WiFi is off, try GPS first.
+    // This avoids a frozen display when WiFi reconnects.
+    #ifdef TC_HAVEGPS
+    if(gpsHaveTime() && wifiIsOff) {
+        if(getGPStime()) return true;
+    }
     #endif
+
+    // Now try NTP
+    if(getNTPTime(weHaveAuthTime)) return true;
+
+    // Again go for GPS, might have older timestamp
     #ifdef TC_HAVEGPS
     return getGPStime();
     #else
     return false;
     #endif
 }
-
-/*
- * Get time from NTP (using OS)
- * 
- * Saves time to RTC; does not save YOffs/isDST to EEPROM.
- * 
- * Does no re-tries in case getLocalTime() fails; this is
- * called repeatedly while current minute is 0, so we can 
- * retry with a later call within that minute.
- */
-#ifdef OLDNTP
-static bool getNTPTime()
-{
-    uint16_t newYear;
-    int16_t  newYOffs = 0;
-
-    // Re-Set NTP server and system time-zone
-    configTime(0, 0, settings.ntpServer);
-    setenv("TZ", settings.timeZone, 1);   
-    tzset();
-
-    if(settings.ntpServer[0] == 0) {
-        #ifdef TC_DBG
-        Serial.println(F("getNTPTime: NTP skipped, no server configured"));
-        #endif
-        return false;
-    }
-
-    pwrNeedFullNow();
-    wifiOn(2*60*1000, false);    // reconnect for only 2 mins, not in AP mode
-
-    if(WiFi.status() == WL_CONNECTED) {
-
-        // if connected to wifi, get NTP time and set RTC
-
-        _timeinfo.tm_isdst = -1;
-
-        int ntpRetries = 0;
-        if(!getLocalTime(&_timeinfo)) {
-            Serial.println(F("getNTPTime: getLocalTime failed"));
-            return false;
-        }
-
-        // Don't waste any time here...
-
-        // Timeinfo:  Years since 1900
-        // RTC:       0-99, 0 being 2000
-        //            (important for leap year compensation, which only works from 2000-2099, not 2100 on,
-        //            century bit has not influence on leap year comp., is buggy)
-
-        newYear = _timeinfo.tm_year + 1900;
-
-        // Get RTC-fit year plus offs for given real year
-        correctYr4RTC(newYear, newYOffs);
-
-        presentTime.setYearOffset(newYOffs);
-
-        rtc.adjust(_timeinfo.tm_sec,
-                   _timeinfo.tm_min,
-                   _timeinfo.tm_hour,
-                   dayOfWeek(_timeinfo.tm_mday, _timeinfo.tm_mon + 1, _timeinfo.tm_year + 1900),
-                   _timeinfo.tm_mday,
-                   _timeinfo.tm_mon + 1,   // Month needs to be 1-12, timeinfo uses 0-11
-                   newYear - 2000);
-
-        // Parse TZ and set up DST data for now current year
-        if((!couldDST) || (tzForYear != _timeinfo.tm_year + 1900)) {
-            if(!(parseTZ(settings.timeZone, _timeinfo.tm_year + 1900))) {
-                #ifdef TC_DBG
-                Serial.println(F("getNTPTime: Failed to parse TZ"));
-                #endif
-            }
-        }
-
-        handleDSTFlag(&_timeinfo);
-
-        #ifdef TC_DBG
-        Serial.print(F("getNTPTime: NTP time "));
-        Serial.print(&_timeinfo, "%A, %B %d %Y %H:%M:%S");
-        Serial.print(F(" DST:"));
-        Serial.println(_timeinfo.tm_isdst, DEC);
-        // The Daylight Saving Time flag (tm_isdst) is greater than zero if Daylight Saving Time is in effect, 
-        // zero if Daylight Saving Time is not in effect, and less than zero if the information is not available.
-        #endif
-
-        return true;
-
-    } else {
-
-        #ifdef TC_DBG
-        Serial.println(F("getNTPTime: WiFi not connected, NTP time sync skipped"));
-        #endif
-        
-        return false;
-
-    }
-}
-#endif
 
 /*
  * Get time from NTP (native)
@@ -2190,28 +2350,32 @@ static bool getNTPTime()
  * called repeatedly while current minute is 0, so we can 
  * retry with a later call within that minute.
  */
-static bool getNTPTimeNew()
+static bool getNTPTime(bool weHaveAuthTime)
 {
     uint16_t newYear;
     int16_t  newYOffs = 0;
 
     if(settings.ntpServer[0] == 0) {
         #ifdef TC_DBG
-        Serial.println(F("getNTPTimeNew: NTP skipped, no server configured"));
+        Serial.println(F("getNTPTime: NTP skipped, no server configured"));
         #endif
         return false;
     }
 
     pwrNeedFullNow();
-    wifiOn(2*60*1000, false);    // reconnect for only 2 mins, not in AP mode
+
+    // Reconnect for only 3 mins, but not in AP mode; do not start CP.
+    // If we don't have authTime yet, connect for longer to avoid
+    // reconnects (aka frozen displays).
+    // If WiFi is reconnected here, we won't have a valid time stamp
+    // immediately. This will therefore fail the first time called.
+    wifiOn(weHaveAuthTime ? 3*60*1000 : 21*60*1000, false, true);    
 
     if(WiFi.status() == WL_CONNECTED) {
 
         int nyear, nmonth, nday, nhour, nmin, nsecond, nisDST;
                 
         if(NTPGetLocalTime(nyear, nmonth, nday, nhour, nmin, nsecond, nisDST)) {
-
-            // Don't waste any time here...
             
             // Get RTC-fit year plus offs for given real year
             newYear = nyear;
@@ -2231,7 +2395,7 @@ static bool getNTPTimeNew()
             if((!couldDST) || (tzForYear != nyear)) {
                 if(!(parseTZ(settings.timeZone, nyear))) {
                     #ifdef TC_DBG
-                    Serial.println(F("getNTPTimeNew: Failed to parse TZ"));
+                    Serial.println(F("getNTPTime: Failed to parse TZ"));
                     #endif
                 }
             }
@@ -2239,7 +2403,7 @@ static bool getNTPTimeNew()
             handleDSTFlag(NULL, nisDST);
     
             #ifdef TC_DBG
-            Serial.print(F("getNTPTimeNew: New time "));
+            Serial.print(F("getNTPTime: New time "));
             Serial.print(nyear);
             Serial.print("-");
             Serial.print(nmonth);
@@ -2260,7 +2424,7 @@ static bool getNTPTimeNew()
         } else {
 
             #ifdef TC_DBG
-            Serial.println(F("getNTPTimeNew: No current NTP timestamp available"));
+            Serial.println(F("getNTPTime: No current NTP timestamp available"));
             #endif
 
             return false;
@@ -2269,14 +2433,13 @@ static bool getNTPTimeNew()
     } else {
 
         #ifdef TC_DBG
-        Serial.println(F("getNTPTimeNew: WiFi not connected, NTP time sync skipped"));
+        Serial.println(F("getNTPTime: WiFi not connected, NTP time sync skipped"));
         #endif
         
         return false;
 
     }
 }
-
 
 /*
  * Get time from GPS
@@ -2289,7 +2452,7 @@ static bool getGPStime()
 {
     struct tm timeinfo;
     uint64_t utcMins;
-    time_t stampAge = 0;
+    unsigned long stampAge = 0;
     int nyear, nmonth, nday, nhour, nminute, nsecond, isDST = 0;
     uint16_t newYear;
     int16_t  newYOffs = 0;
@@ -2297,18 +2460,20 @@ static bool getGPStime()
     if(!useGPS)
         return false;
 
-    if(!myGPS.getDateTime(&timeinfo, &stampAge))
+    if(!myGPS.getDateTime(&timeinfo, &stampAge, GPSupdateFreq))
         return false;
             
     // Convert UTC to local (non-DST) time
     utcMins = dateToMins(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday, 
                          timeinfo.tm_hour, timeinfo.tm_min);
 
-    nsecond = timeinfo.tm_sec + (stampAge / 1000);
-    while(nsecond >= 60) {
-        utcMins++;
-        nsecond -= 60;
-    }
+    // Correct seconds by stampAge plus one (because the second had 
+    // already begun when the time was written to the buffer and we 
+    // lost some time through our delayed polling)
+    nsecond = timeinfo.tm_sec + (stampAge / 1000) + 1;
+    
+    utcMins += (uint64_t)(nsecond / 60);
+    nsecond %= 60;
 
     utcMins -= tzDiffGMT;
 
@@ -2323,38 +2488,10 @@ static bool getGPStime()
         }
     }
 
-    // Determine DST
-    if(couldDST) {
-      
-        // Get mins since 1/1 of current year in local (nonDST) time
-        int currTimeMins = mins2Date(nyear, nmonth, nday, nhour, nminute);
+    // Determine DST from local nonDST time
+    localToDST(nyear, nmonth, nday, nhour, nminute, isDST);
 
-        // Determine DST
-        // DSTonMins is in non-DST time
-        // DSToffMins is in DST time, so correct it for the comparison
-        if(DSTonMins < DSToffMins) {
-            if((currTimeMins >= DSTonMins) && (currTimeMins < (DSToffMins - abs(tzDiff))))
-                isDST = 1;
-            else 
-                isDST = 0;
-        } else {
-            if((currTimeMins >= (DSToffMins - abs(tzDiff))) && (currTimeMins < DSTonMins))
-                isDST = 0;
-            else
-                isDST = 1;
-        }
-
-        // Translate to DST local time
-        if(isDST) {
-            uint64_t myTime = dateToMins(nyear, nmonth, nday, nhour, nminute);
-
-            myTime += abs(tzDiff);
-
-            minsToDate(myTime, nyear, nmonth, nday, nhour, nminute);
-        }
-    }
-
-    // Get RTC-fit year plus offs for given real year
+    // Get RTC-fit year & offs for given real year
     newYOffs = 0;
     newYear = nyear;
     correctYr4RTC(newYear, newYOffs);   
@@ -2450,6 +2587,14 @@ bool gpsHaveFix()
     return myGPS.fix;
 }
 
+static bool gpsHaveTime()
+{
+    if(!useGPS && !useGPSSpeed)
+        return false;
+        
+    return myGPS.haveTime();
+}
+
 /* Only for menu loop: 
  * Call GPS loop, but do not call
  * custom delay inside, ie no audio_loop()
@@ -2466,58 +2611,9 @@ void gps_loop()
 }
 #endif
 
-/*
- * Evaluate DST flag from authoritative time source
- * and update presentTime's isDST flag
+/* 
+ * Determine if provided year is a leap year 
  */
-static void handleDSTFlag(struct tm *ti, int nisDST)
-{
-    int myisDST = nisDST;
-    
-    if(ti) myisDST = ti->tm_isdst;
-    
-    if(presentTime.getDST() != myisDST) {
-      
-        int myDST = -1, currTimeMins = 0;
-        #ifdef TC_DBG
-        bool isAuth = false;
-        #endif
-        
-        if(myisDST >= 0) {
-
-            // If authority has a clear answer, use it.
-            myDST = myisDST;
-            if(myDST > 1) myDST = 1;    // Who knows....
-            #ifdef TC_DBG
-            isAuth = true;
-            #endif
-            
-        } else if(couldDST && ti) {
-
-            // If authority is unsure, try for ourselves
-            myDST = timeIsDST(ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday, 
-                              ti->tm_hour, ti->tm_min, currTimeMins);
-                              
-            // If we are within block-period, set to current to prohibit a change
-            if(blockDSTChange(currTimeMins)) myDST = presentTime.getDST();
-             
-        }
-        
-        if(presentTime.getDST() != myDST) {
-            #ifdef TC_DBG
-            Serial.print(F("handleDSTFlag: Updating isDST from "));
-            Serial.print(presentTime.getDST(), DEC);
-            Serial.print(F(" to "));
-            if(isAuth) Serial.print(F("[authoritative] "));
-            Serial.println(myDST, DEC);
-            #endif
-            presentTime.setDST(myDST);
-        }
-        
-    }
-}
-
-// Determine if provided year is a leap year
 bool isLeapYear(int year)
 {
     if((year & 3) == 0) { 
@@ -2535,7 +2631,9 @@ bool isLeapYear(int year)
     }
 }
 
-// Find number of days in a month
+/* 
+ * Find number of days in a month 
+ */
 int daysInMonth(int month, int year)
 {
     if(month == 2 && isLeapYear(year)) {
@@ -2545,44 +2643,13 @@ int daysInMonth(int month, int year)
 }
 
 /*
- * Internal replacement for RTC.now()
- * RTC sometimes loses sync and does not send data,
- * which is interpreted as 2165/165/165 etc
- * Check for this and retry in case.
- */
-DateTime myrtcnow()
-{
-    DateTime dt = rtc.now();
-    int retries = 0;
-
-    while ((dt.month() < 1 || dt.month() > 12 ||
-            dt.day()   < 1 || dt.day()   > 31 ||
-            dt.hour() > 23 ||
-            dt.minute() < 0 || dt.minute() > 59) &&
-            retries < 30 ) {
-
-            mydelay((retries < 5) ? 50 : 100);
-            dt = rtc.now();
-            retries++;
-    }
-
-    if(retries > 0) {
-        Serial.print(F("myrtcnow: "));
-        Serial.print(retries, DEC);
-        Serial.println(F(" retries needed to read RTC"));
-    }
-
-    return dt;
-}
-
-/*
  *  Convert a date into "minutes since 1/1/1 0:0"
  */
 uint64_t dateToMins(int year, int month, int day, int hour, int minute)
 {
     uint64_t total64 = 0;
     uint32_t total32 = 0;
-    int c = year, d = 1;
+    int c = year, d = 0;        // ny0: d=1
 
     total32 = hours1kYears[year / 500];
     if(total32) d = (year / 500) * 500;
@@ -2603,13 +2670,13 @@ uint64_t dateToMins(int year, int month, int day, int hour, int minute)
  */
 void minsToDate(uint64_t total64, int& year, int& month, int& day, int& hour, int& minute)
 {
-    int c = 1, d = 19;
+    int c = 0, d = 19;    // ny0: c=1
     int temp;
     uint32_t total32;
 
-    year = month = day = 1;
-    hour = 0;
-    minute = 0;
+    year = 0;             // ny0: 1
+    month = day = 1;
+    hour = minute = 0;
 
     while(d >= 0) {
         if(total64 > mins1kYears[d]) break;
@@ -2660,8 +2727,11 @@ uint8_t dayOfWeek(int d, int m, int y)
 {
     // Sakamoto's method
     const int t[] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
-    if(m < 3) y -= 1;
-    return (y + y/4 - y/100 + y/400 + t[m-1] + d) % 7;
+    if(y > 0) {
+        if(m < 3) y -= 1;
+        return (y + y/4 - y/100 + y/400 + t[m-1] + d) % 7;
+    }
+    return (mon_yday[1][m-1] + d + 5) % 7;
 }
 
 /*
@@ -2680,141 +2750,6 @@ void correctYr4RTC(uint16_t& year, int16_t& offs)
         year = 2001;
     }
 }
-
-/*
- * Callbacks for fake power switch
- */
-#ifdef FAKE_POWER_ON
-void fpbKeyPressed()
-{
-    isFPBKeyPressed = true;
-    isFPBKeyChange = true;
-}
-void fpbKeyLongPressStop()
-{
-    isFPBKeyPressed = false;
-    isFPBKeyChange = true;
-}
-#endif
-
-/*
- * Delay function for external modules
- * (gsp, temp sensor). 
- * Do not call gps_loop() here!
- */
-static void myCustomDelay(unsigned int mydel)
-{
-    unsigned long startNow = millis();
-    while(millis() - startNow < mydel) {
-        delay(5);
-        audio_loop();
-        #ifndef OLDNTP
-        ntp_short_loop();
-        #endif
-    }
-}
-
-/*
- * Delay function for keeping essential stuff alive
- * during Intro playback
- * 
- */
-static void myIntroDelay(unsigned int mydel, bool withGPS)
-{
-    unsigned long startNow = millis();
-    while(millis() - startNow < mydel) {
-        delay(5);
-        audio_loop();
-        #ifndef OLDNTP
-        ntp_short_loop();
-        #endif
-        #ifdef TC_HAVEGPS
-        if(withGPS) gps_loop();
-        #endif
-    }
-}
-
-static void waitAudioDoneIntro()
-{
-    int timeout = 100;
-
-    while(!checkAudioDone() && timeout--) {
-        audio_loop();
-        #ifndef OLDNTP
-        ntp_short_loop();
-        #endif
-        #ifdef TC_HAVEGPS
-        gps_loop();
-        #endif
-        delay(10);
-    }
-}
-
-// Call this to get full CPU speed
-void pwrNeedFullNow(bool force)
-{
-    if(pwrLow || force) {
-        setCpuFrequencyMhz(240);
-        #ifdef TC_DBG
-        Serial.print("Setting CPU speed to ");
-        Serial.println(getCpuFrequencyMhz());
-        #endif
-    }
-    pwrFullNow = millis();
-    pwrLow = false;
-}
-
-#ifdef TC_HAVESPEEDO
-#ifdef TC_HAVEGPS
-static void dispGPSSpeed(bool force)
-{
-    if(!useSpeedo || !useGPSSpeed)
-        return;
-
-    if(timeTraveled || timeTravelP0 || timeTravelP1 || timeTravelP2)
-        return;
-
-    if(force || (millis() - dispGPSnow >= 500)) {
-
-        speedo.setSpeed(myGPS.getSpeed());
-        speedo.show();
-        speedo.on();
-        dispGPSnow = millis();
-
-    }
-}
-#endif
-#ifdef TC_HAVETEMP
-static void dispTemperature(bool force)
-{
-    int temp;
-
-    if(!useSpeedo || !useTemp || useGPSSpeed)
-        return;
-
-    if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP0 || timeTravelP1 || timeTravelP2)
-        return;
-
-    if(speedo.getNightMode()) {
-        speedo.off();
-        tempOldNM = true;
-        return;
-    }
-
-    if(tempOldNM || (force || (millis() - tempReadNow >= 2*60*1000))) {
-        tempOldNM = false;
-        tempSens.on();
-        speedo.setTemperature(tempSens.readTemp(tempUnit));
-        speedo.show();
-        speedo.setBrightnessDirect(tempBrightness); // after show b/c brightness
-        speedo.on();
-        tempSens.off();
-        tempReadNow = millis();
-    }
-
-}
-#endif
-#endif
 
 
 /**************************************************************
@@ -3019,7 +2954,7 @@ bool parseTZ(char *tz, int currYear, bool doparseDST)
 
     // 0) Basic validity check
 
-    if(*tz == 0) return true;                     // Empty string. OK, no DST.
+    if(*tz == 0) return true;                         // Empty string. OK, no DST.
 
     if(!tzIsValid) {
         t = tz;
@@ -3043,8 +2978,10 @@ bool parseTZ(char *tz, int currYear, bool doparseDST)
            if(!t) return false;                       // if <, but no >, string is bad. No DST.
            t++;
         } else {
-           while(*t && *t != '-' && (*t < '0' || *t > '9'))
+           while(*t && *t != '-' && (*t < '0' || *t > '9')) {
+              if(*t == ',') return false;
               t++;
+           }
         }
         
         // t = start of diff to GMT
@@ -3120,7 +3057,7 @@ bool parseTZ(char *tz, int currYear, bool doparseDST)
       
     }
 
-    if(*t == 0 || *t != ',' || !doparseDST) return true; // No DST definition. No DST.
+    if(*t == 0 || *t != ',' || !doparseDST) return true;    // No DST definition. No DST.
     t++;
 
     tzForYear = currYear;
@@ -3214,7 +3151,9 @@ bool parseTZ(char *tz, int currYear, bool doparseDST)
 }
 
 /*
- * Check if given local date/time is within local DST period
+ * Check if given local date/time is within DST period.
+ * "Local" can be non-DST or DST; therefore a change possibly
+ * needs to be blocked, see below.
  */
 int timeIsDST(int year, int month, int day, int hour, int mins, int& currTimeMins)
 {
@@ -3252,10 +3191,98 @@ static bool blockDSTChange(int currTimeMins)
            );
 }
 
+/*
+ * Determine DST from non-DST local time. This is used for NTP and GPS, 
+ * where we get UTC time, and have converted it to local nonDST time.
+ * There is no need for blocking as there is no ambiguity.
+ */
+static void localToDST(int& year, int& month, int& day, int& hour, int& minute, int& isDST)
+{
+    if(couldDST) {
+      
+        // Get mins since 1/1 of current year in local (nonDST) time
+        int currTimeMins = mins2Date(year, month, day, hour, minute);
+
+        // Determine DST
+        // DSTonMins is in non-DST time
+        // DSToffMins is in DST time, so correct it for the comparison
+        if(DSTonMins < DSToffMins) {
+            if((currTimeMins >= DSTonMins) && (currTimeMins < (DSToffMins - abs(tzDiff))))
+                isDST = 1;
+            else 
+                isDST = 0;
+        } else {
+            if((currTimeMins >= (DSToffMins - abs(tzDiff))) && (currTimeMins < DSTonMins))
+                isDST = 0;
+            else
+                isDST = 1;
+        }
+
+        // Translate to DST local time
+        if(isDST) {
+            uint64_t myTime = dateToMins(year, month, day, hour, minute);
+
+            myTime += abs(tzDiff);
+
+            minsToDate(myTime, year, month, day, hour, minute);
+        }
+    }
+}
+
+/*
+ * Evaluate DST flag from authoritative time source
+ * and update presentTime's isDST flag
+ */
+static void handleDSTFlag(struct tm *ti, int nisDST)
+{
+    int myisDST = nisDST;
+    
+    if(ti) myisDST = ti->tm_isdst;
+    
+    if(presentTime.getDST() != myisDST) {
+      
+        int myDST = -1, currTimeMins = 0;
+        #ifdef TC_DBG
+        bool isAuth = false;
+        #endif
+        
+        if(myisDST >= 0) {
+
+            // If authority has a clear answer, use it.
+            myDST = myisDST;
+            if(myDST > 1) myDST = 1;    // Who knows....
+            #ifdef TC_DBG
+            isAuth = true;
+            #endif
+            
+        } else if(couldDST && ti) {
+
+            // If authority is unsure, try for ourselves
+            myDST = timeIsDST(ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday, 
+                              ti->tm_hour, ti->tm_min, currTimeMins);
+                              
+            // If we are within block-period, set to current to prohibit a change
+            if(blockDSTChange(currTimeMins)) myDST = presentTime.getDST();
+             
+        }
+        
+        if(presentTime.getDST() != myDST) {
+            #ifdef TC_DBG
+            Serial.print(F("handleDSTFlag: Updating isDST from "));
+            Serial.print(presentTime.getDST(), DEC);
+            Serial.print(F(" to "));
+            if(isAuth) Serial.print(F("[authoritative] "));
+            Serial.println(myDST, DEC);
+            #endif
+            presentTime.setDST(myDST);
+        }
+        
+    }
+}
 
 /**************************************************************
  ***                                                        ***
- ***              Native NTP and time handling              ***
+ ***                       Native NTP                       ***
  ***                                                        ***
  **************************************************************/
 
@@ -3263,6 +3290,7 @@ static void ntp_setup()
 {
     myUDP = &ntpUDP;
     myUDP->begin(NTP_DEFAULT_LOCAL_PORT);
+    NTPfailCount = 0;
 }
 
 void ntp_loop()
@@ -3324,6 +3352,8 @@ static bool NTPTriggerUpdate()
 
 static void NTPSendPacket()
 {
+    unsigned long mymillis = millis();
+    
     memset(NTPUDPBuf, 0, NTP_PACKET_SIZE);
 
     NTPUDPBuf[0] = B11100011; // LI, Version, Mode
@@ -3336,10 +3366,11 @@ static void NTPSendPacket()
     NTPUDPBuf[14] = 'D';
     NTPUDPBuf[15] = '1';
 
-    NTPUDPBuf[40] = 'T';      // Transmit, use as id
-    NTPUDPBuf[41] = 'C';
-    NTPUDPBuf[42] = 'D';
-    NTPUDPBuf[43] = '1';
+    // Transmit, use as id
+    NTPUDPBuf[40] = NTPUDPID[0] = ((mymillis >> 24) & 0xff);      
+    NTPUDPBuf[41] = NTPUDPID[1] = ((mymillis >> 16) & 0xff);
+    NTPUDPBuf[42] = NTPUDPID[2] = ((mymillis >>  8) & 0xff);
+    NTPUDPBuf[43] = NTPUDPID[3] = (mymillis         & 0xff);
 
     myUDP->beginPacket(settings.ntpServer, 123);
     myUDP->write(NTPUDPBuf, NTP_PACKET_SIZE);
@@ -3353,14 +3384,25 @@ static void NTPCheckPacket()
     
     int psize = myUDP->parsePacket();
     if(!psize) {
-        if((mymillis - NTPTSRQAge) > 3000) {
+        if((mymillis - NTPTSRQAge) > 10000) {
+            // Packet timed out
             NTPPacketDue = false;
+            // Immediately trigger new request for
+            // the first 10 timeouts, after that
+            // the new request is only triggered
+            // a minute later as per ntp_loop().
+            if(NTPfailCount < 10) {
+                NTPfailCount++;
+                NTPUpdateNow = 0;
+            }
         }
         return;
     }
 
     // Baseline for round-trip correction
-    NTPTSAge = mymillis - ((mymillis - NTPTSRQAge) / 2); 
+    NTPTSAge = mymillis - ((mymillis - NTPTSRQAge) / 2);
+
+    NTPfailCount = 0;
     
     myUDP->read(NTPUDPBuf, NTP_PACKET_SIZE);
 
@@ -3368,10 +3410,15 @@ static void NTPCheckPacket()
 
     // Basic validity check
     if((NTPUDPBuf[0] & 0x3f) != 0x24) return;
-    if(NTPUDPBuf[24] != 'T' || 
-       NTPUDPBuf[25] != 'C' || 
-       NTPUDPBuf[26] != 'D' || 
-       NTPUDPBuf[27] != '1') return;
+    if(NTPUDPBuf[24] != NTPUDPID[0] || 
+       NTPUDPBuf[25] != NTPUDPID[1] || 
+       NTPUDPBuf[26] != NTPUDPID[2] || 
+       NTPUDPBuf[27] != NTPUDPID[3]) {
+        #ifdef TC_DBG
+        Serial.print("NTPCheckPacket: Bad packet ID (outdated packet?)");
+        #endif
+        return;
+    }
 
     // Evaluate data
     uint64_t secsSince1900 = ((uint32_t)NTPUDPBuf[40] << 24) |
@@ -3379,6 +3426,11 @@ static void NTPCheckPacket()
                              ((uint32_t)NTPUDPBuf[42] <<  8) |
                              ((uint32_t)NTPUDPBuf[43]);
 
+    uint32_t fractSec = ((uint32_t)NTPUDPBuf[44] << 24) |
+                        ((uint32_t)NTPUDPBuf[45] << 16) |
+                        ((uint32_t)NTPUDPBuf[46] <<  8) |
+                        ((uint32_t)NTPUDPBuf[47]);
+                        
     // Correct era
     if(secsSince1900 < (SECS1900_1970 + TCEPOCH_SECS)) {
         secsSince1900 |= 0x100000000ULL;
@@ -3387,21 +3439,8 @@ static void NTPCheckPacket()
     // Calculate seconds since 1/1/TCEPOCH (without round-trip correction)
     NTPsecsSinceTCepoch = secsSince1900 - (SECS1900_1970 + TCEPOCH_SECS);
 
-    #ifdef TC_DBG
-    Serial.print("UDP packet size ");
-    Serial.println(psize);
-    Serial.print("NTPCheckPacket: ");
-    Serial.println(secsSince1900 - SECS1900_1970, DEC);
-    for(int i = 0; i < psize; i+=4) {
-        Serial.print(NTPUDPBuf[i], HEX);
-        Serial.print(" ");
-        Serial.print(NTPUDPBuf[i+1], HEX);
-        Serial.print(" ");
-        Serial.print(NTPUDPBuf[i+2], HEX);
-        Serial.print(" ");
-        Serial.println(NTPUDPBuf[i+3], HEX);
-    }
-    #endif
+    // Convert fraction into ms
+    NTPmsSinceSecond = (uint32_t)(((uint64_t)fractSec * 1000ULL) >> 32);
 }
 
 static bool NTPHaveTime()
@@ -3412,7 +3451,7 @@ static bool NTPHaveTime()
 // Get seconds since 1/1/TCEPOCH including round-trip correction
 static uint32_t NTPGetCurrSecsSinceTCepoch()
 {
-    return NTPsecsSinceTCepoch + ((millis() - NTPTSAge) / 1000UL);
+    return NTPsecsSinceTCepoch + ((NTPmsSinceSecond + (millis() - NTPTSAge)) / 1000UL);
 }
 
 // Get local time
@@ -3468,36 +3507,8 @@ static bool NTPGetLocalTime(int& year, int& month, int& day, int& hour, int& min
         }
     }
 
-    // Determine DST
-    if(couldDST) {
-      
-        // Get mins since 1/1 of current year in local (nonDST) time
-        int currTimeMins = mins2Date(year, month, day, hour, minute);
-
-        // Determine DST
-        // DSTonMins is in non-DST time
-        // DSToffMins is in DST time, so correct it for the comparison
-        if(DSTonMins < DSToffMins) {
-            if((currTimeMins >= DSTonMins) && (currTimeMins < (DSToffMins - abs(tzDiff))))
-                isDST = 1;
-            else 
-                isDST = 0;
-        } else {
-            if((currTimeMins >= (DSToffMins - abs(tzDiff))) && (currTimeMins < DSTonMins))
-                isDST = 0;
-            else
-                isDST = 1;
-        }
-
-        // Translate to DST local time
-        if(isDST) {
-            uint64_t myTime = dateToMins(year, month, day, hour, minute);
-
-            myTime += abs(tzDiff);
-
-            minsToDate(myTime, year, month, day, hour, minute);
-        }
-    }
+    // Determine DST from local nonDST time
+    localToDST(year, month, day, hour, minute, isDST);
 
     return true;
 }

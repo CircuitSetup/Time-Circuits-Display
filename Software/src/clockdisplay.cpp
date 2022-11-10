@@ -3,8 +3,9 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022 Thomas Winischhofer (A10001986)
+ * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
- * Clockdisplay: Handles the TC LED segment displays
+ * Clockdisplay Class: Handles the TC LED segment displays
  *
  * Based on code by John Monaco, Marmoset Electronics
  * https://www.marmosetelectronics.com/time-circuits-clock
@@ -317,12 +318,12 @@ void clockDisplay::setYearOffset(int16_t yearOffs)
 // Place LED pattern in year position in buffer
 void clockDisplay::setYear(uint16_t yearNum)
 {
-    if(yearNum - _yearoffset < 1) {
+    if((int16_t)yearNum - _yearoffset < 0) {    // ny0: < 1
         Serial.print(F("Clockdisplay: setYear: Bad year: "));
         Serial.print(yearNum, DEC);
         Serial.print(F(" / yearoffset: "));
         Serial.println(_yearoffset, DEC);
-        yearNum = _yearoffset + 1;
+        yearNum = _yearoffset;                  // ny0: yo+1
     }
 
     _year = yearNum;
@@ -430,11 +431,9 @@ void clockDisplay::setMinute(int minNum)
 
     _displayBuffer[CD_MIN_POS] = makeNum(minNum);
 
-    switch(_did) {
-    case DISP_PRES:
+    if(_did == DISP_PRES) {
         if(alarmOnOff)
             _displayBuffer[CD_MIN_POS] |= 0x8000;
-        break;
     }
 }
 
@@ -448,6 +447,9 @@ void clockDisplay::setDST(int8_t isDST)
 void clockDisplay::setColon(bool col)
 {
     // set true to turn it on
+    // colon is off in night mode
+    
+    if(_nightmode) col = false;
     _colon = col;
 }
 
@@ -531,7 +533,8 @@ void clockDisplay::showOnlyYear(int yearNum)
 {
     clearDisplay();
 
-    if(yearNum > 10000) yearNum -= 10000;
+    while(yearNum >= 10000) 
+        yearNum -= 10000;
 
     directCol(CD_YEAR_POS,     makeNum(yearNum / 100));
     directCol(CD_YEAR_POS + 1, makeNum(yearNum % 100));
@@ -708,7 +711,7 @@ bool clockDisplay::save()
         savBuf[5] = _day;
         savBuf[6] = _hour;
         savBuf[7] = _minute;
-        savBuf[8] = 0;        // was _brightness, now in settings
+        savBuf[8] = 0;        // unused
 
         for(i = 0; i < 9; i++) {
             sum += savBuf[i];
@@ -721,8 +724,8 @@ bool clockDisplay::save()
 
     } else if(isRTC() && _saveAddress >= 0) {
 
-        // RTC: Save yearoffs, timeDiff (time comes from battery-backed RTC)
-
+        // RTC: Save IsDST, yearoffs, timeDiff
+        
         #ifdef TC_DBG
         Serial.println(F("Clockdisplay: Saving RTC settings to EEPROM"));
         #endif
@@ -864,7 +867,7 @@ bool clockDisplay::load(int initialBrightness)
         if( (sum != 0) && ((sum & 0xff) == loadBuf[9])) {
 
             #ifdef TC_DBG
-            Serial.println(F("Clockdisplay: Loading non-RTC settings from EEPROM"));
+            Serial.println(F("Clockdisplay: Loaded non-RTC settings from EEPROM"));
             #endif
 
             setYearOffset((loadBuf[3] << 8) | loadBuf[2]);
@@ -883,7 +886,7 @@ bool clockDisplay::load(int initialBrightness)
 
     } else {
 
-        // RTC: yearoffs & timeDiff is saved
+        // RTC: IsDST, yearoffs & timeDiff is saved
 
         for(i = 0; i < 10; i++) {
             loadBuf[i] = EEPROM.read(_saveAddress + i);
@@ -905,7 +908,7 @@ bool clockDisplay::load(int initialBrightness)
               timeDiffUp = loadBuf[8] ? true : false;
 
               #ifdef TC_DBG
-              Serial.println(F("Clockdisplay: Loading RTC settings from EEPROM"));
+              Serial.println(F("Clockdisplay: Loaded RTC settings from EEPROM"));
               #endif
 
         } else {
@@ -985,6 +988,8 @@ int8_t clockDisplay::loadDST()
     return -1;
 }
 
+// Load lastYear from EEPROM
+// !!! Does not *SET* it, just returns it !!!
 int16_t clockDisplay::loadLastYear()
 {
     uint8_t loadBuf[4];
@@ -1030,6 +1035,8 @@ uint8_t clockDisplay::getLED7AlphaChar(uint8_t value)
         return numDigs[value - 48];
     } else if(value >= 'A' && value <= 'Z') {
         return numDigs[value - 'A' + 10];
+    } else if(value >= 'a' && value <= 'z') {
+        return numDigs[value - 'a' + 10];
     }
     switch(value) {
     case '-':

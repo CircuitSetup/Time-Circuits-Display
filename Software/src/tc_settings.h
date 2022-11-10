@@ -3,6 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022 Thomas Winischhofer (A10001986)
+ * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * Settings handling
  *
@@ -32,21 +33,23 @@ extern bool    haveSD;
 // Default settings - change settings in the web interface 192.168.4.1
 // For list of time zones, see https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 
-#define DEF_TIMES_PERS      1     // 0-1;  Default: 1 = TimeTravel persistent
+#define DEF_TIMES_PERS      0     // 0-1;  Default: 0 = TimeTravel not persistent
 #define DEF_ALARM_RTC       1     // 0-1;  Default: 1 = Alarm is RTC-based (otherwise 0 = presentTime-based)
 #define DEF_PLAY_INTRO      1     // 0-1;  Default: 1 = Play intro
 #define DEF_MODE24          0     // 0-1;  Default: 0=12-hour-mode, 1=24-hour-mode
 #define DEF_AUTOROTTIMES    1     // 0-5;  Default: Auto-rotate every 5th minute
 #define DEF_WIFI_RETRY      3     // 1-15; Default: 3 retries
-#define DEF_WIFI_TIMEOUT    7     // 1-15; Default: 7 seconds time-out
-#define DEF_WIFI_OFFDELAY   0     // 0/10-99: Default 0 = Never power down WiFi in STA-mode
-#define DEF_WIFI_APOFFDELAY 0     // 0/10-99: Default 0 = Never power down WiFi in AP-mode
+#define DEF_WIFI_TIMEOUT    7     // 7-25; Default: 7 seconds
+#define DEF_WIFI_OFFDELAY   0     // 0/10-99; Default 0 = Never power down WiFi in STA-mode
+#define DEF_WIFI_APOFFDELAY 0     // 0/10-99; Default 0 = Never power down WiFi in AP-mode
 #define DEF_NTP_SERVER      "pool.ntp.org"
-#define DEF_TIMEZONE        "CST6CDT,M3.2.0,M11.1.0"    // Posix format
+#define DEF_TIMEZONE        "UTC0"// Default: UTC; Posix format
 #define DEF_BRIGHT_DEST     15    // 1-15; Default: max brightness
 #define DEF_BRIGHT_PRES     15
 #define DEF_BRIGHT_DEPA     15
-#define DEF_AUTONM_ON       0     // Default: Both 0, Auto-Night-Mode disabled
+#define DEF_AUTONM          0     // Default: AutoNM disabled
+#define DEF_AUTONM_PRESET   0     
+#define DEF_AUTONM_ON       0     // Default: Both 0
 #define DEF_AUTONM_OFF      0
 #define DEF_DT_OFF          1     // Default: Dest. time off in night mode
 #define DEF_PT_OFF          0     // Default: Present time dimmed in night mode
@@ -64,6 +67,7 @@ extern bool    haveSD;
 #define DEF_TEMP_BRIGHT     3     // Default temp brightness
 #define DEF_TEMP_UNIT       0     // Default: temp unit Fahrenheit
 #define DEF_USE_ETTO        0     // 0: No external props
+#define DEF_PLAY_TT_SND     1     // 1: Play time travel sounds (0: Do not; for use with external equipment)
 
 struct Settings {
     char timesPers[4]       = MS(DEF_TIMES_PERS);
@@ -80,6 +84,8 @@ struct Settings {
     char destTimeBright[4]  = MS(DEF_BRIGHT_DEST);
     char presTimeBright[4]  = MS(DEF_BRIGHT_PRES);
     char lastTimeBright[4]  = MS(DEF_BRIGHT_DEPA);
+    char autoNM[4]          = MS(DEF_AUTONM);
+    char autoNMPreset[4]    = MS(DEF_AUTONM_PRESET);
     char autoNMOn[4]        = MS(DEF_AUTONM_ON);
     char autoNMOff[4]       = MS(DEF_AUTONM_OFF);
     char dtNmOff[4]         = MS(DEF_DT_OFF);
@@ -112,6 +118,7 @@ struct Settings {
 #ifdef EXTERNAL_TIMETRAVEL_OUT
     char useETTO[4]         = MS(DEF_USE_ETTO);
 #endif
+    char playTTsnds[4]      = MS(DEF_PLAY_TT_SND);
     char copyAudio[12]      = "";   // never loaded or saved!
 };
 

@@ -3,6 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us 
  * (C) 2022 Thomas Winischhofer (A10001986)
+ * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  * 
  * Clockdisplay and keypad menu code based on code by John Monaco
  * Marmoset Electronics 
@@ -27,14 +28,10 @@
  * Needs ESP32 Arduino framework: https://github.com/espressif/arduino-esp32
  *
  * Library dependencies:
- * - OneButton: https://github.com/mathertel/OneButton
- *   (Tested with 2.0.4)
  * - ESP8266Audio: https://github.com/earlephilhower/ESP8266Audio
  *   (1.9.7 and later for esp-arduino 2.x; 1.9.5 for 1.x)
  * - WifiManager (tablatronix, tzapu; v0.16 and later) https://github.com/tzapu/WiFiManager
  *   (Tested with 2.1.12beta)
- * - Keypad ("by Community; Mark Stanley, Alexander Brevig): https://github.com/Chris--A/Keypad
- *   (Tested with 3.1.1)
  * 
  * 
  * Detailed installation and compilation instructions are here:
@@ -43,6 +40,70 @@
 
 /*  Changelog
  *
+  *  2022/11/08 (A10001986)
+ *    - Allow time travel to (non-existing) year 0, so users can simulate the movie
+ *      error (Dec 25, 0000).
+ *    - RTC can no longer be set to a date below TCEPOCH (which is 2022 currently)
+ *    - Adapt temperature sensor code to allow quickly adding other sensor types
+ *    - Fix time travel time difference in case of a 9999->1 roll-over.
+ *  2022/11/06 (A10001986)
+ *    - Add short-cut to set alarm by typing 11hhmm+ENTER (weekday selection must
+ *      still be done through keypad menu)
+ *    - Change default time zone to UTC; folks without WiFi should not be bothered
+ *      by unexpected DST changes.
+ *    - Change default "time travel persistence" to off to avoid flash wear.
+ *  2022/11/05 (A10001986)
+ *    - Re-order keypad menu; alarm and volume are probably used more often than
+ *      programming times for the displays or setting the RTC...
+ *    - Add weekday selection for alarm
+ *    - Add option to disable time travel sounds (in order to have other props play
+ *      theirs. This is only useful in connection with compatible props, triggered by 
+ *      IO14.)
+ *    - Rename "tc_input.*" files to "input.*" for consistency reasons
+ *  2022/11/03 (A10001986)
+ *    - Reboot after audio file installation from keypad menu
+ *    - Ignore held keys while in keypad menu
+ *    - Optimize tc_input
+ *  2022/11/02 (A10001986)
+ *    - Re-order Config Portal options
+ *    - Disable colon in night mode
+ *    - Unify keypad and keypad_i2c into keypad_i2c; remove unused stuff, and further
+ *      optimize code and improve key responsiveness and debouncing. The dependency 
+ *      on Keypad is now history.
+ *    - Include minimized version of OneButton library (renamed "TCButton"), thereby
+ *      remove dependency on this library.
+ *    - "tc_keypadi2c.*" renamed to tc_input.* to better reflect actual contents.
+ *  2022/10/31 (A10001986)
+ *    - Strengthen logic regarding when to try to resync time with NTP or GPS; if 
+ *      there is no autoritative time, WiFi power saving timeout is set long enough 
+ *      to avoid consecutive reconnects (and thereby frozen displays). This 
+ *      essentially defeats the WiFi power saving feature, but accurate time is 
+ *      more important than power saving. This is a clock after all.
+ *    - Fix NTP update when WiFi is on power-save mode (ie off); WiFiManager's annoying 
+ *      async WiFi scan when re-connecting and starting the Config Portal prohibited an 
+ *      NTP update within the available time frame. Fixed by immediately re-triggering 
+ *      an NTP request when an old packet timed out.
+ *    - Do not start Config Portal when WiFi is reconnecting because of an NTP update.
+ *      (This also fixes the issue above, but both measures are reasonable)
+ *    - NTP: Give request packets a unique id in order to filter out outdated 
+ *      responses; response packet timeout changed from 3 to 10 seconds.
+ *  2022/10/29 (A10001986)
+ *    - Added auto night-mode presets. There are currently four presets, for
+ *      (hopefully) typical home, office and store setups. The times in the description
+ *      define when the clock is in use, which might appear somewhat counter-intuitive 
+ *      at first, but is easier to describe:
+ *      Home: Mon-Thu 5pm-11pm, Fri 1pm-1am, Sat 9am-1am, Sun 9am-11pm
+ *      Office (1): Mon-Fri 9am-5pm
+ *      Office (2): Mon-Thu 7am-5pm, Fri 7am-2pm
+ *      Shop: Mon-Wed 8am-8pm, Thu-Fri 8am-9pm, Sat 8am-5pm
+ *      The old daily "start hour" and "end hour" setting still present, of course.
+ *    - time_loop: Do not adjust time if DST flag is -1
+ *  2022/10/27 (A10001986)
+ *    - Minor fixes/enhancements (in time setup, etc)
+ *  2022/10/26 (A10001986)
+ *    - Enhancements to DST logic
+ *    - Fine-tune GPS polling and RTC updating
+ *    - Remove unused stuff
  *  2022/10/24 (A10001986)
  *    - Defer starting the Config Portal during boot: Starting with 2.0.13beta,
  *      WiFiManager triggers an async WiFi Scan when the CP is started, which 
@@ -376,7 +437,6 @@ void setup()
     settings_setup();
     wifi_setup();
     audio_setup();
-
     menu_setup();
     keypad_setup();
     time_setup();
@@ -386,13 +446,11 @@ void setup()
 void loop() 
 {
     keypad_loop();
-    get_key();
-    #ifndef OLDNTP
+    scanKeypad();
     ntp_loop();
-    #endif
     time_loop();
-    wifi_loop();
     audio_loop();
+    wifi_loop();
 }
 
 // For testing I2C connections and addresses

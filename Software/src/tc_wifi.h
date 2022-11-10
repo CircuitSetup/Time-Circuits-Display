@@ -3,6 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022 Thomas Winischhofer (A10001986)
+ * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * WiFi and Config Portal handling
  *
@@ -33,7 +34,7 @@ extern bool wifiInAPMode;
 void wifi_setup();
 void wifi_loop();
 void wifiOff();
-void wifiOn(unsigned long newDelay = 0, bool alsoInAPMode = false);
+void wifiOn(unsigned long newDelay = 0, bool alsoInAPMode = false, bool deferConfigPortal = false);
 void wifiStartCP();
 
 void updateConfigPortalValues();
