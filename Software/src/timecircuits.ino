@@ -40,7 +40,31 @@
 
 /*  Changelog
  *
-  *  2022/11/08 (A10001986)
+  *  2022/11/22 (A10001986)
+ *    - Audio: SPIFFS does not adhere to POSIX standards and returns a file object
+ *      even if a file does not exist. Fix by work-around (SPIFFS only).
+ *    - clockdisplay: lampTest(), as part of the display disruption sequence, might 
+ *      be the reason for some red displays to go dark after time travel; reduce 
+ *      the number of segments lit.
+ *    - Rename "tempSensor" to "sensors" and add light sensor support. Three types
+ *      are supported: TSL2561, BH1750, VEML7700/VEML6030 (VEML7700 only if no GPS 
+ *      receiver is connected due to an i2c address conflict; VEML6030 must be configured
+ *      for address 0x48, ie ADDR must be high, if GPS is connected at the same time). 
+ *      The light sensor is solely used for switching the device into night mode. The 
+ *      keypad menu as a new option to show the currently measured lux in order to 
+ *      determine a suitable threshold to be configured in the Config Portal.
+ *    - Display "--" on speedo instead of "NAN" if temperature cannot be read
+ *    - Check more properly for GPS sensor (do a read test).
+ *    - Main config file now (de)serialized using Dynamic JSON object due to its size
+ *  2022/11/11 (A10001986)
+ *    - Extended Sound on the Hour: User can now put "hour-xx.mp3" files for each
+ *      hour on the SD card (hour-00.mp3, hour-01.mp3, ..., hour-23.mp3). If one of
+ *      the files is missing, "hour.mp3" will be played (if it exists on the SD card)
+ *    - Support comma on ADA-1270 7-segment display
+ *  2022/11/10 (A10001986)
+ *    - Minor optimizations (wifi)
+ *    - Soft-reset the clock by entering 64738 and ENTER
+ *  2022/11/08 (A10001986)
  *    - Allow time travel to (non-existing) year 0, so users can simulate the movie
  *      error (Dec 25, 0000).
  *    - RTC can no longer be set to a date below TCEPOCH (which is 2022 currently)
@@ -430,7 +454,7 @@ void setup()
 
     // PCF8574 only supports 100kHz, can't go to 400 here - Wire.begin(-1, -1, 100000);
     Wire.begin();
-    // scan();
+
     Serial.println();
     
     time_boot();
@@ -452,38 +476,3 @@ void loop()
     audio_loop();
     wifi_loop();
 }
-
-// For testing I2C connections and addresses
-/*
-void scan() 
-{
-    Serial.println(" Scanning I2C Addresses");
-    uint8_t cnt = 0;
-    for (uint8_t i = 0; i < 128; i++) {
-        Wire.beginTransmission(i);
-        uint8_t ec = Wire.endTransmission(true);
-        if (ec == 0) {
-            if (i < 16) Serial.print('0');
-            Serial.print(i, HEX);
-            cnt++;
-        } else
-            Serial.print("..");
-        Serial.print(' ');
-        if ((i & 0x0f) == 0x0f) Serial.println();
-    }
-    Serial.print("Scan Completed, ");
-    Serial.print(cnt);
-    Serial.println(" I2C Devices found.");
-}
-
-bool i2cReady(uint8_t adr) 
-{
-    uint32_t timeout = millis();
-    bool ready = false;
-    while ((millis() - timeout < 100) && (!ready)) {
-        Wire.beginTransmission(adr);
-        ready = (Wire.endTransmission() == 0);
-    }
-    return ready;
-}
-*/

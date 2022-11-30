@@ -78,8 +78,8 @@ class DateTime {
  * tcRTC Class
  ****************************************************************/
 
-enum rtcType {
-    RTCT_DS3231,
+enum  {
+    RTCT_DS3231 = 0,
     RTCT_PCF2129
 };
 

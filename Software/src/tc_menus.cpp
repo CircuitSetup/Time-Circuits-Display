@@ -54,6 +54,7 @@
  *     - select the brightness for the three displays ("BRIGHTNESS"),
  *     - show network information ("NET-WORK"),
  *     - enter dates/times for the three displays,
+ *     - show currently measured LUX if a light sensor is connected,
  *     - install the default audio files ("INSTALL AUDIO FILES")
  *     - quit the menu ("END").
  *
@@ -200,9 +201,10 @@
 #define MODE_DEST 5
 #define MODE_PRES 6
 #define MODE_DEPT 7
-#define MODE_VER  8
-#define MODE_CPA  9
-#define MODE_END  10
+#define MODE_LUX  8
+#define MODE_VER  9
+#define MODE_CPA  10
+#define MODE_END  11
 #define MODE_MIN  MODE_ALRM
 #define MODE_MAX  MODE_END
 
@@ -251,10 +253,12 @@ static void showCurVolHWSW();
 static void showCurVol();
 static void doSetVolume();
 static void doSetAlarm();
-
 static void saveAutoInterval();
 static void doSetAutoInterval();
 static void doSetBrightness(clockDisplay* displaySet);
+#ifdef TC_HAVELIGHT
+static void doShowLux();
+#endif
 static void doShowNetInfo();
 static void doCopyAudioFiles();
 static void waitForEnterRelease();
@@ -574,6 +578,18 @@ void enter_menu()
         allOff();
         waitForEnterRelease();
 
+    #ifdef TC_HAVELIGHT
+    } else if(menuItemNum == MODE_LUX) {   // Show light sensor info
+
+        allOff();
+        waitForEnterRelease();
+
+        doShowLux();
+
+        allOff();
+        waitForEnterRelease();
+    #endif
+    
     } else if(menuItemNum == MODE_CPA) {   // Copy audio files
 
         allOff();
@@ -659,6 +675,7 @@ static void menuSelect(int& number)
             timeout = 0;  // button pressed, reset timeout
 
             number++;
+            if(number == MODE_LUX && !useLight) number++;
             if(number == MODE_CPA && !check_allow_CPA()) number++;
             if(number > MODE_MAX) number = MODE_MIN;
 
@@ -766,6 +783,15 @@ static void menuShow(int number)
         #endif
         departedTime.off();
         break;
+    #ifdef TC_HAVELIGHT    
+    case MODE_LUX:
+        destinationTime.showOnlyText("LIGHT");
+        presentTime.showOnlyText("SENSOR");
+        presentTime.on();
+        destinationTime.on();
+        departedTime.off();
+        break;
+    #endif
     case MODE_VER:  // Version info
         destinationTime.showOnlyText("VERSION");
         destinationTime.on();
@@ -970,6 +996,11 @@ static bool loadCurVolume()
 
     if(curVolume > 15 && curVolume != 255)
         curVolume = 255;
+
+    #ifdef TC_DBG
+    Serial.print("loadVolume: Loaded volume ");
+    Serial.println(curVolume);
+    #endif
 
     return true;
 }
@@ -1507,6 +1538,69 @@ static void doSetBrightness(clockDisplay* displaySet) {
 
     allLampTest();  // turn on all the segments
 }
+
+/*
+ * Show light sensor info #############################
+ */
+
+#ifdef TC_HAVELIGHT
+static void doShowLux()
+{
+    char buf[13];
+    bool luxDone = false;
+    unsigned luxNow = 0;
+
+    destinationTime.showOnlyText("LUX");
+    destinationTime.on();
+
+    sprintf(buf, "%d", lightSens.readLux());
+    presentTime.showOnlyText(buf);
+    presentTime.on();
+
+    departedTime.off();
+
+    isEnterKeyHeld = false;
+
+    luxNow = millis();
+
+    // Wait for enter
+    while(!luxDone) {
+
+        // If pressed
+        if(checkEnterPress()) {
+
+            // wait for release
+            while(checkEnterPress()) {
+                // If hold threshold is passed, bail out
+                myloop();
+                if(isEnterKeyHeld) {
+                    isEnterKeyHeld = false;
+                    luxDone = true;
+                    break;
+                }
+                delay(10);
+            }
+            
+        } else {
+
+            mydelay(50);
+
+            if(millis() - luxNow > 1000) {
+                lightSens.loop();
+                #ifdef TC_DBG
+                sprintf(buf, "%08x", lightSens.readDebug());
+                #else
+                sprintf(buf, "%d", lightSens.readLux());
+                #endif
+                presentTime.showOnlyText(buf);
+                luxNow = millis();
+            }
+
+        }
+
+    }
+}
+#endif
 
 /*
  * Show network info ##################################

@@ -45,9 +45,10 @@ class clockDisplay {
         void begin();
         void on();
         void off();
+        void realLampTest();
         void lampTest();
 
-        void clear();
+        void clearBuf();
 
         uint8_t setBrightness(uint8_t level, bool setInitial = false);
         uint8_t setBrightnessDirect(uint8_t level);
@@ -81,14 +82,14 @@ class clockDisplay {
 
         void setColon(bool col);
 
-        uint8_t getMonth();
-        uint8_t getDay();
-        int16_t getYearOffset();
+        uint8_t  getMonth();
+        uint8_t  getDay();
+        int16_t  getYearOffset();
         uint16_t getYear();
         uint16_t getDisplayYear();
-        uint8_t getHour();
-        uint8_t getMinute();
-        int8_t getDST();
+        uint8_t  getHour();
+        uint8_t  getMinute();
+        int8_t   getDST();
 
         void showOnlyMonth(int monthNum);
         void showOnlyDay(int dayNum);
@@ -100,13 +101,13 @@ class clockDisplay {
         void showOnlyText(const char *text);
         void showOnlyHalfIP(int a, int b, bool clear = false);
 
-        bool save();
-        bool saveYOffs();
-        bool load(int initialBrightness = -1);
+        bool    save();
+        bool    saveYOffs();
+        bool    load(int initialBrightness = -1);
         int16_t loadYOffs();
-        int8_t loadDST();
+        int8_t  loadDST();
 
-        bool saveLastYear(uint16_t theYear);
+        bool    saveLastYear(uint16_t theYear);
         int16_t loadLastYear();
 
     private:

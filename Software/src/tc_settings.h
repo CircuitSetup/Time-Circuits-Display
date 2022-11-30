@@ -66,6 +66,8 @@ extern bool    haveSD;
 #define DEF_USE_TEMP        0     // 0: No i2c thermometer
 #define DEF_TEMP_BRIGHT     3     // Default temp brightness
 #define DEF_TEMP_UNIT       0     // Default: temp unit Fahrenheit
+#define DEF_USE_LIGHT       0     // Default: No light sensor
+#define DEF_LUX_LIMIT       3     // Default Lux for night mode
 #define DEF_USE_ETTO        0     // 0: No external props
 #define DEF_PLAY_TT_SND     1     // 1: Play time travel sounds (0: Do not; for use with external equipment)
 
@@ -114,6 +116,10 @@ struct Settings {
     char tempBright[4]      = MS(DEF_TEMP_BRIGHT);
     char tempUnit[4]        = MS(DEF_TEMP_UNIT);
 #endif
+#endif
+#ifdef TC_HAVELIGHT
+    char useLight[4]         = MS(DEF_USE_LIGHT);
+    char luxLimit[8]         = MS(DEF_LUX_LIMIT);
 #endif
 #ifdef EXTERNAL_TIMETRAVEL_OUT
     char useETTO[4]         = MS(DEF_USE_ETTO);

@@ -32,9 +32,9 @@
 #endif
 #ifdef TC_HAVESPEEDO
 #include "speeddisplay.h"
-#ifdef TC_HAVETEMP
-#include "tempsensor.h"
 #endif
+#if defined(TC_HAVELIGHT) || (defined(TC_HAVESPEEDO) && defined(TC_HAVETEMP))
+#include "sensors.h"
 #endif
 
 #define AUTONM_NUM_PRESETS 4
@@ -55,8 +55,15 @@ extern speedDisplay speedo;
 extern bool useTemp;
 #endif
 #endif
+extern bool useLight;
+#ifdef TC_HAVELIGHT
+extern lightSensor lightSens;
+#endif
 
 extern tcRTC rtc;
+
+extern int8_t        manualNightMode;
+extern unsigned long manualNMNow;
 
 #define NUM_AUTOTIMES 11
 extern dateStruct destinationTimes[NUM_AUTOTIMES];

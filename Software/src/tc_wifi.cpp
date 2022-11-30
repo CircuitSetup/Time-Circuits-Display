@@ -89,13 +89,15 @@ static const char *dispTypeNames[SP_NUM_TYPES] = {
 };
 #endif
 
+static const char *aco = "autocomplete='off'";
+
 WiFiManagerParameter custom_headline("<img style='display:block;margin:0px auto 10px auto;' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAS0AAACDCAMAAADvXL32AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAYBQTFRFNKLchsjq/7oEZrnl/6IKrWVXbaN5U5eQ+/3+9Pr9W3qR/1Qd/5oMKZ3a/5MN/7QFj2tt/3wT/4MRprBK/2EZ/1sbW7TjtN3y/3QVzpMzA4vU4/L6tZNGfMPo6vX7mK1W/04etbU+6Wooq9jx/20X9FMmEpLW5sMV/40P13A0yV5DwuP0mtHu/64Hkc3s/6kI/8UBQajehJBs11k6/8EChKlm0bsn2u747FQr/4gQ3osp6bgV/8oAybototTv6KkaS6zg16cn8cYLu+Dz/2kYCI7UOoCp1uz49ZYU/8gAyeb2DZDV0ur3cb7mnY9azej2w6I441Yyv7k13sEb6Zkdul9PF5XX7cUP+lAiG5fYdnR9+cgF770Q3rUe8KQV3vD58XQf+XMZIJnZzawuUa/h5IEm83sc/ckC9o8V9sgI96wO+bsJ+8AG84kZ+8QEoGZh1b8j/bEI/74D82ch9oMZ97QL4Z4i+aIP7/j8+skEvntFoXpb/2YY98YH978J////jLnAmQAAAIB0Uk5T/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////wA4BUtnAAAi20lEQVR42u2di0PT1vfA02VAUpfJhmskIUWslEGzboFBEaVWs1BNGwoikaKuM9Yx9viCsq9G3Hf513/n3ryTG6i4/XSPs7lh6SP95LzuveeeSxXlqlor2qzzr5wulLrW4pRGv2DkSmpFb4o28y+UbFptbltAorXKFkcpfUPKySW9JhZt5l9uKVpOSZu+tAMyvby5sICpmRalNAp0rl7iK22RZf7FFtJijdFLoexMTy8Dtrntg9FWlwNlK0hVuQ7Uev9qG6LlNJXtSySZBl1D1HZ3hTKnFGgjV1c7NdFm/7nQgJZTKi9fOlF2lhe2hwBbfk0DbjR4Nr7G/FNpMTFbPJXbAYoJJnJtkqw2e6L9z6LltKm5S28kOzvLQRhFcTRXrfO6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'>");
 
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
 WiFiManagerParameter custom_ttrp("ttrp", "Make time travels persistent (0=no, 1=yes)", settings.timesPers, 1, "autocomplete='off' title='If disabled, the displays are reset after reboot'");
-WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is RTC (1) or displayed \"present\" time (0)", settings.alarmRTC, 1, "autocomplete='off'");
-WiFiManagerParameter custom_playIntro("plIn", "Play intro (0=off, 1=on)", settings.playIntro, 1, "autocomplete='off'");
-WiFiManagerParameter custom_mode24("md24", "24-hour clock mode: (0=12hr, 1=24hr)", settings.mode24, 1, "autocomplete='off'");
+WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is RTC (1) or displayed \"present\" time (0)", settings.alarmRTC, 1, aco);
+WiFiManagerParameter custom_playIntro("plIn", "Play intro (0=off, 1=on)", settings.playIntro, 1, aco);
+WiFiManagerParameter custom_mode24("md24", "24-hour clock mode: (0=12hr, 1=24hr)", settings.mode24, 1, aco);
 #else // -------------------- Checkbox hack: --------------
 WiFiManagerParameter custom_ttrp("ttrp", "Make time travels persistent", settings.timesPers, 1, "title='If unchecked, the displays are reset after reboot' type='checkbox' style='margin-top:3px'", WFM_LABEL_AFTER);
 WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is real present time", settings.alarmRTC, 1, "title='If unchecked, the alarm base is the displayed \"present\" time' type='checkbox'", WFM_LABEL_AFTER);
@@ -125,19 +127,27 @@ WiFiManagerParameter custom_presTimeBright("pt_bright", "Present Time display br
 WiFiManagerParameter custom_lastTimeBright("lt_bright", "Last Time Dep. display brightness (0-15)", settings.lastTimeBright, 2, "type='number' min='0' max='15' autocomplete='off'");
 
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
-WiFiManagerParameter custom_dtNmOff("dTnMOff", "Destination time off in night mode (0=dimmed, 1=off)", settings.dtNmOff, 1, "autocomplete='off'");
-WiFiManagerParameter custom_ptNmOff("pTnMOff", "Present time off in night mode (0=dimmed, 1=off)", settings.ptNmOff, 1, "autocomplete='off'");
-WiFiManagerParameter custom_ltNmOff("lTnMOff", "Last time dep. off in night mode (0=dimmed, 1=off)", settings.ltNmOff, 1, "autocomplete='off'");
-WiFiManagerParameter custom_autoNM("anm", "Automatic night-mode (0=off, 1=on)", settings.autoNM, 1, "autocomplete='off'");
+WiFiManagerParameter custom_dtNmOff("dTnMOff", "Destination time off in night mode (0=dimmed, 1=off)", settings.dtNmOff, 1, aco);
+WiFiManagerParameter custom_ptNmOff("pTnMOff", "Present time off in night mode (0=dimmed, 1=off)", settings.ptNmOff, 1, aco);
+WiFiManagerParameter custom_ltNmOff("lTnMOff", "Last time dep. off in night mode (0=dimmed, 1=off)", settings.ltNmOff, 1, aco);
+WiFiManagerParameter custom_autoNM("anm", "Scheduled night-mode (0=off, 1=on)", settings.autoNM, 1, aco);
 #else // -------------------- Checkbox hack: --------------
 WiFiManagerParameter custom_dtNmOff("dTnMOff", "Destination time off in night mode", settings.dtNmOff, 1, "title='If unchecked, the display will be dimmed' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
 WiFiManagerParameter custom_ptNmOff("pTnMOff", "Present time off in night mode", settings.ptNmOff, 1, "title='If unchecked, the display will be dimmed' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
 WiFiManagerParameter custom_ltNmOff("lTnMOff", "Last time dep. off in night mode", settings.ltNmOff, 1, "title='If unchecked, the display will be dimmed' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
-WiFiManagerParameter custom_autoNM("anm", "Automatic night-mode", settings.autoNM, 1, "title='Check to enable automatic night-mode' type='checkbox' style='margin-top:14px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_autoNM("anm", "Scheduled night-mode", settings.autoNM, 1, "title='Check to enable scheduled night-mode' type='checkbox' style='margin-top:14px'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 WiFiManagerParameter custom_autoNMTimes(anmCustHTML);
 WiFiManagerParameter custom_autoNMOn("anmon", "Daily night-mode start hour (0-23)", settings.autoNMOn, 2, "type='number' min='0' max='23' autocomplete='off' title='Enter hour to switch on night-mode'");
 WiFiManagerParameter custom_autoNMOff("anmoff", "Daily night-mode end hour (0-23)", settings.autoNMOff, 2, "type='number' min='0' max='23' autocomplete='off' title='Enter hour to switch off night-mode'");
+#ifdef TC_HAVELIGHT
+#ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
+WiFiManagerParameter custom_uLS("uLS", "Use light sensor (0=no, 1=yes)", settings.useLight, 1, aco);
+#else // -------------------- Checkbox hack: --------------
+WiFiManagerParameter custom_uLS("uLS", "Use light sensor", settings.useLight, 1, "title='If checked, device will go into night mode if light level is below threshold' type='checkbox' style='margin-top:14px'", WFM_LABEL_AFTER);
+#endif
+WiFiManagerParameter custom_lxLim("lxLim", "<br>Light (lux) threshold (0-100000)", settings.luxLimit, 6, "type='number' min='0' max='100000' autocomplete='off'", WFM_LABEL_BEFORE);
+#endif
 
 #ifdef TC_HAVESPEEDO
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
@@ -236,6 +246,10 @@ static IPAddress stringToIp(char *str);
 static void getParam(String name, char *destBuf, size_t length);
 static bool myisspace(char mychar);
 static char* strcpytrim(char* destination, const char* source);
+#ifndef TC_NOCHECKBOXES
+static void strcpyCB(char *sv, WiFiManagerParameter *el);
+static void setCBVal(WiFiManagerParameter *el, char *sv);
+#endif
 
 /*
  * wifi_setup()
@@ -328,6 +342,10 @@ void wifi_setup()
     wm.addParameter(&custom_autoNMTimes);
     wm.addParameter(&custom_autoNMOn);
     wm.addParameter(&custom_autoNMOff);
+    #ifdef TC_HAVELIGHT
+    wm.addParameter(&custom_uLS);
+    wm.addParameter(&custom_lxLim);
+    #endif
     wm.addParameter(&custom_sectend);
 
     #ifdef TC_HAVESPEEDO
@@ -485,6 +503,9 @@ void wifi_loop()
             }
             strcpy(settings.autoNMOn, custom_autoNMOn.getValue());
             strcpy(settings.autoNMOff, custom_autoNMOff.getValue());
+            #ifdef TC_HAVELIGHT
+            strcpy(settings.luxLimit, custom_lxLim.getValue());
+            #endif
             
             #ifdef EXTERNAL_TIMETRAVEL_IN
             strcpy(settings.ettDelay, custom_ettDelay.getValue());
@@ -516,6 +537,9 @@ void wifi_loop()
             strcpy(settings.dtNmOff, custom_dtNmOff.getValue());
             strcpy(settings.ptNmOff, custom_ptNmOff.getValue());
             strcpy(settings.ltNmOff, custom_ltNmOff.getValue());
+            #ifdef TC_HAVELIGHT
+            strcpy(settings.useLight, custom_uLS.getValue());
+            #endif
             #ifdef EXTERNAL_TIMETRAVEL_IN
             strcpy(settings.ettLong, custom_ettLong.getValue());
             #endif
@@ -539,37 +563,40 @@ void wifi_loop()
 
             #else // -------------------------- Checkboxes:
 
-            strcpy(settings.timesPers, ((int)atoi(custom_ttrp.getValue()) > 0) ? "1" : "0");
-            strcpy(settings.alarmRTC, ((int)atoi(custom_alarmRTC.getValue()) > 0) ? "1" : "0");
-            strcpy(settings.playIntro, ((int)atoi(custom_playIntro.getValue()) > 0) ? "1" : "0");
-            strcpy(settings.mode24, ((int)atoi(custom_mode24.getValue()) > 0) ? "1" : "0");
+            strcpyCB(settings.timesPers, &custom_ttrp);
+            strcpyCB(settings.alarmRTC, &custom_alarmRTC);
+            strcpyCB(settings.playIntro, &custom_playIntro);
+            strcpyCB(settings.mode24, &custom_mode24);
             #ifdef TC_HAVEGPS
-            strcpy(settings.useGPS, ((int)atoi(custom_useGPS.getValue()) > 0) ? "1" : "0");
+            strcpyCB(settings.useGPS, &custom_useGPS);
             #endif
-            strcpy(settings.autoNM, ((int)atoi(custom_autoNM.getValue()) > 0) ? "1" : "0");
-            strcpy(settings.dtNmOff, ((int)atoi(custom_dtNmOff.getValue()) > 0) ? "1" : "0");
-            strcpy(settings.ptNmOff, ((int)atoi(custom_ptNmOff.getValue()) > 0) ? "1" : "0");
-            strcpy(settings.ltNmOff, ((int)atoi(custom_ltNmOff.getValue()) > 0) ? "1" : "0");
+            strcpyCB(settings.autoNM, &custom_autoNM);
+            strcpyCB(settings.dtNmOff, &custom_dtNmOff);
+            strcpyCB(settings.ptNmOff, &custom_ptNmOff);
+            strcpyCB(settings.ltNmOff, &custom_ltNmOff);
+            #ifdef TC_HAVELIGHT
+            strcpyCB(settings.useLight, &custom_uLS);
+            #endif
             #ifdef EXTERNAL_TIMETRAVEL_IN
-            strcpy(settings.ettLong, ((int)atoi(custom_ettLong.getValue()) > 0) ? "1" : "0");
+            strcpyCB(settings.ettLong, &custom_ettLong);
             #endif
             #ifdef FAKE_POWER_ON
-            strcpy(settings.fakePwrOn, ((int)atoi(custom_fakePwrOn.getValue()) > 0) ? "1" : "0");
+            strcpyCB(settings.fakePwrOn, &custom_fakePwrOn);
             #endif
             #ifdef TC_HAVESPEEDO
-            strcpy(settings.useSpeedo, ((int)atoi(custom_useSpeedo.getValue()) > 0) ? "1" : "0");
+            strcpyCB(settings.useSpeedo, &custom_useSpeedo);
             #ifdef TC_HAVEGPS
-            strcpy(settings.useGPSSpeed, ((int)atoi(custom_useGPSS.getValue()) > 0) ? "1" : "0");
+            strcpyCB(settings.useGPSSpeed, &custom_useGPSS);
             #endif
             #ifdef TC_HAVETEMP
-            strcpy(settings.useTemp, ((int)atoi(custom_useTemp.getValue()) > 0) ? "1" : "0");
-            strcpy(settings.tempUnit, ((int)atoi(custom_tempUnit.getValue()) > 0) ? "1" : "0");
+            strcpyCB(settings.useTemp, &custom_useTemp);
+            strcpyCB(settings.tempUnit, &custom_tempUnit);
             #endif
             #endif
             #ifdef EXTERNAL_TIMETRAVEL_OUT
-            strcpy(settings.useETTO, ((int)atoi(custom_useETTO.getValue()) > 0) ? "1" : "0");
+            strcpyCB(settings.useETTO, &custom_useETTO);
             #endif
-            strcpy(settings.playTTsnds, ((int)atoi(custom_playTTSnd.getValue()) > 0) ? "1" : "0");
+            strcpyCB(settings.playTTsnds, &custom_playTTSnd);
 
             #endif  // -------------------------
 
@@ -887,9 +914,6 @@ static void setupStaticIP()
 
 void updateConfigPortalValues()
 {
-    #ifndef TC_NOCHECKBOXES
-    const char makeCheck[] = "1' checked a='";
-    #endif
     const char custHTMLSel[] = " selected";
     int t = atoi(settings.autoRotateTimes);
     int tnm = atoi(settings.autoNMPreset);
@@ -943,6 +967,9 @@ void updateConfigPortalValues()
 
     custom_autoNMOn.setValue(settings.autoNMOn, 2);
     custom_autoNMOff.setValue(settings.autoNMOff, 2);
+    #ifdef TC_HAVELIGHT
+    custom_lxLim.setValue(settings.luxLimit, 6);
+    #endif
     
     #ifdef EXTERNAL_TIMETRAVEL_IN
     custom_ettDelay.setValue(settings.ettDelay, 5);
@@ -982,6 +1009,9 @@ void updateConfigPortalValues()
     custom_dtNmOff.setValue(settings.dtNmOff, 1);
     custom_ptNmOff.setValue(settings.ptNmOff, 1);
     custom_ltNmOff.setValue(settings.ltNmOff, 1);
+    #ifdef TC_HAVELIGHT
+    custom_uLS.setValue(settings.useLight, 1);
+    #endif
     #ifdef EXTERNAL_TIMETRAVEL_IN
     custom_ettLong.setValue(settings.ettLong, 1);
     #endif
@@ -1005,37 +1035,40 @@ void updateConfigPortalValues()
 
     #else   // For checkbox hack --------------------------
 
-    custom_ttrp.setValue(((int)atoi(settings.timesPers) > 0) ? makeCheck : "1", 14);
-    custom_alarmRTC.setValue(((int)atoi(settings.alarmRTC) > 0) ? makeCheck : "1", 14);
-    custom_playIntro.setValue(((int)atoi(settings.playIntro) > 0) ? makeCheck : "1", 14);
-    custom_mode24.setValue(((int)atoi(settings.mode24) > 0) ? makeCheck : "1", 14);
+    setCBVal(&custom_ttrp, settings.timesPers);
+    setCBVal(&custom_alarmRTC, settings.alarmRTC);
+    setCBVal(&custom_playIntro, settings.playIntro);
+    setCBVal(&custom_mode24, settings.mode24);
     #ifdef TC_HAVEGPS
-    custom_useGPS.setValue(((int)atoi(settings.useGPS) > 0) ? makeCheck : "1", 14);
+    setCBVal(&custom_useGPS, settings.useGPS);
     #endif
-    custom_autoNM.setValue(((int)atoi(settings.autoNM) > 0) ? makeCheck : "1", 14);
-    custom_dtNmOff.setValue(((int)atoi(settings.dtNmOff) > 0) ? makeCheck : "1", 14);
-    custom_ptNmOff.setValue(((int)atoi(settings.ptNmOff) > 0) ? makeCheck : "1", 14);
-    custom_ltNmOff.setValue(((int)atoi(settings.ltNmOff) > 0) ? makeCheck : "1", 14);
+    setCBVal(&custom_autoNM, settings.autoNM);
+    setCBVal(&custom_dtNmOff, settings.dtNmOff);
+    setCBVal(&custom_ptNmOff, settings.ptNmOff);
+    setCBVal(&custom_ltNmOff, settings.ltNmOff);
+    #ifdef TC_HAVELIGHT
+    setCBVal(&custom_uLS, settings.useLight);
+    #endif
     #ifdef EXTERNAL_TIMETRAVEL_IN
-    custom_ettLong.setValue(((int)atoi(settings.ettLong) > 0) ? makeCheck : "1", 14);
+    setCBVal(&custom_ettLong, settings.ettLong);
     #endif
     #ifdef FAKE_POWER_ON
-    custom_fakePwrOn.setValue(((int)atoi(settings.fakePwrOn) > 0) ? makeCheck : "1", 14);
+    setCBVal(&custom_fakePwrOn, settings.fakePwrOn);
     #endif  
     #ifdef TC_HAVESPEEDO
-    custom_useSpeedo.setValue(((int)atoi(settings.useSpeedo) > 0) ? makeCheck : "1", 14);
+    setCBVal(&custom_useSpeedo, settings.useSpeedo);
     #ifdef TC_HAVEGPS
-    custom_useGPSS.setValue(((int)atoi(settings.useGPSSpeed) > 0) ? makeCheck : "1", 14);
+    setCBVal(&custom_useGPSS, settings.useGPSSpeed);
     #endif
     #ifdef TC_HAVETEMP
-    custom_useTemp.setValue(((int)atoi(settings.useTemp) > 0) ? makeCheck : "1", 14);
-    custom_tempUnit.setValue(((int)atoi(settings.tempUnit) > 0) ? makeCheck : "1", 14);
+    setCBVal(&custom_useTemp, settings.useTemp);
+    setCBVal(&custom_tempUnit, settings.tempUnit);
     #endif
     #endif
     #ifdef EXTERNAL_TIMETRAVEL_OUT
-    custom_useETTO.setValue(((int)atoi(settings.useETTO) > 0) ? makeCheck : "1", 14);
+    setCBVal(&custom_useETTO, settings.useETTO);
     #endif
-    custom_playTTSnd.setValue(((int)atoi(settings.playTTsnds) > 0) ? makeCheck : "1", 14);
+    setCBVal(&custom_playTTSnd, settings.playTTsnds);
 
     #endif // ---------------------------------------------    
 
@@ -1159,3 +1192,18 @@ static char* strcpytrim(char* destination, const char* source)
     
     return ret;
 }
+
+#ifndef TC_NOCHECKBOXES
+static void strcpyCB(char *sv, WiFiManagerParameter *el)
+{
+    strcpy(sv, ((int)atoi(el->getValue()) > 0) ? "1" : "0");
+}
+
+
+static void setCBVal(WiFiManagerParameter *el, char *sv)
+{
+    const char makeCheck[] = "1' checked a='";
+    
+    el->setValue(((int)atoi(sv) > 0) ? makeCheck : "1", 14);
+}
+#endif

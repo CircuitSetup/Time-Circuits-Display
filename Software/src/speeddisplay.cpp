@@ -37,6 +37,7 @@
 #ifdef TC_HAVESPEEDO
 
 #include <Arduino.h>
+#include <math.h>
 #include "speeddisplay.h"
 #include <Wire.h>
 
@@ -127,7 +128,7 @@ struct dispConf {
 #define S14GR4_DOT 0x0000     // dot (has none)
 
 
-const uint16_t font7segGeneric[38] = {
+static const uint16_t font7segGeneric[38] = {
     S7G_T|S7G_TR|S7G_BR|S7G_B|S7G_BL|S7G_TL,
     S7G_TR|S7G_BR,
     S7G_T|S7G_TR|S7G_B|S7G_BL|S7G_M,
@@ -168,7 +169,7 @@ const uint16_t font7segGeneric[38] = {
     S7G_M
 };
 
-const uint16_t font14segGeneric[38] = {
+static const uint16_t font14segGeneric[38] = {
     S14_T|S14_TL|S14_TR|S14_B|S14_BL|S14_BR,
     S14_TR|S14_BR,
     S14_T|S14_TR|S14_ML|S14_MR|S14_B|S14_BL,
@@ -209,7 +210,7 @@ const uint16_t font14segGeneric[38] = {
     S14_ML|S14_MR
 };
 
-const uint16_t font14segGrove[38] = {
+static const uint16_t font14segGrove[38] = {
     S14GR_T|S14GR_TL|S14GR_TR|S14GR_B|S14GR_BL|S14GR_BR,
     S14GR_TR|S14GR_BR,
     S14GR_T|S14GR_TR|S14GR_ML|S14GR_MR|S14GR_B|S14GR_BL,
@@ -250,7 +251,7 @@ const uint16_t font14segGrove[38] = {
     S14GR_ML|S14GR_MR
 };
 
-const uint16_t font144segGrove[38] = {
+static const uint16_t font144segGrove[38] = {
     S14GR4_T|S14GR4_TL|S14GR4_TR|S14GR4_B|S14GR4_BL|S14GR4_BR,
     S14GR4_TR|S14GR4_BR,
     S14GR4_T|S14GR4_TR|S14GR4_ML|S14GR4_MR|S14GR4_B|S14GR4_BL,
@@ -291,7 +292,7 @@ const uint16_t font144segGrove[38] = {
     S14GR4_ML|S14GR4_MR
 };
 
-struct dispConf displays[SP_NUM_TYPES] = {
+static struct dispConf displays[SP_NUM_TYPES] = {
   { true,  0, 1, 0, 0, 1, 0, 255, 0,      0, 8, 2, 0, { 0, 1 },       font7segGeneric },  // CircuitSetup TCD add-on (TODO)
   { true,  3, 4, 0, 0, 4, 0,   2, 0, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right)
   { true,  0, 1, 0, 0, 1, 0,   2, 0, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)
@@ -313,8 +314,12 @@ struct dispConf displays[SP_NUM_TYPES] = {
 };
 
 // Grove 4-digit special handling
-const uint8_t gr4_sh1[4] = { 4,  6, 5, 10 };
-const uint8_t gr4_sh2[4] = { 3, 14, 9,  8 };
+static const uint16_t gr4_sh1[4] = { 1<<4, 1<<6,  1<<5, 1<<10 };
+static const uint16_t gr4_sh2[4] = { 1<<3, 1<<14, 1<<9, 1<<8  };
+
+// ADA-1270:
+// Pos 2: 0x02 - center colon (both dots),  0x04 - left colon - lower dot
+//        0x08 - left colon - upper dot,    0x10 - decimal point (upper right)
 
 // Store i2c address
 speedDisplay::speedDisplay(uint8_t address)
@@ -354,7 +359,7 @@ void speedDisplay::begin(int dispType)
     Wire.write(0x20 | 1);  // turn on oscillator
     Wire.endTransmission();
 
-    clear();            // clear buffer
+    clearBuf();         // clear buffer
     setBrightness(15);  // setup initial brightness
     clearDisplay();     // clear display RAM
     on();               // turn it on
@@ -391,7 +396,7 @@ void speedDisplay::lampTest()
 }
 
 // Clear the buffer
-void speedDisplay::clear()
+void speedDisplay::clearBuf()
 {
     // must call show() to actually clear display
 
@@ -465,12 +470,19 @@ void speedDisplay::show()
     }
 
     switch(_dispType) {
+    case SP_ADAF_B7x4:
+    case SP_ADAF_B7x4L:
+        _displayBuffer[_colon_pos] &= ~(0x10);
+        if(_displayBuffer[*(_bufPosArr + 2)] & S7G_DOT) {
+            _displayBuffer[_colon_pos] |= 0x10;
+        }
+        break;
     case SP_GROVE_4DIG14:
     case SP_GROVE_4DIG14L:
         _displayBuffer[_colon_pos] &= ~(0x4778);
         for(int i = 0; i < 4; i++) {
-            _displayBuffer[_colon_pos] |= ((_displayBuffer[*(_bufPosArr + i)] & 0x02) ? 1 << gr4_sh1[i] : 0);
-            _displayBuffer[_colon_pos] |= ((_displayBuffer[*(_bufPosArr + i)] & 0x04) ? 1 << gr4_sh2[i] : 0);
+            _displayBuffer[_colon_pos] |= ((_displayBuffer[*(_bufPosArr + i)] & 0x02) ? gr4_sh1[i] : 0);
+            _displayBuffer[_colon_pos] |= ((_displayBuffer[*(_bufPosArr + i)] & 0x04) ? gr4_sh2[i] : 0);
         }
     }
 
@@ -503,7 +515,7 @@ void speedDisplay::setText(const char *text)
     int idx = 0, pos = 0;
     int temp = 0;
 
-    clear();
+    clearBuf();
 
     if(_is7seg) {
         while(text[idx] && (pos < (_num_digs / (1<<_buf_packed)))) {
@@ -529,7 +541,7 @@ void speedDisplay::setText(const char *text)
             _displayBuffer[*(_bufPosArr + pos)] = getLEDChar(text[idx]);
             idx++;
             if(text[idx] == '.') {
-                _displayBuffer[*(_bufPosArr + pos)]  |= getLEDChar('.');
+                _displayBuffer[*(_bufPosArr + pos)] |= getLEDChar('.');
                 idx++;
             }
             pos++;
@@ -543,7 +555,7 @@ void speedDisplay::setText(const char *text)
 // (including current dot01 setting; colon is cleared and ignored)
 void speedDisplay::setSpeed(int8_t speedNum)
 {
-    clear();
+    clearBuf();
 
     _speed = speedNum;
 
@@ -567,12 +579,12 @@ void speedDisplay::setTemperature(double temp)
     char buf[8];
     char alignBuf[20];
     int t, strlenBuf = 0;
-
-    clear();
+    const char *myNan = "----";
 
     switch(_num_digs) {
     case 2:
-        if(temp <= -10.0) setText("Lo");
+        if(isnan(temp)) setText(myNan);
+        else if(temp <= -10.0) setText("Lo");
         else if(t >= 100.0) setText("Hi");
         else if(temp >= 10.0 || temp < 0.0) {
             t = (int)((double)round(temp));
@@ -584,7 +596,8 @@ void speedDisplay::setTemperature(double temp)
         }
         break;
     case 3:
-        if(temp <= -100.0) setText("Low");
+        if(isnan(temp)) setText(myNan);
+        else if(temp <= -100.0) setText("Low");
         else if(t >= 1000.0) setText("Hi");
         else if(temp >= 100.0 || temp <= -10.0) {
             t = (int)((double)round(temp));
@@ -596,7 +609,7 @@ void speedDisplay::setTemperature(double temp)
         }
         break;
     default:
-        sprintf(buf, "%.1f", temp);
+        sprintf(buf, isnan(temp) ? myNan : "%.1f", temp);
         for(int i = 0; i < strlen(buf); i++) {
             if(buf[i] != '.') strlenBuf++;
         }
@@ -613,7 +626,6 @@ void speedDisplay::setTemperature(double temp)
     }
 }
 #endif
-
 
 // Set/clear dot at speed's 1's position.
 void speedDisplay::setDot(bool dot01)
@@ -650,24 +662,27 @@ bool speedDisplay::getColon()
 // Special purpose -------------------------------------------------------------
 
 
-// clears the display RAM and only shows the given text
+// Clears the display RAM and only shows the given text
 // does not use the buffer, writes directly to display
 // (clears colon; dots work like the buffer version.)
 void speedDisplay::showTextDirect(const char *text)
 {
     int idx = 0, pos = 0;
     int temp = 0;
-    uint16_t tt = 0, spec = _lastBufPosCol;
+    uint16_t tt = 0, spec = 0;
+    bool commaAdded = false;
 
     clearDisplay();
 
     if(_is7seg) {
         while(text[idx] && (pos < (_num_digs / (1<<_buf_packed)))) {
+            commaAdded = false;
             temp = getLEDChar(text[idx]) << _dig10_shift;
             idx++;
             if(text[idx] == '.') {
                 temp |= (getLEDChar('.') << _dig10_shift);
                 idx++;
+                commaAdded = true;
             }
             if(_buf_packed && text[idx]) {
                 temp |= (getLEDChar(text[idx]) << _dig01_shift);
@@ -678,6 +693,14 @@ void speedDisplay::showTextDirect(const char *text)
                 }
             }
             directCol(*(_bufPosArr + pos), temp);
+            switch(_dispType) {
+            case SP_ADAF_B7x4:
+            case SP_ADAF_B7x4L:
+                if(pos == 2 && commaAdded) {
+                    spec |= 0x10;
+                }
+                break;
+            }
             pos++;
         }
     } else {
@@ -692,17 +715,20 @@ void speedDisplay::showTextDirect(const char *text)
             switch(_dispType) {
             case SP_GROVE_4DIG14:
             case SP_GROVE_4DIG14L:
-                spec |= ((tt & 0x2) ? 1 << gr4_sh1[pos] : 0);
-                spec |= ((tt & 0x4) ? 1 << gr4_sh2[pos] : 0);
+                spec |= ((tt & 0x2) ? gr4_sh1[pos] : 0);
+                spec |= ((tt & 0x4) ? gr4_sh2[pos] : 0);
                 break;
             }
             pos++;
         }
-        switch(_dispType) {
-        case SP_GROVE_4DIG14:
-        case SP_GROVE_4DIG14L:
-            directCol(_colon_pos, spec);
-        }
+    }
+
+    switch(_dispType) {
+    case SP_ADAF_B7x4:
+    case SP_ADAF_B7x4L:
+    case SP_GROVE_4DIG14:
+    case SP_GROVE_4DIG14L:
+        directCol(_colon_pos, spec);
     }
 }
 
@@ -715,9 +741,9 @@ void speedDisplay::setColonDirect(bool colon)
     if(_colon_pos < 255) {
         if(_colon) t |= (_colon_bm << _colon_shift);
         else       t &= (~(_colon_bm << _colon_shift));
-    }
 
-    directCol(_colon_pos, t);
+        directCol(_colon_pos, t);
+    }
 }
 
 // Private functions ###########################################################

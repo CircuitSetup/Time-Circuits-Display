@@ -63,7 +63,7 @@ enum dispTypes : int {
     SP_GROVE_4DIG14,  // Grove 0.54" Quad Alphanumeric Display
     SP_GROVE_4DIG14L, // " " " (left aligned)
 #ifdef TWPRIVATE
-    SP_TWCUSTOM1,     // Like SP_ADAF_14x4, but with only left hand side tube soldered on
+    SP_TWCUSTOM1,     // Like SP_ADAF_14x4L, but with only left hand side tube soldered on
     SP_TWCUSTOM2,     // Like SP_ADAF_7x4L, but only 2 digits soldered on
 #endif
 // ----- do not use the ones below ----
@@ -84,7 +84,7 @@ class speedDisplay {
         void off();
         void lampTest();
 
-        void clear();
+        void clearBuf();
 
         uint8_t setBrightness(uint8_t level, bool isInitial = false);
         uint8_t setBrightnessDirect(uint8_t level) ;

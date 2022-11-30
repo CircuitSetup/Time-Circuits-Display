@@ -97,11 +97,14 @@ static unsigned long timeNow = 0;
 
 static unsigned long lastKeyPressed = 0;
 
-#define DATELEN_ALL   12   // month, day, year, hour, min
-#define DATELEN_DATE   8   // month, day, year
-#define DATELEN_QALM   6   // 11, hour, min (alarm-set shortcut)
-#define DATELEN_TIME   4   // hour, minute
-#define DATELEN_CODE   3   // xxx (special; todo)
+#define DATELEN_ALL   12   // mmddyyyyHHMM month, day, year, hour, min
+#define DATELEN_DATE   8   // mmddyyyy     month, day, year
+#define DATELEN_QALM   6   // 11HHMM       11, hour, min (alarm-set shortcut)
+#define DATELEN_INT    5   // xxxxx        reset
+#define DATELEN_TIME   4   // HHMM         hour, minute
+#define DATELEN_CODE   3   // xxx          (special; todo)
+#define DATELEN_CMIN   DATELEN_CODE
+#define DATELEN_CMAX   DATELEN_QALM
 
 static char dateBuffer[DATELEN_ALL + 2];
 char        timeBuffer[8];
@@ -245,11 +248,15 @@ static void keypadEvent(char key, KeyState kstate)
         case '4':    // "4" held down -> nightmode on
             doKey = false;
             nightModeOn();
+            manualNightMode = 1;
+            manualNMNow = millis();
             play_file("/nmon.mp3", 1.0, false, 0);
             break;
         case '5':    // "5" held down -> nightmode off
             doKey = false;
             nightModeOff();
+            manualNightMode = 0;
+            manualNMNow = millis();
             play_file("/nmoff.mp3", 1.0, false, 0);
             break;
         case '3':    // "3" held down -> play audio file "key3"
@@ -439,11 +446,8 @@ void keypad_loop()
 
         if(strLen != DATELEN_ALL  &&
            strLen != DATELEN_DATE &&
-           strLen != DATELEN_TIME &&
-           strLen != DATELEN_QALM &&
-           strLen != DATELEN_CODE) {
-
-            Serial.println(F("keypad_loop: Date is too long or too short"));
+           (strLen < DATELEN_CMIN ||
+            strLen > DATELEN_CMAX) ) {
 
             invalidEntry = true;
 
@@ -457,6 +461,19 @@ void keypad_loop()
             default:
                 invalidEntry = true;
             }
+
+        } else if(strLen == DATELEN_INT) {
+
+            if(!(strncmp(dateBuffer, "64738", 5))) {
+                allOff();
+                destinationTime.showOnlyText("REBOOTING");
+                destinationTime.on();
+                delay(ENTER_DELAY);
+                digitalWrite(WHITE_LED_PIN, LOW);
+                esp_restart();
+            }
+
+            invalidEntry = true;
 
         } else if(strLen == DATELEN_QALM) {
 
@@ -584,11 +601,11 @@ void keypad_loop()
             }
 
             // Copy date to destination time
-            if(_setYear >= 0)    destinationTime.setYear(_setYear);   // y0
-            if(_setMonth > 0)   destinationTime.setMonth(_setMonth);
-            if(_setDay > 0)     destinationTime.setDay(_setDay);
-            if(_setHour >= 0)   destinationTime.setHour(_setHour);
-            if(_setMin >= 0)    destinationTime.setMinute(_setMin);
+            if(_setYear >= 0) destinationTime.setYear(_setYear);   // ny0: >
+            if(_setMonth > 0) destinationTime.setMonth(_setMonth);
+            if(_setDay > 0)   destinationTime.setDay(_setDay);
+            if(_setHour >= 0) destinationTime.setHour(_setHour);
+            if(_setMin >= 0)  destinationTime.setMinute(_setMin);
 
             // We only save the new time to the EEPROM if user wants persistence.
             // Might not be preferred; first, this messes with the user's custom

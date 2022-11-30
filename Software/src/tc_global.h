@@ -29,11 +29,11 @@
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION "V2.3.0"           // 13 chars max
-#define TC_VERSION_EXTRA "NOV082022"  // 13 chars max
+#define TC_VERSION "V2.4.0"           // 13 chars max
+#define TC_VERSION_EXTRA "NOV232022"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION "V2.3.0_A-CAR"     // 12 chars max
-#define TC_VERSION_EXTRA "11082022"   // 12 chars max
+#define TC_VERSION "V2.4.0_A-CAR"     // 12 chars max
+#define TC_VERSION_EXTRA "11232022"   // 12 chars max
 #endif
 
 //#define TC_DBG            // debug output on Serial
@@ -53,11 +53,16 @@
 #define SP_NUM_TYPES    10  // Number of speedo display types supported
 #define SP_MIN_TYPE     1   // Change to 0 when CircuitSetup speedo prop exists
 
-// Uncomment for support of temperature sensor (MCP9808-based) connected 
+// Uncomment for support of a temperature sensor (MCP9808-based) connected 
 // via i2c (0x18). Will be used to display ambient temperature on speedometer 
 // display when idle. GPS speed has higher priority, ie if GPS speed is 
 // enabled in Config Portal, temperature will not be shown.
 #define TC_HAVETEMP
+
+// Uncomment for support of s light sensor (TLS2561, BH1750, or VEML7700) 
+// connected via i2c. Used for night-mode-switching. VEML7700 and GPS cannot 
+// be present at the same time since they share the same i2c slave address.
+//#define TC_HAVELIGHT
 
 // Fake Power Switch:
 // Attach an active-low switch to io13; firmware will start network and

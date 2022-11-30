@@ -208,12 +208,15 @@ void settings_setup()
                 Serial.println(F("settings_setup: Opened config file"));
                 #endif
 
-                StaticJsonDocument<1024> json;
+                //StaticJsonDocument<1536> json;
+                DynamicJsonDocument json(1536);
                 DeserializationError error = deserializeJson(json, configFile);
 
                 #ifdef TC_DBG
                 serializeJson(json, Serial);
                 Serial.println(F(" "));
+                Serial.print(F("Size of JSON: "));
+                Serial.println(json.memoryUsage());
                 #endif
 
                 if(!error) {
@@ -364,6 +367,16 @@ void settings_setup()
                     } else writedefault = true;
                     #endif
                     #endif
+                    #ifdef TC_HAVELIGHT
+                    if(json["useLight"]) {
+                        strcpy(settings.useLight, json["useLight"]);
+                        writedefault |= checkValidNumParm(settings.useLight, 0, 1, DEF_USE_LIGHT);
+                    } else writedefault = true;
+                    if(json["luxLimit"]) {
+                        strcpy(settings.luxLimit, json["luxLimit"]);
+                        writedefault |= checkValidNumParm(settings.luxLimit, 0, 100000, DEF_LUX_LIMIT);
+                    } else writedefault = true;
+                    #endif
                     #ifdef EXTERNAL_TIMETRAVEL_OUT
                     if(json["useETTO"]) {
                         strcpy(settings.useETTO, json["useETTO"]);
@@ -416,7 +429,8 @@ void settings_setup()
 
 void write_settings()
 {
-    StaticJsonDocument<1024> json;
+    DynamicJsonDocument json(1536);
+    //StaticJsonDocument<1536> json;
 
     if(!haveFS) {
         Serial.println(F("write_settings: Cannot write settings, flash FS not mounted"));
@@ -471,6 +485,10 @@ void write_settings()
     json["tempBright"] = settings.tempBright;
     json["tempUnit"] = settings.tempUnit;
     #endif
+    #endif
+    #ifdef TC_HAVELIGHT
+    json["useLight"] = settings.useLight;
+    json["luxLimit"] = settings.luxLimit;
     #endif
     #ifdef EXTERNAL_TIMETRAVEL_OUT
     json["useETTO"] = settings.useETTO;

@@ -96,7 +96,7 @@ void clockDisplay::begin()
     Wire.write(0x20 | 1);  // turn on oscillator
     Wire.endTransmission();
 
-    clear();            // clear buffer
+    clearBuf();         // clear buffer
     setBrightness(15);  // setup initial brightness
     clearDisplay();     // clear display RAM
     on();               // turn it on
@@ -119,19 +119,36 @@ void clockDisplay::off()
 }
 
 // Turn on all LEDs
+// Not for use in normal operation
+// Red displays apparently draw more power
+// and might remain dark after repeatedly
+// calling this.
+void clockDisplay::realLampTest()
+{
+    Wire.beginTransmission(_address);
+    Wire.write(0x00);  // start at address 0x0
+
+    for(int i = 0; i < CD_BUF_SIZE*2; i++) {
+        Wire.write(0xff);
+    }
+    Wire.endTransmission();
+}
+
+// Turn on some LEDs
+// Used for effects and brightness keypad menu
 void clockDisplay::lampTest()
 {
     Wire.beginTransmission(_address);
     Wire.write(0x00);  // start at address 0x0
 
     for(int i = 0; i < CD_BUF_SIZE*2; i++) {
-        Wire.write(0xFF);
+        Wire.write(0x55);
     }
     Wire.endTransmission();
 }
 
 // Clear the buffer
-void clockDisplay::clear()
+void clockDisplay::clearBuf()
 {
     // must call show() to actually clear display
 
@@ -357,9 +374,6 @@ void clockDisplay::setMonth(int monthNum)
 #ifdef IS_ACAR_DISPLAY
     _displayBuffer[CD_MONTH_POS] = makeNum(monthNum);
 #else
-    // We always work with months 1-12, not 0-11
-    // Exception: timeinfo (tm) works with 0-11, but we only use this in getNTPtime
-    // for syncing. Therefore, we must ALWAYS decrease monthNum here
     monthNum--;
     _displayBuffer[CD_MONTH_POS]     = getLEDAlphaChar(months[monthNum][0]);
     _displayBuffer[CD_MONTH_POS + 1] = getLEDAlphaChar(months[monthNum][1]);
