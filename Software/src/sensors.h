@@ -40,9 +40,11 @@
 class tcSensor {
   
     protected:
-    
+
+        void     prepareRead(uint16_t regno);
         uint16_t read16(uint16_t regno, bool LSBfirst = false);
         uint8_t  read8(uint16_t regno);
+        uint32_t read24(uint16_t regno);
         void     write16(uint16_t regno, uint16_t value, bool LSBfirst = false);
         void     write8(uint16_t regno, uint8_t value);
 
@@ -54,7 +56,8 @@ class tcSensor {
 #ifdef TC_HAVETEMP    // -----------------------------------------
 
 enum {
-    MCP9808 = 0
+    MCP9808 = 0,
+    BMx820
 };
 
 class tempSensor : tcSensor {
@@ -71,13 +74,23 @@ class tempSensor : tcSensor {
         void off();
         double readTemp(bool celsius = true);
 
+        void setOffset(double myOffs);
+
     private:
 
         int     _numTypes = 0;
         uint8_t _addrArr[4*2];    // up to 4 sensor types fit here
         int8_t  _st = -1;
 
+        double  _userOffset = 0.0;
+
+        uint32_t _BMx280_CD_T1;
+        int32_t  _BMx280_CD_T2;
+        int32_t  _BMx280_CD_T3;
+
         void onoff(bool shutDown);
+
+        double BMx280_CalcTemp(uint32_t ival);
 
         // Ptr to custom delay function
         void (*_customDelayFunc)(unsigned int) = NULL;

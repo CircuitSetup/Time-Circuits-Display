@@ -365,6 +365,10 @@ void settings_setup()
                         strcpy(settings.tempUnit, json["tempUnit"]);
                         writedefault |= checkValidNumParm(settings.tempUnit, 0, 1, DEF_TEMP_UNIT);
                     } else writedefault = true;
+                    if(json["tempOffs"]) {
+                        strcpy(settings.tempOffs, json["tempOffs"]);
+                        writedefault |= checkValidNumParmF(settings.tempOffs, -3.0, 3.0, DEF_TEMP_OFFS);
+                    } else writedefault = true;
                     #endif
                     #endif
                     #ifdef TC_HAVELIGHT
@@ -484,6 +488,7 @@ void write_settings()
     json["useTemp"] = settings.useTemp;
     json["tempBright"] = settings.tempBright;
     json["tempUnit"] = settings.tempUnit;
+    json["tempOffs"] = settings.tempOffs;
     #endif
     #endif
     #ifdef TC_HAVELIGHT
@@ -552,7 +557,7 @@ static bool checkValidNumParmF(char *text, double lowerLim, double upperLim, dou
     }
 
     for(i = 0; i < len; i++) {
-        if(text[i] != '.' && (text[i] < '0' || text[i] > '9')) {
+        if(text[i] != '.' && text[i] != '-' && (text[i] < '0' || text[i] > '9')) {
             sprintf(text, "%1.1f", setDefault);
             return true;
         }

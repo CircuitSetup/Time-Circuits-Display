@@ -42,23 +42,26 @@
 
 #include "tc_time.h"
 
-#define DEST_TIME_ADDR 0x71 // i2C address of TC displays
+// i2c slave addresses
+
+#define DEST_TIME_ADDR 0x71 // TC displays
 #define PRES_TIME_ADDR 0x72
 #define DEPT_TIME_ADDR 0x74
 
-#define SPEEDO_ADDR    0x70 // i2C address of speedo display
+#define SPEEDO_ADDR    0x70 // speedo display
 
-#define GPS_ADDR       0x10 // i2C address of GPS receiver
+#define GPS_ADDR       0x10 // GPS receiver
 
-#define MCP9808_ADDR   0x18 // i2C address of temperature sensor
+#define MCP9808_ADDR   0x18 // temperature sensors
+#define BMx820_ADDR    0x77
 
-#define TSL2561_ADDR   0x29 // I2C address of light sensors 
+#define TSL2561_ADDR   0x29 // light sensors 
 #define BH1750_ADDR    0x23
 #define VEML6030_ADDR  0x48
 #define VEML7700_ADDR  0x10 // (conflicts with GPS!)
 
-#define DS3231_ADDR    0x68 // i2C address of DS3231 RTC
-#define PCF2129_ADDR   0x51 // i2C address of PCF2129 RTC
+#define DS3231_ADDR    0x68 // DS3231 RTC
+#define PCF2129_ADDR   0x51 // PCF2129 RTC
 
 // The time between reentry sound being started and the display coming on
 // Must be sync'd to the sound file used! (startup.mp3/timetravel.mp3)
@@ -137,7 +140,7 @@ bool                 useTemp = false;
 static unsigned long dispGPSnow = 0;
 #endif
 #ifdef TC_HAVETEMP
-static bool          tempUnit = DEF_TEMP_UNIT;
+bool                 tempUnit = DEF_TEMP_UNIT;
 static unsigned long tempReadNow = 0;
 static int           tempBrightness = DEF_TEMP_BRIGHT;
 #endif
@@ -243,7 +246,10 @@ clockDisplay departedTime(DISP_LAST, DEPT_TIME_ADDR, DEPT_TIME_PREF);
 #ifdef TC_HAVESPEEDO
 speedDisplay speedo(SPEEDO_ADDR);
 #ifdef TC_HAVETEMP
-static tempSensor tempSens(1, (uint8_t[1*2]){ MCP9808_ADDR, MCP9808 });
+tempSensor tempSens(2, 
+            (uint8_t[2*2]){ MCP9808_ADDR, MCP9808,
+                            BMx820_ADDR,  BMx820
+                          });
 static bool tempOldNM = false;
 #endif
 #endif
@@ -930,6 +936,7 @@ void time_setup()
             if(tempSens.begin()) {
                 tempSens.setCustomDelayFunc(myCustomDelay);
                 tempBrightness = (int)atoi(settings.tempBright);
+                tempSens.setOffset((double)atof(settings.tempOffs));
                 #ifdef FAKE_POWER_ON
                 if(!waitForFakePowerButton) {
                 #endif
@@ -1338,7 +1345,7 @@ void time_loop()
             // This is normally done hourly between hour:01 and hour:02. However:
             // - If no GPS time is available and Wifi is in power-save, update only once 
             //   a week during night hours. We don't want a stalled display due to 
-            //   WiFi re-connect during day time or too often.
+            //   WiFi re-connect during day time for too often.
             // - Then again, ignore rule above if we have no authoritative time yet. In 
             //   that case, try every 5th+1 and 5th+2 (resyncInt) minute. Frozen displays
             //   are avoided by setting the WiFi off-timer to a period longer than the

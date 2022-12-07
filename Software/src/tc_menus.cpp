@@ -201,7 +201,7 @@
 #define MODE_DEST 5
 #define MODE_PRES 6
 #define MODE_DEPT 7
-#define MODE_LUX  8
+#define MODE_SENS  8
 #define MODE_VER  9
 #define MODE_CPA  10
 #define MODE_END  11
@@ -256,8 +256,8 @@ static void doSetAlarm();
 static void saveAutoInterval();
 static void doSetAutoInterval();
 static void doSetBrightness(clockDisplay* displaySet);
-#ifdef TC_HAVELIGHT
-static void doShowLux();
+#if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+static void doShowSensors();
 #endif
 static void doShowNetInfo();
 static void doCopyAudioFiles();
@@ -578,13 +578,13 @@ void enter_menu()
         allOff();
         waitForEnterRelease();
 
-    #ifdef TC_HAVELIGHT
-    } else if(menuItemNum == MODE_LUX) {   // Show light sensor info
+    #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+    } else if(menuItemNum == MODE_SENS) {   // Show light sensor info
 
         allOff();
         waitForEnterRelease();
 
-        doShowLux();
+        doShowSensors();
 
         allOff();
         waitForEnterRelease();
@@ -675,7 +675,11 @@ static void menuSelect(int& number)
             timeout = 0;  // button pressed, reset timeout
 
             number++;
-            if(number == MODE_LUX && !useLight) number++;
+            #ifdef TC_HAVESPEEDO
+            if(number == MODE_SENS && !useLight && !useTemp) number++;
+            #else
+            if(number == MODE_SENS && !useLight) number++;
+            #endif
             if(number == MODE_CPA && !check_allow_CPA()) number++;
             if(number > MODE_MAX) number = MODE_MIN;
 
@@ -783,12 +787,11 @@ static void menuShow(int number)
         #endif
         departedTime.off();
         break;
-    #ifdef TC_HAVELIGHT    
-    case MODE_LUX:
-        destinationTime.showOnlyText("LIGHT");
-        presentTime.showOnlyText("SENSOR");
-        presentTime.on();
+    #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+    case MODE_SENS:
+        destinationTime.showOnlyText("SENSORS");
         destinationTime.on();
+        presentTime.off();
         departedTime.off();
         break;
     #endif
@@ -964,7 +967,7 @@ static void setField(uint16_t& number, uint8_t field, int year = 0, int month = 
 }
 
 /*
- *  Volume ###################################################
+ *  Volume #####################################################
  */
 
 static void saveCurVolume()
@@ -1172,7 +1175,7 @@ static void doSetVolume()
 }
 
 /*
- *  Alarm ###################################################
+ *  Alarm ######################################################
  */
 
 void alarmOff()
@@ -1471,7 +1474,7 @@ static void doSetAutoInterval()
 }
 
 /*
- * Brightness ###################################################
+ * Brightness ##################################################
  */
 
 static void doSetBrightness(clockDisplay* displaySet) {
@@ -1540,28 +1543,31 @@ static void doSetBrightness(clockDisplay* displaySet) {
 }
 
 /*
- * Show light sensor info #############################
+ * Show sensor info ############################################
  */
 
-#ifdef TC_HAVELIGHT
-static void doShowLux()
+#if defined(TC_HAVETEMP) || defined(TC_HAVELIGHT)
+static void doShowSensors()
 {
     char buf[13];
     bool luxDone = false;
-    unsigned luxNow = 0;
+    unsigned sensNow = 0;
+    uint8_t number = 0;
 
-    destinationTime.showOnlyText("LUX");
+    #ifdef TC_HAVETEMP
+    if(!useLight) number = 1;
+    if(useTemp)   tempSens.on();
+    #endif
+
+    destinationTime.showOnlyText("");
     destinationTime.on();
-
-    sprintf(buf, "%d", lightSens.readLux());
-    presentTime.showOnlyText(buf);
+    presentTime.showOnlyText("");
     presentTime.on();
-
     departedTime.off();
 
     isEnterKeyHeld = false;
 
-    luxNow = millis();
+    sensNow = millis();
 
     // Wait for enter
     while(!luxDone) {
@@ -1580,30 +1586,56 @@ static void doShowLux()
                 }
                 delay(10);
             }
+
+            #if defined(TC_HAVETEMP) && defined(TC_HAVELIGHT)
+            if(useLight && useTemp) {
+                number++;
+                if(number > 1) number = 0;
+            }
+            #endif
             
         } else {
 
             mydelay(50);
 
-            if(millis() - luxNow > 1000) {
-                lightSens.loop();
-                #ifdef TC_DBG
-                sprintf(buf, "%08x", lightSens.readDebug());
-                #else
-                sprintf(buf, "%d", lightSens.readLux());
-                #endif
+            if(millis() - sensNow > 1000) {
+                switch(number) {
+                case 0:
+                    #ifdef TC_HAVELIGHT
+                    lightSens.loop();
+                    destinationTime.showOnlyText("LIGHT");
+                    #ifdef TC_DBG
+                    sprintf(buf, "%08x", lightSens.readDebug());
+                    #else
+                    sprintf(buf, "%d LUX", lightSens.readLux());
+                    #endif
+                    #endif
+                    break;
+                case 1:
+                    #ifdef TC_HAVETEMP
+                    destinationTime.showOnlyText("TEMP");
+                    sprintf(buf, "%.2f %c", tempSens.readTemp(tempUnit), tempUnit ? 'C' : 'F');
+                    #endif
+                    break;
+                }
                 presentTime.showOnlyText(buf);
-                luxNow = millis();
+                sensNow = millis();
             }
 
         }
 
     }
+
+    #ifdef TC_HAVETEMP
+    if(useTemp) {
+        tempSens.off();
+    }
+    #endif
 }
 #endif
 
 /*
- * Show network info ##################################
+ * Show network info ###########################################
  */
 
 static void doShowNetInfo()
@@ -1726,7 +1758,7 @@ static void doShowNetInfo()
 }
 
 /*
- * Install default audio files from SD to flash FS #################
+ * Install default audio files from SD to flash FS #############
  */
 
 static void doCopyAudioFiles()

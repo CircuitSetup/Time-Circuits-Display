@@ -174,6 +174,7 @@ WiFiManagerParameter custom_useTemp("uTem", "Use temperature sensor", settings.u
 WiFiManagerParameter custom_tempUnit("temUnt", "Display in °Celsius", settings.tempUnit, 1, "title='If unchecked, temperature is displayed in Fahrenheit' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 WiFiManagerParameter custom_tempBright("temBri", "<br>Temperature brightness (0-15)", settings.tempBright, 2, "type='number' min='0' max='15' autocomplete='off'");
+WiFiManagerParameter custom_tempOffs("tOffs", "Temperature offset (-3.0-3.0)", settings.tempOffs, 4, "type='number' min='-3.0' max='3.0' step='0.1' title='Correction value to add to temperature' autocomplete='off'");
 #endif // TC_HAVETEMP
 #endif // TC_HAVESPEEDO
 
@@ -361,6 +362,7 @@ void wifi_setup()
     wm.addParameter(&custom_useTemp);
     wm.addParameter(&custom_tempUnit);
     wm.addParameter(&custom_tempBright);
+    wm.addParameter(&custom_tempOffs);
     #endif
     wm.addParameter(&custom_sectend);
     #endif
@@ -521,6 +523,7 @@ void wifi_loop()
             
             #ifdef TC_HAVETEMP
             strcpy(settings.tempBright, custom_tempBright.getValue());
+            strcpy(settings.tempOffs, custom_tempOffs.getValue());
             #endif
             #endif
 
@@ -993,6 +996,7 @@ void updateConfigPortalValues()
     custom_speedoFact.setValue(settings.speedoFact, 3);
     #ifdef TC_HAVETEMP
     custom_tempBright.setValue(settings.tempBright, 2);
+    custom_tempOffs.setValue(settings.tempOffs, 4);
     #endif
     #endif
 

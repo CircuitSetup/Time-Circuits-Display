@@ -33,7 +33,7 @@
 #ifdef TC_HAVESPEEDO
 #include "speeddisplay.h"
 #endif
-#if defined(TC_HAVELIGHT) || (defined(TC_HAVESPEEDO) && defined(TC_HAVETEMP))
+#if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
 #include "sensors.h"
 #endif
 
@@ -50,9 +50,11 @@ extern clockDisplay presentTime;
 extern clockDisplay departedTime;
 #ifdef TC_HAVESPEEDO
 extern bool useSpeedo;
+extern bool useTemp;
 extern speedDisplay speedo;
 #ifdef TC_HAVETEMP
-extern bool useTemp;
+extern tempSensor tempSens;
+extern bool tempUnit;
 #endif
 #endif
 extern bool useLight;

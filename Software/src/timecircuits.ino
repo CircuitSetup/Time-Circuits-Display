@@ -40,7 +40,17 @@
 
 /*  Changelog
  *
-  *  2022/11/22 (A10001986)
+ *  2022/12/02 (A10001986)
+ *    - Add support for BMx820 sensor (temperature only).
+ *    - Modify former "light sensor" keypad menu to not only show measured lux level
+ *      from a light sensor, but also current ambient temperature as measured by
+ *      a connected temperature sensor. Rename menu to "Sensors" accordingly.
+ *    - Add temperature offset value. User can program an offset that will be added
+ *      to the measured temperature for compensating sensor inaccuracies or suboptimal
+ *      sensor placement. In order to calibrate the offset, use the keypad menu 
+ *      "SENSORS" since the temperature shown there is not rounded (unlike what is
+ *      shown on a speedo display if it has less than three digits).
+ *  2022/11/22 (A10001986) [2.4]
  *    - Audio: SPIFFS does not adhere to POSIX standards and returns a file object
  *      even if a file does not exist. Fix by work-around (SPIFFS only).
  *    - clockdisplay: lampTest(), as part of the display disruption sequence, might 

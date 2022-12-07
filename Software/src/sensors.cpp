@@ -7,7 +7,7 @@
  * Sensor Class: Temperature and Light Sensor handling
  *
  * This is designed for 
- * - MCP9808-based temperature sensors,
+ * - MCP9808, BMx820 temperature sensors,
  * - BH1750, TSL2561 and VEML7700/VEML6030 light sensors.
  * -------------------------------------------------------------------
  * License: MIT
@@ -45,15 +45,20 @@ static void defaultDelay(unsigned int mydelay)
     delay(mydelay);
 }
 
+void tcSensor::prepareRead(uint16_t regno)
+{
+    Wire.beginTransmission(_address);
+    Wire.write((uint8_t)(regno));
+    Wire.endTransmission(false);
+}
+
 uint16_t tcSensor::read16(uint16_t regno, bool LSBfirst)
 {
     uint16_t value = 0;
     size_t i2clen = 0;
 
     if(regno <= 0xff) {
-        Wire.beginTransmission(_address);
-        Wire.write((uint8_t)(regno));
-        Wire.endTransmission(false);
+        prepareRead(regno);
     }
 
     i2clen = Wire.requestFrom(_address, (uint8_t)2);
@@ -70,13 +75,29 @@ uint16_t tcSensor::read16(uint16_t regno, bool LSBfirst)
     return value;
 }
 
+uint32_t tcSensor::read24(uint16_t regno)
+{
+    uint32_t value = 0;
+    size_t i2clen = 0;
+
+    prepareRead(regno);
+
+    i2clen = Wire.requestFrom(_address, (uint8_t)3);
+
+    if(i2clen > 0) {
+        value = Wire.read() << 16;
+        value |= (Wire.read() << 8);
+        value |= Wire.read();
+    }
+
+    return value;
+}
+
 uint8_t tcSensor::read8(uint16_t regno)
 {
     uint16_t value = 0;
 
-    Wire.beginTransmission(_address);
-    Wire.write((uint8_t)(regno));
-    Wire.endTransmission(false);
+    prepareRead(regno);
 
     Wire.requestFrom(_address, (uint8_t)1);
 
@@ -112,7 +133,7 @@ void tcSensor::write8(uint16_t regno, uint8_t value)
 /*****************************************************************
  * tempSensor Class
  * 
- * Supports MCP9808-based temperature sensors
+ * Supports MCP9808 and BMx820 temperature sensors
  * 
  ****************************************************************/
 
@@ -145,6 +166,17 @@ void tcSensor::write8(uint16_t regno, uint8_t value)
 #define TC_TEMP_RES_MCP9808 2
 static const uint16_t wakeDelayMCP9808[4] = { 30, 65, 130, 250 };
 
+#define BMx280_REG_DIG_T1 0x88
+#define BMx280_REG_DIG_T2 0x8a
+#define BMx280_REG_DIG_T3 0x8c
+#define BMx280_REG_ID     0xd0
+#define BME280_REG_RESET  0xe0
+#define BMx820_REG_CTRLH  0xf2
+#define BMx280_REG_STATUS 0xf3
+#define BMx820_REG_CTRLM  0xf4
+#define BMx820_REG_CONF   0xf5
+#define BMx820_REG_TEMP   0xfa
+
 
 // Store i2c address
 tempSensor::tempSensor(int numTypes, uint8_t addrArr[])
@@ -160,6 +192,7 @@ tempSensor::tempSensor(int numTypes, uint8_t addrArr[])
 bool tempSensor::begin()
 {
     bool foundSt = false;
+    uint8_t temp, timeOut = 20;
     
     _customDelayFunc = defaultDelay;
 
@@ -177,7 +210,15 @@ bool tempSensor::begin()
                 #endif
             }
             break;
-        /*...*/
+        case BMx820:
+            temp = read8(BMx280_REG_ID);
+            if(temp == 0x60 || temp == 0x58) {
+                foundSt = true;
+                #ifdef TC_DBG
+                Serial.println("tempSensor: Detected BMx820 temperature sensor");
+                #endif
+            }
+            break;
         }
 
         if(foundSt) {
@@ -187,6 +228,7 @@ bool tempSensor::begin()
     }
 
     switch(_st) {
+      
     case MCP9808:
         // Write config register
         write16(MCP9808_REG_CONFIG, 0x0);
@@ -194,6 +236,37 @@ bool tempSensor::begin()
         // Set resolution
         write8(MCP9808_REG_RESOLUTION, TC_TEMP_RES_MCP9808 & 0x03);
         break;
+        
+    case BMx820:
+        // Reset
+        write8(BME280_REG_RESET, 0xb6);
+        (*_customDelayFunc)(10);
+
+        // Wait for sensor to copy its calib data
+        do {
+            temp = read8(BMx280_REG_STATUS);
+            (*_customDelayFunc)(10);
+        } while((temp & 1) && --timeOut);
+
+        // read relevant calib data
+        _BMx280_CD_T1 = read16(BMx280_REG_DIG_T1, true);
+        _BMx280_CD_T2 = (int32_t)((int16_t)read16(BMx280_REG_DIG_T2, true));
+        _BMx280_CD_T3 = (int32_t)((int16_t)read16(BMx280_REG_DIG_T3, true));
+        #ifdef TC_DBG
+        Serial.println("BMx820 calib values");
+        Serial.println(_BMx280_CD_T1);
+        Serial.println(_BMx280_CD_T2);
+        Serial.println(_BMx280_CD_T3);
+        #endif
+
+        // setup sensor parameters
+        write8(BMx820_REG_CTRLM, 0x20);  // Temp OSx1; Pres skipped; "sleep mode"
+        write8(BMx820_REG_CTRLH, 0x00);  // Hum skipped
+        write8(BMx820_REG_CONF,  0xa0);  // t_sb 1000ms; filter off, SPI3w off
+
+        write8(BMx820_REG_CTRLM, 0x23);  // Temp OSx1; Pres skipped; "normal mode"
+        break;
+        
     default:
         return false;
     }
@@ -224,25 +297,37 @@ void tempSensor::off()
 double tempSensor::readTemp(bool celsius)
 {
     double temp = NAN;
+    uint16_t t;
 
     switch(_st) {
     case MCP9808:
-        uint16_t t = read16(MCP9808_REG_AMBIENT_TEMP);
+        t = read16(MCP9808_REG_AMBIENT_TEMP);
 
         if(t != 0xffff) {
             temp = ((double)(t & 0x0fff)) / 16.0;
             if(t & 0x1000) temp = 256.0 - temp;
-            if(!celsius) temp = temp * 9.0 / 5.0 + 32.0;
         }
+        break;
+    case BMx820:
+        temp = BMx280_CalcTemp(read24(BMx820_REG_TEMP));
         break;
     }
 
+    if(!celsius && !isnan(temp)) temp = temp * 9.0 / 5.0 + 32.0;
+
+    temp += _userOffset;
+    
     #ifdef TC_DBG
     Serial.print("Read temp: ");
     Serial.println(temp);
-    #endif
+    #endif   
 
     return temp;
+}
+
+void tempSensor::setOffset(double myOffs)
+{
+    _userOffset = myOffs;
 }
 
 // Private functions ###########################################################
@@ -277,6 +362,20 @@ void tempSensor::onoff(bool shutDown)
     }
 }
 
+double tempSensor::BMx280_CalcTemp(uint32_t ival)
+{
+    int32_t var1, var2;
+
+    if(ival == 0x800000) return NAN;
+
+    ival >>= 4;
+    
+    var1 = ((((ival >> 3) - (_BMx280_CD_T1 << 1))) * _BMx280_CD_T2) / 2048;
+    var2 = (ival >> 4) - _BMx280_CD_T1;
+    var2 = (((var2 * var2) / 4096) * _BMx280_CD_T3) / 16384;
+    
+    return (double)(((var1 + var2) * 5 + 128) / 256) / 100.0;
+}
 
 #endif // TC_HAVETEMP
 
@@ -284,12 +383,12 @@ void tempSensor::onoff(bool shutDown)
 /*****************************************************************
  * lightSensor Class
  * 
- * Supports TSL2561, BH1750, VEML7700 light sensors
+ * Supports TSL2561, BH1750, VEML7700/6030 light sensors
  * 
  * Sensors are set for indoor conditions and might overflow (in 
  * which case -1 is returned) or report bad lux values outdoors.
  * For TSL2561 and BH1750, their settings can be changed by 
- * #defines below. VEML7700 auto-adjusts.
+ * #defines below. VEML7700/6030 auto-adjust.
  * 
  ****************************************************************/
 
@@ -677,7 +776,7 @@ uint32_t lightSensor::TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, 
 
     ratio = (ratio1 + 1) >> 1;
     
-    if((ratio >= 0) && (ratio <= TSL2561_K1T))
+    if(ratio <= TSL2561_K1T)
         { b = TSL2561_B1T; m = TSL2561_M1T; }
     else if (ratio <= TSL2561_K2T)
         { b = TSL2561_B2T; m = TSL2561_M2T; }
@@ -691,7 +790,7 @@ uint32_t lightSensor::TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, 
         { b = TSL2561_B6T; m = TSL2561_M6T; }
     else if(ratio <= TSL2561_K7T)
         { b = TSL2561_B7T; m = TSL2561_M7T; }
-    else if(ratio > TSL2561_K8T)
+    else //if(ratio > TSL2561_K8T)
         { b = TSL2561_B8T; m = TSL2561_M8T; }
 
     temp = ((channel0 * b) - (channel1 * m));

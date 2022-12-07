@@ -51,8 +51,8 @@
 //
 // The display's i2c slave address is 0x70 (defined in tc_time.h).
 //
-enum dispTypes : int {
-    SP_CIRCSETUP,     // Original CircuitSetup.us speedo                        [yet to be designed]
+enum dispTypes : uint8_t {
+    SP_CIRCSETUP = 0, // Original CircuitSetup.us speedo                        [yet to be designed]
     SP_ADAF_7x4,      // Adafruit 0.56" 4 digits, 7-segment (7x4) (ADA-878)
     SP_ADAF_7x4L,     // " " " (left-aligned)
     SP_ADAF_B7x4,     // Adafruit 1.2" 4 digits, 7-segment (7x4) (ADA-1270)
@@ -125,7 +125,7 @@ class speedDisplay {
         bool    _nightmode = false;
         int     _oldnm = -1;
 
-        int      _dispType;
+        uint8_t  _dispType;
         bool     _is7seg;         //      7- or 14-segment-display?
         uint8_t  _speed_pos10;    //      Speed's 10s position in 16bit buffer
         uint8_t  _speed_pos01;    //      Speed's 1s position in 16bit buffer

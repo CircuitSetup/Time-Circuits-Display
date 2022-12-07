@@ -304,8 +304,8 @@ static struct dispConf displays[SP_NUM_TYPES] = {
   { false, 3, 4, 0, 0, 4, 0,   5, 0, 0x2080, 8, 4, 0, { 1, 2, 3, 4 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
   { false, 1, 2, 0, 0, 2, 0,   5, 0, 0x2080, 8, 4, 0, { 1, 2, 3, 4 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
 #ifdef TWPRIVATE
-  { false, 0, 1, 0, 0, 1, 0, 255, 0,      0, 8, 2, 0, { 0, 1 },       font14segGeneric }, // TW Custom (wallclock)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0, 0x0002, 8, 2, 0, { 0, 1 },       font7segGeneric },  // TW Custom (speedo replica)
+  { false, 0, 1, 0, 0, 1, 0, 255, 0,      0, 8, 2, 0, { 0, 1 },       font14segGeneric }, // TW Custom (wall clock)
+  { true,  0, 1, 0, 0, 1, 0, 255, 0,      0, 8, 2, 0, { 0, 1 },       font7segGeneric },  // TW Custom (speedo replica)
 #endif
 // .... for testing only:
 //{ true,  7, 7, 0, 8, 7, 8, 255, 0,      0, 8, 2, 1, { 7 },          font7segGeneric },  // SP_TCD_TEST7
