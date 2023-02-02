@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  * 
  * RTC Class (DS3231/PCF2129 RTC handling) and DateTime Class
@@ -135,8 +135,15 @@ tcRTC::tcRTC(int numTypes, uint8_t addrArr[])
 /*
  *  Test i2c connection and detect chip type
  */
-bool tcRTC::begin()
+bool tcRTC::begin(unsigned long powerupTime)
 {
+
+    // Give the RTC some time to boot
+    unsigned long millisNow = millis();
+    if(millisNow - powerupTime < 2000) {
+        delay(2000 - (millisNow - powerupTime));
+    }
+    
     for(int i = 0; i < _numTypes * 2; i += 2) {
 
         // Check for RTC on i2c bus
@@ -149,8 +156,7 @@ bool tcRTC::begin()
 
             #ifdef TC_DBG
             const char *tpArr[2] = { "DS3231", "PCF2129" };
-            Serial.print(F("RTC: Detected "));
-            Serial.println(tpArr[_rtcType]);
+            Serial.printf("RTC: Detected %s\n", tpArr[_rtcType]);
             #endif
 
             return true;
@@ -203,12 +209,7 @@ void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte day
         buffer[5] = bin2bcd(dayOfWeek);
         buffer[6] = bin2bcd(month);
         buffer[7] = bin2bcd(year);
-
-        Wire.beginTransmission(_address);
-        for(int i = 0; i < 8; i++) {
-            Wire.write(buffer[i]);
-        }
-        Wire.endTransmission();
+        write_bytes(buffer, 8); 
 
         // OSF bit cleared by writing seconds
         break;
@@ -223,12 +224,7 @@ void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte day
         buffer[5] = bin2bcd(dayOfMonth);
         buffer[6] = bin2bcd(month);
         buffer[7] = bin2bcd(year);
-
-        Wire.beginTransmission(_address);
-        for(int i = 0; i < 8; i++) {
-            Wire.write(buffer[i]);
-        }
-        Wire.endTransmission();   
+        write_bytes(buffer, 8);  
 
         // clear OSF bit
         statreg = read_register(DS3231_STATUS);
@@ -238,20 +234,8 @@ void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte day
     }
 
     #ifdef TC_DBG
-    Serial.print("RTC: Adjusted to ");
-    Serial.print(dayOfMonth, DEC);
-    Serial.print("-");
-    Serial.print(month, DEC);
-    Serial.print("-");
-    Serial.print(year+2000, DEC);
-    Serial.print(" ");
-    Serial.print(hour, DEC);
-    Serial.print(":");
-    Serial.print(minute, DEC);
-    Serial.print(":");
-    Serial.print(second, DEC);
-    Serial.print(" ");
-    Serial.println(dayOfWeek);
+    Serial.printf("RTC: Adjusted to %d-%02d-%02d %02d:%02d:%02d DOW %d\n",
+          year+2000, month, dayOfMonth, hour, minute, second, dayOfWeek);
     #endif
 }
 
@@ -265,14 +249,7 @@ DateTime tcRTC::now()
     switch(_rtcType) {
 
     case RTCT_PCF2129:
-        Wire.beginTransmission(_address);
-        Wire.write(PCF2129_TIME); 
-        Wire.endTransmission();
-        Wire.requestFrom(_address, (uint8_t)7);
-        for(int i = 0; i < 7; i++) {
-            buffer[i] = Wire.read();
-        }
-
+        read_bytes(PCF2129_TIME, buffer, 7);
         return DateTime(bcd2bin(buffer[6]) + 2000U,
                         bcd2bin(buffer[5] & 0x7F),
                         bcd2bin(buffer[3]),
@@ -282,14 +259,7 @@ DateTime tcRTC::now()
 
     case RTCT_DS3231:
     default:
-        Wire.beginTransmission(_address);
-        Wire.write(DS3231_TIME); 
-        Wire.endTransmission();
-        Wire.requestFrom(_address, (uint8_t)7);
-        for(int i = 0; i < 7; i++) {
-            buffer[i] = Wire.read();
-        }
-
+        read_bytes(DS3231_TIME, buffer, 7);
         return DateTime(bcd2bin(buffer[6]) + 2000U,
                         bcd2bin(buffer[5] & 0x7F),
                         bcd2bin(buffer[4]),
@@ -309,42 +279,55 @@ void tcRTC::clockOutEnable()
     switch(_rtcType) {
       
     case RTCT_PCF2129:
-        Wire.beginTransmission(_address);
-        Wire.write((byte)PCF2129_CLKCTRL);  
-        Wire.endTransmission();
-
-        Wire.requestFrom(_address, (uint8_t)1);
-        readValue = Wire.read();
+        readValue = read_register(PCF2129_CLKCTRL);
         // set squarewave to 1Hz
         // Bits 2:0 - 110  sets 1Hz
         readValue &= B11111000;
-        readValue |= B11111110;
-
-        Wire.beginTransmission(_address);
-        Wire.write((byte)PCF2129_CLKCTRL);
-        Wire.write(readValue);
-        Wire.endTransmission();
+        readValue |= B00000110;
+        write_register(PCF2129_CLKCTRL, readValue);
         break;
 
     case RTCT_DS3231:
     default:
-        Wire.beginTransmission(_address);
-        Wire.write((byte)DS3231_CONTROL);
-        Wire.endTransmission();
-
-        Wire.requestFrom(_address, (uint8_t)1);
-        readValue = Wire.read();
+        readValue = read_register(DS3231_CONTROL);
         // enable squarewave and set to 1Hz
         // Bit 2 INTCN - 0 enables wave output
         // Bit 3 and 4 - 0 0 sets 1Hz
         readValue &= B11100011;
-
-        Wire.beginTransmission(_address);
-        Wire.write((byte)DS3231_CONTROL);
-        Wire.write(readValue);
-        Wire.endTransmission();
+        write_register(DS3231_CONTROL, readValue);
         break;
     }
+}
+
+/*
+ * OTP refresh (PCF2129 only)
+ */
+bool tcRTC::NeedOTPRefresh()
+{
+    if(_rtcType == RTCT_PCF2129)
+        return true;
+
+    return false;
+}
+
+bool tcRTC::OTPRefresh(bool start)
+{
+    uint8_t readValue = 0;
+
+    switch(_rtcType) {
+      
+    case RTCT_PCF2129:
+        readValue = read_register(PCF2129_CLKCTRL);
+        // set squarewave to 1Hz
+        // Bits 2:0 - 110  sets 1Hz
+        readValue &= B11011111;
+        if(!start) readValue |= B00100000;
+        write_register(PCF2129_CLKCTRL, readValue);
+        return true;
+
+    }
+
+    return false;
 }
 
 /*
@@ -396,13 +379,7 @@ float tcRTC::getTemperature()
 
     case RTCT_DS3231:
     default:
-        Wire.beginTransmission(_address);
-        Wire.write(DS3231_TEMP); 
-        Wire.endTransmission();
-        Wire.requestFrom(_address, (uint8_t)2);
-        buffer[0] = Wire.read();
-        buffer[1] = Wire.read();
-  
+        read_bytes(DS3231_TEMP, buffer, 2);
         return (float)buffer[0] + (float)(buffer[1] >> 6) * 0.25f;
     }
 
@@ -430,4 +407,24 @@ uint8_t tcRTC::read_register(uint8_t reg)
     Wire.endTransmission();
     Wire.requestFrom(_address, (uint8_t)1);
     return Wire.read();
+}
+
+void tcRTC::write_bytes(uint8_t *buffer, uint8_t num)
+{
+    Wire.beginTransmission(_address);
+    for(int i = 0; i < num; i++) {
+        Wire.write(buffer[i]);
+    }
+    Wire.endTransmission();   
+}
+
+void tcRTC::read_bytes(uint8_t reg, uint8_t *buffer, uint8_t num)
+{
+    Wire.beginTransmission(_address);
+    Wire.write(reg);
+    Wire.endTransmission();
+    Wire.requestFrom(_address, num);
+    for(int i = 0; i < num; i++) {
+        buffer[i] = Wire.read();
+    }
 }

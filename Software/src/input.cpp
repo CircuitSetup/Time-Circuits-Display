@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * Keypad_I2C Class, TCButton Class: I2C-Keypad and Button handling

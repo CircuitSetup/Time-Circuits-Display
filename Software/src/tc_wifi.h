@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * WiFi and Config Portal handling
@@ -19,13 +19,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef _TC_WIFI_H
 #define _TC_WIFI_H
-
-#include <WiFiManager.h>
 
 extern bool wifiIsOff;
 extern bool wifiAPIsOff;
@@ -35,11 +33,13 @@ void wifi_setup();
 void wifi_loop();
 void wifiOff();
 void wifiOn(unsigned long newDelay = 0, bool alsoInAPMode = false, bool deferConfigPortal = false);
+bool wifiIsOn();
 void wifiStartCP();
 
 void updateConfigPortalValues();
 
 int  wifi_getStatus();
 bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d);
+void wifi_getMAC(char *buf);
 
 #endif

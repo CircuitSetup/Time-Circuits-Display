@@ -1,14 +1,16 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * speedDisplay Class: Speedo Display
  *
- * This is designed for HT16K33-based displays, like the "Grove - 0.54"
- * Dual/Quad Alphanumeric Display" or some displays with the Adafruit
+ * This is designed for CircuitSetup's Speedo display and other 
+ * HT16K33-based displays, like the "Grove - 0.54" Dual/Quad 
+ * Alphanumeric Display" or some displays with the Adafruit
  * i2c backpack (878, 1911, 1270; product numbers vary with color).
+ * The i2c slave address must be 0x70.
  * -------------------------------------------------------------------
  * License: MIT
  * 
@@ -40,24 +42,6 @@
 #include <math.h>
 #include "speeddisplay.h"
 #include <Wire.h>
-
-struct dispConf {
-    bool     is7seg;         //   7- or 14-segment-display?
-    uint8_t  speed_pos10;    //   Speed's 10s position in 16bit buffer
-    uint8_t  speed_pos01;    //   Speed's 1s position in 16bit buffer
-    uint8_t  dig10_shift;    //   Shift 10s to align in buffer
-    uint8_t  dig01_shift;    //   Shift 1s to align in buffer
-    uint8_t  dot_pos01;      //   1s dot position in 16bit buffer
-    uint8_t  dot01_shift;    //   1s dot shift to align in buffer
-    uint8_t  colon_pos;      //   Pos of colon in 16bit buffer
-    uint8_t  colon_shift;    //   Colon shift to align in buffer
-    uint16_t colon_bit;      //   The bitmask for the colon
-    uint8_t  buf_size;       //   total buffer size in words (16bit)
-    uint8_t  num_digs;       //   total number of digits/letters
-    uint8_t  buf_packed;     //   2 digits in one buffer pos? (0=no, 1=yes) (for 7seg only)
-    uint8_t  bufPosArr[8];   //   The buffer positions of each of the digits from left to right
-    const uint16_t *fontSeg; //   Pointer to font
-};
 
 // The segments' wiring to buffer bits
 // This reflects the actual hardware wiring
@@ -126,7 +110,6 @@ struct dispConf {
 #define S14GR4_BRD 0x0004     // bottom right diag
 #define S14GR4_BV  0x0800     // bottom vertical
 #define S14GR4_DOT 0x0000     // dot (has none)
-
 
 static const uint16_t font7segGeneric[38] = {
     S7G_T|S7G_TR|S7G_BR|S7G_B|S7G_BL|S7G_TL,
@@ -292,25 +275,39 @@ static const uint16_t font144segGrove[38] = {
     S14GR4_ML|S14GR4_MR
 };
 
-static struct dispConf displays[SP_NUM_TYPES] = {
-  { true,  0, 1, 0, 0, 1, 0, 255, 0,      0, 8, 2, 0, { 0, 1 },       font7segGeneric },  // CircuitSetup TCD add-on (TODO)
-  { true,  3, 4, 0, 0, 4, 0,   2, 0, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)
-  { true,  3, 4, 0, 0, 4, 0,   2, 0, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)
-  { false, 2, 3, 0, 0, 3, 0, 255, 0,      0, 8, 4, 0, { 0, 1, 2, 3 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right)
-  { false, 0, 1, 0, 0, 1, 0, 255, 0,      0, 8, 4, 0, { 0, 1, 2, 3 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)
-  { false, 2, 1, 0, 0, 1, 0, 255, 0,      0, 8, 2, 0, { 2, 1 },       font14segGrove },   // SP_GROVE_2DIG14
-  { false, 3, 4, 0, 0, 4, 0,   5, 0, 0x2080, 8, 4, 0, { 1, 2, 3, 4 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
-  { false, 1, 2, 0, 0, 2, 0,   5, 0, 0x2080, 8, 4, 0, { 1, 2, 3, 4 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
-#ifdef TWPRIVATE
-  { false, 0, 1, 0, 0, 1, 0, 255, 0,      0, 8, 2, 0, { 0, 1 },       font14segGeneric }, // TW Custom (wall clock)
-  { true,  0, 1, 0, 0, 1, 0, 255, 0,      0, 8, 2, 0, { 0, 1 },       font7segGeneric },  // TW Custom (speedo replica)
-#endif
+static struct dispConf {
+    bool     is7seg;         //   7- or 14-segment-display?
+    uint8_t  speed_pos10;    //   Speed's 10s position in 16bit buffer
+    uint8_t  speed_pos01;    //   Speed's 1s position in 16bit buffer
+    uint8_t  dig10_shift;    //   Shift 10s to align in buffer
+    uint8_t  dig01_shift;    //   Shift 1s to align in buffer
+    uint8_t  dot_pos01;      //   1s dot position in 16bit buffer
+    uint8_t  dot01_shift;    //   1s dot shift to align in buffer
+    uint8_t  colon_pos;      //   Pos of center colon in 16bit buffer (255 = no colon)
+    uint16_t colon_bit;      //   The bitmask for the center colon
+    uint8_t  buf_size;       //   total buffer size in words (16bit)
+    uint8_t  num_digs;       //   total number of digits/letters
+    uint8_t  buf_packed;     //   2 digits in one buffer pos? (0=no, 1=yes) (for 7seg only)
+    uint8_t  bufPosArr[4];   //   The buffer positions of each of the digits from left to right
+    const uint16_t *fontSeg; //   Pointer to font
+} displays[SP_NUM_TYPES] = {
+  { true,  0, 1, 0, 0, 1, 0, 255,      0, 8, 2, 0, { 0, 1 },       font7segGeneric },  // CircuitSetup Speedo add-on (in design stage; non-multiplexed)
+//{ true,  0, 0, 0, 8, 0, 8, 255,      0, 8, 2, 1, { 0 },          font7segGeneric },  // CircuitSetup Speedo add-on (in design stage; multiplexed)
+  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right)
+  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)
+  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)
+  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)
+  { false, 2, 3, 0, 0, 3, 0, 255,      0, 8, 4, 0, { 0, 1, 2, 3 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right)
+  { false, 0, 1, 0, 0, 1, 0, 255,      0, 8, 4, 0, { 0, 1, 2, 3 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)
+  { false, 2, 1, 0, 0, 1, 0, 255,      0, 8, 2, 0, { 2, 1 },       font14segGrove },   // SP_GROVE_2DIG14
+  { false, 3, 4, 0, 0, 4, 0,   5, 0x2080, 8, 4, 0, { 1, 2, 3, 4 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
+  { false, 1, 2, 0, 0, 2, 0,   5, 0x2080, 8, 4, 0, { 1, 2, 3, 4 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
+  { false, 0, 1, 0, 0, 1, 0, 255,      0, 8, 2, 0, { 0, 1 },       font14segGeneric }, // like SP_ADAF_14x4L, but left tube only (TW wall clock)
+  { true,  0, 1, 0, 0, 1, 0, 255,      0, 8, 2, 0, { 0, 1 },       font7segGeneric },  // like SP_ADAF_7x4L, but left tube only (TW speedo replica)
 // .... for testing only:
-//{ true,  7, 7, 0, 8, 7, 8, 255, 0,      0, 8, 2, 1, { 7 },          font7segGeneric },  // SP_TCD_TEST7
-//{ false, 1, 2, 0, 0, 2, 0, 255, 0,      0, 8, 3, 0, { 0, 1, 2 },    font14segGeneric }, // SP_TCD_TEST14 right
-//{ false, 0, 1, 0, 0, 1, 0, 255, 0,      0, 8, 3, 0, { 0, 1, 2 },    font14segGeneric }  // SP_TCD_TEST14 left
+//{ true,  7, 7, 0, 8, 7, 8, 255,      0, 8, 2, 1, { 7 },          font7segGeneric },  // SP_TCD_TEST7
+//{ false, 1, 2, 0, 0, 2, 0, 255,      0, 8, 3, 0, { 0, 1, 2 },    font14segGeneric }, // SP_TCD_TEST14 right
+//{ false, 0, 1, 0, 0, 1, 0, 255,      0, 8, 3, 0, { 0, 1, 2 },    font14segGeneric }  // SP_TCD_TEST14 left
 };
 
 // Grove 4-digit special handling
@@ -332,8 +329,7 @@ void speedDisplay::begin(int dispType)
 {
     if(dispType < SP_MIN_TYPE || dispType >= SP_NUM_TYPES) {
         #ifdef TC_DBG
-        Serial.print("Bad speedo display type: ");
-        Serial.println(dispType, DEC);
+        Serial.printf("Bad speedo display type: %d\n", dispType);
         #endif
         dispType = SP_MIN_TYPE;
     }
@@ -347,7 +343,6 @@ void speedDisplay::begin(int dispType)
     _dot_pos01 = displays[dispType].dot_pos01;
     _dot01_shift = displays[dispType].dot01_shift;
     _colon_pos = displays[dispType].colon_pos;
-    _colon_shift = displays[dispType].colon_shift;
     _colon_bm = displays[dispType].colon_bit;
     _buf_size = displays[dispType].buf_size;
     _num_digs = displays[dispType].num_digs;
@@ -355,33 +350,28 @@ void speedDisplay::begin(int dispType)
     _bufPosArr = displays[dispType].bufPosArr;
     _fontXSeg = displays[dispType].fontSeg;
 
-    Wire.beginTransmission(_address);
-    Wire.write(0x20 | 1);  // turn on oscillator
-    Wire.endTransmission();
+    directCmd(0x20 | 1); // turn on oscillator
 
-    clearBuf();         // clear buffer
-    setBrightness(15);  // setup initial brightness
-    clearDisplay();     // clear display RAM
-    on();               // turn it on
+    clearBuf();          // clear buffer
+    setBrightness(15);   // setup initial brightness
+    clearDisplay();      // clear display RAM
+    on();                // turn it on
 }
 
 // Turn on the display
 void speedDisplay::on()
 {
-    Wire.beginTransmission(_address);
-    Wire.write(0x80 | 1);
-    Wire.endTransmission();
+    directCmd(0x80 | 1);
 }
 
 // Turn off the display
 void speedDisplay::off()
 {
-    Wire.beginTransmission(_address);
-    Wire.write(0x80);
-    Wire.endTransmission();
+    directCmd(0x80);
 }
 
 // Turn on all LEDs
+#if 0
 void speedDisplay::lampTest()
 {
     Wire.beginTransmission(_address);
@@ -394,6 +384,7 @@ void speedDisplay::lampTest()
 
     _lastBufPosCol = 0xffff;
 }
+#endif
 
 // Clear the buffer
 void speedDisplay::clearBuf()
@@ -426,9 +417,7 @@ uint8_t speedDisplay::setBrightnessDirect(uint8_t level)
     if(level > 15)
         level = 15;
 
-    Wire.beginTransmission(_address);
-    Wire.write(0xE0 | level);  // Dimming command
-    Wire.endTransmission();
+    directCmd(0xE0 | level);  // Dimming command
 
     return level;
 }
@@ -574,7 +563,7 @@ void speedDisplay::setSpeed(int8_t speedNum)
 }
 
 #ifdef TC_HAVETEMP
-void speedDisplay::setTemperature(double temp)
+void speedDisplay::setTemperature(float temp)
 {
     char buf[8];
     char alignBuf[20];
@@ -587,7 +576,7 @@ void speedDisplay::setTemperature(double temp)
         else if(temp <= -10.0) setText("Lo");
         else if(t >= 100.0) setText("Hi");
         else if(temp >= 10.0 || temp < 0.0) {
-            t = (int)((double)round(temp));
+            t = (int)((float)round(temp));
             sprintf(buf, "%d", t);
             setText(buf);
         } else {
@@ -600,7 +589,7 @@ void speedDisplay::setTemperature(double temp)
         else if(temp <= -100.0) setText("Low");
         else if(t >= 1000.0) setText("Hi");
         else if(temp >= 100.0 || temp <= -10.0) {
-            t = (int)((double)round(temp));
+            t = (int)((float)round(temp));
             sprintf(buf, "%d", t);
             setText(buf);
         } else {
@@ -661,6 +650,7 @@ bool speedDisplay::getColon()
 
 // Special purpose -------------------------------------------------------------
 
+#if 0 // Currently unused
 
 // Clears the display RAM and only shows the given text
 // does not use the buffer, writes directly to display
@@ -739,12 +729,14 @@ void speedDisplay::setColonDirect(bool colon)
     _colon = colon;
 
     if(_colon_pos < 255) {
-        if(_colon) t |= (_colon_bm << _colon_shift);
-        else       t &= (~(_colon_bm << _colon_shift));
+        if(_colon) t |= _colon_bm;
+        else       t &= (~_colon_bm);
 
         directCol(_colon_pos, t);
     }
 }
+
+#endif // if 0
 
 // Private functions ###########################################################
 
@@ -752,8 +744,8 @@ void speedDisplay::setColonDirect(bool colon)
 void speedDisplay::handleColon()
 {
     if(_colon_pos < 255) {
-        if(_colon) _displayBuffer[_colon_pos] |= (_colon_bm << _colon_shift);
-        else       _displayBuffer[_colon_pos] &= (~(_colon_bm << _colon_shift));
+        if(_colon) _displayBuffer[_colon_pos] |= _colon_bm;
+        else       _displayBuffer[_colon_pos] &= (~_colon_bm);
     }
 }
 
@@ -774,6 +766,7 @@ uint16_t speedDisplay::getLEDChar(uint8_t value)
     return 0;
 }
 
+#if 0 // Unused currently
 // Directly write to a column with supplied segments
 // (leave buffer intact, directly write to display)
 void speedDisplay::directCol(int col, int segments)
@@ -787,6 +780,7 @@ void speedDisplay::directCol(int col, int segments)
     if(col == _colon_pos)
         _lastBufPosCol = segments;
 }
+#endif
 
 // Directly clear the display
 void speedDisplay::clearDisplay()
@@ -801,6 +795,13 @@ void speedDisplay::clearDisplay()
     Wire.endTransmission();
 
     _lastBufPosCol = 0;
+}
+
+void speedDisplay::directCmd(uint8_t val)
+{
+    Wire.beginTransmission(_address);
+    Wire.write(val);
+    Wire.endTransmission();
 }
 
 #endif

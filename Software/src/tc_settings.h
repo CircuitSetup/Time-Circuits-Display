@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * Settings handling
@@ -19,13 +19,16 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef _TC_SETTINGS_H
 #define _TC_SETTINGS_H
 
-extern bool    haveSD;
+extern bool haveSD;
+extern bool FlashROMode;   
+
+extern uint8_t musFolderNum;
 
 #define MS(s) XMS(s)
 #define XMS(s) #s
@@ -38,6 +41,7 @@ extern bool    haveSD;
 #define DEF_PLAY_INTRO      1     // 0-1;  Default: 1 = Play intro
 #define DEF_MODE24          0     // 0-1;  Default: 0=12-hour-mode, 1=24-hour-mode
 #define DEF_AUTOROTTIMES    1     // 0-5;  Default: Auto-rotate every 5th minute
+#define DEF_HOSTNAME        "timecircuits"
 #define DEF_WIFI_RETRY      3     // 1-15; Default: 3 retries
 #define DEF_WIFI_TIMEOUT    7     // 7-25; Default: 7 seconds
 #define DEF_WIFI_OFFDELAY   0     // 0/10-99; Default 0 = Never power down WiFi in STA-mode
@@ -63,21 +67,26 @@ extern bool    haveSD;
 #define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness
 #define DEF_USE_GPS         0     // 0: No i2c GPS module
 #define DEF_USE_GPS_SPEED   0     // 0: Do not use GPS speed on speedo display
-#define DEF_USE_TEMP        0     // 0: No i2c thermometer
+#define DEF_USE_TEMP        0     // 0: No i2c temperature/humidity sensor
+#define DEF_DISP_TEMP       1     // 1: Display temperature (if available) on speedo
 #define DEF_TEMP_BRIGHT     3     // Default temp brightness
 #define DEF_TEMP_UNIT       0     // Default: temp unit Fahrenheit
 #define DEF_TEMP_OFFS       0.0   // Default temp offset 0.0
-#define DEF_USE_LIGHT       0     // Default: No light sensor
+#define DEF_USE_LIGHT       0     // Default: No i2c light sensor
 #define DEF_LUX_LIMIT       3     // Default Lux for night mode
 #define DEF_USE_ETTO        0     // 0: No external props
 #define DEF_PLAY_TT_SND     1     // 1: Play time travel sounds (0: Do not; for use with external equipment)
+#define DEF_SHUFFLE         0     // Music Playser: Do not shuffle by default
+#define DEF_CFG_ON_SD       0     // Default: Save alarm/volume settings in flash memory
+#define DEF_SD_FREQ         0     // SD/SPI frequency: Default 16MHz
 
 struct Settings {
     char timesPers[4]       = MS(DEF_TIMES_PERS);
     char alarmRTC[4]        = MS(DEF_ALARM_RTC);
     char playIntro[4]       = MS(DEF_PLAY_INTRO);
     char mode24[4]          = MS(DEF_MODE24);
-    char autoRotateTimes[4] = MS(DEF_AUTOROTTIMES);
+    char autoRotateTimes[4] = MS(DEF_AUTOROTTIMES);   
+    char hostName[32]       = DEF_HOSTNAME;
     char wifiConRetries[4]  = MS(DEF_WIFI_RETRY);
     char wifiConTimeout[4]  = MS(DEF_WIFI_TIMEOUT);
     char wifiOffDelay[4]    = MS(DEF_WIFI_OFFDELAY);
@@ -104,6 +113,15 @@ struct Settings {
 #ifdef TC_HAVEGPS
     char useGPS[4]          = MS(DEF_USE_GPS);
 #endif
+#ifdef TC_HAVETEMP
+    char useTemp[4]         = MS(DEF_USE_TEMP);
+    char tempUnit[4]        = MS(DEF_TEMP_UNIT);
+    char tempOffs[6]        = MS(DEF_TEMP_OFFS);
+#endif
+#ifdef TC_HAVELIGHT
+    char useLight[4]         = MS(DEF_USE_LIGHT);
+    char luxLimit[8]         = MS(DEF_LUX_LIMIT);
+#endif
 #ifdef TC_HAVESPEEDO
     char useSpeedo[4]       = MS(DEF_USE_SPEEDO);
     char speedoType[4]      = MS(DEF_SPEEDO_TYPE);
@@ -113,20 +131,17 @@ struct Settings {
     char useGPSSpeed[4]     = MS(DEF_USE_GPS_SPEED);
 #endif
 #ifdef TC_HAVETEMP
-    char useTemp[4]         = MS(DEF_USE_TEMP);
+    char dispTemp[4]        = MS(DEF_DISP_TEMP);
     char tempBright[4]      = MS(DEF_TEMP_BRIGHT);
-    char tempUnit[4]        = MS(DEF_TEMP_UNIT);
-    char tempOffs[6]        = MS(DEF_TEMP_OFFS);
 #endif
-#endif
-#ifdef TC_HAVELIGHT
-    char useLight[4]         = MS(DEF_USE_LIGHT);
-    char luxLimit[8]         = MS(DEF_LUX_LIMIT);
-#endif
+#endif // HAVESPEEDO
 #ifdef EXTERNAL_TIMETRAVEL_OUT
     char useETTO[4]         = MS(DEF_USE_ETTO);
 #endif
     char playTTsnds[4]      = MS(DEF_PLAY_TT_SND);
+    char shuffle[4]         = MS(DEF_SHUFFLE);
+    char CfgOnSD[4]         = MS(DEF_CFG_ON_SD);
+    char sdFreq[4]          = MS(DEF_SD_FREQ);
     char copyAudio[12]      = "";   // never loaded or saved!
 };
 
@@ -145,18 +160,41 @@ extern struct IPSettings ipsettings;
 
 void settings_setup();
 void write_settings();
+bool checkConfigExists();
 
 bool loadAlarm();
 void saveAlarm();
+
+bool loadCurVolume();
+void saveCurVolume();
+
+bool loadMusFoldNum();
+void saveMusFoldNum();
+
+void copySettings();
 
 bool loadIpSettings();
 void writeIpSettings();
 void deleteIpSettings();
 
+void doCopyAudioFiles();
 bool copy_audio_files();
 
 bool check_allow_CPA();
+void delete_ID_file();
+
+bool audio_files_present();
+
+void waitForEnterRelease();
 
 void formatFlashFS();
+
+void rewriteSecondarySettings();
+
+bool readFileFromSD(const char *fn, uint8_t *buf, int len);
+bool writeFileToSD(const char *fn, uint8_t *buf, int len);
+bool readFileFromFS(const char *fn, uint8_t *buf, int len);
+bool writeFileToFS(const char *fn, uint8_t *buf, int len);
+
 
 #endif

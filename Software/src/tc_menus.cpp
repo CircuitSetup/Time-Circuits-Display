@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * Keypad Menu handling
@@ -21,7 +21,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 /*
@@ -50,11 +50,12 @@
  *
  *     - set an alarm ("ALA-RM"),
  *     - set the audio volume (VOL-UME),
- *     - select the Time-rotation Interval ("TIME ROTATION INTERVAL"),
+ *     - select the music folder number ("MUSIC FOLDER NUMBER")
+ *     - select the Time-Cycling Interval ("TIME CYCLING"),
  *     - select the brightness for the three displays ("BRIGHTNESS"),
  *     - show network information ("NET-WORK"),
- *     - enter dates/times for the three displays,
- *     - show currently measured LUX if a light sensor is connected,
+ *     - enter dates/times for the three displays/set built-in RTC,
+ *     - show currently measured data from connected sensors ("SENSORS"),
  *     - install the default audio files ("INSTALL AUDIO FILES")
  *     - quit the menu ("END").
  *
@@ -72,39 +73,52 @@
  *       available options.
  *     - Hold ENTER. "SAVING" is displayed briefly.
  *
- *    Under normal operation (ie outside of the menu), holding "1" enables 
- *    the alarm, holding "2" disables it.
+ *    Under normal operation (ie outside of the menu), holding "1" toggles 
+ *    the alarm on/off. When the alarm is set and enabled, the dot in the 
+ *    present time's minute field will light up.
+ *    
+ *    This quickly set the alarm time outside of the menu, enter "11hhMM" and 
+ *    press ENTER. (Weekday selection must be done through the menu.)
+ *    To see the current time/weekday settings, type 11 and press ENTER.
  *
  *    Note that the alarm is recurring, ie it rings at the programmed time
- *    unless disabled. Also note, as mentioned, that the alarm is by default
- *    relative to your actual present time, not the time displayed (eg after
- *    a time travel). It can, however, be configured to be based on the time
- *    displayed, in the Config Portal.
- *
- *    If the alarm is set and enabled, the dot in the present time's minute
- *    field is lit.
+ *    unless disabled. Also note that the alarm is by default relative to your 
+ *    actual present time, not the time displayed (eg after a time travel). 
+ *    It can, however, be configured to be based on the time displayed, in 
+ *    the Config Portal.
  *
  * How to set the audio volume:
  *
  *     Basically, and by default, the device uses the hardware volume knob to 
- *     determine the desired volume. You can change this to a software setting 
- *     as follows:
+ *     determine the desired volume. You can change this to a fixed level as 
+ *     follows:
  *
  *     - Hold ENTER to invoke main menu
  *     - Press ENTER until "VOL-UME" is shown
  *     - Hold ENTER
- *     - Press ENTER to toggle between "HW" (volume knob) or "SW" (software)
+ *     - Press ENTER to toggle between "USE VOLUME KNOB" and "FIXED LEVEL"
  *     - Hold ENTER to proceed
- *     - If you chose "SW", you can now select the desired level by pressing
- *       ENTER repeatedly. There are 16 levels available.
- *     - Hold ENTER to save and quit the menu
+ *     - If you chose "FIXED LEVEL", you can now select the desired level by 
+ *       pressing ENTER repeatedly. There are 20 levels available.
+ *     - Hold ENTER to save and quit the menu ("SAVING" is displayed
+ *       briefly)
  *
- * How to select the Time-rotation Interval:
+ * How to select the Music Folder Number:
+ * 
+ *     - Hold ENTER to invoke main menu
+ *     - Press ENTER until "MUSIC FOLDER NUMBER" is shown
+ *     - Hold ENTER, "NUMBER" is displayed
+ *     - Press ENTER to cycle through the possible settings (0-9)
+ *       values.
+ *     - Hold ENTER to save and quit the menu ("SAVING" is displayed
+ *       briefly)
+ * 
+ * How to select the Time-cycling Interval:
  *
  *     - Hold ENTER to invoke main menu
- *     - Press ENTER until "TIME ROTATION INTERVAL" is shown
- *     - Hold ENTER, "INT" is displayed
- *     - Press ENTER to cycle through the possible Time-rotation Interval 
+ *     - Press ENTER until "TIME CYCLING" is shown
+ *     - Hold ENTER, "INTERVAL" is displayed
+ *     - Press ENTER to cycle through the possible Time-cycling Interval 
  *       values.
  *
  *       A value of 0 disables automatic time cycling ("OFF").
@@ -127,12 +141,12 @@
  *     - After the third display, "SAVING" is displayed briefly and the menu 
  *       is left automatically.
  *
- * How to find out the IP address and WiFi status:
+ * How to find out the IP address, WiFi status and MAC address
  *
  *     - Hold ENTER to invoke main menu
  *     - Press ENTER until "NET-WORK" is shown
  *     - Hold ENTER, the displays shows the IP address
- *     - Press ENTER to view the WiFi status
+ *     - Press ENTER to toggle between WiFi status, MAC address and IP address
  *     - Hold ENTER to leave the menu
  *
  * How to enter dates/times for the three displays / set the RTC:
@@ -160,6 +174,16 @@
  *     set to 0 (ie turned off). Your entered date/time(s) are shown until 
  *     overwritten by time travels (see above, section How to select the 
  *     Time-rotation Interval").
+ *     
+ * How to view light/temperature sensor data:
+ *
+ *     - Hold ENTER to invoke main menu
+ *     - Press ENTER until "SENSORS" is shown. If this menu does not appear,
+ *       no light and/or temperature sensors were detected during boot.
+ *     - Hold ENTER to proceed
+ *     - Sensor data is shown; if both light and temperature sensors are present,
+ *       press ENTER to toggle between their data.
+ *     - Hold ENTER to leave the menu
  *
  * How to install the default audio files:
  *
@@ -182,7 +206,7 @@
 
 #include <Arduino.h>
 #include <Wire.h>
-#include <EEPROM.h>
+#include <WiFi.h> 
 
 #include "clockdisplay.h"
 #include "tc_keypad.h"
@@ -193,19 +217,19 @@
 
 #include "tc_menus.h"
 
-#define MODE_ALRM 0
-#define MODE_VOL  1
-#define MODE_AINT 2
-#define MODE_BRI  3
-#define MODE_NET  4
-#define MODE_DEST 5
-#define MODE_PRES 6
-#define MODE_DEPT 7
-#define MODE_SENS  8
-#define MODE_VER  9
-#define MODE_CPA  10
-#define MODE_END  11
-#define MODE_MIN  MODE_ALRM
+#define MODE_CPA  0
+#define MODE_ALRM 1
+#define MODE_VOL  2
+#define MODE_MSFX 3
+#define MODE_AINT 4
+#define MODE_BRI  5
+#define MODE_NET  6
+#define MODE_PRES 7
+#define MODE_DEST 8
+#define MODE_DEPT 9
+#define MODE_SENS 10
+#define MODE_VER  11
+#define MODE_END  12
 #define MODE_MAX  MODE_END
 
 #define FIELD_MONTH   0
@@ -242,26 +266,34 @@ static bool yy;
 static uint8_t timeout = 0;
 
 static const char *StrSaving = "SAVING";
+static const char *alarmWD[10] = {
+      #ifdef IS_ACAR_DISPLAY
+      "MON-SUN", "MON-FRI", "SAT-SUN",
+      #else
+      "MON -SUN", "MON -FRI", "SAT -SUN",
+      #endif
+      "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
+};
 
-static void menuSelect(int& number);
+static void menuSelect(int& number, int mode_min);
 static void menuShow(int number);
-static void setUpdate(uint16_t number, int field);
-static void setField(uint16_t& number, uint8_t field, int year, int month);
-static void saveCurVolume();
-static bool loadCurVolume();
+static void setUpdate(uint16_t number, int field, bool extra = false);
+static void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0, bool extra = false);
 static void showCurVolHWSW();
 static void showCurVol();
 static void doSetVolume();
+static void displayMSfx(int msfx);
+static void doSetMSfx();
 static void doSetAlarm();
 static void saveAutoInterval();
+static void displayAI(int interval);
 static void doSetAutoInterval();
 static void doSetBrightness(clockDisplay* displaySet);
 #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
 static void doShowSensors();
 #endif
+static void displayIP();
 static void doShowNetInfo();
-static void doCopyAudioFiles();
-static void waitForEnterRelease();
 static bool checkEnterPress();
 static void prepareInput(uint16_t number);
 
@@ -269,17 +301,6 @@ static bool checkTimeOut();
 
 static void myssdelay(unsigned long mydel);
 static void myloop();
-
-/*
- * menu_setup()
- *
- */
-void menu_setup() {
-
-    // Load volume settings from EEPROM
-    loadCurVolume();
-
-}
 
 /*
  * enter_menu() - the real thing
@@ -290,6 +311,8 @@ void enter_menu()
     bool desNM = destinationTime.getNightMode();
     bool preNM = presentTime.getNightMode();
     bool depNM = departedTime.getNightMode();
+    bool mpActive;
+    int mode_min;
 
     pwrNeedFullNow();
 
@@ -299,13 +322,18 @@ void enter_menu()
     destinationTime.setNightMode(false);
     presentTime.setNightMode(false);
     departedTime.setNightMode(false);
+    destinationTime.resetBrightness();
+    presentTime.resetBrightness();
+    departedTime.resetBrightness();
 
+    mpActive = mp_stop();
     stopAudio();
 
     // start with first menu item
-    menuItemNum = MODE_MIN;
+    mode_min = check_allow_CPA() ? MODE_CPA : MODE_ALRM;
+    menuItemNum = mode_min;
 
-    // Load the custom times from EEPROM
+    // Load the custom times from NVM
     // This means that when the user activates the menu while
     // autoInterval was > 0 or after time travels, there will
     // be different times shown in the menu than were outside
@@ -327,12 +355,12 @@ void enter_menu()
     // Wait for ENTER to cycle through main menu,
     // HOLDing ENTER selects current menu "item"
     // (Also sets displaySet to selected display, if applicable)
-    menuSelect(menuItemNum);
+    menuSelect(menuItemNum, mode_min);
 
     if(checkTimeOut())
         goto quitMenu;
 
-    if(menuItemNum >= MODE_DEST && menuItemNum <= MODE_DEPT) {
+    if(menuItemNum >= MODE_PRES && menuItemNum <= MODE_DEPT) {
 
         // Enter display times
 
@@ -358,7 +386,7 @@ void enter_menu()
         } else {
 
             // non RTC, get the time info from the object
-            // Remember: These are the ones saved in the EEPROM
+            // Remember: These are the ones saved in NVM
             // NOT the ones that were possibly shown on the
             // display before invoking the menu
             yearSet = displaySet->getYear();
@@ -376,7 +404,7 @@ void enter_menu()
         setUpdate(yearSet, FIELD_YEAR);
         prepareInput(yearSet);
         waitForEnterRelease();
-        setField(yearSet, FIELD_YEAR, displaySet->isRTC() ? TCEPOCH : 0, 0);
+        setField(yearSet, FIELD_YEAR, displaySet->isRTC() ? TCEPOCH_GEN : 0, 0);
         isYearUpdate = false;
 
         if(checkTimeOut())
@@ -386,7 +414,7 @@ void enter_menu()
         setUpdate(monthSet, FIELD_MONTH);
         prepareInput(monthSet);
         waitForEnterRelease();
-        setField(monthSet, FIELD_MONTH, 0, 0);
+        setField(monthSet, FIELD_MONTH);
 
         if(checkTimeOut())
             goto quitMenu;
@@ -404,7 +432,7 @@ void enter_menu()
         setUpdate(hourSet, FIELD_HOUR);
         prepareInput(hourSet);
         waitForEnterRelease();
-        setField(hourSet, FIELD_HOUR, 0, 0);
+        setField(hourSet, FIELD_HOUR);
 
         if(checkTimeOut())
             goto quitMenu;
@@ -413,11 +441,13 @@ void enter_menu()
         setUpdate(minSet, FIELD_MINUTE);
         prepareInput(minSet);
         waitForEnterRelease();
-        setField(minSet, FIELD_MINUTE, 0, 0);
+        setField(minSet, FIELD_MINUTE);
 
         isSetUpdate = false;
 
         // Have new date & time at this point
+
+        waitAudioDone();
 
         // Do nothing if there was a timeout waiting for button presses
         if(!checkTimeOut()) {
@@ -455,6 +485,7 @@ void enter_menu()
 
                 // Avoid immediate re-adjustment in time_loop
                 lastYear = yearSet;
+                presentTime.saveLastYear(lastYear);
 
                 // Resetting the RTC invalidates our timeDifference, ie
                 // fake present time. Make the user return to present
@@ -471,15 +502,16 @@ void enter_menu()
 
                 displaySet->setYearOffset(0);
 
-                autoInterval = 0;
-                saveAutoInterval();
+                if(autoInterval) {
+                    autoInterval = 0;
+                    saveAutoInterval();
+                    updateConfigPortalValues();
+                }
 
             }
 
             // Show a save message for a brief moment
-            displaySet->showOnlyText(StrSaving);
-
-            waitAudioDone();
+            displaySet->showTextDirect(StrSaving);
 
             // update the object
             displaySet->setYear(yearSet);
@@ -488,7 +520,7 @@ void enter_menu()
             displaySet->setHour(hourSet);
             displaySet->setMinute(minSet);
 
-            // save to eeprom (regardless of persistence mode)
+            // save to NVM (regardless of persistence mode)
             displaySet->save();
 
             mydelay(1000);
@@ -509,6 +541,17 @@ void enter_menu()
         allOff();
         waitForEnterRelease();
 
+    } else if(menuItemNum == MODE_MSFX) {
+
+        allOff();
+        waitForEnterRelease();
+
+        // Set music folder number
+        doSetMSfx();
+
+        allOff();
+        waitForEnterRelease();
+
     } else if(menuItemNum == MODE_ALRM) {
 
         allOff();
@@ -520,7 +563,7 @@ void enter_menu()
         allOff();
         waitForEnterRelease();
 
-    } else if(menuItemNum == MODE_AINT) {  // Select autoInterval
+    } else if(menuItemNum == MODE_AINT) {
 
         allOff();
         waitForEnterRelease();
@@ -531,7 +574,11 @@ void enter_menu()
         allOff();
         waitForEnterRelease();
 
-    } else if(menuItemNum == MODE_BRI) {   // Adjust brightness
+    } else if(menuItemNum == MODE_BRI) {
+
+        uint8_t dtbri = destinationTime.getBrightness();
+        uint8_t ptbri = presentTime.getBrightness();
+        uint8_t ltbri = departedTime.getBrightness();
 
         allOff();
         waitForEnterRelease();
@@ -546,21 +593,30 @@ void enter_menu()
         // Now save
         if(!checkTimeOut()) {
 
-            presentTime.showOnlyText(StrSaving);
+            presentTime.showTextDirect(StrSaving);
 
-            // (Re)Set current brightness as "initial" brightness
-            destinationTime.setBrightness(destinationTime.getBrightness(), true);
-            presentTime.setBrightness(presentTime.getBrightness(), true);
-            departedTime.setBrightness(departedTime.getBrightness(), true);
+            uint8_t dtbri2 = destinationTime.getBrightness();
+            uint8_t ptbri2 = presentTime.getBrightness();
+            uint8_t ltbri2 = departedTime.getBrightness();
+
+            if( (dtbri2 != dtbri) ||
+                (ptbri2 != ptbri) || 
+                (ltbri2 != ltbri) ) {
+
+                // (Re)Set current brightness as "initial" brightness
+                destinationTime.setBrightness(dtbri2, true);
+                presentTime.setBrightness(ptbri2, true);
+                departedTime.setBrightness(ltbri2, true);
+
+                // Convert bri values to strings, write to settings, write settings file
+                sprintf(settings.destTimeBright, "%d", dtbri2);
+                sprintf(settings.presTimeBright, "%d", ptbri2);
+                sprintf(settings.lastTimeBright, "%d", ltbri2);
+                write_settings();
+                updateConfigPortalValues();
+            }
 
             mydelay(1000);
-
-            // Convert bri values to strings, write to settings, write settings file
-            sprintf(settings.destTimeBright, "%d", destinationTime.getBrightness());
-            sprintf(settings.presTimeBright, "%d", presentTime.getBrightness());
-            sprintf(settings.lastTimeBright, "%d", departedTime.getBrightness());
-            write_settings();
-            updateConfigPortalValues();
 
         }
 
@@ -624,7 +680,9 @@ quitMenu:
     // Done, turn off displays
     allOff();
 
-    mydelay(1000);
+    mydelay(500);
+
+    waitForEnterRelease();
 
     // Restore present time
     presentTime.setDateTimeDiff(myrtcnow());
@@ -635,19 +693,24 @@ quitMenu:
 
     myloop();
 
-    waitForEnterRelease();
-
     // Restore night mode
     destinationTime.setNightMode(desNM);
     presentTime.setNightMode(preNM);
     departedTime.setNightMode(depNM);
+
+    // make time_loop immediately re-eval auto-nm
+    // unless manual-override
+    if(manualNightMode < 0) forceReEvalANM = true;
+
+    // Restart mp if it was active before entering the menu
+    if(mpActive) mp_play();
 }
 
 /*
  *  Cycle through main menu
  *
  */
-static void menuSelect(int& number)
+static void menuSelect(int& number, int mode_min)
 {
     isEnterKeyHeld = false;
 
@@ -675,13 +738,13 @@ static void menuSelect(int& number)
             timeout = 0;  // button pressed, reset timeout
 
             number++;
-            #ifdef TC_HAVESPEEDO
+            if(number == MODE_MSFX && !haveSD) number++;
+            #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
             if(number == MODE_SENS && !useLight && !useTemp) number++;
             #else
-            if(number == MODE_SENS && !useLight) number++;
+            if(number == MODE_SENS) number++;
             #endif
-            if(number == MODE_CPA && !check_allow_CPA()) number++;
-            if(number > MODE_MAX) number = MODE_MIN;
+            if(number > MODE_MAX) number = mode_min;
 
             // Show only the selected display, or menu item text
             menuShow(number);
@@ -713,7 +776,7 @@ static void menuShow(int number)
         displaySet = &destinationTime;
         break;
     case MODE_PRES:  // Present Time (RTC)
-        destinationTime.showOnlyText("RTC");
+        destinationTime.showTextDirect("SET RTC");
         destinationTime.on();
         presentTime.on();
         presentTime.setColon(false);
@@ -731,57 +794,58 @@ static void menuShow(int number)
         break;
     case MODE_VOL:   // Software volume
         #ifdef IS_ACAR_DISPLAY
-        destinationTime.showOnlyText("VOLUME");
+        destinationTime.showTextDirect("VOLUME");
         presentTime.off();
         #else
-        destinationTime.showOnlyText("VOL");    // "M" on 7seg no good, 2 lines
-        presentTime.showOnlyText("UME");
+        destinationTime.showTextDirect("VOL");    // "M" on 7seg no good, 2 lines
+        presentTime.showTextDirect("UME");
         presentTime.on();
         #endif
         destinationTime.on();
         departedTime.off();
         break;
+    case MODE_MSFX:   // Music Folder Number
+        destinationTime.showTextDirect("MUSIC");
+        presentTime.showTextDirect("FOLDER");
+        departedTime.showTextDirect("NUMBER");
+        presentTime.on();
+        destinationTime.on();
+        departedTime.on();
+        break;
     case MODE_ALRM:   // Alarm
         #ifdef IS_ACAR_DISPLAY
-        destinationTime.showOnlyText("ALARM");
+        destinationTime.showTextDirect("ALARM");
         presentTime.off();
         #else
-        destinationTime.showOnlyText("ALA");    // "M" on 7seg no good, 2 lines
-        presentTime.showOnlyText("RM");
+        destinationTime.showTextDirect("ALA");    // "M" on 7seg no good, 2 lines
+        presentTime.showTextDirect("RM");
         presentTime.on();
         #endif
         destinationTime.on();
         departedTime.off();
         displaySet = &destinationTime;
         break;
-    case MODE_AINT:  // Time Rotation inverval
-        #ifdef IS_ACAR_DISPLAY
-        destinationTime.showOnlyText("ROT INT");
-        presentTime.off();
-        departedTime.off();
-        #else
-        destinationTime.showOnlyText("TIME");
-        presentTime.showOnlyText("ROTATION");
-        departedTime.showOnlyText("INTERVAL");
-        presentTime.on();
-        departedTime.on();
-        #endif
+    case MODE_AINT:  // Time Cycling inverval
+        destinationTime.showTextDirect("TIME");
+        presentTime.showTextDirect("CYCLING");
         destinationTime.on();
+        presentTime.on();
+        departedTime.off();
         break;
     case MODE_BRI:  // Brightness
-        destinationTime.showOnlyText("BRIGHTNESS");
+        destinationTime.showTextDirect("BRIGHTNESS");
         presentTime.off();
         departedTime.off();
         destinationTime.on();
         break;
     case MODE_NET:  // Network info
         #ifdef IS_ACAR_DISPLAY
-        destinationTime.showOnlyText("NETWORK");
+        destinationTime.showTextDirect("NETWORK");
         destinationTime.on();
         presentTime.off();
         #else
-        destinationTime.showOnlyText("NET");  // "W" on 7seg no good, 2 lines
-        presentTime.showOnlyText("WORK");
+        destinationTime.showTextDirect("NET");  // "W" on 7seg no good, 2 lines
+        presentTime.showTextDirect("WORK");
         destinationTime.on();
         presentTime.on();
         #endif
@@ -789,33 +853,33 @@ static void menuShow(int number)
         break;
     #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
     case MODE_SENS:
-        destinationTime.showOnlyText("SENSORS");
+        destinationTime.showTextDirect("SENSORS");
         destinationTime.on();
         presentTime.off();
         departedTime.off();
         break;
     #endif
     case MODE_VER:  // Version info
-        destinationTime.showOnlyText("VERSION");
+        destinationTime.showTextDirect("VERSION");
         destinationTime.on();
-        presentTime.showOnlyText(TC_VERSION);
+        presentTime.showTextDirect(TC_VERSION);
         presentTime.on();
         #ifdef TC_VERSION_EXTRA
-        departedTime.showOnlyText(TC_VERSION_EXTRA);
+        departedTime.showTextDirect(TC_VERSION_EXTRA);
         departedTime.on();
         #else
         departedTime.off();
         #endif
         break;
     case MODE_CPA:  // Install audio files
-        destinationTime.showOnlyText("INSTALL");
+        destinationTime.showTextDirect("INSTALL");
         destinationTime.on();
-        presentTime.showOnlyText("AUDIO FILES");
+        presentTime.showTextDirect("AUDIO FILES");
         presentTime.on();
         departedTime.off();
         break;
     case MODE_END:  // end
-        destinationTime.showOnlyText("END");
+        destinationTime.showTextDirect("END");
         destinationTime.on();
         destinationTime.setColon(false);
         presentTime.off();
@@ -832,7 +896,7 @@ static void menuShow(int number)
  * field = field to show it in
  *
  */
-static void setUpdate(uint16_t number, int field)
+static void setUpdate(uint16_t number, int field, bool extra)
 {
     switch(field) {
     case FIELD_MONTH:
@@ -845,7 +909,7 @@ static void setUpdate(uint16_t number, int field)
         displaySet->showOnlyYear(number);
         break;
     case FIELD_HOUR:
-        displaySet->showOnlyHour(number);
+        displaySet->showOnlyHour(number, extra);
         break;
     case FIELD_MINUTE:
         displaySet->showOnlyMinute(number);
@@ -872,7 +936,7 @@ static void prepareInput(uint16_t number)
  * year, month - check checking maximum day number
  *
  */
-static void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0)
+static void setField(uint16_t& number, uint8_t field, int year, int month, bool extra)
 {
     int upperLimit;
     int lowerLimit;
@@ -910,10 +974,6 @@ static void setField(uint16_t& number, uint8_t field, int year = 0, int month = 
         break;
     }
 
-    #ifdef TC_DBG
-    Serial.println(F("setField: Awaiting digits or ENTER..."));
-    #endif
-
     // Force keypad to send keys to our buffer (and block key holding)
     isSetUpdate = true;
 
@@ -934,7 +994,7 @@ static void setField(uint16_t& number, uint8_t field, int year = 0, int month = 
         // Show setNum in field
         if(prevNum != setNum) {
             someupddone = true;
-            setUpdate(setNum, field);
+            setUpdate(setNum, field, extra);
             prevNum = setNum;
         }
 
@@ -958,83 +1018,35 @@ static void setField(uint16_t& number, uint8_t field, int year = 0, int month = 
     number = numVal;
     setNum = numVal;
 
-    setUpdate(setNum, field);
-
-    #ifdef TC_DBG
-    Serial.print(F("Setfield: number: "));
-    Serial.println(number);
-    #endif
+    setUpdate(setNum, field, extra);
 }
 
 /*
  *  Volume #####################################################
  */
 
-static void saveCurVolume()
-{
-    EEPROM.write(SWVOL_PREF, (uint8_t)curVolume);
-    EEPROM.write(SWVOL_PREF + 1, (uint8_t)((curVolume ^ 0xff) & 0xff));
-    EEPROM.commit();
-}
-
-static bool loadCurVolume()
-{
-    uint8_t loadBuf[2];
-
-    loadBuf[0] = EEPROM.read(SWVOL_PREF);
-    loadBuf[1] = EEPROM.read(SWVOL_PREF + 1) ^ 0xff;
-
-    if(loadBuf[0] != loadBuf[1]) {
-
-        Serial.println(F("loadVolume: Invalid volume data in EEPROM"));
-
-        curVolume = 255;
-
-        saveCurVolume();
-
-        return false;
-    }
-
-    curVolume = loadBuf[0];
-
-    if(curVolume > 15 && curVolume != 255)
-        curVolume = 255;
-
-    #ifdef TC_DBG
-    Serial.print("loadVolume: Loaded volume ");
-    Serial.println(curVolume);
-    #endif
-
-    return true;
-}
-
 static void showCurVolHWSW()
 {
     if(curVolume == 255) {
-        destinationTime.showOnlyText("HW");
-        presentTime.showOnlyText("VOLUME");
-        departedTime.showOnlyText("KNOB");
-        destinationTime.on();
-        presentTime.on();
+        destinationTime.showTextDirect("USE");
+        presentTime.showTextDirect("VOLUME");
+        departedTime.showTextDirect("KNOB");
         departedTime.on();
     } else {
-        destinationTime.showOnlyText("SW");
-        destinationTime.on();
-        presentTime.off();
+        destinationTime.showTextDirect("FIXED");
+        presentTime.showTextDirect("LEVEL");
         departedTime.off();
     }
+    destinationTime.on();
+    presentTime.on();
 }
 
 static void showCurVol()
 {
-    #ifdef IS_ACAR_DISPLAY
-    destinationTime.showOnlySettingVal("LV", curVolume, true);
-    #else
-    destinationTime.showOnlySettingVal("LVL", curVolume, true);
-    #endif
+    destinationTime.showSettingValDirect("LEVEL", curVolume, true);
     destinationTime.on();
     if(curVolume == 0) {
-        presentTime.showOnlyText("MUTE");
+        presentTime.showTextDirect("MUTE");
         presentTime.on();
     } else {
         presentTime.off();
@@ -1077,7 +1089,7 @@ static void doSetVolume()
 
                 timeout = 0;  // button pressed, reset timeout
 
-                if(curVolume <= 15)
+                if(curVolume <= 19)
                     curVolume = 255;
                 else
                     curVolume = 0;
@@ -1129,7 +1141,7 @@ static void doSetVolume()
                     timeout = 0;  // button pressed, reset timeout
 
                     curVolume++;
-                    if(curVolume == 16) curVolume = 0;
+                    if(curVolume == 20) curVolume = 0;
 
                     showCurVol();
 
@@ -1142,7 +1154,7 @@ static void doSetVolume()
             } else {
 
                 if(triggerPlay && (millis() - playNow >= 1*1000)) {
-                    play_file("/alarm.mp3", 1.0, true, 0);
+                    play_file("/alarm.mp3", 1.0, false, true);
                     triggerPlay = false;
                 }
 
@@ -1160,17 +1172,107 @@ static void doSetVolume()
 
         stopAudio();
 
-        destinationTime.showOnlyText(StrSaving);
+        destinationTime.showTextDirect(StrSaving);
 
-        // Save it
-        saveCurVolume();
+        // Save it (if changed)
+        if(oldVol != curVolume) {
+            saveCurVolume();
+        }
+        mydelay(1000);
+
+    } else {
+
+        curVolume = oldVol;
+
+    }
+}
+
+/*  
+ *   Music Folder Number ########################################
+ */
+
+static void displayMSfx(int msfx)
+{
+    destinationTime.showSettingValDirect("NUMBER", msfx, true);
+    destinationTime.on();
+
+    if(mp_checkForFolder(msfx)) {
+        presentTime.off();
+    } else {
+        presentTime.showTextDirect("NOT FOUND");
+        presentTime.on();
+    }
+}
+
+static void doSetMSfx()
+{
+    bool msfxDone = false;
+    int oldmsfx = musFolderNum;
+
+    displayMSfx(musFolderNum);
+    departedTime.off();
+
+    isEnterKeyHeld = false;
+
+    timeout = 0;  // reset timeout
+
+    // Wait for enter
+    while(!checkTimeOut() && !msfxDone) {
+
+        // If pressed
+        if(checkEnterPress()) {
+
+            // wait for release
+            while(!checkTimeOut() && checkEnterPress()) {
+                // If hold threshold is passed, return false */
+                myloop();
+                if(isEnterKeyHeld) {
+                    isEnterKeyHeld = false;
+                    msfxDone = true;
+                    break;
+                }
+                delay(10);
+            }
+
+            if(!checkTimeOut() && !msfxDone) {
+
+                timeout = 0;  // button pressed, reset timeout
+
+                musFolderNum++;
+                if(musFolderNum > 9)
+                    musFolderNum = 0;
+
+                displayMSfx(musFolderNum);
+
+            }
+
+        } else {
+
+            mydelay(50);
+
+        }
+
+    }
+
+    if(!checkTimeOut()) {  // only if there wasn't a timeout
+
+        presentTime.off();
+        departedTime.off();
+
+        destinationTime.showTextDirect(StrSaving);
+
+        // Save it (if changed)
+        if(oldmsfx != musFolderNum) {
+            saveMusFoldNum();
+            mp_init();
+        }
 
         mydelay(1000);
 
     } else {
 
-        oldVol = curVolume;
-
+        musFolderNum = oldmsfx;
+        
     }
 }
 
@@ -1196,23 +1298,40 @@ bool alarmOn()
     return true;
 }
 
+int toggleAlarm()
+{
+    if(alarmOnOff) {
+        alarmOff();
+        return 0;
+    }
+    return alarmOn() ? 1 : -1;
+}
+
+int getAlarm()
+{
+    if(alarmHour <= 23 && alarmMinute <= 59) {
+        return (alarmHour << 8) | alarmMinute;
+    }
+    return -1;
+}
+
+const char *getAlWD(int wd)
+{
+    return alarmWD[wd];
+}
+
 // Set Alarm
 static void doSetAlarm()
 {
     char almBuf[16];
+    char almBuf2[16];
+    bool blinkSwitch = false;
+    unsigned long blinkNow;
     bool alarmDone = false;
     bool newAlarmOnOff = alarmOnOff;
     uint16_t newAlarmHour = (alarmHour <= 23) ? alarmHour : 0;
     uint16_t newAlarmMinute = (alarmMinute <= 59) ? alarmMinute : 0;
     uint16_t newAlarmWeekday = alarmWeekday;
-    const char *alarmWD[10] = {
-      #ifdef IS_ACAR_DISPLAY
-      "MON-SUN", "MON-FRI", "SAT-SUN",
-      #else
-      "MON -SUN", "MON -FRI", "SAT -SUN",
-      #endif
-      "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
-    };
     #ifdef IS_ACAR_DISPLAY
     const char *almFmt = "%s     %02d%02d";
     #else
@@ -1220,19 +1339,27 @@ static void doSetAlarm()
     #endif
 
     // On/Off
+    sprintf(almBuf2, almFmt, "   " , newAlarmHour, newAlarmMinute);
     sprintf(almBuf, almFmt, newAlarmOnOff ? "ON " : "OFF", newAlarmHour, newAlarmMinute);
-    displaySet->showOnlyText(almBuf);
+    displaySet->showTextDirect(almBuf);
     displaySet->on();
 
     isEnterKeyHeld = false;
 
     timeout = 0;  // reset timeout
+    blinkNow = millis();
 
     // Wait for enter
     while(!checkTimeOut() && !alarmDone) {
 
         // If pressed
         if(checkEnterPress()) {
+
+            if(blinkSwitch) {
+                displaySet->showTextDirect(almBuf);
+                blinkSwitch = false;
+                blinkNow = millis();
+            }
 
             // wait for release
             while(!checkTimeOut() && checkEnterPress()) {
@@ -1253,13 +1380,19 @@ static void doSetAlarm()
                 newAlarmOnOff = !newAlarmOnOff;
 
                 sprintf(almBuf, almFmt, newAlarmOnOff ? "ON " : "OFF", newAlarmHour, newAlarmMinute);
-                displaySet->showOnlyText(almBuf);
+                displaySet->showTextDirect(almBuf);
 
             }
 
         } else {
 
             mydelay(50);
+
+            if(millis() - blinkNow > 500) {
+                blinkSwitch = !blinkSwitch;
+                displaySet->showTextDirect(blinkSwitch ? almBuf2 : almBuf);
+                blinkNow = millis();
+            }
 
         }
 
@@ -1270,10 +1403,10 @@ static void doSetAlarm()
     }
 
     // Get hour
-    setUpdate(newAlarmHour, FIELD_HOUR);
+    setUpdate(newAlarmHour, FIELD_HOUR, true);  // force24 here
     prepareInput(newAlarmHour);
     waitForEnterRelease();
-    setField(newAlarmHour, FIELD_HOUR, 0, 0);
+    setField(newAlarmHour, FIELD_HOUR, 0, 0, true);
 
     if(checkTimeOut()) {
         return;
@@ -1283,11 +1416,11 @@ static void doSetAlarm()
     setUpdate(newAlarmMinute, FIELD_MINUTE);
     prepareInput(newAlarmMinute);
     waitForEnterRelease();
-    setField(newAlarmMinute, FIELD_MINUTE, 0, 0);
+    setField(newAlarmMinute, FIELD_MINUTE);
 
     // Weekday(s)
     waitForEnterRelease();
-    displaySet->showOnlyText(alarmWD[newAlarmWeekday]);
+    displaySet->showTextDirect(getAlWD(newAlarmWeekday));
 
     isEnterKeyHeld = false;
     alarmDone = false;
@@ -1317,7 +1450,7 @@ static void doSetAlarm()
                 newAlarmWeekday++;
                 if(newAlarmWeekday > 9) newAlarmWeekday = 0;
 
-                displaySet->showOnlyText(alarmWD[newAlarmWeekday]);
+                displaySet->showTextDirect(getAlWD(newAlarmWeekday));
 
             }
 
@@ -1332,24 +1465,30 @@ static void doSetAlarm()
     // Do nothing if there was a timeout waiting for button presses
     if(!checkTimeOut()) {
 
-        displaySet->showOnlyText(StrSaving);
+        displaySet->showTextDirect(StrSaving);
 
         waitAudioDone();
 
-        alarmOnOff = newAlarmOnOff;
-        alarmHour = newAlarmHour;
-        alarmMinute = newAlarmMinute;
-        alarmWeekday = newAlarmWeekday;
+        // Save it (if changed)
+        if( (alarmOnOff != newAlarmOnOff)   ||
+            (alarmHour != newAlarmHour)     ||
+            (alarmMinute != newAlarmMinute) ||
+            (alarmWeekday != newAlarmWeekday) ) {
+        
+            alarmOnOff = newAlarmOnOff;
+            alarmHour = newAlarmHour;
+            alarmMinute = newAlarmMinute;
+            alarmWeekday = newAlarmWeekday;
 
-        // Save it
-        saveAlarm();
+            saveAlarm();
+        }
 
         mydelay(1000);
     }
 }
 
 /*
- *  Time-rotation Interval (aka "autoInterval") #################
+ *  Time-cycling Interval (aka "autoInterval") #################
  */
 
 /*
@@ -1358,14 +1497,9 @@ static void doSetAlarm()
  */
 bool loadAutoInterval()
 {
-    #ifdef TC_DBG
-    Serial.println(F("Load Auto Interval"));
-    #endif
-
     autoInterval = (uint8_t)atoi(settings.autoRotateTimes);
     if(autoInterval > 5) {
         autoInterval = DEF_AUTOROTTIMES;
-        Serial.println(F("loadAutoInterval: Bad autoInterval, resetting to default"));
         return false;
     }
     return true;
@@ -1383,26 +1517,28 @@ static void saveAutoInterval()
     write_settings();
 }
 
+static void displayAI(int interval)
+{ 
+    destinationTime.showSettingValDirect("INTERVAL", interval, true);
+
+    if(interval == 0) {
+        presentTime.showTextDirect("OFF");
+    } else {
+        presentTime.showTextDirect("MINUTES");
+    }
+}
+
 /*
  * Adjust the autoInverval and save
  */
 static void doSetAutoInterval()
 {
     bool autoDone = false;
+    int newAutoInterval = autoInterval;
 
-    #ifdef IS_ACAR_DISPLAY
-    destinationTime.showOnlySettingVal("IN", autoTimeIntervals[autoInterval], true);
-    #else
-    destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval], true);
-    #endif
+    displayAI(autoTimeIntervals[newAutoInterval]);
     destinationTime.on();
-
     presentTime.on();
-    if(autoTimeIntervals[autoInterval] == 0) {
-        presentTime.showOnlyText("OFF");
-    } else {
-        presentTime.showOnlyText("MINUTES");    // Times cycled in xx minutes
-    }
     departedTime.off();
 
     isEnterKeyHeld = false;
@@ -1431,22 +1567,11 @@ static void doSetAutoInterval()
 
                 timeout = 0;  // button pressed, reset timeout
 
-                autoInterval++;
-                if(autoInterval > 5)
-                    autoInterval = 0;
+                newAutoInterval++;
+                if(newAutoInterval > 5)
+                    newAutoInterval = 0;
 
-                #ifdef IS_ACAR_DISPLAY
-                destinationTime.showOnlySettingVal("IN", autoTimeIntervals[autoInterval], true);
-                #else
-                destinationTime.showOnlySettingVal("INT", autoTimeIntervals[autoInterval], true);
-                #endif
-
-                if(autoTimeIntervals[autoInterval] == 0) {
-                    presentTime.showOnlyText("OFF");
-                } else {
-                    presentTime.showOnlyText("MINUTES");
-                }
-                departedTime.off();
+                displayAI(autoTimeIntervals[newAutoInterval]);
             }
 
         } else {
@@ -1462,11 +1587,14 @@ static void doSetAutoInterval()
         presentTime.off();
         departedTime.off();
 
-        destinationTime.showOnlyText(StrSaving);
+        destinationTime.showTextDirect(StrSaving);
 
-        // Save it
-        saveAutoInterval();
-        updateConfigPortalValues();
+        // Save it (if changed)
+        if(autoInterval != newAutoInterval) {
+            autoInterval = newAutoInterval;
+            saveAutoInterval();
+            updateConfigPortalValues();
+        }
 
         mydelay(1000);
 
@@ -1487,9 +1615,9 @@ static void doSetBrightness(clockDisplay* displaySet) {
 
     // Display "LVL"
     #ifdef IS_ACAR_DISPLAY
-    displaySet->showOnlySettingVal("LV", displaySet->getBrightness(), false);
+    displaySet->showSettingValDirect("LV", displaySet->getBrightness(), false);
     #else
-    displaySet->showOnlySettingVal("LVL", displaySet->getBrightness(), false);
+    displaySet->showSettingValDirect("LVL", displaySet->getBrightness(), false);
     #endif
 
     isEnterKeyHeld = false;
@@ -1524,9 +1652,9 @@ static void doSetBrightness(clockDisplay* displaySet) {
                 displaySet->setBrightness(number);
 
                 #ifdef IS_ACAR_DISPLAY
-                displaySet->showOnlySettingVal("LV", number, false);
+                displaySet->showSettingValDirect("LV", number, false);
                 #else
-                displaySet->showOnlySettingVal("LVL", number, false);
+                displaySet->showSettingValDirect("LVL", number, false);
                 #endif
 
             }
@@ -1552,16 +1680,26 @@ static void doShowSensors()
     char buf[13];
     bool luxDone = false;
     unsigned sensNow = 0;
-    uint8_t number = 0;
+    uint8_t numberArr[3];
+    uint8_t numIdx = 0, maxIdx = 0;
+    int hum;
+    float temp;
 
-    #ifdef TC_HAVETEMP
-    if(!useLight) number = 1;
-    if(useTemp)   tempSens.on();
+    #ifdef TC_HAVELIGHT
+    if(useLight) numberArr[numIdx++] = 0;
     #endif
+    #ifdef TC_HAVETEMP
+    if(useTemp) {  
+        numberArr[numIdx++] = 1;
+        if(tempSens.haveHum()) numberArr[numIdx++] = 2;
+    }
+    #endif
+    maxIdx = numIdx - 1;
+    numIdx = 0;
 
-    destinationTime.showOnlyText("");
+    destinationTime.showTextDirect("WAIT");
     destinationTime.on();
-    presentTime.showOnlyText("");
+    presentTime.showTextDirect("");
     presentTime.on();
     departedTime.off();
 
@@ -1587,50 +1725,75 @@ static void doShowSensors()
                 delay(10);
             }
 
-            #if defined(TC_HAVETEMP) && defined(TC_HAVELIGHT)
-            if(useLight && useTemp) {
-                number++;
-                if(number > 1) number = 0;
+            if(maxIdx > 0) {
+                numIdx++;
+                if(numIdx > maxIdx) numIdx = 0;
+                destinationTime.showTextDirect("WAIT");
+                presentTime.showTextDirect("");
             }
-            #endif
             
         } else {
 
             mydelay(50);
 
-            if(millis() - sensNow > 1000) {
-                switch(number) {
+            if(millis() - sensNow > 3000) {
+                switch(numberArr[numIdx]) {
                 case 0:
                     #ifdef TC_HAVELIGHT
                     lightSens.loop();
-                    destinationTime.showOnlyText("LIGHT");
-                    #ifdef TC_DBG
-                    sprintf(buf, "%08x", lightSens.readDebug());
-                    #else
+                    destinationTime.showTextDirect("LIGHT");
+                    //#ifdef TC_DBG
+                    //sprintf(buf, "%08x", lightSens.readDebug());
+                    //#else
                     sprintf(buf, "%d LUX", lightSens.readLux());
-                    #endif
+                    //#endif
+                    #else
+                    buf[0] = 0;
                     #endif
                     break;
                 case 1:
                     #ifdef TC_HAVETEMP
-                    destinationTime.showOnlyText("TEMP");
-                    sprintf(buf, "%.2f %c", tempSens.readTemp(tempUnit), tempUnit ? 'C' : 'F');
+                    destinationTime.showTextDirect("TEMPERATURE");
+                    temp = tempSens.readTemp(tempUnit);
+                    if(isnan(temp)) {
+                        sprintf(buf, "--.--~%c", tempUnit ? 'C' : 'F');
+                    } else {
+                        sprintf(buf, "%.2f~%c", temp, tempUnit ? 'C' : 'F');
+                    }
+                    #else
+                    buf[0] = 0;
+                    #endif
+                    break;
+                case 2:
+                    #ifdef TC_HAVETEMP
+                    tempSens.readTemp(tempUnit);
+                    destinationTime.showTextDirect("HUMIDITY");
+                    hum = tempSens.readHum();
+                    if(hum < 0) {
+                        #ifdef IS_ACAR_DISPLAY
+                        sprintf(buf, "--%%&", hum);
+                        #else
+                        sprintf(buf, "-- %%&", hum);
+                        #endif
+                    } else {
+                        #ifdef IS_ACAR_DISPLAY
+                        sprintf(buf, "%2d%%&", hum);
+                        #else
+                        sprintf(buf, "%2d %%&", hum);
+                        #endif
+                    }
+                    #else
+                    buf[0] = 0;
                     #endif
                     break;
                 }
-                presentTime.showOnlyText(buf);
+                presentTime.showTextDirect(buf);
                 sensNow = millis();
             }
 
         }
 
     }
-
-    #ifdef TC_HAVETEMP
-    if(useTemp) {
-        tempSens.off();
-    }
-    #endif
 }
 #endif
 
@@ -1638,22 +1801,30 @@ static void doShowSensors()
  * Show network info ###########################################
  */
 
-static void doShowNetInfo()
+static void displayIP()
 {
     uint8_t a, b, c, d;
-    int number = 0;
-    bool netDone = false;
 
     wifi_getIP(a, b, c, d);
-
-    destinationTime.showOnlyText("IP");
+    
+    destinationTime.showTextDirect("IP");
+    presentTime.showHalfIPDirect(a, b, true);
+    departedTime.showHalfIPDirect(c, d, true);
+    
     destinationTime.on();
-
-    presentTime.showOnlyHalfIP(a, b, true);
     presentTime.on();
-
-    departedTime.showOnlyHalfIP(c, d, true);
     departedTime.on();
+}
+
+static void doShowNetInfo()
+{
+    int number = 0;
+    bool netDone = false;
+    char macBuf[16];
+
+    wifi_getMAC(macBuf);
+
+    displayIP();
 
     isEnterKeyHeld = false;
 
@@ -1682,66 +1853,66 @@ static void doShowNetInfo()
                 timeout = 0;  // button pressed, reset timeout
 
                 number++;
-                if(number > 1) number = 0;
+                if(number > 2) number = 0;
                 switch(number) {
                 case 0:
-                    wifi_getIP(a, b, c, d);
-                    destinationTime.showOnlyText("IP");
-                    destinationTime.on();
-                    presentTime.showOnlyHalfIP(a, b, true);
-                    presentTime.on();
-                    departedTime.showOnlyHalfIP(c, d, true);
-                    departedTime.on();
+                    displayIP();
                     break;
                 case 1:
-                    destinationTime.showOnlyText("WIFI");
+                    destinationTime.showTextDirect("WIFI");
                     destinationTime.on();
                     switch(wifi_getStatus()) {
                     case WL_IDLE_STATUS:
-                        presentTime.showOnlyText("IDLE");
+                        presentTime.showTextDirect("IDLE");
                         departedTime.off();
                         break;
                     case WL_SCAN_COMPLETED:
-                        presentTime.showOnlyText("SCAN");
-                        departedTime.showOnlyText("COMPLETE");
+                        presentTime.showTextDirect("SCAN");
+                        departedTime.showTextDirect("COMPLETE");
                         departedTime.on();
                         break;
                     case WL_NO_SSID_AVAIL:
-                        presentTime.showOnlyText("SSID NOT");
-                        departedTime.showOnlyText("AVAILABLE");
+                        presentTime.showTextDirect("SSID NOT");
+                        departedTime.showTextDirect("AVAILABLE");
                         departedTime.on();
                         break;
                     case WL_CONNECTED:
-                        presentTime.showOnlyText("CONNECTED");
+                        presentTime.showTextDirect("CONNECTED");
                         departedTime.off();
                         break;
                     case WL_CONNECT_FAILED:
-                        presentTime.showOnlyText("CONNECT");
-                        departedTime.showOnlyText("FAILED");
+                        presentTime.showTextDirect("CONNECT");
+                        departedTime.showTextDirect("FAILED");
                         departedTime.on();
                         break;
                     case WL_CONNECTION_LOST:
-                        presentTime.showOnlyText("CONNECTION");
-                        departedTime.showOnlyText("LOST");
+                        presentTime.showTextDirect("CONNECTION");
+                        departedTime.showTextDirect("LOST");
                         departedTime.on();
                         break;
                     case WL_DISCONNECTED:
-                        presentTime.showOnlyText("DISCONNECTED");
+                        presentTime.showTextDirect("DISCONNECTED");
                         departedTime.off();
                         break;
                     case 0x10000:
-                        presentTime.showOnlyText("AP MODE");
+                        presentTime.showTextDirect("AP MODE");
                         departedTime.off();
                         break;
                     case 0x10001:
-                        presentTime.showOnlyText("OFF");
+                        presentTime.showTextDirect("OFF");
                         departedTime.off();
                         break;
                     //case 0x10002:     // UNKNOWN
                     default:
-                        presentTime.showOnlyText("UNKNOWN");
+                        presentTime.showTextDirect("UNKNOWN");
                         departedTime.off();
                     }
+                    presentTime.on();
+                    break;
+                case 2:
+                    destinationTime.showTextDirect("MAC");
+                    destinationTime.on();
+                    presentTime.showTextDirect(macBuf, true, true);
                     presentTime.on();
                     break;
                 }
@@ -1761,15 +1932,18 @@ static void doShowNetInfo()
  * Install default audio files from SD to flash FS #############
  */
 
-static void doCopyAudioFiles()
+void doCopyAudioFiles()
 {
     bool doCancDone = false;
     bool newCanc = false;
+    bool blinkSwitch = false;
+    unsigned long blinkNow = millis();
+    bool delIDfile = false;
 
     // Cancel/Copy
     destinationTime.on();
     presentTime.on();
-    departedTime.showOnlyText("CANCEL");
+    departedTime.showTextDirect("CANCEL");
     departedTime.on();
 
     isEnterKeyHeld = false;
@@ -1781,6 +1955,12 @@ static void doCopyAudioFiles()
 
         // If pressed
         if(checkEnterPress()) {
+
+            if(blinkSwitch) {
+                departedTime.on();
+                blinkSwitch = false;
+                blinkNow = millis();
+            }
   
             // wait for release
             while(!checkTimeOut() && checkEnterPress()) {
@@ -1800,13 +1980,19 @@ static void doCopyAudioFiles()
   
                 newCanc = !newCanc;
   
-                departedTime.showOnlyText(newCanc ? "COPY" : "CANCEL");
+                departedTime.showTextDirect(newCanc ? "PROCEED" : "CANCEL");
   
             }
   
         } else {
   
             mydelay(50);
+
+            if(millis() - blinkNow > 500) {
+                blinkSwitch = !blinkSwitch;
+                blinkSwitch ? departedTime.off() : departedTime.on();
+                blinkNow = millis();
+            }
   
         }
 
@@ -1817,12 +2003,30 @@ static void doCopyAudioFiles()
     }
 
     if(!copy_audio_files()) {
-        mydelay(3000);
+        // If copy fails, re-format flash FS
+        departedTime.showTextDirect("FORMATTING");
+        formatFlashFS();            // Format
+        rewriteSecondarySettings(); // Re-write alarm/ip/vol settings
+        #ifdef TC_DBG 
+        Serial.println("Re-writing general settings");
+        #endif
+        write_settings();           // Re-write general settings
+        if(!copy_audio_files()) {   // Retry copy
+            mydelay(3000);
+        } else {
+            delIDfile = true;
+        }
+    } else {
+        delIDfile = true;
     }
+
+    if(delIDfile)
+        delete_ID_file();
+    
     mydelay(2000);
 
     allOff();
-    destinationTime.showOnlyText("REBOOTING");
+    destinationTime.showTextDirect("REBOOTING");
     destinationTime.on();
 
     esp_restart();
@@ -1833,13 +2037,39 @@ static void doCopyAudioFiles()
 // Show all, month after a short delay
 void animate()
 {
-    destinationTime.showAnimate1();
+    #ifdef TC_HAVETEMP
+    if(isRcMode()) {
+        destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit, true);
+    } else
+    #endif
+        destinationTime.showAnimate1();
+
     presentTime.showAnimate1();
-    departedTime.showAnimate1();
+
+    #ifdef TC_HAVETEMP
+    if(isRcMode() && tempSens.haveHum()) {
+        departedTime.showHumDirect(tempSens.readHum(), true);
+    } else
+    #endif
+        departedTime.showAnimate1();
+        
     mydelay(80);
-    destinationTime.showAnimate2();
+
+    #ifdef TC_HAVETEMP
+    if(isRcMode())
+        destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit);
+    else
+    #endif
+        destinationTime.showAnimate2();
+        
     presentTime.showAnimate2();
-    departedTime.showAnimate2();
+
+    #ifdef TC_HAVETEMP
+    if(isRcMode() && tempSens.haveHum()) {
+        departedTime.showHumDirect(tempSens.readHum());
+    } else
+    #endif
+        departedTime.showAnimate2();
 }
 
 // Activate lamp test on all displays and turn on
@@ -1862,14 +2092,19 @@ void allOff()
 
 void start_file_copy()
 {
+    mp_stop();
     stopAudio();
   
+    destinationTime.showTextDirect("COPYING");
+    presentTime.showTextDirect("FILES");
+    departedTime.showTextDirect("PLEASE");
     destinationTime.on();
     presentTime.on();
     departedTime.on();
-    destinationTime.showOnlyText("COPYING");
-    presentTime.showOnlyText("FILES");
-    departedTime.showOnlyText("PLEASE");
+    destinationTime.resetBrightness();
+    presentTime.resetBrightness();
+    departedTime.resetBrightness();
+    
     fcprog = false;
     fcstart = millis();
 }
@@ -1877,7 +2112,7 @@ void start_file_copy()
 void file_copy_progress()
 {
     if(millis() - fcstart >= 1000) {
-        departedTime.showOnlyText(fcprog ? "PLEASE" : "WAIT");
+        departedTime.showTextDirect(fcprog ? "PLEASE" : "WAIT");
         fcprog = !fcprog;
         fcstart = millis();
     }
@@ -1885,12 +2120,12 @@ void file_copy_progress()
 
 void file_copy_done()
 {
-    departedTime.showOnlyText("DONE");
+    departedTime.showTextDirect("DONE");
 }
 
 void file_copy_error()
 {
-    departedTime.showOnlyText("ERROR");
+    departedTime.showTextDirect("ERROR");
 }
 
 /*
@@ -1913,7 +2148,7 @@ static bool checkEnterPress()
  * Call myloop() to allow other stuff to proceed
  *
  */
-static void waitForEnterRelease()
+void waitForEnterRelease()
 {
     while(1) {
         while(digitalRead(ENTER_BUTTON_PIN)) {

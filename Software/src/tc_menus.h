@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * Keypad Menu handling
@@ -21,7 +21,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef _TC_MENUS_H
@@ -38,14 +38,14 @@ extern uint8_t alarmHour;
 extern uint8_t alarmMinute;
 extern uint8_t alarmWeekday;
 
-void menu_setup();
 void enter_menu();
-
-bool loadAlarm();
-void saveAlarm();
 
 void alarmOff();
 bool alarmOn();
+int  toggleAlarm();
+int  getAlarm();
+const char *getAlWD(int wd);
+
 bool loadAutoInterval();
 
 void waitAudioDone();

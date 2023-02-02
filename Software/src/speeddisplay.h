@@ -1,14 +1,16 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * speedDisplay Class: Speedo Display
  *
- * This is designed for HT16K33-based displays, like the "Grove - 0.54"
- * Dual/Quad Alphanumeric Display" or some displays with the Adafruit
+ * This is designed for CircuitSetup's Speedo display and other 
+ * HT16K33-based displays, like the "Grove - 0.54" Dual/Quad 
+ * Alphanumeric Display" or some displays with the Adafruit
  * i2c backpack (878, 1911, 1270; product numbers vary with color).
+ * The i2c slave address must be 0x70.
  * -------------------------------------------------------------------
  * License: MIT
  * 
@@ -82,7 +84,9 @@ class speedDisplay {
         void begin(int dispType);
         void on();
         void off();
+        #if 0
         void lampTest();
+        #endif
 
         void clearBuf();
 
@@ -98,7 +102,7 @@ class speedDisplay {
         void setText(const char *text);
         void setSpeed(int8_t speedNum);
         #ifdef TC_HAVETEMP
-        void setTemperature(double temp);
+        void setTemperature(float temp);
         #endif
         void setDot(bool dot01 = true);
         void setColon(bool colon);
@@ -107,10 +111,20 @@ class speedDisplay {
         bool getDot();
         bool getColon();
 
+        #if 0
         void showTextDirect(const char *text);
         void setColonDirect(bool colon);
+        #endif
 
     private:
+
+        void handleColon();
+        uint16_t getLEDChar(uint8_t value);
+        #if 0
+        void directCol(int col, int segments);  // directly writes column RAM
+        #endif
+        void clearDisplay();                    // clears display RAM
+        void directCmd(uint8_t val);
 
         uint8_t _address;
         uint16_t _displayBuffer[8];
@@ -134,21 +148,15 @@ class speedDisplay {
         uint8_t  _dot_pos01;      //      1s dot position in 16bit buffer
         uint8_t  _dot01_shift;    //      1s dot shift to align in buffer
         uint8_t  _colon_pos;      //      Pos of colon in 16bit buffer (255 = no colon)
-        uint8_t  _colon_shift;    //      Colon shift to align in buffer
         uint16_t _colon_bm;       //      bitmask for colon
         uint8_t  _buf_size;       //      total buffer size in words (16bit)
-        uint8_t  _num_digs;       //      total number of digits/letters
+        uint8_t  _num_digs;       //      total number of digits/letters (max 4)
         uint8_t  _buf_packed;     //      2 digits in one buffer pos? (0=no, 1=yes)
         uint8_t *_bufPosArr;      //      Array of buffer positions for digits left->right
 
         const uint16_t *_fontXSeg;
 
         uint16_t _lastBufPosCol;
-
-        void handleColon();
-        uint16_t getLEDChar(uint8_t value);
-        void directCol(int col, int segments);  // directly writes column RAM
-        void clearDisplay();                    // clears display RAM
 };
 
 #endif

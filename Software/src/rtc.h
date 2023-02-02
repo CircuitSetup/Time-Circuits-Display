@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  * 
  * RTC Class (DS3231/PCF2129 RTC handling) and DateTime Class
@@ -89,7 +89,7 @@ class tcRTC
 
         tcRTC(int numTypes, uint8_t addrArr[]);
 
-        bool begin();
+        bool begin(unsigned long powerupTime);
 
         void adjust(const DateTime &dt);
         void adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year);
@@ -97,6 +97,9 @@ class tcRTC
         DateTime now();
 
         void clockOutEnable();
+
+        bool NeedOTPRefresh();
+        bool OTPRefresh(bool start);
 
         bool lostPower(void);
         bool battLow(void);
@@ -107,16 +110,17 @@ class tcRTC
 
     private:
 
+        uint8_t read_register(uint8_t reg);
+        void    write_register(uint8_t reg, uint8_t val);
+        void    read_bytes(uint8_t reg, uint8_t *buf, uint8_t num);
+        void    write_bytes(uint8_t *buffer, uint8_t num);
+        static uint8_t bcd2bin(uint8_t val) { return val - 6 * (val >> 4); }
+        static uint8_t bin2bcd(uint8_t val) { return val + 6 * (val / 10); }
+        
         int     _numTypes = 0;
         uint8_t _addrArr[2*2];
         uint8_t _address;
         uint8_t _rtcType = RTCT_DS3231;
-
-        static uint8_t bcd2bin(uint8_t val) { return val - 6 * (val >> 4); }
-        static uint8_t bin2bcd(uint8_t val) { return val + 6 * (val / 10); }
-
-        uint8_t read_register(uint8_t reg);
-        void    write_register(uint8_t reg, uint8_t val);
 };
 
 #endif

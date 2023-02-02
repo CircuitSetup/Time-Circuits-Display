@@ -32,6 +32,7 @@
  *   (1.9.7 and later for esp-arduino 2.x; 1.9.5 for 1.x)
  * - WifiManager (tablatronix, tzapu; v0.16 and later) https://github.com/tzapu/WiFiManager
  *   (Tested with 2.1.12beta)
+ * - ArduinoJSON >= 6.19: https://arduinojson.org/v6/doc/installation/
  * 
  * 
  * Detailed installation and compilation instructions are here:
@@ -40,6 +41,151 @@
 
 /*  Changelog
  *
+  *  2023/01/28 (A10001986)
+ *    - PCF2129 RTC: Fix obvious copy/paste error; add OTP refresh
+ *  2023/01/26 (A10001986)
+ *    - GPS: Code optimizations; quicker time-sync if GPS has valid time
+ *  2023/01/25 (A10001986)
+ *    - GPS speed: Fix tt sequence/sound timing when counting up from GPS speed
+ *    - GPS speed: Soften count-down from 88 back to current GPS speed
+ *    - Turn speedo off when rebooting
+ *  2023/01/23 (A10001986)
+ *    - GPS speed: Reduce delay between reading speed and displaying it
+ *    - GPS time fix: Fractions are of variable size, not always 3 digits
+ *  2023/01/22 (A10001986)
+ *    - Minor fix (reset flags after audio file installation; better question mark)
+ *  2023/01/21 (A10001986)
+ *    - Audio installer change: The installer is now invoked automatically during
+ *      boot. If the user cancels, the installer is still available as the first menu 
+ *      item in the keypad menu. It was, however, removed from the Config Portal.
+ *      The installer now removes the ID file after successfully copying the files
+ *      so that it is not shown again on reboot.
+ *    - Show hint to install audio files during boot if files not present on flash
+ *      FS
+ *    - Return from tt: Don't stop music player if we were on actual present time
+ *      already.
+ *  2023/01/20 (A10001986)
+ *    - Add count-down timer function: To start, type 44xxENTER, xx being the number
+ *      of minutes (2 digits). Type 44ENTER to see the time remaining.
+ *    - Update for sound-pack: Add "timer.mp3" sound, changed "alarm.mp3" sound.
+ *  2023/01/19 (A10001986)
+ *    - CP: All sub-pages are now uniform (redo logo on Update-page)
+ *  2023/01/18 (A10001986)
+ *    - Invalidate EEPROM contents after migrating to flash FS
+ *    - Patch the living daylights out of the CP's WiFi Config Page (new JS with 
+ *      corrected logic for Password-placeholder, uniform look, etc)
+ *    - Fix regression on WiFi Config page (clicking on SSID-Link)
+ *  2023/01/16-17 (A10001986)
+ *    - Use files for clock states instead of the EEPROM API
+ *    - Some more CP eye-candy, plus an easter egg
+ *  2023/01/15 (A10001986)
+ *    - More style for the Config Portal
+ *  2023/01/14 (A10001986)
+ *    - Another NM logic fix (when forced if min == 0)
+ *  2023/01/13 (A10001986)
+ *    - Minor fixes and enhancement (settings, alarm, etc)
+ *  2023/01/12 (A10001986)
+ *    - Disable NM and stop music player before copying audio files
+ *    - More NM logic fixes
+ *  2023/01/11 (A10001986)
+ *    - Fix minor logic error in loadCurVolume()
+ *    - Really disable night-mode when entering keypad menu
+ *    - Fix LR303/329 light sensor lux calculation; sensor now officially supported
+ *  2023/01/10 (A10001986)
+ *    - Simplify debug and other output (printf)
+ *    - GPS: Check NMEA length before other tests
+ *  2023/01/09 (A10001986)
+ *    - Settings: Add some more checks for validity, code simplifications
+ *    - Clockdisplay: Make loadLastYear() return impossible values on error to force 
+ *      comparisons to fail
+ *    - [Prepare Flash-RO (read-only) mode]
+ *  2023/01/07 (A10001986)
+ *    - Change "Time-rotation" to "Time-cycling" in CP
+ *    - Re-order keypad menu (SET RTC before other displays)
+ *    - Replace double by float almost everywhere, precision not needed
+ *  2023/01/06 (A10001986)
+ *    - Flash wear awareness week continues: Add option to save alarm and volume
+ *      settings on SD card. Folks who often change their alarm or volume settings
+ *      are advised to check/enable this.
+ *      Music folder number was removed from Config Portal, and is now always saved 
+ *      on the SD card.
+ *    - Code optimizations (mainly settings and rtc)
+ *  2023/01/05 (A10001986)
+ *    - Keypad menu: Save settings only if they were changed to reduce flash wear.
+ *    - Fix "8" being written to typing buffer despite being held
+ *    - Fix restoring volume in case of timeout in keypad menu
+ *  2023/01/04 (A10001986)
+ *    - Minor enhancements for Keypad menu (Music folder number: Show info if /musicX 
+ *      or /musicX/000.mp3 is not found on SD; Alarm: Blink on/off to indicate which
+ *      field is to be edited; etc); code simplifications.
+ *  2023/01/02 (A10001986)
+ *    - Night-mode: Treat daily schedule like other schedules with regard to hourly
+ *      checks; this fixes returning to nm after manual override.
+ *    - Add 11+ENTER short-cut to quickly show alarm settings
+ *    - Alarm times are ALWAYS shown in 24-hour mode, regardless of Config Portal
+ *      24hr setting.
+ *  2023/01/01 (A10001986)
+ *    - Have a go at wobbling volume, again: New "noise reduction" from apparently
+ *      totally unstable analog input; knob now always mutes when turned fully off; 
+ *      new fixed-level table with better granularity at lower volumes, also it now
+ *      has 20 levels.
+ *    - Audio: Add mp3 music player. Music files must reside on the SD card in /musicX 
+ *      (X being 0-9) folder(s), be named 000.mp3 up to 999.mp3 (starting at 000.mp3 
+ *      in each folder), and be of max 128kpbs. Up to ten folders (music0-music9) are 
+ *      supported; the folder number is selected in the Config Portal or the keypad 
+ *      menu (default: 0, hence /music0).
+ *      Keypad layout changed as follows:
+ *      Holding 1 now toggles the alarm on/off (formerly: Switch alarm on)
+ *      Holding 4 now toggles night-mode on/off (formerly: Switch nm on)
+ *      Holding 2 goes to previous song (formerly: Switch alarm off)
+ *      Holding 5 starts/stops the mp3 player (formerly: Switch nm off)
+ *      Holding 8 goes to next song
+ *      222+ENTER    disables shuffle (played in order 000->999)
+ *      555+ENTER    enables shuffle (played in random order)
+ *      888+ENTER    goes to song 000
+ *      888xxx+ENTER goes to song xxx
+ *    - Audio: Skip ID3 tags before starting playback. This fixes a freeze when
+ *      attempting to play mp3 files with large tags, eg cover art.
+ *    - Increase SD/SPI frequency to 16Mhz (with option to reduce back to 4Mhz in
+ *      Config Portal)
+ *    - Light sensor: Allowed lux level range is now 0-50000
+ *  2022/12/26 (A10001986)
+ *    - Fix reading BME280 sensor (burst read all data registers for consistency)
+ *    - Disable WiFi-power-save when user initiates firmware update
+ *    - Display "wait" if Flash-FS is being formatted upon boot
+ *    - Add support for LTR3xx light sensor [untested]
+ *    - [All supported temperature sensors verified working]
+ *  2022/12/19 (A10001986)
+ *    - Changed read logic for Si7021 and SHT4x; fix typo in TMP117 code path
+ *    - Run MCP9808 in higher resolution mode, scrap sensor shut-down
+ *    - Restrict allowed chars in NTP server and hostname fields in Config Portal
+ *    - Updated WiFiManager to 2.0.15-rc1 in pre-compiled binary
+ *  2022/12/18 (A10001986)
+ *    - Audio files installer in keypad menu: If copy fails, re-format flash FS,
+ *      re-write settings, and retry copy. (Same can be done by writing "FORMAT"
+ *      instead of "COPY" in Config Portal)
+ *  2022/12/17 (A10001986)
+ *    - "Animate" room condition mode display (imitate delayed month)
+ *    - Sensors keypad menu: Read sensors only every 3rd second to avoid self-
+ *      heating
+ *    - Add mDNS support: Access the Config Portal via http://timecircuits.local (the
+ *      hostname is configurable in the Config Portal)
+ *    - Disable WiFiManager's "capitive portal" in order to avoid server-redirects to 
+ *      IP address.
+ *  2022/12/16 (A10001986)
+ *    - Add support for SI7021, SHT40, TMP117, AHT20/AM2315C, HTU31D temperature sensors 
+ *    - Add reading humidity from BME280, SI7021, SHT40, AHT20, HTU31D sensors 
+ *    - Add "room condition" mode, where destination and departed time are replaced
+ *      by temperature and humidity, respectively. Toggle normal and rc mode by entering
+ *      "111" and pressing ENTER. Sensor values are updated every 30 seconds in this
+ *      mode (otherwise every 2 minutes).
+ *    - Add humidity display to SENSORS keypad menu
+ *    - Add MAC address display to "Network" keypad menu. Only the "station mode" MAC
+ *      is shown, ie the MAC address of the ESP32 when it is connected to a WiFi
+ *      network. For some reason there are up to four MAC addresses, used in different
+ *      network modes (AP, STA, etc). The digit "6" as part of the MAC is shown using
+ *      the "modern"/common segment pattern here to distinguish it from "b".
+ *    - Fix formatting bug in tc_font.h leading to font missing one character
  *  2022/12/02 (A10001986)
  *    - Add support for BMx820 sensor (temperature only).
  *    - Modify former "light sensor" keypad menu to not only show measured lux level
@@ -463,7 +609,7 @@ void setup()
     Serial.begin(115200);    
 
     // PCF8574 only supports 100kHz, can't go to 400 here - Wire.begin(-1, -1, 100000);
-    Wire.begin();
+    Wire.begin(-1, -1, 100000);
 
     Serial.println();
     
@@ -471,7 +617,6 @@ void setup()
     settings_setup();
     wifi_setup();
     audio_setup();
-    menu_setup();
     keypad_setup();
     time_setup();
 }

@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
  *
  * Keypad handling
@@ -19,7 +19,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef _TC_KEYPAD_H
@@ -27,6 +27,9 @@
 
 extern bool isEnterKeyPressed;
 extern bool isEnterKeyHeld;
+#ifdef EXTERNAL_TIMETRAVEL_IN
+extern bool isEttKeyPressed;
+#endif
 
 extern char timeBuffer[];
 
@@ -36,11 +39,12 @@ bool scanKeypad();
 void keypad_loop();
 
 void resetTimebufIndices();
-void cancelEnterAnim();
+void cancelEnterAnim(bool reenableDT = true);
 void cancelETTAnim();
 
 void nightModeOn();
 void nightModeOff();
+bool toggleNightMode();
 
 void enterkeyScan();
 
