@@ -8,7 +8,7 @@
 The Time Circuits Display has been meticulously reproduced to be as accurate as possible to the one seen in the Delorean Time Machine in the Back to the Future movies. The LED displays are custom made to the correct size for CircuitSetup. This includes the month 14 segment/3 character displays being closer together, and both the 7 & 14 segment displays being 0.6" high by 0.35" wide.
 
 ## Kits
-[Time Circuits Display kits can be purchased here with or without 3d printed parts.](https://circuitsetup.us/product/complete-time-circuits-display-kit/)
+[Time Circuits Display kits can be purchased here with or without 3d printed parts or aluminum enclosures.](https://circuitsetup.us/product/complete-time-circuits-display-kit/)
 
 [View the instructions for assembling your CircuitSetup.us TCD Kit](https://github.com/CircuitSetup/Time-Circuits-Display/wiki)
 
@@ -112,7 +112,7 @@ Set the interval to OFF (0) to disable Time-cycling.
 
 ### Common usage scenarios
 
-####  &#9654; I want my clock to work like in the movie
+####  &#9654; I want clock to work like in the movie
 
 In this case, head to the Config Portal and
 - set the *Time Cycling Interval* to OFF
@@ -210,7 +210,7 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
 
 <table>
     <tr>
-     <td align="center" colspan="3">Keypad reference: Holding keys for 2 seconds<br>(Firmware versions from 2023 and later)</td>
+     <td align="center" colspan="3">Keypad reference: Holding keys for 2 seconds<br>(Firmware versions from 2023 and later - v2.6+)</td>
     </tr>
     <tr>
      <td align="center">1<br>Toggle <a href="#how-to-set-up-the-alarm">Alarm</a> on/off</td>
@@ -578,7 +578,7 @@ The firmware supports a speedometer display connected via i2c (slave address 0x7
 
 The speedo display shown in this video is based on a fairly well-designed stand-alone replica purchased on ebay. I removed the Arduino Uno inside and wired the LED segments to an Adafruit i2c backpack (from the Adafruit 878 product). The strange look of the speedo's LEDs in the video is due to camera limitations in combination with the layer of semi-clear plastic covering the LED display to make it like the originally used Stanley Readout displays plus the originally used diffusers; in real life it looks much better.
 
-There are two special options in the Speedo Display Type drop-down in the Config Portal: *Ada 1911 (left tube)* and *Ada 878 (left tube)*. These two can be used if you connect only one 2-digit-tube to the respective Adafruit i2c backpack, as I did in case of my speedo replica as well as my [Wall Clock](#my-custom-made-time-circuits-wall-clock).
+There are two special options in the Speedo Display Type drop-down in the Config Portal: *Ada 1911 (left tube)* and *Ada 878 (left tube)*. These two can be used if you connect only one 2-digit-tube to the respective Adafruit i2c backpack.
 
 Since the I2C bus is already quite long from the control board to the last display in the chain, I recommend soldering another JST XH 4pin plug onto the control board (there are two additional i2c break-outs available), and to connect the speedometer there.
 
