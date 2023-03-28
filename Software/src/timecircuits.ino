@@ -41,7 +41,22 @@
 
 /*  Changelog
  *
-  *  2023/01/28 (A10001986)
+  *  2023/03/27 (A10001986)
+ *    - Add (annoying) beep sound. Enabled/disabled by 000+ENTER. Disabled by default.
+ *      Requires new sound-pack.
+ *  2023/03/16 (A10001986)
+ *    - Fixes for CircuitSetup's speedo display
+ *  2023/03/05 (A10001986)
+ *    - External time travel button: When held for 3 seconds, a "return from time
+ *      travel" is triggered. This brings a change in external time travel triggering:
+ *      Up until now, a time travel was issued when the button was pressed for 200ms, 
+ *      regardless of when it was released. Now, the tt will be triggered upon release 
+ *      of the button, as long it is released in under 3000ms. If a delay is 
+ *      configured, it, too, will start running upon release.
+ *  2023/02/21 (A10001986)
+ *    - Prepare for TCD CB 1.3 with switchable LEDs. LEDs are off when fake power
+ *      is off, and in night mode.
+ *  2023/01/28 (A10001986)
  *    - PCF2129 RTC: Fix obvious copy/paste error; add OTP refresh
  *  2023/01/26 (A10001986)
  *    - GPS: Code optimizations; quicker time-sync if GPS has valid time

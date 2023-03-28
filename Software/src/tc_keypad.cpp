@@ -44,8 +44,8 @@
 #define ENTER_HOLD_TIME 2000    // time in ms holding the enter button will count as a long press
 
 #define ETT_DEBOUNCE      50    // external time travel button debounce time in ms
-#define ETT_PRESS_TIME   250    // external time travel button will register a short press (unused)
-#define ETT_HOLD_TIME    200    // external time travel button will register a long press (that's the one)
+#define ETT_PRESS_TIME   200    // external time travel button will register a short press
+#define ETT_HOLD_TIME   3000    // external time travel button will register a long press
 
 // When ENTER button is pressed, turn off display for this many ms
 // Must be sync'd to the sound file used (enter.mp3)
@@ -87,6 +87,7 @@ static bool rcModeDepTime = false;
 
 #ifdef EXTERNAL_TIMETRAVEL_IN
 bool                 isEttKeyPressed = false;
+bool                 isEttKeyHeld = false;
 static unsigned long ettNow = 0;
 static bool          ettDelayed = false;
 static unsigned long ettDelay = 0; // ms
@@ -140,6 +141,7 @@ static void enterKeyHeld();
 
 #ifdef EXTERNAL_TIMETRAVEL_IN
 static void ettKeyPressed();
+static void ettKeyHeld();
 #endif
 
 static void mykpddelay(unsigned int mydel);
@@ -178,7 +180,8 @@ void keypad_setup()
     ettKey.setPressTicks(ETT_PRESS_TIME);
     ettKey.setLongPressTicks(ETT_HOLD_TIME);
     ettKey.setDebounceTicks(ETT_DEBOUNCE);
-    ettKey.attachLongPressStart(ettKeyPressed);
+    ettKey.attachPress(ettKeyPressed);
+    ettKey.attachLongPressStart(ettKeyHeld);
 
     ettDelay = (int)atoi(settings.ettDelay);
     if(ettDelay > ETT_MAX_DEL) ettDelay = ETT_MAX_DEL;
@@ -341,6 +344,12 @@ static void ettKeyPressed()
     isEttKeyPressed = true;
     pwrNeedFullNow();
 }
+
+static void ettKeyHeld()
+{
+    isEttKeyHeld = true;
+    pwrNeedFullNow();
+}
 #endif
 
 static void recordKey(char key)
@@ -406,6 +415,7 @@ void keypad_loop()
         isEnterKeyPressed = false;
         #ifdef EXTERNAL_TIMETRAVEL_IN
         isEttKeyPressed = false;
+        isEttKeyHeld = false;
         #endif
 
         return;
@@ -413,7 +423,10 @@ void keypad_loop()
     }
 
 #ifdef EXTERNAL_TIMETRAVEL_IN
-    if(isEttKeyPressed) {
+    if(isEttKeyHeld) {
+        resetPresentTime();
+        isEttKeyPressed = isEttKeyHeld = false;
+    } else if(isEttKeyPressed) {
         if(!ettDelay) {
             timeTravel(ettLong, true);
             ettDelayed = false;
@@ -421,7 +434,7 @@ void keypad_loop()
             ettNow = millis();
             ettDelayed = true;
         }
-        isEttKeyPressed = false;
+        isEttKeyPressed = isEttKeyHeld = false;
     }
     if(ettDelayed) {
         if(millis() - ettNow >= ettDelay) {
@@ -450,7 +463,7 @@ void keypad_loop()
         #ifdef EXTERNAL_TIMETRAVEL_IN
         // No external tt while in menu mode,
         // so reset flag upon menu exit
-        isEttKeyPressed = false;
+        isEttKeyPressed = isEttKeyHeld = false;
         #endif
 
     }
@@ -586,6 +599,9 @@ void keypad_loop()
                 } else {
                     invalidEntry = true;
                 }
+                break;
+            case 000:
+                muteBeep = !muteBeep;
                 break;
             default:
                 invalidEntry = true;
@@ -974,19 +990,34 @@ static void setNightMode(bool nm)
 void nightModeOn()
 {
     setNightMode(true);
+    leds_off();
 }
 
 void nightModeOff()
 {
     setNightMode(false);
+    leds_on();
 }
 
 bool toggleNightMode()
 {
     if(destinationTime.getNightMode()) {
         setNightMode(false);
+        leds_on();
         return false;
     }
     setNightMode(true);
+    leds_off();
     return true;
+}
+
+
+void leds_on()
+{
+    digitalWrite(LEDS_PIN, HIGH);
+}
+
+void leds_off()
+{
+    digitalWrite(LEDS_PIN, LOW);
 }

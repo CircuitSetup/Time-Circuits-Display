@@ -28,6 +28,8 @@
 extern bool audioInitDone;
 extern bool audioMute;
 
+extern bool muteBeep;
+
 extern uint8_t curVolume;
 
 extern bool haveMusic;
@@ -36,6 +38,7 @@ extern bool mpActive;
 void audio_setup();
 void play_keypad_sound(char key);
 void play_hour_sound(int hour);
+void play_beep();
 void audio_loop();
 void play_file(const char *audio_file, float volumeFactor = 1.0, bool checkNightMode = true, bool interruptMusic = false, bool allowSD = true, int channel = 0);
 bool checkAudioDone();

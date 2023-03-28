@@ -54,7 +54,7 @@
 // The display's i2c slave address is 0x70 (defined in tc_time.h).
 //
 enum dispTypes : uint8_t {
-    SP_CIRCSETUP = 0, // Original CircuitSetup.us speedo                        [yet to be designed]
+    SP_CIRCSETUP = 0, // Original CircuitSetup.us speedo
     SP_ADAF_7x4,      // Adafruit 0.56" 4 digits, 7-segment (7x4) (ADA-878)
     SP_ADAF_7x4L,     // " " " (left-aligned)
     SP_ADAF_B7x4,     // Adafruit 1.2" 4 digits, 7-segment (7x4) (ADA-1270)
@@ -64,10 +64,8 @@ enum dispTypes : uint8_t {
     SP_GROVE_2DIG14,  // Grove 0.54" Dual Alphanumeric Display
     SP_GROVE_4DIG14,  // Grove 0.54" Quad Alphanumeric Display
     SP_GROVE_4DIG14L, // " " " (left aligned)
-#ifdef TWPRIVATE
-    SP_TWCUSTOM1,     // Like SP_ADAF_14x4L, but with only left hand side tube soldered on
-    SP_TWCUSTOM2,     // Like SP_ADAF_7x4L, but only 2 digits soldered on
-#endif
+    SP_ADAF1911_L,    // Like SP_ADAF_14x4L, but with only left hand side tube soldered on
+    SP_ADAF878L,      // Like SP_ADAF_7x4L, but only left 2 digits soldered on
 // ----- do not use the ones below ----
     SP_TCD_TEST7,     // TimeCircuits Display 7 (for testing)
     SP_TCD_TEST14,    // TimeCircuits Display 14 (for testing)
@@ -153,6 +151,7 @@ class speedDisplay {
         uint8_t  _num_digs;       //      total number of digits/letters (max 4)
         uint8_t  _buf_packed;     //      2 digits in one buffer pos? (0=no, 1=yes)
         uint8_t *_bufPosArr;      //      Array of buffer positions for digits left->right
+        uint8_t *_bufShftArr;     //      Array of shift values for each digit
 
         const uint16_t *_fontXSeg;
 

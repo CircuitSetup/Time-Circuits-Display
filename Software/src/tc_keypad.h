@@ -29,6 +29,7 @@ extern bool isEnterKeyPressed;
 extern bool isEnterKeyHeld;
 #ifdef EXTERNAL_TIMETRAVEL_IN
 extern bool isEttKeyPressed;
+extern bool isEttKeyHeld;
 #endif
 
 extern char timeBuffer[];
@@ -45,6 +46,9 @@ void cancelETTAnim();
 void nightModeOn();
 void nightModeOff();
 bool toggleNightMode();
+
+void leds_on();
+void leds_off();
 
 void enterkeyScan();
 

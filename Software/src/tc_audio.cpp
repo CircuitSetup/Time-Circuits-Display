@@ -81,6 +81,8 @@ static AudioOutputMixerStub *stub[2];
 bool audioInitDone = false;
 bool audioMute = false;
 
+bool muteBeep = true;
+
 bool haveMusic = false;
 bool mpActive = false;
 static uint16_t maxMusic = 0;
@@ -418,6 +420,14 @@ void play_hour_sound(int hour)
     }
     
     play_file("/hour.mp3", 1.0, false, false);
+}
+
+void play_beep()
+{
+    if(muteBeep || mpActive || mp3->isRunning())
+        return;
+
+    play_file("/beep.mp3", 0.3, true, false, false);
 }
 
 /*
