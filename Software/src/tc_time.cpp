@@ -161,6 +161,7 @@ static int           tempBrightness = DEF_TEMP_BRIGHT;
 #endif // HAVESPEEDO
 bool                 useTemp = false;
 bool                 dispTemp = true;
+bool                 tempOffNM = true;
 #ifdef TC_HAVETEMP
 bool                 tempUnit = DEF_TEMP_UNIT;
 static unsigned long tempReadNow = 0;
@@ -500,10 +501,11 @@ static void handleDSTFlag(struct tm *ti, int nisDST = -1);
 static void ntp_setup();
 static bool NTPHaveTime();
 static bool NTPTriggerUpdate();
+static void NTPSendPacket();
 static void NTPCheckPacket();
 static uint32_t NTPGetSecsSinceTCepoch();
 static bool NTPGetLocalTime(int& year, int& month, int& day, int& hour, int& minute, int& second, int& isDST);
-static void NTPSendPacket();
+static bool NTPHaveLocalTime();
 
 
 /*
@@ -936,6 +938,9 @@ void time_setup()
 
     // Set up option to play/mute time travel sounds
     playTTsounds = ((int)atoi(settings.playTTsnds) > 0);
+
+    // Set power-up setting for beep
+    muteBeep = ((int)atoi(settings.beep) == 0);
     
     // Set up speedo display
     #ifdef TC_HAVESPEEDO
@@ -1007,6 +1012,7 @@ void time_setup()
             tempSens.setOffset((float)atof(settings.tempOffs));
             #ifdef TC_HAVESPEEDO
             tempBrightness = (int)atoi(settings.tempBright);
+            tempOffNM = ((int)atoi(settings.tempOffNM) > 0);
             if(!useSpeedo || useGPSSpeed) dispTemp = false;
             if(dispTemp) {
                 #ifdef FAKE_POWER_ON
@@ -2615,7 +2621,8 @@ static void dispGPSSpeed(bool force)
 #ifdef TC_HAVETEMP
 static void dispTemperature(bool force)
 {
-    int temp;
+    bool tempNM = speedo.getNightMode();
+    bool tempChgNM = false;
 
     if(!dispTemp)
         return;
@@ -2623,18 +2630,20 @@ static void dispTemperature(bool force)
     if(!FPBUnitIsOn || startup || timeTraveled || timeTravelP0 || timeTravelP1 || timeTravelP2)
         return;
 
-    if(speedo.getNightMode()) {
-        speedo.off();
-        tempOldNM = true;
-        return;
-    }
+    tempChgNM = (tempNM != tempOldNM);
+    tempOldNM = tempNM;
 
-    if(tempOldNM || (force || (millis() - tempDispNow >= 2*60*1000))) {
-        tempOldNM = false;
-        speedo.setTemperature(tempSens.readLastTemp());
-        speedo.show();
-        speedo.setBrightnessDirect(tempBrightness); // after show b/c brightness
-        speedo.on();
+    if(tempChgNM || force || (millis() - tempDispNow >= 2*60*1000)) {
+        if(tempNM && tempOffNM) {
+            speedo.off();
+        } else {
+            speedo.setTemperature(tempSens.readLastTemp());
+            speedo.show();
+            if(!tempNM) {
+                speedo.setBrightnessDirect(tempBrightness); // after show b/c brightness
+            }
+            speedo.on();
+        }
         tempDispNow = millis();
     }
 }
@@ -2709,7 +2718,7 @@ static bool getNTPTime(bool weHaveAuthTime)
     // If we don't have authTime yet, connect for longer to avoid
     // reconnects (aka frozen displays).
     // If WiFi is reconnected here, we won't have a valid time stamp
-    // immediately. This will therefore fail the first time called.
+    // immediately. This will therefore fail the first time called
     wifiOn(weHaveAuthTime ? 3*60*1000 : 21*60*1000, false, true);    
 
     if(WiFi.status() == WL_CONNECTED) {
@@ -3714,14 +3723,9 @@ static void NTPCheckPacket()
         return;
     }
 
-    // Baseline for round-trip correction
-    NTPTSAge = mymillis - ((mymillis - NTPTSRQAge) / 2);
-
     NTPfailCount = 0;
     
     myUDP->read(NTPUDPBuf, NTP_PACKET_SIZE);
-
-    NTPPacketDue = false;
 
     // Basic validity check
     if((NTPUDPBuf[0] & 0x3f) != 0x24) return;
@@ -3730,10 +3734,16 @@ static void NTPCheckPacket()
        NTPUDPBuf[26] != NTPUDPID[2] || 
        NTPUDPBuf[27] != NTPUDPID[3]) {
         #ifdef TC_DBG
-        Serial.print("NTPCheckPacket: Bad packet ID (outdated packet?)");
+        Serial.println("NTPCheckPacket: Bad packet ID (outdated packet?)");
         #endif
         return;
     }
+
+    // If it's our expected packet, no other is due for now
+    NTPPacketDue = false;
+
+    // Baseline for round-trip correction
+    NTPTSAge = mymillis - ((mymillis - NTPTSRQAge) / 2);
 
     // Evaluate data
     uint64_t secsSince1900 = ((uint32_t)NTPUDPBuf[40] << 24) |
@@ -3775,7 +3785,7 @@ static bool NTPGetLocalTime(int& year, int& month, int& day, int& hour, int& min
     uint32_t temp, c;
 
     // Fail if no time received, or stamp is older than 10 mins
-    if((!NTPsecsSinceTCepoch) || ((millis() - NTPTSAge) > 10*60*1000)) return false;
+    if(!NTPHaveLocalTime()) return false;
 
     isDST = 0;
     
@@ -3824,6 +3834,15 @@ static bool NTPGetLocalTime(int& year, int& month, int& day, int& hour, int& min
 
     // Determine DST from local nonDST time
     localToDST(year, month, day, hour, minute, isDST);
+
+    return true;
+}
+
+static bool NTPHaveLocalTime()
+{
+    // Have no time if no time stamp received, or stamp is older than 10 mins
+    if((!NTPsecsSinceTCepoch) || ((millis() - NTPTSAge) > 10*60*1000)) 
+        return false;
 
     return true;
 }

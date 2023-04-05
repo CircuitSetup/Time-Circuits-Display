@@ -16,10 +16,10 @@
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
 #ifndef IS_ACAR_DISPLAY
 #define TC_VERSION "V2.7.0"           // 13 chars max
-#define TC_VERSION_EXTRA "MAR232023"  // 13 chars max
+#define TC_VERSION_EXTRA "APR042023"  // 13 chars max
 #else   // A-Car
 #define TC_VERSION "V2.7.0_A-CAR"     // 12 chars max
-#define TC_VERSION_EXTRA "03232023"   // 12 chars max
+#define TC_VERSION_EXTRA "04042023"   // 12 chars max
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -50,7 +50,7 @@
 // See speeddisplay.h for details
 //#define TC_HAVESPEEDO
 #define SP_NUM_TYPES    12  // Number of speedo display types supported
-#define SP_MIN_TYPE     0   // Change to 0 when CircuitSetup speedo prop exists
+#define SP_MIN_TYPE     0
 
 // Uncomment for support of a temperature/humidity sensor (MCP9808, BMx280, 
 // SI7021, SHT40, TMP117, AHT20, HTU31D) connected via i2c. Will be used for 

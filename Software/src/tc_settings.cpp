@@ -309,6 +309,7 @@ static bool read_settings(File configFile)
         wd |= CopyCheckValidNumParm(json["alarmRTC"], settings.alarmRTC, sizeof(settings.alarmRTC), 0, 1, DEF_ALARM_RTC);
         wd |= CopyCheckValidNumParm(json["playIntro"], settings.playIntro, sizeof(settings.playIntro), 0, 1, DEF_PLAY_INTRO);
         wd |= CopyCheckValidNumParm(json["mode24"], settings.mode24, sizeof(settings.mode24), 0, 1, DEF_MODE24);
+        wd |= CopyCheckValidNumParm(json["beep"], settings.beep, sizeof(settings.beep), 0, 1, DEF_BEEP);
         wd |= CopyCheckValidNumParm(json["autoRotateTimes"], settings.autoRotateTimes, sizeof(settings.autoRotateTimes), 0, 5, DEF_AUTOROTTIMES);
 
         if(json["hostName"]) {
@@ -365,6 +366,7 @@ static bool read_settings(File configFile)
         #ifdef TC_HAVETEMP
         wd |= CopyCheckValidNumParm(json["dispTemp"], settings.dispTemp, sizeof(settings.dispTemp), 0, 1, DEF_DISP_TEMP);
         wd |= CopyCheckValidNumParm(json["tempBright"], settings.tempBright, sizeof(settings.tempBright), 0, 15, DEF_TEMP_BRIGHT);
+        wd |= CopyCheckValidNumParm(json["tempOffNM"], settings.tempOffNM, sizeof(settings.tempOffNM), 0, 1, DEF_TEMP_OFF_NM);
         #endif
         #endif // HAVESPEEDO
         
@@ -414,6 +416,7 @@ void write_settings()
     json["timeTrPers"] = settings.timesPers;
     json["alarmRTC"] = settings.alarmRTC;
     json["mode24"] = settings.mode24;
+    json["beep"] = settings.beep;
     json["playIntro"] = settings.playIntro;
     json["autoRotateTimes"] = settings.autoRotateTimes;
 
@@ -462,6 +465,7 @@ void write_settings()
     #ifdef TC_HAVETEMP
     json["dispTemp"] = settings.dispTemp;
     json["tempBright"] = settings.tempBright;
+    json["tempOffNM"] = settings.tempOffNM;
     #endif
     #endif // HAVESPEEDO
     
@@ -1050,7 +1054,7 @@ static bool check_if_default_audio_present()
     char dtmf_buf[16] = "/Dtmf-0.mp3\0";
     size_t sizes[10+NUM_AUDIOFILES] = {
       4178, 4178, 4178, 4178, 4178, 4178, 3760, 3760, 4596, 3760, // DTMF
-      65230, 71500, 60633, 10478, 15911,    // alarm, alarmoff, alarmon, baddate, beep
+      65230, 71500, 60633, 10478, 15045,    // alarm, alarmoff, alarmon, baddate, beep
       15184, 22983, 33364, 51701,           // ee1, ee2, ee3, ee4
       SND_ENTER_LEN, 125804, 33853, 47228,  // enter, intro, nmoff, nmon
       16747, 3790, SND_STARTUP_LEN, 84894,  // ping, shutdown, startup, timer

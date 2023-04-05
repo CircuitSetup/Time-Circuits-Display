@@ -129,7 +129,9 @@ static float getVolume(int channel);
  */
 void audio_setup()
 {
+    #ifdef TC_DBG
     audioLogger = &Serial;
+    #endif
 
     // Set resolution for volume pot
     analogReadResolution(POT_RESOLUTION);
@@ -424,7 +426,7 @@ void play_hour_sound(int hour)
 
 void play_beep()
 {
-    if(muteBeep || mpActive || mp3->isRunning())
+    if(!FPBUnitIsOn || muteBeep || mpActive || presentTime.getNightMode() || mp3->isRunning())
         return;
 
     play_file("/beep.mp3", 0.3, true, false, false);

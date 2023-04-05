@@ -1002,19 +1002,18 @@ void nightModeOff()
 bool toggleNightMode()
 {
     if(destinationTime.getNightMode()) {
-        setNightMode(false);
-        leds_on();
+        nightModeOff();
         return false;
     }
-    setNightMode(true);
-    leds_off();
+    nightModeOn();
     return true;
 }
 
-
 void leds_on()
 {
-    digitalWrite(LEDS_PIN, HIGH);
+    if(FPBUnitIsOn && !destinationTime.getNightMode()) {
+        digitalWrite(LEDS_PIN, HIGH);
+    }
 }
 
 void leds_off()

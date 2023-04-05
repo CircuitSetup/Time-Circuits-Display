@@ -40,6 +40,7 @@ extern uint8_t musFolderNum;
 #define DEF_ALARM_RTC       1     // 0-1;  Default: 1 = Alarm is RTC-based (otherwise 0 = presentTime-based)
 #define DEF_PLAY_INTRO      1     // 0-1;  Default: 1 = Play intro
 #define DEF_MODE24          0     // 0-1;  Default: 0=12-hour-mode, 1=24-hour-mode
+#define DEF_BEEP            0     // 0-1:  Default: 0 = annoying beep(tm) off by default
 #define DEF_AUTOROTTIMES    1     // 0-5;  Default: Auto-rotate every 5th minute
 #define DEF_HOSTNAME        "timecircuits"
 #define DEF_WIFI_RETRY      3     // 1-15; Default: 3 retries
@@ -70,6 +71,7 @@ extern uint8_t musFolderNum;
 #define DEF_USE_TEMP        0     // 0: No i2c temperature/humidity sensor
 #define DEF_DISP_TEMP       1     // 1: Display temperature (if available) on speedo
 #define DEF_TEMP_BRIGHT     3     // Default temp brightness
+#define DEF_TEMP_OFF_NM     1     // Default: temp off in night mode
 #define DEF_TEMP_UNIT       0     // Default: temp unit Fahrenheit
 #define DEF_TEMP_OFFS       0.0   // Default temp offset 0.0
 #define DEF_USE_LIGHT       0     // Default: No i2c light sensor
@@ -85,6 +87,7 @@ struct Settings {
     char alarmRTC[4]        = MS(DEF_ALARM_RTC);
     char playIntro[4]       = MS(DEF_PLAY_INTRO);
     char mode24[4]          = MS(DEF_MODE24);
+    char beep[4]            = MS(DEF_BEEP);
     char autoRotateTimes[4] = MS(DEF_AUTOROTTIMES);   
     char hostName[32]       = DEF_HOSTNAME;
     char wifiConRetries[4]  = MS(DEF_WIFI_RETRY);
@@ -133,6 +136,7 @@ struct Settings {
 #ifdef TC_HAVETEMP
     char dispTemp[4]        = MS(DEF_DISP_TEMP);
     char tempBright[4]      = MS(DEF_TEMP_BRIGHT);
+    char tempOffNM[4]       = MS(DEF_TEMP_OFF_NM);
 #endif
 #endif // HAVESPEEDO
 #ifdef EXTERNAL_TIMETRAVEL_OUT
