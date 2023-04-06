@@ -2200,7 +2200,7 @@ void mydelay(unsigned long mydel)
     unsigned long startNow = millis();
     myloop();
     while(millis() - startNow < mydel) {
-        delay(10);
+        delay(5);
         myloop();
     }
 }
@@ -2226,10 +2226,13 @@ static void myssdelay(unsigned long mydel)
  */
 static void myloop()
 {
+    audio_loop();
     enterkeyScan();
+    audio_loop();
     wifi_loop();
     audio_loop();
     ntp_loop();
+    audio_loop();
     #ifdef TC_HAVEGPS
     gps_loop();
     #endif

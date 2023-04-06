@@ -282,6 +282,9 @@ static int  shouldSaveConfig = 0;
 static bool shouldSaveIPConfig = false;
 static bool shouldDeleteIPConfig = false;
 
+// Did user configure a WiFi network to connect to?
+static bool wifiHaveSTAConf = false;
+
 // WiFi power management in AP mode
 bool          wifiInAPMode = false;
 bool          wifiAPIsOff = false;
@@ -504,6 +507,18 @@ void wifi_setup()
     // Configure static IP
     if(loadIpSettings()) {
         setupStaticIP();
+    }
+           
+    // Find out if we have a configured WiFi network to connect to,
+    // or if we are condemned to AP mode for good
+    {
+        wifi_config_t conf;
+        esp_wifi_get_config(WIFI_IF_STA, &conf);
+        wifiHaveSTAConf = (conf.sta.ssid[0] != 0);
+        #ifdef TC_DBG
+        Serial.printf("WiFi network configured: %s (%s)\n", wifiHaveSTAConf ? "YES" : "NO", 
+                    wifiHaveSTAConf ? (const char *)conf.sta.ssid : "n/a");
+        #endif
     }
 
     // Connect, but defer starting the CP
@@ -796,8 +811,9 @@ void wifi_loop()
     // There are separate delays for AP mode and STA mode.
     // WiFi can be re-enabled for the configured time by holding '7'
     // on the keypad.
-    // NTP requests will re-enable WiFi (in STA mode) for a short
-    // while automatically.
+    // NTP requests will re-enable WiFi for a short while automatically
+    // if the user configured a WiFi network to connect to.
+    
     if(wifiInAPMode) {
         // Disable WiFi in AP mode after a configurable delay (if > 0)
         if(wifiAPOffDelay > 0) {
@@ -827,7 +843,7 @@ void wifi_loop()
 }
 
 static void wifiConnect(bool deferConfigPortal)
-{
+{     
     // Automatically connect using saved credentials if they exist
     // If connection fails it starts an access point with the specified name
     if(wm.autoConnect("TCD-AP")) {
@@ -850,6 +866,16 @@ static void wifiConnect(bool deferConfigPortal)
         // Since it is the default setting, so no need to call it here.
         //WiFi.setSleep(true);
 
+        // Set transmit power to max; we might be connecting as STA after
+        // a previous period in AP mode.
+        #ifdef TC_DBG
+        {
+            wifi_power_t power = WiFi.getTxPower();
+            Serial.printf("WiFi: Max TX power in STA mode %d\n", power);
+        }
+        #endif
+        WiFi.setTxPower(WIFI_POWER_19_5dBm);
+
         wifiInAPMode = false;
         wifiIsOff = false;
         wifiOnNow = millis();
@@ -869,7 +895,7 @@ static void wifiConnect(bool deferConfigPortal)
             #ifdef TC_DBG
             int8_t power;
             esp_wifi_get_max_tx_power(&power);
-            Serial.printf("WiFi: Max TX power %d\n", power);
+            Serial.printf("WiFi: Max TX power in AP mode %d\n", power);
             #endif
 
             // Try to avoid "burning" the ESP when the WiFi mode
@@ -914,8 +940,20 @@ void wifiOn(unsigned long newDelay, bool alsoInAPMode, bool deferCP)
 {
     unsigned long desiredDelay;
     unsigned long Now = millis();
+    
+    // wifiON() is called when the user pressed (and held) "7" and when a time
+    // sync via NTP is issued.
+    // While the first case must re-enable WiFi in any case (in order to allow
+    // access to the config portal, eg), the second case only makes sense
+    // if the user configured a WiFi network to connect to. 
+    // "wifiInAPMode" only tells us our latest mode; if the configured WiFi
+    // network was - for whatever reason - was not available when we
+    // tried to (re)connect, "wifiInAPMode" is true.
+    // "alsoInAPMode" should therefore not refer to "wifiInAPMode", but to
+    // "wifiHaveSTAConf", which tells us if the user has a network configured.
 
-    if(wifiInAPMode && !alsoInAPMode) return;
+    //if(wifiInAPMode && !alsoInAPMode) return;
+    if(!wifiHaveSTAConf && !alsoInAPMode) return;
 
     if(wifiInAPMode) {
         if(wifiAPOffDelay == 0) return;   // If no delay set, auto-off is disabled

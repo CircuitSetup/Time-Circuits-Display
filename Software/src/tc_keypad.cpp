@@ -271,10 +271,10 @@ static void keypadEvent(char key, KeyState kstate)
         case '7':    // "7" held down -> re-enable WiFi if in PowerSave mode
             doKey = false;
             if(wifiIsOn()) {
-                play_file("/ping.mp3", 1.0, true, false);
+                play_file("/ping.mp3", 1.0, true, false, true, false);
             } else {
                 if(haveMusic) mpWasActive = mp_stop();
-                play_file("/ping.mp3", 1.0, true, true);
+                play_file("/ping.mp3", 1.0, true, true), true, false;
                 waitAudioDone();
             }
             // Enable WiFi / even if in AP mode / with CP
@@ -306,7 +306,7 @@ static void keypadEvent(char key, KeyState kstate)
             break;
         }
         if(playBad) {
-            play_file("/baddate.mp3", 1.0, true, false);
+            play_file("/baddate.mp3", 1.0, true, false, true, false);
         }
         break;
         
@@ -602,6 +602,9 @@ void keypad_loop()
                 break;
             case 000:
                 muteBeep = !muteBeep;
+                // do not set (in)validEntry, we
+                // don't want sound
+                enterDelay = 0;
                 break;
             default:
                 invalidEntry = true;
@@ -784,15 +787,15 @@ void keypad_loop()
                 validEntry = true;
                 break;
             case 2:
-                play_file("/ee2.mp3", 1.0, true, true, false);
+                play_file("/ee2.mp3", 1.0, true, true, false, false);
                 enterDelay = EE2_DELAY;
                 break;
             case 3:
-                play_file("/ee3.mp3", 1.0, true, true, false);
+                play_file("/ee3.mp3", 1.0, true, true, false, false);
                 enterDelay = EE3_DELAY;
                 break;
             case 4:
-                play_file("/ee4.mp3", 1.0, true, true, false);
+                play_file("/ee4.mp3", 1.0, true, true, false, false);
                 enterDelay = EE4_DELAY;
                 break;
             default:
@@ -821,10 +824,10 @@ void keypad_loop()
         }
 
         if(validEntry) {
-            play_file("/enter.mp3", 1.0, true, enterInterruptsMusic);
+            play_file("/enter.mp3", 1.0, true, enterInterruptsMusic, true, false);
             enterDelay = ENTER_DELAY;
         } else if(invalidEntry) {
-            play_file("/baddate.mp3", 1.0, true, enterInterruptsMusic);
+            play_file("/baddate.mp3", 1.0, true, enterInterruptsMusic, true, false);
             enterDelay = BADDATE_DELAY;
         }
 
@@ -859,7 +862,7 @@ void keypad_loop()
                 timeNow = millis();
                 enterWasPressed = true;
                 enterDelay = EE1_DELAY3;
-                play_file("/ee1.mp3", 1.0, true, true, false);
+                play_file("/ee1.mp3", 1.0, true, true, false, false);
                 break;
             case 4:
             case 11:

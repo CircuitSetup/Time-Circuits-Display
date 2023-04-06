@@ -41,6 +41,25 @@
 
 /*  Changelog
  *
+  *  2023/04/06 (A10001986)
+ *    - Audio: Re-do beep; remove all traces of (obsolete) MIXER; Short fx are now played 
+ *      without re-scanning the analog input during play-back. Reason: Pot tolerance led to 
+ *      "distortions" with very short sounds.
+ *    Note that some WiFi activity (key exchange? Re-scan?) might cause distortions 
+ *    in mp3 play back. I experienced this when connecting the TCD to a "personal 
+ *    hotspot" on an iPhone; every 2 or 3 minutes exactly, there is a small distortion.
+ *    Does not happen when the TCD is connected to my home network.
+ *  2023/04/05 (A10001986)
+ *    - WiFi: Reconnect for NTP also if previously in AP-mode, if a WiFi network 
+ *      is configured to connect to. This helps for unstable WiFi networks (or ones 
+ *      which are disabled in a schedule), if the power-saving timers are non-zero. 
+ *      The TCD might be unable to (re)connect to a previously configured network when 
+ *      attempting to sync time via NTP and end up in AP mode. However, after the power-
+ *      saving timers expire, an new connection attempt might succeed.
+ *      So, if your WiFi network is somewhat unstable, set the WiFi power save timers
+ *      (both for station as well as AP mode) so non-zero; this causes re-connects for
+ *      NTP allowing time synchonization even if some of those reconnecting attempts
+ *      fail (because the WiFi network is not found at some attempts).
  *  2023/04/04 (A10001986)
  *    - NTP: Do not overwrite previous packet age in case of a bad(outdated) new packet
  *  2023/04/01 (A10001986)

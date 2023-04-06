@@ -1230,7 +1230,7 @@ void time_loop()
                     cancelEnterAnim(false);
                     cancelETTAnim();
                     mp_stop();
-                    play_file("/shutdown.mp3", 1.0, true, true);
+                    play_file("/shutdown.mp3", 1.0, true, true, true, false);
                     mydelay(130);
                     allOff();
                     leds_off();
@@ -1272,7 +1272,7 @@ void time_loop()
     // Initiate startup delay, play startup sound
     if(startupSound) {
         startupNow = pauseNow = millis();
-        play_file("/startup.mp3", 1.0, true, true);
+        play_file("/startup.mp3", 1.0, true, true, true, false);
         startupSound = false;
         // Don't let autoInt interrupt us
         autoPaused = true;
@@ -1469,6 +1469,8 @@ void time_loop()
             destinationTime.setColon(true);
             presentTime.setColon(true);
             departedTime.setColon(true);
+
+            play_beep();
 
             // Prepare for time re-adjustment through NTP/GPS
 
@@ -1823,7 +1825,7 @@ void time_loop()
                     if(millis() - ctDownNow > ctDown) {
                         if( (!(alarmOnOff && (alarmHour == compHour) && (alarmMinute == compMin))) ||
                             (alarmDone && checkAudioDone()) ) {
-                            play_file("/timer.mp3", 1.0, false, true);
+                            play_file("/timer.mp3", 1.0, false, true, true, false);
                             ctDown = 0;
                         }
                     }
@@ -1967,7 +1969,7 @@ void time_loop()
             if(autoIntAnimRunning)
                 autoIntAnimRunning++;
 
-            play_beep();
+            //play_beep();
 
         }
 
@@ -2502,6 +2504,7 @@ static void myCustomDelay(unsigned int mydel)
     audio_loop();
     while(millis() - startNow < mydel) {
         delay(5);
+        audio_loop();
         ntp_short_loop();
         audio_loop();
     }
@@ -2718,7 +2721,7 @@ static bool getNTPTime(bool weHaveAuthTime)
     // If we don't have authTime yet, connect for longer to avoid
     // reconnects (aka frozen displays).
     // If WiFi is reconnected here, we won't have a valid time stamp
-    // immediately. This will therefore fail the first time called
+    // immediately. This will therefore fail the first time called.
     wifiOn(weHaveAuthTime ? 3*60*1000 : 21*60*1000, false, true);    
 
     if(WiFi.status() == WL_CONNECTED) {

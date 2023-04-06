@@ -24,12 +24,6 @@
 
 #include "tc_global.h"
 
-// Use the mixer, or do not use the mixer.
-// Since we don't use mixing, turn it off.
-// With the current versions of the audio library,
-// turning it on might cause a static after stopping
-// sound play back.
-//#define TC_USE_MIXER
 
 #include <Arduino.h>
 #include <SD.h>
@@ -42,12 +36,12 @@
 #include <AudioFileSourceLittleFS.h>
 #endif
 #include <AudioFileSourceSD.h>
+#include <AudioFileSourcePROGMEM.h>
+
 #include <AudioGeneratorMP3.h>
-//#include <AudioGeneratorWAV.h>
+#include <AudioGeneratorWAV.h>
+
 #include <AudioOutputI2S.h>
-#ifdef TC_USE_MIXER
-#include <AudioOutputMixer.h>
-#endif
 
 #include "tc_settings.h"
 #include "tc_keypad.h"
@@ -55,28 +49,18 @@
 
 #include "tc_audio.h"
 
-// Initialize ESP32 Audio Library classes
-
 static AudioGeneratorMP3 *mp3;
-//static AudioGeneratorMP3 *beep;
-//static AudioGeneratorWAV *beep;
+static AudioGeneratorWAV *beep;
 
 #ifdef USE_SPIFFS
 static AudioFileSourceSPIFFS *myFS0;
-//static AudioFileSourceSPIFFS *myFS1;
 #else
 static AudioFileSourceLittleFS *myFS0;
-//static AudioFileSourceLittleFS *myFS1;
 #endif
-
 static AudioFileSourceSD *mySD0;
+static AudioFileSourcePROGMEM *myPM;
 
 static AudioOutputI2S *out;
-
-#ifdef TC_USE_MIXER
-static AudioOutputMixer *mixer;
-static AudioOutputMixerStub *stub[2];
-#endif
 
 bool audioInitDone = false;
 bool audioMute = false;
@@ -100,8 +84,9 @@ static const float volTable[20] = {
 
 uint8_t curVolume = DEFAULT_VOLUME;
 
-static float curVolFact[2] = { 1.0, 1.0 };
-static bool  curChkNM[2]   = { true, true };
+static float curVolFact = 1.0;
+static bool  curChkNM   = true;
+static bool  dynVol     = true;
 
 static int sampleCnt = 0;
 
@@ -122,7 +107,9 @@ static void mp_buildFileName(char *fnbuf, int num);
 static int skipID3(char *buf);
 
 static float getRawVolume();
-static float getVolume(int channel);
+static float getVolume();
+
+#include "tc_beep.h"
 
 /*
  * audio_setup()
@@ -141,13 +128,8 @@ void audio_setup()
     out->SetOutputModeMono(true);
     out->SetPinout(I2S_BCLK_PIN, I2S_LRCLK_PIN, I2S_DIN_PIN);
 
-    #ifdef TC_USE_MIXER
-    mixer = new AudioOutputMixer(8, out);
-    #endif
-
     mp3  = new AudioGeneratorMP3();
-    //beep = new AudioGeneratorMP3();
-    //beep = new AudioGeneratorWAV();
+    beep = new AudioGeneratorWAV();
 
     #ifdef USE_SPIFFS
     myFS0 = new AudioFileSourceSPIFFS();
@@ -161,10 +143,7 @@ void audio_setup()
         mySD0 = new AudioFileSourceSD();
     }
 
-    #ifdef TC_USE_MIXER
-    stub[0] = mixer->NewInput();
-    //stub[1] = mixer->NewInput();
-    #endif
+    myPM = new AudioFileSourcePROGMEM();
 
     loadCurVolume();
 
@@ -307,9 +286,6 @@ bool mp_stop()
     
     if(mpActive) {
         mp3->stop();
-        #ifdef TC_USE_MIXER
-        stub[0]->stop();
-        #endif
         mpActive = false;
     }
     
@@ -405,7 +381,7 @@ void play_keypad_sound(char key)
 
     if(key) {
         buf[6] = key;
-        play_file(buf, 0.6, true, false, false);
+        play_file(buf, 0.6, true, false, false, false);
     }
 }
 
@@ -414,22 +390,39 @@ void play_hour_sound(int hour)
     char buf[16];
 
     if(!haveSD || mpActive) return;
+    // Not even called in night mode
     
     sprintf(buf, "/hour-%02d.mp3", hour);
     if(SD.exists(buf)) {
-        play_file(buf, 1.0, false, false);
+        play_file(buf, 1.0, false, false, true, false);
         return;
     }
     
-    play_file("/hour.mp3", 1.0, false, false);
+    play_file("/hour.mp3", 1.0, false, false, true, false);
 }
 
 void play_beep()
 {
-    if(!FPBUnitIsOn || muteBeep || mpActive || presentTime.getNightMode() || mp3->isRunning())
+    if(!FPBUnitIsOn     || 
+       mp3->isRunning() || 
+       muteBeep         || 
+       mpActive         || 
+       audioMute        || 
+       presentTime.getNightMode())
         return;
 
-    play_file("/beep.mp3", 0.3, true, false, false);
+    pwrNeedFullNow();
+
+    if(beep->isRunning()) {
+        beep->stop();
+    }
+
+    curVolFact = 0.3;
+    curChkNM   = true;
+    out->SetGain(getVolume());
+
+    myPM->open(data_beep_wav, data_beep_wav_len);
+    beep->begin(myPM, out);
 }
 
 /*
@@ -438,23 +431,23 @@ void play_beep()
  */
 void audio_loop()
 {   
-    if(mp3->isRunning()) {
+    float vol;
+    
+    if(beep->isRunning()) {
+        if(!beep->loop()) {
+            beep->stop();
+        }
+    } else if(mp3->isRunning()) {
         if(!mp3->loop()) {
             mp3->stop();
-            #ifdef TC_USE_MIXER
-            stub[0]->stop();
-            #endif
             if(mpActive) {
                 mp_next(true);
             }
         } else {
             sampleCnt++;
             if(sampleCnt > 1) {
-                #ifdef TC_USE_MIXER
-                stub[0]->SetGain(getVolume(0));
-                #else
-                out->SetGain(getVolume(0));
-                #endif
+                vol = getVolume();
+                if(dynVol) out->SetGain(vol);
                 sampleCnt = 0;
             }
         }
@@ -462,14 +455,6 @@ void audio_loop()
         pwrNeedFullNow();
         mp_next(true);
     }
-    /*
-    if(beep->isRunning()) {
-        if(!beep->loop()) {
-            beep->stop();
-            stub[1]->stop();
-        }
-    }
-    */
 }
 
 static int skipID3(char *buf)
@@ -489,13 +474,11 @@ static int skipID3(char *buf)
     return 0;
 }
 
-void play_file(const char *audio_file, float volumeFactor, bool checkNightMode, bool interruptMusic, bool allowSD, int channel)
+void play_file(const char *audio_file, float volumeFactor, bool checkNightMode, bool interruptMusic, bool allowSD, bool dynVolume)
 {
     char buf[10];
     
     if(audioMute) return;
-
-    if(channel != 0) return;  // For now, only 0 is allowed
 
     if(!interruptMusic) {
         if(mpActive) return;
@@ -506,76 +489,60 @@ void play_file(const char *audio_file, float volumeFactor, bool checkNightMode, 
     pwrNeedFullNow();
 
     #ifdef TC_DBG
-    Serial.printf("Audio: Playing %s (channel %d)\n", audio_file, channel);
+    Serial.printf("Audio: Playing %s\n", audio_file);
     #endif
 
     // If something is currently on, kill it
-    if((channel == 0) && mp3->isRunning()) {
+    if(mp3->isRunning()) {
         mp3->stop();
-        #ifdef TC_USE_MIXER
-        stub[0]->stop();
-        #endif
-    }
-
-    /*
-    if((channel == 1) && beep->isRunning()) {
+    } 
+    if(beep->isRunning()) {
         beep->stop();
-        stub[1]->stop();
     }
-    */
 
-    curVolFact[channel] = volumeFactor;
-    curChkNM[channel] = checkNightMode;
+    curVolFact = volumeFactor;
+    curChkNM   = checkNightMode;
+    dynVol     = dynVolume;
 
-    #ifdef TC_USE_MIXER
-    stub[channel]->SetGain(getVolume(channel));
-    #else
-    out->SetGain(getVolume(channel));
-    #endif
+    // Reset vol smoothing
+    rawVolIdx = 0;
+    anaReadCount = 0;
 
-    //if(channel == 0) {
-        if(haveSD && (allowSD || FlashROMode) && mySD0->open(audio_file)) {
+    out->SetGain(getVolume());
 
-            buf[0] = 0;
-            mySD0->read((void *)buf, 10);
-            mySD0->seek(skipID3(buf), SEEK_SET);
-          
-            #ifdef TC_USE_MIXER
-            mp3->begin(mySD0, stub[0]);
-            #else
-            mp3->begin(mySD0, out);
-            #endif
-            #ifdef TC_DBG
-            Serial.println(F("Playing from SD"));
-            #endif
-        }
-        #ifdef USE_SPIFFS
-          else if(SPIFFS.exists(audio_file) && myFS0->open(audio_file))
-        #else    
-          else if(myFS0->open(audio_file))
+    buf[0] = 0;
+
+    if(haveSD && (allowSD || FlashROMode) && mySD0->open(audio_file)) {
+
+        mySD0->read((void *)buf, 10);
+        mySD0->seek(skipID3(buf), SEEK_SET);
+        mp3->begin(mySD0, out);   
+                 
+        #ifdef TC_DBG
+        Serial.println(F("Playing from SD"));
         #endif
-        {
-            buf[0] = 0;
-            myFS0->read((void *)buf, 10);
-            myFS0->seek(skipID3(buf), SEEK_SET);
-            
-            #ifdef TC_USE_MIXER
-            mp3->begin(myFS0, stub[0]);
-            #else
-            mp3->begin(myFS0, out);
-            #endif
-            #ifdef TC_DBG
-            Serial.println(F("Playing from flash FS"));
-            #endif
-        } else {
-            #ifdef TC_DBG
-            Serial.println(F("Audio file not found"));
-            #endif
-        }
-    //} else {
-    //    myFS1->open(audio_file);
-    //    beep->begin(myFS1, stub[1]);
-    //}
+    }
+    #ifdef USE_SPIFFS
+      else if(SPIFFS.exists(audio_file) && myFS0->open(audio_file))
+    #else    
+      else if(myFS0->open(audio_file))
+    #endif
+    {
+        myFS0->read((void *)buf, 10);
+        myFS0->seek(skipID3(buf), SEEK_SET);
+        mp3->begin(myFS0, out);
+                  
+        #ifdef TC_DBG
+        Serial.println(F("Playing from flash FS"));
+        #endif
+        
+    } else {
+      
+        #ifdef TC_DBG
+        Serial.println(F("Audio file not found"));
+        #endif
+        
+    }
 }
 
 // Returns value for volume based on the position of the pot
@@ -643,7 +610,7 @@ static float getRawVolume()
     return vol_val;
 }
 
-static float getVolume(int channel)
+static float getVolume()
 {
     float vol_val;
 
@@ -656,14 +623,14 @@ static float getVolume(int channel)
     // If user muted, return 0
     if(vol_val == 0.0) return vol_val;
 
-    vol_val *= curVolFact[channel];
+    vol_val *= curVolFact;
     
     // Do not totally mute
     // 0.02 is the lowest audible gain
     if(vol_val < 0.02) vol_val = 0.02;
 
     // Reduce volume in night mode, if requested
-    if(curChkNM[channel] && presentTime.getNightMode()) {
+    if(curChkNM && presentTime.getNightMode()) {
         vol_val *= 0.3;
         // Do not totally mute
         if(vol_val < 0.02) vol_val = 0.02;
@@ -674,7 +641,7 @@ static float getVolume(int channel)
 
 bool checkAudioDone()
 {
-    if( (mp3->isRunning()) /*|| (beep->isRunning())*/ ) return false;
+    if( mp3->isRunning() || beep->isRunning() ) return false;
     return true;
 }
 
@@ -682,14 +649,7 @@ void stopAudio()
 {
     if(mp3->isRunning()) {
         mp3->stop();
-        #ifdef TC_USE_MIXER
-        stub[0]->stop();
-        #endif
-    }
-    /*
-    if(beep->isRunning()) {
+    } else if(beep->isRunning()) {
         beep->stop();
-        stub[1]->stop();
     }
-    */
 }
