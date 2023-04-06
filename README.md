@@ -203,6 +203,10 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
      <td align="center"><a href="#the-music-player">Music Player</a>: Go to song xxx</td>
     </tr>
     <tr>
+     <td align="center">000&#9166;</td>
+     <td align="center">Enable/disable beep sound played every second</td>
+    </tr>
+    <tr>
      <td align="center">64738&#9166;</td>
      <td align="center">Reboot the device</td>
     </tr>
