@@ -548,11 +548,13 @@ You probably noticed that the device takes longer to boot than would be required
 
 If corresponding option is enabled in the Config Portal (*Use fake power switch*), the device will power-up, initialize everything, but stay quiet and dark. Only when the fake "power switch" is activated, the device will visually "power up". Likewise, you can also fake "power off" the device using this switch. Fake "off" disables the displays, all audio (except the alarm) and the keypad. Just like in the movie.
 
-The switch needs shorten "IO13" and "GND", and therefore to be connected to these two solder pads on the TC control board:
+On Control Boards V1.3 and later, there is a dedicated header labeled "Fake PWR" to connect the switch to. The pins to be shortened by the switch are labeled "GND" and "PWR Trigger".
+
+On earlier Control Boards (1.2 and below), the switch needs shorten the pins labeled "IO13" and "GND" as shown here:
 
 ![access_to_io13](https://user-images.githubusercontent.com/76924199/194283241-3bee5fef-f51a-4b1a-a158-ed92292bcf32.jpg)
 
-Here is a close-up of one of my boards; I have soldered some headers on the io ports.
+Here is a close-up of a v1.2 control board; Headers have been soldered to the io ports.
 
 ![io13neu](https://user-images.githubusercontent.com/76924199/212369689-f945dcf1-55f9-41e9-8fd7-fc0dbc69906c.jpg)
 
