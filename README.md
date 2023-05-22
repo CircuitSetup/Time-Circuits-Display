@@ -52,11 +52,12 @@ The Time Circuits Display has been meticulously reproduced to be as accurate as 
 - Option to make time travels persistent over reboots (dates entered stay there instead of rotating)
 - Built-in installer for default audio files in addition to OTA firmware updates
 
+
 ## Short summary of first steps
 
-The first step is to establish access to the Config Portal in order to configure your clock. This involves connecting the clock to your WiFi network, if applicable and desired. 
+The first step is to establish access to the Config Portal in order to configure your clock.
 
-As long as the device is unconfigured, as is the case with a brand new clock, or later for some reason fails to connect to a configured WiFi network, it starts in "access point" mode, i.e. it creates a WiFi network of its own named "TCD-AP".
+As long as the device is unconfigured, as is the case with a brand new clock, or later if it for some reason fails to connect to a configured WiFi network, it starts in "access point" mode, i.e. it creates a WiFi network of its own named "TCD-AP".
 
 - Power up the clock and wait until it shows a time (which is probably wrong).
 - Connect your computer or handheld device to the WiFi network "TCD-AP".
@@ -78,11 +79,13 @@ The Config Portal is accessible exclusively through WiFi. As outlined above, if 
 
 If the operating system on your handheld or computer supports Bonjour (or "mDNS"), you can connect to the Config Portal by directing your browser to http://timecircuits.local. (mDNS is supported on Windows 10 version TH2 (1511) [other sources say 1703] and later, Android 13 and later, MacOS, iOS)
 
-If that fails, the way to connect to the Config Portal depends on whether the clock is in access point mode or not. If it is in access point mode, nagivate to http://192.168.4.1. If the device is connected to your WiFi network, you need to find out its IP address first: Hold ENTER on the keypad for 2 seconds, then repeatedly press ENTER until "NET-WORK" is shown, then hold ENTER for 2 seconds. The device will then show its current IP address. Then, on your handheld or computer, navigate to http://a.b.c.d (a.b.c.d being the IP address as shown on the display) in order to enter the Config Portal.
+If that fails, the way to connect to the Config Portal depends on whether the clock is in access point mode or not. 
+- If it is in access point mode (and your handheld/computer is connected to the WiFi network "TCP-AP"), navigate your browser to http://192.168.4.1 
+- If the device is connected to your WiFi network, you need to find out its IP address first: Hold ENTER on the keypad for 2 seconds, then repeatedly press ENTER until "NET-WORK" is shown, then hold ENTER for 2 seconds. The device will then show its current IP address. Then, on your handheld or computer, navigate to http://a.b.c.d (a.b.c.d being the IP address as shown on the display) in order to enter the Config Portal.
 
 In the main menu, click on "Setup" to configure your clock, first and foremost your time zone. If the time zone isn't set correctly, the clock might show a wrong time, and DST (daylight saving) will not be switched on/off correctly.
 
-| ![The_Config_Portal](https://user-images.githubusercontent.com/76924199/198831635-8cfef3ca-a06e-4321-b2fd-d23cc1e91c56.jpg) |
+| ![The_Config_Portal](https://user-images.githubusercontent.com/76924199/235524035-afa58901-8115-42d6-a896-f65d4a7a56c2.png) |
 |:--:| 
 | *The Config Portal's Setup page* |
 
@@ -110,9 +113,26 @@ Time-cycling will, if enabled, change the *Destination* and *Last Time Departed*
 
 Set the interval to OFF (0) to disable Time-cycling.
 
+### World Clock mode
+
+World Clock (WC) mode is another kind of "decorative" mode where the red and yellow displays show not some stale times, but current time in other time zones. These time zones need to be configured in Config Portal. At least one time zone (for either the red or yellow display) must be configured in order to use WC mode. Optionally, also names for cities/locations for these time zones can be entered in the Config Portal; if a name for a time zone is configured, this name and the time will alternately be shown; if no name is configured, time will be shown permanently. Note that names can only contain letters a-z, numbers 0-9, space and minus.
+
+WC mode is toggled by typing "112" followed by ENTER. 
+
+For logical reasons, WC mode will be automatically disabled in some situations:
+
+- Time travel. The time travel sequence runs like in non-WC mode: If a time travel is triggered while WC mode is enabled (and no new destination time was entered before), the currently shown *Destination Time* will be the travel target, and the *Last Time Departed* display will show your formerly current time. However: Both *Destination Time* as well as *Last Time Departed* become stale after the time travel as per the nature of the sequence.
+- After entering a destination time. WC mode is disabled at this point, because your new *Destination Time* would be overwritten otherwise.
+
+#### WC/RC hybrid mode
+
+[Room Condition (RC) mode](#room-condition-mode-temperaturehumidity-sensor) can be enabled together with WC mode. In that case, only one timezone is used, and the other display shows the temperature. If there is a time zone configured for the red display, the temperature will be shown in the yellow display. If there no time zone for the red display, the temperature will be shown there, and the yellow display will show time for the time zone you set up for the yellow display.
+
+To toggle WC/RC hybrid mode, type "113" followed by ENTER. 
+
 ### Common usage scenarios
 
-####  &#9654; I want clock to work like in the movie
+####  &#9654; I want my clock to work like in the movie
 
 In this case, head to the Config Portal and
 - set the *Time Cycling Interval* to OFF
@@ -183,8 +203,36 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
      <td align="center"><a href="#count-down-timer">Timer</a>: Set timer to MM minutes</td>
     </tr>
     <tr>
+     <td align="center">77&#9166;</td>
+     <td align="center"><a href="#yearlymonthly-reminder">Reminder</a>: Display reminder</td>
+    </tr>
+    <tr>
+     <td align="center">777&#9166;</td>
+     <td align="center"><a href="#yearlymonthly-reminder">Reminder</a>: Display time until reminder</td>
+    </tr>
+    <tr>
+     <td align="center">770&#9166;</td>
+     <td align="center"><a href="#yearlymonthly-reminder">Reminder</a>: Delete reminder</td>
+    </tr>
+    <tr>
+     <td align="center">77mmdd&#9166;</td>
+     <td align="center"><a href="#yearlymonthly-reminder">Reminder</a>: Program reminder</td>
+    </tr>
+    <tr>
+     <td align="center">77mmddhhMM&#9166;</td>
+     <td align="center"><a href="#yearlymonthly-reminder">Reminder</a>: Program reminder</td>
+    </tr>
+    <tr>
      <td align="center">111&#9166;</td>
      <td align="center">Toggle <a href="#room-condition-mode-temperaturehumidity-sensor">Room Condition mode</a></td>
+    </tr>
+    <tr>
+     <td align="center">112&#9166;</td>
+     <td align="center">Toggle <a href="#">World Clock mode</a></td>
+    </tr>
+    <tr>
+     <td align="center">113&#9166;</td>
+     <td align="center">Synchronously toggle <a href="#">World Clock mode</a> and <a href="#room-condition-mode-temperaturehumidity-sensor">Room Condition mode</a></td>
     </tr>
     <tr>
      <td align="center">222&#9166;</td>
@@ -193,6 +241,10 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
     <tr>
      <td align="center">555&#9166;</td>
      <td align="center"><a href="#the-music-player">Music Player</a>: Shuffle on</td>
+    </tr>
+    <tr>
+     <td align="center">88&#9166;</td>
+     <td align="center"><a href="#the-music-player">Music Player</a>: Show currently played song number</td>
     </tr>
     <tr>
      <td align="center">888&#9166;</td>
@@ -204,7 +256,19 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
     </tr>
     <tr>
      <td align="center">000&#9166;</td>
-     <td align="center">Enable/disable beep sound played every second</td>
+     <td align="center">Disable <a href="#beep-on-the-second">beep</a> sound</td>
+    </tr>
+    <tr>
+     <td align="center">001&#9166;</td>
+     <td align="center">Enable <a href="#beep-on-the-second">beep</a> sound</td>
+    </tr>
+   <tr>
+     <td align="center">002&#9166;</td>
+     <td align="center">Enable <a href="#beep-on-the-second">beep</a> sound (30 seconds)</td>
+    </tr>
+   <tr>
+     <td align="center">003&#9166;</td>
+     <td align="center">Enable <a href="#beep-on-the-second">beep</a> sound (60 seconds)</td>
     </tr>
     <tr>
      <td align="center">64738&#9166;</td>
@@ -214,7 +278,7 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
 
 <table>
     <tr>
-     <td align="center" colspan="3">Keypad reference: Holding keys for 2 seconds<br>(Firmware versions from 2023 and later - v2.6+)</td>
+     <td align="center" colspan="3">Keypad reference: Holding keys for 2 seconds</td>
     </tr>
     <tr>
      <td align="center">1<br>Toggle <a href="#how-to-set-up-the-alarm">Alarm</a> on/off</td>
@@ -229,32 +293,6 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
     <tr>
      <td align="center">7<br><a href="#wifi-power-saving-features">Re-enable WiFi</a></td>
      <td align="center">8<br><a href="#the-music-player">Music Player</a>: Next song</td>
-     <td align="center">9<br><a href="#time-travel">Return from Time Travel</a></td>
-    </tr>
-    <tr>
-     <td align="center"></td>
-     <td align="center">0<br><a href="#time-travel">Time Travel</a></td>
-     <td align="center"></td>
-    </tr>
-</table>
-
-<table>
-    <tr>
-     <td align="center" colspan="3">Keypad reference: Holding keys for 2 seconds<br>(Firmware versions from 2022)</td>
-    </tr>
-    <tr>
-     <td align="center">1<br>Enable <a href="#how-to-set-up-the-alarm">Alarm</a></td>
-     <td align="center">2<br>Disable <a href="#how-to-set-up-the-alarm">Alarm</a></td>
-     <td align="center">3<br><a href="#additional-custom-sounds">Play "key3.mp3"</a></td>
-    </tr>
-    <tr>
-     <td align="center">4<br>Enable <a href="#night-mode">Night mode</a></td>
-     <td align="center">5<br>Disable <a href="#night-mode">Night mode</a></td>
-     <td align="center">6<br><a href="#additional-custom-sounds">Play "key6.mp3"</a></td>
-    </tr>
-    <tr>
-     <td align="center">7<br><a href="#wifi-power-saving-features">Re-enable WiFi</a></td>
-     <td align="center">8<br>n/a</td>
      <td align="center">9<br><a href="#time-travel">Return from Time Travel</a></td>
     </tr>
     <tr>
@@ -296,6 +334,19 @@ Note that Time-cycling, if enabled, will force the device to cycle through the l
 
 Persistent time travels, if done often, will cause [Flash Wear](#flash-wear).
 
+## Beep on the second
+
+In the movies, the Time Circuits emit a "beep" sound every second, which is only really audible in the scene in which Doc explains to Marty how the time machine works. The firmware supports that beep, too.
+
+The beep can be permanently disabled, permanently enabled, or enabled for 30 or 60 seconds
+- after a destination time is entered (and ENTER is pressed),
+- upon triggering a time travel,
+- after switching on the clock (real power-up or fake power-up).
+
+The different modes are selected by typing 000 (disabled), 001 (enabled), 002 (enabled for 30 secs) or 003 (enabled for 60 secs), followed by ENTER. The power-up default is selected in the Config Portal.
+
+Since the hardware only has one audio channel, the beep is suppressed whenever other sounds are played-back.
+
 ## Night mode
 
 In night-mode, by default, the *destination time* and *last time departed* displays are switched off, the *present time* display is dimmed to a minimum, and the volume of sound playback is reduced (except the alarm). Apart from considerably increasing the displays' lifetime, night-mode reduces the power consumption of the device from around 4.5W to around 2.5W.
@@ -304,7 +355,7 @@ You can configure the displays' behavior in night-mode in the Config Portal: The
 
 #### Manually switching to night-mode
 
-To toggle night-mode on/off manually, hold "4". (For firmware from 2022: To switch on night-mode manually, hold "4". To switch off night-mode, hold "5".)
+To toggle night-mode on/off manually, hold "4".
 
 #### Scheduled night-mode
 
@@ -317,6 +368,8 @@ The presets are for (hopefully) typical home, office and shop setups, and they a
 - Shop: Mon-Wed 8am-8pm, Thu-Fri 8am-9pm, Sat 8am-5pm
 
 The *daily* schedule works by entering start and end in the text fields below. The clock will go into night-mode at the defined start hour (xx:00), and return to normal operation at the end hour (yy:00). 
+
+Night mode schedules are always based on actual local present time.
 
 #### Sensor-controlled night-mode
 
@@ -335,6 +388,24 @@ The firmware features a simple count-down timer. This timer can count down from 
 To set the timer to MM minutes, type 44MM and press ENTER. Note that for minutes, 2 digits must be entered. To cancel a running timer, enter 4400 and press ENTER.
 
 The check the remaining time, type 44 and press ENTER.
+
+## Yearly/monthly reminder
+
+The reminder is similar to the alarm, the difference being that the reminder is yearly or monthly, not daily. 
+
+To program a yearly reminder, enter 77mmddhhMM and press ENTER. For example: 7705150900 sets the reminder to May 15 9am. Now a reminder sound will play every year on May 15 at 9am.
+
+To program a monthly reminder, enter 7700ddhhMM and press ENTER. For example: 7700152300 sets the reminder to the 15th of each month, at 11pm.
+
+You can also leave out the hhMM part; in that case the time remains unchanged from a previous setting, unless both hour and minute were 0 (zero), in which case the reminder time is set to 9am.
+
+Note that, as usual, all fields consist of two digits, and hours are entered in 24-hour notation.
+
+Type 77 followed by ENTER to display the programmed reminder, 770 to delete it, and 777 to display the days/hours/minutes until the next reminder.
+
+The reminder only plays a sound file. The current sound-pack contains a default file; if your SD contains a file named "reminder.mp3", this will played instead of the default file.
+
+Note: While the alarm and the sound-on-the-hour adhere to the "Alarm base is real present time" setting in the config portal, the Reminder does not. It is always based on real local time.
 
 ## SD card
 
@@ -356,7 +427,8 @@ Your replacements need to be put in the root (top-most) directory of the SD card
 - "alarmoff.mp3". Played when disabling the alarm
 - "nmon.mp3". Played when manually enabling night mode
 - "nmoff.mp3". Played when manually disabling night mode
-- "timer.mp3". Playeed when the count-down timer expires.
+- "reminder.mp3". Played when the reminder is due.
+- "timer.mp3". Played when the count-down timer expires.
 
 The following sounds are time-sync'd to display action. If you decide to substitute these with your own, be prepared to lose synchronicity:
 - "enter.mp3". Played when a date was entered and ENTER was pressed
@@ -376,8 +448,9 @@ The firmware supports some additional user-provided sound effects, which it will
 - "hour.mp3": Will be played every hour, on the hour. This feature is disabled in night mode.
 - "hour-xx.mp3", xx being 00 through 23: Sounds-on-the-hour for specific hours that will be played instead of "hour.mp3". If a sound for a specific hour is not present, "hour.mp3" will be played, if that one exists.
 - "key3.mp3" and/or "key6.mp3": Will be played if you hold the "3"/"6" key for 2 seconds.
+- "ha-alert.mp3" will be played when a [HA/MQTT](#home-assistant--mqtt) message is received.
 
-"hour.mp3"/"hour-xx.mp3", "key3.mp3" and "key6.mp3" are not provided here. You can use any mp3, with 128kpbs or less.
+"hour.mp3"/"hour-xx.mp3", "key3.mp3", "key6.mp3" and "ha-alert.mp3" are not provided here. You can use any mp3, with 128kpbs or less.
 
 ## The Music Player
 
@@ -399,11 +472,11 @@ While the music player is playing music, most sound effects are disabled/muted, 
  
 The keypad menu is an additional way to configure your clock; it only involves the three displays and the keypad. It is controlled by "pressing" or "holding" the ENTER key on the keypad.
 
-*Note that while the clock is in the keypad menu, the alarm, count-down timer or sound-on-the-hour will not sound.*
-
 A "press" is shorter than 2 seconds, a "hold" is 2 seconds or longer.
 
 The menu is invoked by holding the ENTER button.
+
+*Note that if the keypad menu is active at a time when the alarm, the reminder, the count-down timer or sound-on-the-hour are due, those events will be missed and no sounds are played.*
 
 Data entry, such as for dates and times, is done through the keypad's number keys and works as follows: Whenever a data entry is requested, the field for that data is lit (while the rest of the display is dark) and a pre-set value is shown. If you want to keep that pre-set, press ENTER to proceed to next field. Otherwise press a digit on the keypad; the pre-set is then overwritten by the value entered. 2 digits can be entered (4 for years), upon which the new value is stored and the next field is activated. You can also enter less than 2 digits (4 for years) and press ENTER when done with the field. Note that a month needs to be entered numerically (1-12), and hours need to be entered in 24-hour notation (0-23), regardless of 12-hour or 24-hour mode as per the Config Portal setting.
 
@@ -412,12 +485,13 @@ After invoking the keypad menu, the first step is to choose a menu item. The ava
 - set the alarm ("ALA-RM"),
 - set the audio volume (VOL-UME),
 - set the Music Player folder number ("MUSIC FOLDER NUMBER")
-- select the Time-cycling Interval ("TIME-CYCLING", formerly "TIME-ROTATION-INTERVAL"),
+- select the Time-cycling Interval ("TIME-CYCLING"),
 - select the brightness for the three displays ("BRIGHTNESS"),
 - show network information ("NET-WORK"),
 - set the internal Real Time Clock (RTC) ("SET RTC"),
 - enter dates/times for the *Destination* and *Last Time Departed* displays,
 - show light/temperature/humidity sensor info (if such a sensor is connected) ("SENSORS"),
+- show when time was last sync'd with NTP or GPS ("TIME SYNC"),
 - quit the menu ("END").
  
 Pressing ENTER cycles through the list, holding ENTER selects an item.
@@ -442,7 +516,7 @@ Pressing ENTER cycles through the list, holding ENTER selects an item.
 
 When the alarm is set and enabled, the dot in the present time's minute field will light up. 
 
-Under normal operation (ie outside of the menu), holding "1" toggles the alarm on/off. (For firmware from 2022: Holding "1" enables the alarm, holding "2" disables it.) 
+Under normal operation (ie outside of the menu), holding "1" toggles the alarm on/off.
 
 The alarm time can also quickly be set by typing 11hhMM (eg. 110645 for 6:45am, or 112300 for 11:00pm) and pressing ENTER, just like when setting a time travel destination time. (The weekday selection has still to be done via the keypad menu.) Typing 11 followed by ENTER shows the currently set time and weekday selection briefly.
 
@@ -456,7 +530,7 @@ Basically, and by default, the device uses the hardware volume knob to determine
 - Hold ENTER to invoke main menu
 - Press ENTER repeatedly until "VOL-UME" is shown
 - Hold ENTER
-- Press ENTER to toggle between "USE VOLUME KNOB" (formerly "HW VOLUME KNOB") and "FIXED LEVEL" (formerly "SW")
+- Press ENTER to toggle between "USE VOLUME KNOB" and "FIXED LEVEL"
 - Hold ENTER to proceed
 - If you chose "FIXED LEVEL/"SW", you can now select the desired level by pressing ENTER repeatedly. There are 20 levels available. The volume knob is now ignored.
 - Hold ENTER to save and quit the menu
@@ -478,8 +552,8 @@ Note that the Music Folder Number is saved in a config file on the SD card.
 #### How to select the Time-cycling Interval:
 
 - Hold ENTER to invoke main menu
-- Press ENTER repeatedly until "TIME-CYCLING" (formerly "TIME-ROTATION-INTERVAL") is shown
-- Hold ENTER, "INTERVAL" (formerly "INT") is displayed
+- Press ENTER repeatedly until "TIME-CYCLING" is shown
+- Hold ENTER, "INTERVAL" is displayed
 - Press ENTER repeatedly to cycle through the possible Time-cycling Interval values.
 - A value of 0 disables automatic time cycling ("OFF").
 - Non-zero values make the device cycle through a number of pre-programmed times. The value means "minutes" (hence "MIN-UTES") between changes.              
@@ -490,26 +564,24 @@ Note that the Music Folder Number is saved in a config file on the SD card.
 - Hold ENTER to invoke main menu
 - Press ENTER repeatedly until "BRIGHTNESS" is shown
 - Hold ENTER, the displays show all elements, the top-most display says "LVL"
-- Press ENTER repeatedly to cycle through the possible levels (1-5)
+- Press ENTER repeatedly to cycle through the possible levels (1-15)
 - Hold ENTER to use current value and proceed to next display
 - After the third display, "SAVING" is displayed briefly and the menu is left automatically.
-
-The [Config Portal](#the-config-portal) offers more granularity as it provides 16 levels to choose from.
  
 #### How to find out the IP address and WiFi status:
 
 - Hold ENTER to invoke main menu
 - Press ENTER repeatedly until "NET-WORK" is shown
 - Hold ENTER, the displays show the IP address
-- Repeatedly press ENTER to cycle between IP address, WiFi status and MAC address (in station mode)
+- Repeatedly press ENTER to cycle between IP address, WiFi status, MAC address (in station mode) and Home Assistant connection status.
 - Hold ENTER to leave the menu
 
 #### How to set the Real Time Clock (RTC):
 
-Adjusting the RTC is useful if you can't use NTP for time keeping, and really helpful when using GPS. Always set your actual local present time here; if you want to display some other time, use the Time Travel function. Note: The time you entered will be overwritten if/when the device has access to network time via NTP or GPS. For DST (daylight saving) and GPS, it is essential that you also set the correct time zone in the [Config Portal](#the-config-portal).
+Adjusting the RTC is useful if you can't use NTP for time keeping, and really helpful when using GPS. Always set your actual local present time here; if you want to display some other time, use the Time Travel function. Note: The time you entered will be overwritten if/when the device has access to authoritative time such as via NTP or GPS. For DST (daylight saving) and GPS, it is essential that you also set the correct time zone in the [Config Portal](#the-config-portal).
 
 - Hold ENTER to invoke main menu
-- Press ENTER repeatedly until "SET RTC" or "RTC" is displayed and the *Present Time* display shows a date and time 
+- Press ENTER repeatedly until "SET RTC" is displayed and the *Present Time* display shows a date and time 
 - Hold ENTER until the *Present Time* display goes off except for the first field to enter data into
 - The field to enter data into is shown (exclusively), pre-set with its current value
 - Data entry works as described [above](#the-keypad-menu); remember that months need to be entered numerically (01-12), and hours in 24-hour notation (0-23).
@@ -554,19 +626,21 @@ On earlier Control Boards (1.2 and below), the switch needs shorten the pins lab
 
 ![access_to_io13](https://user-images.githubusercontent.com/76924199/194283241-3bee5fef-f51a-4b1a-a158-ed92292bcf32.jpg)
 
-Here is a close-up of a v1.2 control board; Headers have been soldered to the io ports.
+Here is a close-up of a v1.2 control board; Headers have been soldered to the io ports
 
 ![io13neu](https://user-images.githubusercontent.com/76924199/212369689-f945dcf1-55f9-41e9-8fd7-fc0dbc69906c.jpg)
 
 Note that the switch actually needs to be a switch with a maintained contact; the pins need to remain connected for as long as the device is fake-switched-on.
 
+In order to use the Fake Power Switch, check **Use fake power switch** in the Config Portal.
+
 ## External Time Travel Trigger
 
-As mentioned above, a time travel can be triggered by holding "0" on the keypad. Since this doesn't really allow for an authentic movie-like experience, the firmware also supports an external trigger, such as a button switch or even another prop to trigger a time travel.
+As mentioned above, a time travel can be triggered by holding "0" on the keypad. Since this doesn't really allow for an authentic movie-like experience, the firmware also supports an external trigger, such as a button switch or even another prop to trigger a time travel. Note that, unlike the [Fake Power Switch](#fake-power-switch), this trigger must be a momentary toggle.
 
-This button/prop must be connected to IO27 and GND. In order to trigger a time-travel sequence on the Time Circuits, IO27 and GND must be shortened for 200ms or longer. Note that, unlike the [Fake Power Switch](#fake-power-switch), this trigger must be a momentary toggle.
+On Control Boards V1.3 and later, there is a dedicated header for the button labeled "Time Travel". The button needs to shorten pins "TT IN" and "GND".
 
-Unfortunately, there is no header and no break out for IO27 on existing TC control boards. Some soldering is required. The button needs to be connected to the two marked pins in the image below:
+Unfortunately, there is no header and no break out for IO27 on TC control boards V1.2 and below. Some soldering is required. The button needs to be connected to the two marked pins in the image below:
 
 ![nodemcuio27](https://user-images.githubusercontent.com/76924199/194284838-635419f9-5eb7-4480-8693-2bf7cfc7c744.jpg)
 
@@ -574,23 +648,29 @@ Luckily, there is a row of solder pads right next to the socket on the control b
 
 ![tcboard_io27](https://user-images.githubusercontent.com/76924199/194284336-2fe9fa9b-d5e5-49f5-b1cd-b0fd2abdff53.jpg)
 
-The Config Portal allows configuring a delay and the type of sequence played, in order match the device to another prop.
+In order to trigger a time-travel sequence on the Time Circuits, "TT IN"/IO27 and GND must be shortened for at least 200ms and then opened; the time travel is triggered upon release of the button. If the button is pressed for 3000ms (3 seconds), a ["Return from Time Travel"](#time-travel) is triggered.
+
+The Config Portal allows configuring a delay for matching/synchronizing the TCD to another prop. The delay, if any, starts running after the button is released. The time travel sequence starts after the delay has expired.
 
 ## Speedometer
 
-The firmware supports a speedometer display connected via i2c (slave address 0x70) as part of the time travel sequence. Unfortunately, CircuitSetup's upcoming Speedo display is yet in the design stage, so you are on your own to build one for the time being. There are, however, various readily available LED segment displays with i2c break-outs from Adafruit and Seeed (Grove), that can be used as a basis. Adafruit [878](https://www.adafruit.com/product/878), [1270](https://www.adafruit.com/product/1270) and [1911](https://www.adafruit.com/product/1911), as well as Grove 0.54" 14-segment [2-digit](https://www.seeedstudio.com/Grove-0-54-Red-Dual-Alphanumeric-Display-p-4031.html) or [4-digit](https://www.seeedstudio.com/Grove-0-54-Red-Quad-Alphanumeric-Display-p-4032.html) alphanumeric displays are supported. (The product numbers vary with color, the numbers here are the red ones.)
+The firmware supports a speedometer display connected via i2c (slave address 0x70) as part of the time travel sequence. Unfortunately, CircuitSetup's upcoming Speedo display is yet in the design stage, so you are on your own to build one for the time being.
 
-[![Watch the video](https://img.youtube.com/vi/FRRecGxAONc/0.jpg)](https://youtu.be/FRRecGxAONc)
+What you need is a box, the LED segment displays and a HT16K33-based PCB that allows accessing the LED displays via i2c. There are various readily available LED segment displays with suitable i2c break-outs from Adafruit and Seeed (Grove) that can be used as a basis. Adafruit [878](https://www.adafruit.com/product/878), [1270](https://www.adafruit.com/product/1270) and [1911](https://www.adafruit.com/product/1911), as well as Grove 0.54" 14-segment [2-digit](https://www.seeedstudio.com/Grove-0-54-Red-Dual-Alphanumeric-Display-p-4031.html) or [4-digit](https://www.seeedstudio.com/Grove-0-54-Red-Quad-Alphanumeric-Display-p-4032.html) alphanumeric displays are supported. (The product numbers vary with color, the numbers here are the red ones.)
 
-The speedo display shown in this video is based on a fairly well-designed stand-alone replica purchased on ebay. I removed the Arduino Uno inside and wired the LED segments to an Adafruit i2c backpack (from the Adafruit 878 product). The strange look of the speedo's LEDs in the video is due to camera limitations in combination with the layer of semi-clear plastic covering the LED display to make it like the originally used Stanley Readout displays plus the originally used diffusers; in real life it looks much better.
+| [![Watch the video](https://img.youtube.com/vi/opAZugb_W1Q/0.jpg)](https://youtu.be/opAZugb_W1Q) |
+|:--:|
+| Click to watch the video |
 
-There are two special options in the Speedo Display Type drop-down in the Config Portal: *Ada 1911 (left tube)* and *Ada 878 (left tube)*. These two can be used if you connect only one 2-digit-tube to the respective Adafruit i2c backpack.
+The speedo display shown in this video is based on a fairly well-designed stand-alone replica I purchased on ebay. I removed the electronics inside and wired the LED segments to an Adafruit i2c backpack (from the Adafruit 878 product) and connected it to the TCD. Yes, it is really that simple. (The switch was made by me, see [here](https://github.com/realA10001986/Time-Circuits-Display/wiki/Time-Circuits-Switch), it uses the [Fake Power Switch](#fake-power-switch) feature of the TCD.)
+
+In order to use the Speedometer display, select the correct display type in the Config Portal. There are two special options in the Speedo Display Type drop-down: *Ada 1911 (left tube)* and *Ada 878 (left tube)*. These two can be used if you connect only one 2-digit-tube to the respective Adafruit i2c backpack.
 
 Since the I2C bus is already quite long from the control board to the last display in the chain, I recommend soldering another JST XH 4pin plug onto the control board (there are two additional i2c break-outs available), and to connect the speedometer there.
 
 ## GPS receiver
 
-The firmware supports an MT(K)3333-based GPS receiver, connected through i2c (slave address 0x10). The CircuitSetup-designed speedo display will have such a chip built-in, but since this gadget is not yet available, in the meantime, you can use alternatives such as the Adafruit Mini GPS PA1010D (product id [4415](https://www.adafruit.com/product/4415)) or the Pimoroni P1010D GPS Breakout ([PIM525](https://shop.pimoroni.com/products/pa1010d-gps-breakout?variant=32257258881107)). The GPS receiver can be used as a source of authoritative time (like NTP), and/or speed of movement (to be displayed on a [speedo display](#speedometer)).
+The firmware supports an MT(K)3333-based GPS receiver, connected through i2c (slave address 0x10). The CircuitSetup-designed speedo display will have such a chip built-in, but since this gadget is not yet available, in the meantime, you can use alternatives such as the Adafruit Mini GPS PA1010D (product id [4415](https://www.adafruit.com/product/4415)) or the Pimoroni P1010D GPS Breakout ([PIM525](https://shop.pimoroni.com/products/pa1010d-gps-breakout?variant=32257258881107)). The GPS receiver can be used as a source of authoritative time (like NTP), and speed of movement (to be displayed on a [speedo display](#speedometer)).
 
 GPS receivers receive signals from satellites, but in order to do so, they need to be "tuned in" (aka get a "fix"). This "tuning" process can take a long time; after first power up, it can take 30 minutes or more for a receiver to be able to determine its position. In order to speed up this process, modern GPS receivers have special "assisting" features. One key element is knowledge of current time, as this helps identifying satellite signals quicker. So, in other words, initially, you need to tell the receiver, what it is supposed to tell you. However, as soon as the receiver has received satellite signals for 15-20 minutes, it saves the data it collected to its battery-backed memory and will find a fix within seconds after power-up in the future.
 
@@ -602,21 +682,82 @@ For using GPS effectively as a long-term source of accurate time, it is therefor
 
 If/as long as the GPS receiver has a fix and receives data from satellites, the dot in the present time's year field is lit.
 
+In order to use the GPS receiver as a source of time, no special configuration is required. If it is detected during boot, it will be used.
+
 #### GPS for speed
 
 One nice feature of GPS is that the receiver can deliver current speed of movement. If the Time Circuits are, for instance, mounted in a car or on a boat, and a [speedo display](#speedometer) is connected, this display will be just that: A real speedometer.
 
-[![Watch the video](https://img.youtube.com/vi/wbeXZJaDLa8/0.jpg)](https://youtu.be/wbeXZJaDLa8)
+| [![Watch the video](https://img.youtube.com/vi/wbeXZJaDLa8/0.jpg)](https://youtu.be/wbeXZJaDLa8) |
+|:--:|
+| Click to watch the video |
+
+In order to use the GPS receiver for speed, check *Display GPS speed* in the Config Portal.
 
 ## Room Condition Mode, Temperature/humidity sensor
 
-The firmware supports connecting a temperature/humidity sensor for "room condition mode"; in this mode, *destination* and *last departed* times are replaced by temperature and humidity, respectively. To toggle between normal and room condition mode, enter "111" and press ENTER.
+The firmware supports connecting a temperature/humidity sensor for "room condition mode"; in this mode, *destination* and *last departed* times are replaced by temperature and humidity (if applicable), respectively. To toggle between normal and room condition mode, enter "111" and press ENTER. 
 
 ![rcmode](https://user-images.githubusercontent.com/76924199/208133653-f0fb0a38-51e4-4436-9506-d841ef1bfa6c.jpg)
 
-Furthermore, unless you do time travelling on a regular basis, the [speedo display](#speedometer) is idle most of the time in a typical home setup. To give it more of a purpose, the firmware can display ambient temperature on the speedo while idle.
+Room condition mode can be used together with [World Clock mode](#world-clock-mode); if both are enabled, only one alternative time and only temperature is shown. To toggle RC and WC mode simultaniously, type "113" and press ENTER.
 
-Seven sensor types are supported: MCP9808 (i2c address 0x18), BMx280 (0x77), SI7021 (0x40), SHT40 (0x44), TMP117 (0x49), AHT20/AM2315C (0x38), HTU31D (0x41). All of those are readily available on breakout boards from Adafruit or Seeed (Grove). Note that BMP280 (unlike BME280), MCP9808 and TMP117 work as pure temperature sensors, the others for temperature and humidity. *Note: You cannot connect the sensor chip directly to the TCD control board; most sensors need at least a power converter/level-shifter.* This is why I exclusively used Adafruit or Seeed breakouts ([MCP9808](https://www.adafruit.com/product/1782), [BME280](https://www.adafruit.com/product/2652), [SI7021](https://www.adafruit.com/product/3251), [SHT40](https://www.adafruit.com/product/4885), [TMP117](https://www.adafruit.com/product/4821), [AHT20](https://www.adafruit.com/product/4566), [HTU31D](https://www.adafruit.com/product/4832)), which all allow connecting named sensors to the 5V the TCD board operates on. For wiring information, see [here](#appendix-b-sensor-wiring).
+Temperature on speedometer display: Unless you do time travelling on a regular basis, the [speedo display](#speedometer) is idle most of the time in a typical home setup. To give it more of a purpose, the firmware can display ambient temperature on the speedo while idle.
+
+#### Hardware
+
+In order to use a temperature/humidity sensor, no special configuration is required. If a sensor is detected by the firmware during boot, it will be used.
+
+Seven sensor types are supported: MCP9808 (i2c address 0x18), BMx280 (0x77), SI7021 (0x40), SHT40 (0x44), TMP117 (0x49), AHT20/AM2315C (0x38), HTU31D (0x41). All of those are readily available on breakout boards from Adafruit or Seeed (Grove). The BMP280 (unlike BME280), MCP9808 and TMP117 work as pure temperature sensors, the others for temperature and humidity. For wiring information, see [here](#appendix-b-sensor-wiring).
+
+*Note: You cannot connect the sensor chip directly to the TCD control board; most sensors need at least a power converter/level-shifter.* This is why I exclusively used Adafruit or Seeed breakouts ([MCP9808](https://www.adafruit.com/product/1782), [BME280](https://www.adafruit.com/product/2652), [SI7021](https://www.adafruit.com/product/3251), [SHT40](https://www.adafruit.com/product/4885), [TMP117](https://www.adafruit.com/product/4821), [AHT20](https://www.adafruit.com/product/4566), [HTU31D](https://www.adafruit.com/product/4832)), which all allow connecting named sensors to the 5V the TCD board operates on.
+
+## Home Assistant / MQTT
+
+The TCD supports the MQTT protocol version 3.1.1 for the following features:
+
+### Display messages on TCD
+
+The TCD can subscribe to a user-configured topic and display messages received for this topic on the *Destination Time* display. This can be used to display the status of other HA/MQTT devices, for instance alarm systems. If the SD card contains a file names "ha-alert.mp3", this file will be played upon reception of a message.
+
+Only ASCII messages are supported, the maximum length is 255 characters.
+
+### Control the TCD via MQTT
+
+The TCD can - to a limited extent - be controlled through messages sent to topic **bttf/tcd/cmd**. Support commands are
+- TIMETRAVEL: Start a time travel
+- RETURN: Return from time travel
+- BEEP_ON: Enables the *annoying beep*(tm)
+- BEEP_OFF: Disables the *annoying beep*(tm)
+- BEEP_30, BEEP_60: Set the beep modes as described [here](#beep-on-the-second)
+- ALARM_ON: Enable the alarm
+- ALARM_OFF: Disable the alarm
+- NIGHTMODE_ON: Enable manual night mode
+- NIGHTMODE_OFF: Disable manual night mode
+- MP_PLAY: Starts the Music Player
+- MP_STOP: Stops the Music Player
+- MP_NEXT: Jump to next song
+- MP_PREV: Jump to previous song
+- MP_SHUFFLE_ON: Enables shuffle mode in Music Player
+- MP_SHUFFLE_OFF: Disables shuffle mode in Music Player
+
+### Trigger a time travel on other devices
+
+Upon a time travel, the TCD can send messages to topic **bttf/tcd/pub**. This can be used to control other props wirelessly, such as Flux Capacitor, SID, etc. The timing is identical to the wired protocol, see [here](#controlling-other-props). TIMETRAVEL is sent when IO14 goes high, ie with a lead time (ETTO LEAD) of 5 seconds. REENTRY is sent when the re-entry sequence starts (ie when IO14 goes low). Note that network traffic has some latency, so timing might not be as exact as a wired connection.
+
+When the [alarm](#how-to-set-up-the-alarm) sounds, the TCD can also send "ALARM" to **bttf/tcd/pub**.
+
+### Setup
+
+In order to connect to a MQTT network, a "broker" (such as [mosquitto](https://mosquitto.org/), [EMQ X](https://www.emqx.io/), [Cassandana](https://github.com/mtsoleimani/cassandana), [RabbitMQ](https://www.rabbitmq.com/), [Ejjaberd](https://www.ejabberd.im/), [HiveMQ](https://www.hivemq.com/) to name a few) must be present in your network, and its address needs to be configured in the Config Portal. The broker can be specified either by domain or IP (IP preferred, spares us a DNS call). The default port is 1883. If a different port is to be used, append a ":" followed by the port number to the domain/IP, such as "192.168.1.5:1884". 
+
+If your broker does not allow anonymous logins, a username and password can be specified.
+
+If you want your TCD to display messages as described above, you also need to specify the topic in the respective field.
+
+If you want your TCD to publish messages to bttf/tcd/pub (ie if you want to notify other devices about the timetravel and/or the alarm), check the respective option.
+
+Limitations: MQTT Protocol version 3.1.1; TLS/SSL not supported; ".local" domains (MDNS) not supported; maximum message length 255 characters; server/broker must respond to PING (ICMP) echo requests. For proper operation with low latency, it is recommended that the broker is on your local network. Note that using HA/MQTT will disable WiFi power saving (as described below).
 
 ## WiFi power saving features
 
@@ -628,9 +769,11 @@ The reason for having two different timers for AP-mode and for station mode is t
 
 After WiFi has been switched off due to timer expiry, it can be re-enabled by holding "7" on the keypad for approx. 2 seconds, in which case the timers are restarted (ie WiFi is again switched off after timer expiry).
 
+Note that if your configured WiFi network was not available when the clock was trying to connect, it will end up in AP-mode. Holding "7" in that case will trigger another attempt to connect to your WiFi network.
+
 ## Controlling other props
 
-The device can tell other props about a time travel, and in essence act as a "master controller" for several props. It does so via IO14, see diagram below.
+The device can tell other props about a time travel, and in essence act as a "master controller" for several props. It does so via IO14 (labeled "TT OUT" on Control Boards 1.3 and later), see diagram below.
 
 ```
 |<---------- speedo acceleration --------->|                         |<-speedo de-acceleration->|
@@ -648,12 +791,16 @@ The device can tell other props about a time travel, and in essence act as a "ma
 
 "ETTO lead", ie the lead time between IO14 going high and the actual start of a time travel is defined as 5000ms (ETTO_LEAD_TIME). In this window of time, the prop can play its pre-time-travel (warm-up/acceleration/etc) sequence. The sequence inside the time "tunnel" follows after that lead time, and when IO14 goes LOW, the re-entry into the destination time takes place.
 
+If external gear is connected to IO14 and you want to use this control feature, check **Use compatible external props** in the Config Portal.
+
 ## Flash Wear
 
 Flash memory has a somewhat limited life-time. It can be written to only between 10.000 and 100.000 times before becoming unreliable. The firmware writes to the internal flash memory when saving settings and other data. Every time you change settings through the keypad menu or the Config Portal, data is written to flash memory. The same goes for changing alarm settings (including enabling/disabling the alarm), and time travelling if time travels are [persistent](#persistent--non-persistent-time-travels).
 
-In order to reduce the number of write operations and thereby prolonging the life of your clock, it is recommended
+In order to reduce the number of write operations and thereby prolong the life of your clock, it is recommended
 - to uncheck the option *[Make time travels persistent](#persistent--non-persistent-time-travels)* in the Config Portal,
 - to use a good-quality SD card and to check ["Save alarm/volume settings on SD"](#-save-alarmvolume-settings-on-sd) in the Config Portal; alarm and volume settings are then stored on the SD card (which also suffers from wear but is easy to replace). If you want to swap the SD card but preserve your alarm/volume settings, go to the Config Portal while the old SD card is still in place, uncheck the *Save alarm/volume settings on SD* option, click on Save and wait until the clock has rebooted. You can then power down the clock, swap the SD card and power-up again. Then go to the Config Portal, change the option back on and click on Save. Your settings are now on the new SD card.
 
 ## [Appendix: The Config Portal & Sensor Wiring](https://github.com/CircuitSetup/Time-Circuits-Display/wiki/Appendix:-The-Config-Portal-&-Sensor-Wiring)
+
+
