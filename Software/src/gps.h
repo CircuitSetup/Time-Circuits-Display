@@ -69,6 +69,7 @@ class tcGPS {
         bool    checkNMEA(char *nmea);
 
         uint8_t parseHex(char c);
+        bool    mystrcmp3(char *src, const char *cmp);
         uint8_t AToI2(char *buf);
         uint16_t AToI4(char *buf);
         unsigned long  getFracs(char *buf);

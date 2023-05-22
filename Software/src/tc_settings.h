@@ -8,25 +8,33 @@
  * Settings handling
  *
  * -------------------------------------------------------------------
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * License: MIT
+ * 
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef _TC_SETTINGS_H
 #define _TC_SETTINGS_H
 
 extern bool haveSD;
-extern bool FlashROMode;   
+extern bool FlashROMode;
 
 extern uint8_t musFolderNum;
 
@@ -39,21 +47,21 @@ extern uint8_t musFolderNum;
 #define DEF_TIMES_PERS      0     // 0-1;  Default: 0 = TimeTravel not persistent
 #define DEF_ALARM_RTC       1     // 0-1;  Default: 1 = Alarm is RTC-based (otherwise 0 = presentTime-based)
 #define DEF_PLAY_INTRO      1     // 0-1;  Default: 1 = Play intro
-#define DEF_MODE24          0     // 0-1;  Default: 0=12-hour-mode, 1=24-hour-mode
-#define DEF_BEEP            0     // 0-1:  Default: 0 = annoying beep(tm) off by default
+#define DEF_MODE24          0     // 0-1;  Default: 0 = 12-hour-mode
+#define DEF_BEEP            0     // 0-1:  Default: 0 = annoying beep(tm) off
 #define DEF_AUTOROTTIMES    1     // 0-5;  Default: Auto-rotate every 5th minute
 #define DEF_HOSTNAME        "timecircuits"
 #define DEF_WIFI_RETRY      3     // 1-15; Default: 3 retries
 #define DEF_WIFI_TIMEOUT    7     // 7-25; Default: 7 seconds
 #define DEF_WIFI_OFFDELAY   0     // 0/10-99; Default 0 = Never power down WiFi in STA-mode
 #define DEF_WIFI_APOFFDELAY 0     // 0/10-99; Default 0 = Never power down WiFi in AP-mode
+#define DEF_WIFI_PRETRY     1     // Default: Nightly, periodic WiFi reconnection attempts for time sync
 #define DEF_NTP_SERVER      "pool.ntp.org"
 #define DEF_TIMEZONE        "UTC0"// Default: UTC; Posix format
-#define DEF_BRIGHT_DEST     15    // 1-15; Default: max brightness
-#define DEF_BRIGHT_PRES     15
-#define DEF_BRIGHT_DEPA     15
-#define DEF_AUTONM          0     // Default: AutoNM disabled
-#define DEF_AUTONM_PRESET   0     
+#define DEF_BRIGHT_DEST     10    // 1-15; Default: medium brightness
+#define DEF_BRIGHT_PRES     10
+#define DEF_BRIGHT_DEPA     10
+#define DEF_AUTONM_PRESET   10    // Default: AutoNM disabled
 #define DEF_AUTONM_ON       0     // Default: Both 0
 #define DEF_AUTONM_OFF      0
 #define DEF_DT_OFF          1     // Default: Dest. time off in night mode
@@ -61,24 +69,21 @@ extern uint8_t musFolderNum;
 #define DEF_LT_OFF          1     // Default: Last dep. time off in night mode
 #define DEF_FAKE_PWR        0     // 0-1;  Default: 0 = Do not use external fake "power" switch
 #define DEF_ETT_DELAY       0     // in ms; Default 0: ETT immediately
-#define DEF_ETT_LONG        0     // 0: Ext. TT short (reentry), 1: long
-#define DEF_USE_SPEEDO      0     // 0: Don't use speedo part of time travel sequence
-#define DEF_SPEEDO_TYPE     SP_MIN_TYPE  // Default display type
+#define DEF_ETT_LONG        1     // [removed] 0: Ext. TT short (reentry), 1: long
+#define DEF_SPEEDO_TYPE     99    // Default display type: None
 #define DEF_SPEEDO_FACT     2.0   // Speedo factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
-#define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness
-#define DEF_USE_GPS         0     // 0: No i2c GPS module
+#define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness for speed
 #define DEF_USE_GPS_SPEED   0     // 0: Do not use GPS speed on speedo display
-#define DEF_USE_TEMP        0     // 0: No i2c temperature/humidity sensor
 #define DEF_DISP_TEMP       1     // 1: Display temperature (if available) on speedo
-#define DEF_TEMP_BRIGHT     3     // Default temp brightness
-#define DEF_TEMP_OFF_NM     1     // Default: temp off in night mode
-#define DEF_TEMP_UNIT       0     // Default: temp unit Fahrenheit
-#define DEF_TEMP_OFFS       0.0   // Default temp offset 0.0
+#define DEF_TEMP_BRIGHT     3     // Default temperature brightness
+#define DEF_TEMP_OFF_NM     1     // Default: temperature off in night mode
+#define DEF_TEMP_UNIT       0     // Default: temperature unit Fahrenheit
+#define DEF_TEMP_OFFS       0.0   // Default: temperature offset 0.0
 #define DEF_USE_LIGHT       0     // Default: No i2c light sensor
 #define DEF_LUX_LIMIT       3     // Default Lux for night mode
-#define DEF_USE_ETTO        0     // 0: No external props
-#define DEF_PLAY_TT_SND     1     // 1: Play time travel sounds (0: Do not; for use with external equipment)
-#define DEF_SHUFFLE         0     // Music Playser: Do not shuffle by default
+#define DEF_USE_ETTO        0     // Default: 0: No external props
+#define DEF_PLAY_TT_SND     1     // Default 1: Play time travel sounds (0: Do not; for use with external equipment)
+#define DEF_SHUFFLE         0     // Music Player: Do not shuffle by default
 #define DEF_CFG_ON_SD       0     // Default: Save alarm/volume settings in flash memory
 #define DEF_SD_FREQ         0     // SD/SPI frequency: Default 16MHz
 
@@ -94,12 +99,16 @@ struct Settings {
     char wifiConTimeout[4]  = MS(DEF_WIFI_TIMEOUT);
     char wifiOffDelay[4]    = MS(DEF_WIFI_OFFDELAY);
     char wifiAPOffDelay[4]  = MS(DEF_WIFI_APOFFDELAY);
+    char wifiPRetry[4]      = MS(DEF_WIFI_PRETRY);
     char ntpServer[64]      = DEF_NTP_SERVER;
     char timeZone[64]       = DEF_TIMEZONE;
+    char timeZoneDest[64]   = "";
+    char timeZoneDep[64]    = "";
+    char timeZoneNDest[16]  = "";
+    char timeZoneNDep[16]   = "";
     char destTimeBright[4]  = MS(DEF_BRIGHT_DEST);
     char presTimeBright[4]  = MS(DEF_BRIGHT_PRES);
     char lastTimeBright[4]  = MS(DEF_BRIGHT_DEPA);
-    char autoNM[4]          = MS(DEF_AUTONM);
     char autoNMPreset[4]    = MS(DEF_AUTONM_PRESET);
     char autoNMOn[4]        = MS(DEF_AUTONM_ON);
     char autoNMOff[4]       = MS(DEF_AUTONM_OFF);
@@ -113,20 +122,15 @@ struct Settings {
     char ettDelay[8]        = MS(DEF_ETT_DELAY);
     char ettLong[4]         = MS(DEF_ETT_LONG);
 #endif
-#ifdef TC_HAVEGPS
-    char useGPS[4]          = MS(DEF_USE_GPS);
-#endif
 #ifdef TC_HAVETEMP
-    char useTemp[4]         = MS(DEF_USE_TEMP);
     char tempUnit[4]        = MS(DEF_TEMP_UNIT);
     char tempOffs[6]        = MS(DEF_TEMP_OFFS);
 #endif
 #ifdef TC_HAVELIGHT
-    char useLight[4]         = MS(DEF_USE_LIGHT);
-    char luxLimit[8]         = MS(DEF_LUX_LIMIT);
+    char useLight[4]        = MS(DEF_USE_LIGHT);
+    char luxLimit[8]        = MS(DEF_LUX_LIMIT);
 #endif
 #ifdef TC_HAVESPEEDO
-    char useSpeedo[4]       = MS(DEF_USE_SPEEDO);
     char speedoType[4]      = MS(DEF_SPEEDO_TYPE);
     char speedoBright[4]    = MS(DEF_BRIGHT_SPEEDO);
     char speedoFact[6]      = MS(DEF_SPEEDO_FACT);
@@ -146,7 +150,13 @@ struct Settings {
     char shuffle[4]         = MS(DEF_SHUFFLE);
     char CfgOnSD[4]         = MS(DEF_CFG_ON_SD);
     char sdFreq[4]          = MS(DEF_SD_FREQ);
-    char copyAudio[12]      = "";   // never loaded or saved!
+#ifdef TC_HAVEMQTT  
+    char useMQTT[4]         = "0";
+    char mqttServer[80]     = "";  // ip or domain [:port]  
+    char mqttUser[128]      = "";  // user[:pass] (UTF8)
+    char mqttTopic[512]     = "";  // topic (UTF8)
+    char pubMQTT[4]         = "0"; // publish to broker (timetravel)
+#endif    
 };
 
 // Maximum delay for incoming tt trigger
@@ -168,6 +178,9 @@ bool checkConfigExists();
 
 bool loadAlarm();
 void saveAlarm();
+
+bool loadReminder();
+void saveReminder();
 
 bool loadCurVolume();
 void saveCurVolume();

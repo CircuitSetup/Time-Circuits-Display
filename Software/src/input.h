@@ -6,24 +6,30 @@
  *
  * Keypad_I2C Class, TCButton Class: I2C-Keypad and Button handling
  *
- * Parts of this are customized minimizations of parts of the Keypad 
- * and the OneButton libraries.
- * Authors of Keypad library: Mark Stanley, Alexander Brevig
- * Author of OneButton library: Matthias Hertel
+ * Keypad part inspired by "Keypad" library by M. Stanley & A. Brevig
+ * Fractions of this code are customized, minimized derivates of parts 
+ * of OneButton library by Matthias Hertel.
  * -------------------------------------------------------------------
- * License of original KeyPad library and this program as regards the 
- * Key and Keypad_I2C classes:
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; version
- * 2.1 of the License or later versions.
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>
+ * License of Keypad_I2C class: MIT
+ * 
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * -------------------------------------------------------------------
  * Original OneButton library 
  * Copyright (c) 2005-2014 by Matthias Hertel, http://www.mathertel.de/
@@ -62,8 +68,9 @@
 
 #include <Wire.h>
 
-#define KI2C_LISTMAX 1    // Max number of keys recognized simultaneously
-#define KI2C_MAPSIZE 10   // Number of rows (x 16 columns)
+/*
+ * Keypad_i2c class
+ */
 
 typedef enum {
     TCKS_IDLE,
@@ -72,30 +79,14 @@ typedef enum {
     TCKS_RELEASED
 } KeyState;
 
-const char NO_KEY = '\0';
 
-/*
- * TCKey class
- */
-
-class TCKey {
-
-    public:
-
-        TCKey();
-
-        char      kchar;
-        int       kcode;
-        KeyState  kstate;
-        bool      stateChanged;
-        unsigned long holdTimer;
+struct KeyStruct {
+    int       kCode;
+    KeyState  kState;
+    char      kChar;
+    bool      stateChanged;
+    unsigned long startTime;
 };
-
-/*
- * Keypad_i2c class
- */
-
-#define makeKeymap(x) ((char*)x)
 
 class Keypad_I2C {
 
@@ -119,11 +110,9 @@ class Keypad_I2C {
 
     private:
 
-        void scanKeys();
-        bool updateList();
-        void nextKeyState(uint8_t n, bool kstate);
-        int  findInList(int keyCode);
-        void transitionTo(uint8_t n, KeyState nextState);
+        bool scanKeys();
+        void advanceState(bool kstate);
+        void transitionTo(KeyState nextState);
 
         void (*_keypadEventListener)(char, KeyState);
 
@@ -139,13 +128,12 @@ class Keypad_I2C {
         char          *_keymap;
         int           _i2caddr;
 
-        unsigned long _startTime = 0;        
+        unsigned long _scanTime = 0;        
         uint16_t      _rowMask;
 
         uint8_t       _pinState;  // shadow for output pins
 
-        uint16_t      _bitMap[KI2C_MAPSIZE];
-        TCKey         _key[KI2C_LISTMAX];
+        KeyStruct     _key;
 
         TwoWire       *_wire;
 

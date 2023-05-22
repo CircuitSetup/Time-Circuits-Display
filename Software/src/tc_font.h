@@ -8,24 +8,33 @@
  * Font for TC LED segment displays
  *
  * -------------------------------------------------------------------
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * License: MIT
+ * 
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef _TC_FONT_H
 #define _TC_FONT_H
 
-static const uint16_t alphaChars[128-32] = {
+#ifndef IS_ACAR_DISPLAY
+static const uint16_t alphaChars[127-31-1] = {
     0b0000000000000000,  // <space>
     0b0000000000000110,  // !
     0b0000001000100000,  // "
@@ -120,11 +129,27 @@ static const uint16_t alphaChars[128-32] = {
     0b0000100101001001,  // {
     0b0001001000000000,  // |
     0b0010010010001001,  // }
-    0b0000000011100011,  // ° (encoded as ~ [0b0000010100100000])
-    0b0011111111111111   // DEL
+    0b0000000011100011   // ~ displayed as '°' (encoded as ~) [was: 0b0000010100100000]
 };
+#endif
 
-static const uint8_t numDigs[44] = {
+static const uint8_t numDigs[127-31-1+2] = {
+    0b00000000, // space
+    0b00000010, // !
+    0b00100010, // "
+    0b00110110, // #
+    0b01101001, // $
+    0b00101101, // %
+    0b01111011, // &
+    0b00100000, // '
+    0b00111001, // (
+    0b00001111, // )
+    0b01100011, // *
+    0b01110000, // +
+    0b00001100, // ,
+    0b01000000, // -
+    0b00001000, // .
+    0b01000010, // /
     0b00111111, // 0
     0b00000110, // 1
     0b01011011, // 2
@@ -135,40 +160,77 @@ static const uint8_t numDigs[44] = {
     0b00000111, // 7
     0b01111111, // 8
     0b01100111, // 9
-    0b01110111, // A  10
-    0b01111100, // B  11
-    0b00111001, // C  12
-    0b01011110, // D  13
-    0b01111001, // E  14
-    0b01110001, // F  15
-    0b00111101, // G  16
-    0b01110110, // H  17
-    0b00110000, // I  18
-    0b00011110, // J  19
-    0b01110101, // K  20
-    0b00111000, // L  21
-    0b00010101, // M  22
-    0b00110111, // N  23
-    0b00111111, // O  24
-    0b01110011, // P  25
-    0b01101011, // Q  26
-    0b00110011, // R  27
-    0b01101101, // S  28
-    0b01111000, // T  29
-    0b00111110, // U  30
-    0b00111110, // V  31
-    0b00101010, // W  32
-    0b01110110, // X  33
-    0b01101110, // Y  34
-    0b01011011, // Z  35
-    0b01000000, // -   36
-    0b00111001, // (/[ 37
-    0b00001111, // )/] 38
-    0b00001000, // _/. 39
-    0b01100011, // °   40 (encoded as ~)
-    0b01101011, // %1  41 (encoded as %)
-    0b01011101, // %2  42 (encoded as &)
-    0b01010011  // ?   43
+    0b01001000, // :
+    0b01001100, // ;
+    0b01100001, // <
+    0b01000001, // =
+    0b01000011, // >
+    0b01010011, // ? 
+    0b01011111, // @
+    0b01110111, // A
+    0b01111100, // B
+    0b00111001, // C
+    0b01011110, // D
+    0b01111001, // E
+    0b01110001, // F
+    0b00111101, // G
+    0b01110110, // H
+    0b00110000, // I
+    0b00011110, // J
+    0b01110101, // K
+    0b00111000, // L
+    0b00010101, // M
+    0b00110111, // N
+    0b00111111, // O
+    0b01110011, // P
+    0b01101011, // Q
+    0b00110011, // R
+    0b01101101, // S
+    0b01111000, // T
+    0b00111110, // U
+    0b00111110, // V
+    0b00101010, // W
+    0b01110110, // X
+    0b01101110, // Y
+    0b01011011, // Z
+    0b00111001, // [
+    0b01100000, // backslash
+    0b00001111, // ]
+    0b00100011, // ^
+    0b00001000, // _
+    0b00100000, // ´
+    0b01110111, // A
+    0b01111100, // B
+    0b00111001, // C
+    0b01011110, // D
+    0b01111001, // E
+    0b01110001, // F
+    0b00111101, // G
+    0b01110110, // H
+    0b00110000, // I
+    0b00011110, // J
+    0b01110101, // K
+    0b00111000, // L
+    0b00010101, // M
+    0b00110111, // N
+    0b00111111, // O
+    0b01110011, // P
+    0b01101011, // Q
+    0b00110011, // R
+    0b01101101, // S
+    0b01111000, // T
+    0b00111110, // U
+    0b00111110, // V
+    0b00101010, // W
+    0b01110110, // X
+    0b01101110, // Y
+    0b01011011, // Z
+    0b00111001, // {
+    0b00110000, // |
+    0b00001111, // }
+    0b01100011, // ~  displayed as '°' (encoded as ~)
+    0b01101011, // %1  (encoded as \x7f)
+    0b01011101  // %2  (encoded as \x80)
 };
 
 #endif

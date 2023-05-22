@@ -10,18 +10,26 @@
  * Based on code by John Monaco, Marmoset Electronics
  * https://www.marmosetelectronics.com/time-circuits-clock
  * -------------------------------------------------------------------
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * License: MIT
+ * 
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 /*
@@ -136,7 +144,7 @@
  *     - Press ENTER until "BRIGHTNESS" is shown
  *     - Hold ENTER, the displays show all elements, the top-most display 
  *       says "LVL"
- *     - Press ENTER to cycle through the possible levels (1-5)
+ *     - Press ENTER to cycle through the possible levels (1-15)
  *     - Hold ENTER to use current value and proceed to next display
  *     - After the third display, "SAVING" is displayed briefly and the menu 
  *       is left automatically.
@@ -146,7 +154,8 @@
  *     - Hold ENTER to invoke main menu
  *     - Press ENTER until "NET-WORK" is shown
  *     - Hold ENTER, the displays shows the IP address
- *     - Press ENTER to toggle between WiFi status, MAC address and IP address
+ *     - Press ENTER to toggle between WiFi status, MAC address, IP address
+ *       and HomeAssistant/MQTT connection status
  *     - Hold ENTER to leave the menu
  *
  * How to enter dates/times for the three displays / set the RTC:
@@ -165,9 +174,10 @@
  *
  *     By entering a date/time into the present time display, the RTC (real 
  *     time clock) of the device is adjusted, which is useful if you can't 
- *     use NTP for time keeping. The time you entered will be overwritten 
- *     if/when the device has access to network time via NTP, or time from 
- *     GPS. Don't forget to configure your time zone in the Config Portal.
+ *     use NTP or GPS for time synchronization. The time you entered will be
+ *     overwritten if/when the device has access to network time via NTP, or 
+ *     time from GPS. Don't forget to configure your time zone in the Config 
+ *     Portal.
  *     
  *     Note that when entering dates/times into the destination time or last 
  *     time departed displays, the Time-rotation Interval is automatically 
@@ -175,7 +185,7 @@
  *     overwritten by time travels (see above, section How to select the 
  *     Time-rotation Interval").
  *     
- * How to view light/temperature sensor data:
+ * How to view light/temperature/humidity sensor data:
  *
  *     - Hold ENTER to invoke main menu
  *     - Press ENTER until "SENSORS" is shown. If this menu does not appear,
@@ -228,8 +238,9 @@
 #define MODE_DEST 8
 #define MODE_DEPT 9
 #define MODE_SENS 10
-#define MODE_VER  11
-#define MODE_END  12
+#define MODE_LTS  11
+#define MODE_VER  12
+#define MODE_END  13
 #define MODE_MAX  MODE_END
 
 #define FIELD_MONTH   0
@@ -246,9 +257,14 @@ uint8_t alarmHour = 255;
 uint8_t alarmMinute = 255;
 uint8_t alarmWeekday = 0;
 
+uint8_t remMonth = 0;
+uint8_t remDay = 0;
+uint8_t remHour = 0;
+uint8_t remMin = 0;
+
 static int menuItemNum;
 
-bool isSetUpdate = false;
+bool keypadInMenu = false;
 bool isYearUpdate = false;
 
 static clockDisplay* displaySet;
@@ -275,10 +291,10 @@ static const char *alarmWD[10] = {
       "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
 };
 
-static void menuSelect(int& number, int mode_min);
+static bool menuSelect(int& number, int mode_min);
 static void menuShow(int number);
-static void setUpdate(uint16_t number, int field, bool extra = false);
-static void setField(uint16_t& number, uint8_t field, int year = 0, int month = 0, bool extra = false);
+static void setUpdate(uint16_t number, int field, uint16_t dflags = 0);
+static bool setField(uint16_t& number, uint8_t field, int year = 0, int month = 0, uint16_t dflags = 0);
 static void showCurVolHWSW();
 static void showCurVol();
 static void doSetVolume();
@@ -288,12 +304,13 @@ static void doSetAlarm();
 static void saveAutoInterval();
 static void displayAI(int interval);
 static void doSetAutoInterval();
-static void doSetBrightness(clockDisplay* displaySet);
+static bool doSetBrightness(clockDisplay* displaySet);
 #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
 static void doShowSensors();
 #endif
 static void displayIP();
 static void doShowNetInfo();
+static bool menuWaitForRelease();
 static bool checkEnterPress();
 static void prepareInput(uint16_t number);
 
@@ -303,7 +320,7 @@ static void myssdelay(unsigned long mydel);
 static void myloop();
 
 /*
- * enter_menu() - the real thing
+ * enter_menu()
  *
  */
 void enter_menu()
@@ -312,7 +329,11 @@ void enter_menu()
     bool preNM = presentTime.getNightMode();
     bool depNM = departedTime.getNightMode();
     bool mpActive;
+    bool nonRTCdisplayChanged = false;
     int mode_min;
+    int y1, yo1, m1, d1, h1, mi1;
+    int y2, yo2, m2, d2, h2, mi2;
+    DateTime dt;
 
     pwrNeedFullNow();
 
@@ -334,30 +355,27 @@ void enter_menu()
     menuItemNum = mode_min;
 
     // Load the custom times from NVM
-    // This means that when the user activates the menu while
-    // autoInterval was > 0 or after time travels, there will
-    // be different times shown in the menu than were outside
-    // the menu.
+    // Backup current times
+    destinationTime.getToParms(y1, yo1, m1, d1, h1, mi1);
+    departedTime.getToParms(y2, yo2, m2, d2, h2, mi2);
+    // Load NWM times
     destinationTime.load();
     departedTime.load();
 
     // Load the RTC time into present time
-    presentTime.setDateTime(myrtcnow());
+    myrtcnow(dt);
+    presentTime.setDateTime(dt);
 
     // Show first menu item
     menuShow(menuItemNum);
 
     waitForEnterRelease();
 
-    timeout = 0;
-
     // menuSelect:
     // Wait for ENTER to cycle through main menu,
     // HOLDing ENTER selects current menu "item"
     // (Also sets displaySet to selected display, if applicable)
-    menuSelect(menuItemNum, mode_min);
-
-    if(checkTimeOut())
+    if(!(menuSelect(menuItemNum, mode_min)))
         goto quitMenu;
 
     if(menuItemNum >= MODE_PRES && menuItemNum <= MODE_DEPT) {
@@ -371,21 +389,20 @@ void enter_menu()
         uint16_t daySet;
         uint16_t minSet;
         uint16_t hourSet;
-        // all need to be same type since they're passed by ref
 
         if(displaySet->isRTC()) {
 
-            // This is the RTC, get the current time, corrected by yearOffset
-            DateTime currentTime = myrtcnow();
-            yearSet = currentTime.year() - displaySet->getYearOffset();
-            monthSet = currentTime.month();
-            daySet = currentTime.day();
-            minSet = currentTime.minute();
-            hourSet = currentTime.hour();
+            // This is the RTC, get the current date/time
+            myrtcnow(dt);
+            yearSet = dt.year() - displaySet->getYearOffset();
+            monthSet = dt.month();
+            daySet = dt.day();
+            minSet = dt.minute();
+            hourSet = dt.hour();
 
         } else {
 
-            // non RTC, get the time info from the object
+            // Non-RTC, get the time info from the object
             // Remember: These are the ones saved in NVM
             // NOT the ones that were possibly shown on the
             // display before invoking the menu
@@ -397,138 +414,119 @@ void enter_menu()
 
         }
 
-        timeout = 0;
-
         // Get year
-        isYearUpdate = true;    // Allow 4 digits instead of 2
         setUpdate(yearSet, FIELD_YEAR);
         prepareInput(yearSet);
         waitForEnterRelease();
-        setField(yearSet, FIELD_YEAR, displaySet->isRTC() ? TCEPOCH_GEN : 0, 0);
-        isYearUpdate = false;
-
-        if(checkTimeOut())
+        if(!setField(yearSet, FIELD_YEAR, displaySet->isRTC() ? TCEPOCH_GEN : 0, 0))
             goto quitMenu;
 
         // Get month
         setUpdate(monthSet, FIELD_MONTH);
         prepareInput(monthSet);
         waitForEnterRelease();
-        setField(monthSet, FIELD_MONTH);
-
-        if(checkTimeOut())
-            goto quitMenu;
+        if(!setField(monthSet, FIELD_MONTH))
+            goto quitMenu;          
 
         // Get day
         setUpdate(daySet, FIELD_DAY);
         prepareInput(daySet);
         waitForEnterRelease();
-        setField(daySet, FIELD_DAY, yearSet, monthSet);  // this depends on the month and year
-
-        if(checkTimeOut())
+        if(!setField(daySet, FIELD_DAY, yearSet, monthSet))  // this depends on the month and year
             goto quitMenu;
 
         // Get hour
-        setUpdate(hourSet, FIELD_HOUR);
+        setUpdate(hourSet, FIELD_HOUR, CDD_FORCE24);
         prepareInput(hourSet);
         waitForEnterRelease();
-        setField(hourSet, FIELD_HOUR);
-
-        if(checkTimeOut())
+        if(!setField(hourSet, FIELD_HOUR, 0, 0, CDD_FORCE24))
             goto quitMenu;
 
         // Get minute
         setUpdate(minSet, FIELD_MINUTE);
         prepareInput(minSet);
         waitForEnterRelease();
-        setField(minSet, FIELD_MINUTE);
-
-        isSetUpdate = false;
+        if(!setField(minSet, FIELD_MINUTE))
+            goto quitMenu;
 
         // Have new date & time at this point
 
         waitAudioDone();
 
-        // Do nothing if there was a timeout waiting for button presses
-        if(!checkTimeOut()) {
+        if(displaySet->isRTC()) {  // this is the RTC display, set the RTC
 
-            if(displaySet->isRTC()) {  // this is the RTC display, set the RTC
+            // Update RTC and fake year if neccessary
+            // see comments in tc_time.cpp
 
-                // Update RTC and fake year if neccessary
-                // see comments in tc_time.cpp
+            uint16_t newYear = yearSet;
+            int16_t tyroffs = 0;
 
-                uint16_t newYear = yearSet;
-                int16_t tyroffs = 0;
-
-                // Set up DST data for now current year
-                if(!(parseTZ(settings.timeZone, yearSet))) {
-                    #ifdef TC_DBG
-                    Serial.println(F("Menu: Failed to parse TZ"));
-                    #endif
-                }
-
-                // Get RTC-fit year plus offs for given real year
-                correctYr4RTC(newYear, tyroffs);
-
-                displaySet->setYearOffset(tyroffs);
-
-                rtc.adjust(0, minSet, hourSet, dayOfWeek(daySet, monthSet, yearSet), daySet, monthSet, newYear-2000U);
-
-                // User entered current local time; set DST flag to current DST status
-                if(couldDST) {
-                    int currTimeMins;
-                    presentTime.setDST(timeIsDST(yearSet, monthSet, daySet, hourSet, minSet, currTimeMins));
-                    // Saved below
-                } else {
-                    presentTime.setDST(0);
-                }
-
-                // Avoid immediate re-adjustment in time_loop
-                lastYear = yearSet;
-                presentTime.saveLastYear(lastYear);
-
-                // Resetting the RTC invalidates our timeDifference, ie
-                // fake present time. Make the user return to present
-                // time after setting the RTC
-                timeDifference = 0;
-
-                // 'newYear' is the year to write to display
-                // (where it is corrected by subtracting tyroffs)
-                yearSet = newYear;
-
-            } else {
-
-                // Non-RTC: Setting a static display, turn off autoInverval
-
-                displaySet->setYearOffset(0);
-
-                if(autoInterval) {
-                    autoInterval = 0;
-                    saveAutoInterval();
-                    updateConfigPortalValues();
-                }
-
+            // Set up DST data for now current year
+            if(!(parseTZ(0, yearSet))) {
+                #ifdef TC_DBG
+                Serial.println(F("Menu: Failed to parse TZ"));
+                #endif
             }
 
-            // Show a save message for a brief moment
-            displaySet->showTextDirect(StrSaving);
+            // Get RTC-fit year plus offs for given real year
+            correctYr4RTC(newYear, tyroffs);
 
-            // update the object
-            displaySet->setYear(yearSet);
-            displaySet->setMonth(monthSet);
-            displaySet->setDay(daySet);
-            displaySet->setHour(hourSet);
-            displaySet->setMinute(minSet);
+            displaySet->setYearOffset(tyroffs);
 
-            // save to NVM (regardless of persistence mode)
-            displaySet->save();
+            rtc.adjust(0, minSet, hourSet, dayOfWeek(daySet, monthSet, yearSet), daySet, monthSet, newYear-2000U);
 
-            mydelay(1000);
+            // User entered current local time; set DST flag accordingly
+            // (This assumes user did not set time in the "loop-hour" when
+            // DST is ending, otherwise there's a 50% chance DST is wrong.)
+            if(couldDST[0]) {
+                int currTimeMins;
+                presentTime.setDST(timeIsDST(0, yearSet, monthSet, daySet, hourSet, minSet, currTimeMins));
+                // Saved below
+            } else {
+                presentTime.setDST(0);
+            }
 
-            allOff();
-            waitForEnterRelease();
+            // Avoid immediate re-adjustment in time_loop
+            lastYear = yearSet;
+            presentTime.saveLastYear(lastYear);
+
+            // Resetting the RTC invalidates our timeDifference, ie
+            // fake present time. Make the user return to present
+            // time after setting the RTC
+            timeDifference = 0;
+
+            yearSet = newYear;
+
+        } else {
+
+            // Non-RTC: Setting a static display, turn off autoInverval
+
+            displaySet->setYearOffset(0);
+
+            if(autoInterval) {
+                autoInterval = 0;
+                saveAutoInterval();
+                updateConfigPortalValues();
+            }
+
+            nonRTCdisplayChanged = true;
 
         }
+
+        // Show a save message for a brief moment
+        displaySet->showTextDirect(StrSaving);
+
+        // update the object
+        displaySet->setYear(yearSet);
+        displaySet->setMonth(monthSet);
+        displaySet->setDay(daySet);
+        displaySet->setHour(hourSet);
+        displaySet->setMinute(minSet);
+
+        // Save to NVM (regardless of persistence mode)
+        displaySet->save();
+
+        mydelay(1000);
 
     } else if(menuItemNum == MODE_VOL) {
 
@@ -538,9 +536,6 @@ void enter_menu()
         // Set volume
         doSetVolume();
 
-        allOff();
-        waitForEnterRelease();
-
     } else if(menuItemNum == MODE_MSFX) {
 
         allOff();
@@ -548,9 +543,6 @@ void enter_menu()
 
         // Set music folder number
         doSetMSfx();
-
-        allOff();
-        waitForEnterRelease();
 
     } else if(menuItemNum == MODE_ALRM) {
 
@@ -560,9 +552,6 @@ void enter_menu()
         // Set alarm
         doSetAlarm();
 
-        allOff();
-        waitForEnterRelease();
-
     } else if(menuItemNum == MODE_AINT) {
 
         allOff();
@@ -571,9 +560,6 @@ void enter_menu()
         // Set autoInterval
         doSetAutoInterval();
 
-        allOff();
-        waitForEnterRelease();
-
     } else if(menuItemNum == MODE_BRI) {
 
         uint8_t dtbri = destinationTime.getBrightness();
@@ -581,47 +567,47 @@ void enter_menu()
         uint8_t ltbri = departedTime.getBrightness();
 
         allOff();
-        waitForEnterRelease();
-
+        
         // Set brightness settings
-        if(!checkTimeOut()) doSetBrightness(&destinationTime);
         waitForEnterRelease();
-        if(!checkTimeOut()) doSetBrightness(&presentTime);
+        if(!doSetBrightness(&destinationTime))
+            goto quitMenu;
+
         waitForEnterRelease();
-        if(!checkTimeOut()) doSetBrightness(&departedTime);
+        if(!doSetBrightness(&presentTime))
+            goto quitMenu;
+
+        waitForEnterRelease();
+        if(!doSetBrightness(&departedTime))
+            goto quitMenu;
 
         // Now save
-        if(!checkTimeOut()) {
+        destinationTime.showTextDirect(StrSaving);
+        presentTime.off();
+        departedTime.off();
 
-            presentTime.showTextDirect(StrSaving);
+        uint8_t dtbri2 = destinationTime.getBrightness();
+        uint8_t ptbri2 = presentTime.getBrightness();
+        uint8_t ltbri2 = departedTime.getBrightness();
 
-            uint8_t dtbri2 = destinationTime.getBrightness();
-            uint8_t ptbri2 = presentTime.getBrightness();
-            uint8_t ltbri2 = departedTime.getBrightness();
+        if( (dtbri2 != dtbri) ||
+            (ptbri2 != ptbri) || 
+            (ltbri2 != ltbri) ) {
 
-            if( (dtbri2 != dtbri) ||
-                (ptbri2 != ptbri) || 
-                (ltbri2 != ltbri) ) {
+            // (Re)Set current brightness as "initial" brightness
+            destinationTime.setBrightness(dtbri2, true);
+            presentTime.setBrightness(ptbri2, true);
+            departedTime.setBrightness(ltbri2, true);
 
-                // (Re)Set current brightness as "initial" brightness
-                destinationTime.setBrightness(dtbri2, true);
-                presentTime.setBrightness(ptbri2, true);
-                departedTime.setBrightness(ltbri2, true);
-
-                // Convert bri values to strings, write to settings, write settings file
-                sprintf(settings.destTimeBright, "%d", dtbri2);
-                sprintf(settings.presTimeBright, "%d", ptbri2);
-                sprintf(settings.lastTimeBright, "%d", ltbri2);
-                write_settings();
-                updateConfigPortalValues();
-            }
-
-            mydelay(1000);
-
+            // Convert bri values to strings, write to settings, write settings file
+            sprintf(settings.destTimeBright, "%d", dtbri2);
+            sprintf(settings.presTimeBright, "%d", ptbri2);
+            sprintf(settings.lastTimeBright, "%d", ltbri2);
+            write_settings();
+            updateConfigPortalValues();
         }
 
-        allOff();
-        waitForEnterRelease();
+        mydelay(1000);
 
     } else if(menuItemNum == MODE_NET) {   // Show network info
 
@@ -631,9 +617,6 @@ void enter_menu()
         // Show net info
         doShowNetInfo();
 
-        allOff();
-        waitForEnterRelease();
-
     #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
     } else if(menuItemNum == MODE_SENS) {   // Show light sensor info
 
@@ -641,9 +624,6 @@ void enter_menu()
         waitForEnterRelease();
 
         doShowSensors();
-
-        allOff();
-        waitForEnterRelease();
     #endif
     
     } else if(menuItemNum == MODE_CPA) {   // Copy audio files
@@ -654,28 +634,33 @@ void enter_menu()
         // Copy audio files
         doCopyAudioFiles();
 
-        allOff();
-        waitForEnterRelease();
-
-    } else {                              // VERSION, END: Bail out
-
-        allOff();
-        waitForEnterRelease();
-
-    }
+    }                                      // LTS, VERSION, END: Bail out
 
 quitMenu:
 
-    isSetUpdate = false;
+    allOff();
+    waitForEnterRelease();
 
     // Return dest/dept displays to where they should be
-    if(autoTimeIntervals[autoInterval] == 0 || checkIfAutoPaused()) {
-        destinationTime.load();
-        departedTime.load();
+    if((autoTimeIntervals[autoInterval] == 0) || checkIfAutoPaused()) {
+        if(nonRTCdisplayChanged) {
+            if(!isWcMode() || !WcHaveTZ1) destinationTime.load();
+            if(!isWcMode() || !WcHaveTZ2) departedTime.load();
+        } else {
+            if(!isWcMode() || !WcHaveTZ1) {
+                  destinationTime.setFromParms(y1, m1, d1, h1, mi1); 
+                  destinationTime.setYearOffset(yo1); 
+            }
+            if(!isWcMode() || !WcHaveTZ2) {
+                  departedTime.setFromParms(y2, m2, d2, h2, mi2);
+                  departedTime.setYearOffset(yo2); 
+            }
+        }
     } else {
-        destinationTime.setFromStruct(&destinationTimes[autoTime]);
-        departedTime.setFromStruct(&departedTimes[autoTime]);
+        if(!isWcMode() || !WcHaveTZ1) destinationTime.setFromStruct(&destinationTimes[autoTime]);
+        if(!isWcMode() || !WcHaveTZ2) departedTime.setFromStruct(&departedTimes[autoTime]);
     }
+    destShowAlt = depShowAlt = 0; // Reset TZ-Name-Animation
 
     // Done, turn off displays
     allOff();
@@ -684,19 +669,25 @@ quitMenu:
 
     waitForEnterRelease();
 
+    resetKeypadState();
+
     // Restore present time
-    presentTime.setDateTimeDiff(myrtcnow());
+    myrtcnow(dt);
+    presentTime.setDateTimeDiff(dt);
+    if(isWcMode()) {
+        setDatesTimesWC(dt);
+    }
 
     // all displays on and show
 
     animate();
 
-    myloop();
-
     // Restore night mode
     destinationTime.setNightMode(desNM);
     presentTime.setNightMode(preNM);
     departedTime.setNightMode(depNM);
+
+    myloop();
 
     // make time_loop immediately re-eval auto-nm
     // unless manual-override
@@ -708,11 +699,15 @@ quitMenu:
 
 /*
  *  Cycle through main menu
+ *  
+ *  Returns
+ *  - true if item selected
+ *  - false if timeout
  *
  */
-static void menuSelect(int& number, int mode_min)
+static bool menuSelect(int& number, int mode_min)
 {
-    isEnterKeyHeld = false;
+    timeout = 0;
 
     // Wait for enter
     while(!checkTimeOut()) {
@@ -720,22 +715,9 @@ static void menuSelect(int& number, int mode_min)
         // If pressed
         if(checkEnterPress()) {
 
-            // wait for release
-            while(!checkTimeOut() && checkEnterPress()) {
-
-                myloop();
-
-                // If hold threshold is passed, return false */
-                if(isEnterKeyHeld) {
-                    isEnterKeyHeld = false;
-                    return;
-                }
-                delay(10);
-            }
-
-            if(checkTimeOut()) return;
-
             timeout = 0;  // button pressed, reset timeout
+
+            if(menuWaitForRelease()) return true;
 
             number++;
             if(number == MODE_MSFX && !haveSD) number++;
@@ -756,6 +738,8 @@ static void menuSelect(int& number, int mode_min)
         }
 
     }
+
+    return false;
 }
 
 /*
@@ -765,6 +749,7 @@ static void menuSelect(int& number, int mode_min)
 static void menuShow(int number)
 {
     displaySet = NULL;
+    char buf[32];
     
     switch (number) {
     case MODE_DEST:  // Destination Time
@@ -871,6 +856,30 @@ static void menuShow(int number)
         departedTime.off();
         #endif
         break;
+    case MODE_LTS:  // last time sync info
+        destinationTime.showTextDirect("TIME SYNC");
+        destinationTime.on();
+        if(!lastAuthTime64) {
+            presentTime.showTextDirect("NEVER");
+            presentTime.on();
+            departedTime.off();
+        } else {
+            uint64_t ago = (((uint64_t)millis() + millisEpoch) - lastAuthTime64) / 1000;
+            if(ago > 24*60*60) {
+                sprintf(buf, "%d DAYS", ago / (24*60*60));
+            } else if(ago > 60*60) {
+                sprintf(buf, "%d HOURS", ago / (60*60));
+            } else if(ago > 60) {
+                sprintf(buf, "%d MINS", ago / 60);
+            } else {
+                sprintf(buf, "%d SECS", ago);
+            }
+            presentTime.showTextDirect(buf);
+            presentTime.on();
+            departedTime.showTextDirect("AGO");
+            departedTime.on();
+        }
+        break;
     case MODE_CPA:  // Install audio files
         destinationTime.showTextDirect("INSTALL");
         destinationTime.on();
@@ -889,30 +898,30 @@ static void menuShow(int number)
 }
 
 /*
- * Show only the field being updated
- * and setup pre-set contents
+ * Show only the field to be updated
+ * and set up pre-set contents
  *
  * number = number to show
  * field = field to show it in
  *
  */
-static void setUpdate(uint16_t number, int field, bool extra)
+static void setUpdate(uint16_t number, int field, uint16_t dflags)
 {
     switch(field) {
     case FIELD_MONTH:
-        displaySet->showOnlyMonth(number);
+        displaySet->showMonthDirect(number, dflags);
         break;
     case FIELD_DAY:
-        displaySet->showOnlyDay(number);
+        displaySet->showDayDirect(number, dflags);
         break;
     case FIELD_YEAR:
-        displaySet->showOnlyYear(number);
+        displaySet->showYearDirect(number, dflags);
         break;
     case FIELD_HOUR:
-        displaySet->showOnlyHour(number, extra);
+        displaySet->showHourDirect(number, dflags);
         break;
     case FIELD_MINUTE:
-        displaySet->showOnlyMinute(number);
+        displaySet->showMinuteDirect(number, dflags);
         break;
     }
 }
@@ -936,21 +945,27 @@ static void prepareInput(uint16_t number)
  * year, month - check checking maximum day number
  *
  */
-static void setField(uint16_t& number, uint8_t field, int year, int month, bool extra)
+static bool setField(uint16_t& number, uint8_t field, int year, int month, uint16_t dflags)
 {
     int upperLimit;
     int lowerLimit;
     int i;
     uint16_t setNum = 0, prevNum = number;
-    int16_t numVal = 0;
-
+    int16_t  numVal = 0;
     int numChars = 2;
-
     bool someupddone = false;
+    unsigned long blinkNow = 0;
+    bool blinkSwitch = true;
 
-    //timeBuffer[0] = '\0';  // No, timeBuffer is pre-set with previous value
+    timeout = 0;  // reset timeout
 
-    switch (field) {
+    // Start blinking
+    displaySet->onBlink(2);
+
+    // No, timeBuffer is pre-set with previous value
+    //timeBuffer[0] = '\0';   
+
+    switch(field) {
     case FIELD_MONTH:
         upperLimit = 12;
         lowerLimit = 1;
@@ -963,6 +978,7 @@ static void setField(uint16_t& number, uint8_t field, int year, int month, bool 
         upperLimit = 9999;
         lowerLimit = year;
         numChars = 4;
+        isYearUpdate = true;
         break;
     case FIELD_HOUR:
         upperLimit = 23;
@@ -975,16 +991,18 @@ static void setField(uint16_t& number, uint8_t field, int year, int month, bool 
     }
 
     // Force keypad to send keys to our buffer (and block key holding)
-    isSetUpdate = true;
+    keypadInMenu = true;
 
-    while( !checkTimeOut() && !checkEnterPress() &&
-              ( (!someupddone && number == prevNum) || strlen(timeBuffer) < numChars) ) {
+    // Reset key state machine
+    resetKeypadState();
 
-        scanKeypad();      // We're outside our main loop, so poll here
+    while( !checkTimeOut() && 
+           !checkEnterPress() &&
+           ( (!someupddone && number == prevNum) || strlen(timeBuffer) < numChars) ) {
 
-        /* Using strlen here means that we always need to start a new number at timebuffer[0].
-         * This is therefore NOT a ringbuffer!
-         */
+        // We're outside our main loop, so poll here
+        scanKeypad();
+
         setNum = 0;
         for(i = 0; i < strlen(timeBuffer); i++) {
             setNum *= 10;
@@ -994,19 +1012,33 @@ static void setField(uint16_t& number, uint8_t field, int year, int month, bool 
         // Show setNum in field
         if(prevNum != setNum) {
             someupddone = true;
-            setUpdate(setNum, field, extra);
+            setUpdate(setNum, field, dflags | CDD_NOLEAD0);
             prevNum = setNum;
+            timeout = 0;  // key pressed, reset timeout
+            displaySet->on();
+            blinkNow = millis();
+            blinkSwitch = false;
         }
 
         mydelay(10);
 
+        if(!blinkSwitch && (millis() - blinkNow > 500)) {
+            displaySet->onBlink(2);
+            blinkSwitch = true;
+        }
+
     }
 
+    isYearUpdate = false;
+    
     // Force keypad to send keys somewhere else but our buffer
-    isSetUpdate = false;
+    keypadInMenu = false;
+
+    // Stop blinking
+    displaySet->on();
 
     if(checkTimeOut())
-        return;
+        return false;
 
     numVal = 0;
     for(i = 0; i < strlen(timeBuffer); i++) {
@@ -1016,42 +1048,56 @@ static void setField(uint16_t& number, uint8_t field, int year, int month, bool 
     if(numVal < lowerLimit) numVal = lowerLimit;
     if(numVal > upperLimit) numVal = upperLimit;
     number = numVal;
-    setNum = numVal;
 
-    setUpdate(setNum, field, extra);
+    // Display (corrected) number for .5 seconds
+    setUpdate((uint16_t)numVal, field, dflags);
+
+    mydelay(500);
+
+    return true;
 }
 
 /*
  *  Volume #####################################################
  */
 
-static void showCurVolHWSW()
+static void showCurVolHWSW(bool blink)
 {
-    if(curVolume == 255) {
-        destinationTime.showTextDirect("USE");
-        presentTime.showTextDirect("VOLUME");
-        departedTime.showTextDirect("KNOB");
-        departedTime.on();
+    if(blink) {
+        allOff();
     } else {
-        destinationTime.showTextDirect("FIXED");
-        presentTime.showTextDirect("LEVEL");
-        departedTime.off();
+        if(curVolume == 255) {
+            destinationTime.showTextDirect("USE");
+            presentTime.showTextDirect("VOLUME");
+            departedTime.showTextDirect("KNOB");
+            departedTime.on();
+        } else {
+            destinationTime.showTextDirect("FIXED");
+            presentTime.showTextDirect("LEVEL");
+            departedTime.off();
+        }
+        destinationTime.on();
+        presentTime.on();
     }
-    destinationTime.on();
-    presentTime.on();
 }
 
-static void showCurVol()
+static void showCurVol(bool blink, bool doComment)
 {
-    destinationTime.showSettingValDirect("LEVEL", curVolume, true);
+    uint16_t flags = CDT_CLEAR;
+    if(blink) flags |= CDT_BLINK;
+    
+    destinationTime.showSettingValDirect("LEVEL", curVolume, flags);
     destinationTime.on();
-    if(curVolume == 0) {
-        presentTime.showTextDirect("MUTE");
-        presentTime.on();
-    } else {
-        presentTime.off();
+
+    if(doComment) {
+        if(curVolume == 0) {
+            presentTime.showTextDirect("MUTE");
+            presentTime.on();
+        } else {
+            presentTime.off();
+        }
+        departedTime.off();
     }
-    departedTime.off();
 }
 
 static void doSetVolume()
@@ -1060,10 +1106,10 @@ static void doSetVolume()
     uint8_t oldVol = curVolume;
     unsigned long playNow;
     bool triggerPlay = false;
+    bool blinkSwitch = false;
+    unsigned long blinkNow = millis();
 
-    showCurVolHWSW();
-
-    isEnterKeyHeld = false;
+    showCurVolHWSW(false);
 
     timeout = 0;  // reset timeout
 
@@ -1073,32 +1119,35 @@ static void doSetVolume()
         // If pressed
         if(checkEnterPress()) {
 
-            // wait for release
-            while(!checkTimeOut() && checkEnterPress()) {
-                // If hold threshold is passed, return false */
-                myloop();
-                if(isEnterKeyHeld) {
-                    isEnterKeyHeld = false;
-                    volDone = true;
-                    break;
-                }
-                delay(10);
+            timeout = 0;  // button pressed, reset timeout
+
+            if(blinkSwitch) {
+                showCurVolHWSW(false);
             }
 
-            if(!checkTimeOut() && !volDone) {
-
-                timeout = 0;  // button pressed, reset timeout
+            if(!(volDone = menuWaitForRelease())) {
 
                 if(curVolume <= 19)
                     curVolume = 255;
                 else
                     curVolume = 0;
 
-                showCurVolHWSW();
+                showCurVolHWSW(false);
+
+                blinkNow = millis();
+                blinkSwitch = false;
 
             }
 
         } else {
+
+            unsigned long mm = millis();
+                
+            if(mm - blinkNow > 500) {
+                blinkSwitch = !blinkSwitch;
+                showCurVolHWSW(blinkSwitch);
+                blinkNow = mm;
+            }
 
             mydelay(50);
 
@@ -1106,13 +1155,16 @@ static void doSetVolume()
 
     }
 
-    if(!checkTimeOut() && curVolume != 255) {
+    if(volDone && curVolume != 255) {
 
         curVolume = (oldVol == 255) ? 0 : oldVol;
 
-        showCurVol();
+        showCurVol(false, true);
 
         timeout = 0;  // reset timeout
+
+        blinkSwitch = false;
+        blinkNow = millis();
 
         volDone = false;
 
@@ -1124,28 +1176,21 @@ static void doSetVolume()
             // If pressed
             if(checkEnterPress()) {
 
-                // wait for release
-                while(!checkTimeOut() && checkEnterPress()) {
-                    // If hold threshold is passed, return false */
-                    myloop();
-                    if(isEnterKeyHeld) {
-                        isEnterKeyHeld = false;
-                        volDone = true;
-                        break;
-                    }
-                    delay(10);
+                timeout = 0;  // button pressed, reset timeout
+
+                if(blinkSwitch) {
+                    showCurVol(false, false);
                 }
-
-                if(!checkTimeOut() && !volDone) {
-
-                    timeout = 0;  // button pressed, reset timeout
+                
+                if(!(volDone = menuWaitForRelease())) {
 
                     curVolume++;
                     if(curVolume == 20) curVolume = 0;
 
-                    showCurVol();
+                    showCurVol(false, true);
 
-                    playNow = millis();
+                    blinkNow = playNow = millis();
+                    blinkSwitch = false;
                     triggerPlay = true;
                     stopAudio();
 
@@ -1153,8 +1198,16 @@ static void doSetVolume()
 
             } else {
 
-                if(triggerPlay && (millis() - playNow >= 1*1000)) {
-                    play_file("/alarm.mp3", 1.0, false, true);
+                unsigned long mm = millis();
+                
+                if(mm - blinkNow > 500) {
+                    blinkSwitch = !blinkSwitch;
+                    showCurVol(blinkSwitch, false);
+                    blinkNow = mm;
+                }
+
+                if(triggerPlay && (mm - playNow >= 1*1000)) {
+                    play_file("/alarm.mp3", PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
                     triggerPlay = false;
                 }
 
@@ -1165,14 +1218,15 @@ static void doSetVolume()
 
     }
 
-    presentTime.off();
-    departedTime.off();
+    stopAudio();
+    allOff();
 
-    if(!checkTimeOut()) {
-
-        stopAudio();
+    if(volDone) {
 
         destinationTime.showTextDirect(StrSaving);
+        destinationTime.on();
+        presentTime.off();
+        departedTime.off();
 
         // Save it (if changed)
         if(oldVol != curVolume) {
@@ -1191,16 +1245,21 @@ static void doSetVolume()
  *   Music Folder Number ########################################
  */
 
-static void displayMSfx(int msfx)
+static void displayMSfx(int msfx, bool blink, bool doFolderChk)
 {
-    destinationTime.showSettingValDirect("NUMBER", msfx, true);
+    uint16_t flags = CDT_CLEAR;
+    if(blink) flags |= CDT_BLINK;
+    
+    destinationTime.showSettingValDirect("FOLDER", msfx, flags);
     destinationTime.on();
 
-    if(mp_checkForFolder(msfx)) {
-        presentTime.off();
-    } else {
-        presentTime.showTextDirect("NOT FOUND");
-        presentTime.on();
+    if(doFolderChk) {
+        if(mp_checkForFolder(msfx)) {
+            presentTime.off();
+        } else {
+            presentTime.showTextDirect("NOT FOUND");
+            presentTime.on();
+        }
     }
 }
 
@@ -1208,11 +1267,11 @@ static void doSetMSfx()
 {
     bool msfxDone = false;
     int oldmsfx = musFolderNum;
+    bool blinkSwitch = false;
+    unsigned long blinkNow = millis();
 
-    displayMSfx(musFolderNum);
+    displayMSfx(musFolderNum, false, true);
     departedTime.off();
-
-    isEnterKeyHeld = false;
 
     timeout = 0;  // reset timeout
 
@@ -1222,31 +1281,34 @@ static void doSetMSfx()
         // If pressed
         if(checkEnterPress()) {
 
-            // wait for release
-            while(!checkTimeOut() && checkEnterPress()) {
-                // If hold threshold is passed, return false */
-                myloop();
-                if(isEnterKeyHeld) {
-                    isEnterKeyHeld = false;
-                    msfxDone = true;
-                    break;
-                }
-                delay(10);
+            timeout = 0;  // button pressed, reset timeout
+
+            if(blinkSwitch) {
+                displayMSfx(musFolderNum, false, false);
             }
 
-            if(!checkTimeOut() && !msfxDone) {
-
-                timeout = 0;  // button pressed, reset timeout
+            if(!(msfxDone = menuWaitForRelease())) {
 
                 musFolderNum++;
                 if(musFolderNum > 9)
                     musFolderNum = 0;
 
-                displayMSfx(musFolderNum);
+                displayMSfx(musFolderNum, false, true);
+
+                blinkNow = millis();
+                blinkSwitch = false;
 
             }
 
         } else {
+
+            unsigned long mm = millis();
+                
+            if(mm - blinkNow > 500) {
+                blinkSwitch = !blinkSwitch;
+                displayMSfx(musFolderNum, blinkSwitch, false);
+                blinkNow = mm;
+            }
 
             mydelay(50);
 
@@ -1254,12 +1316,11 @@ static void doSetMSfx()
 
     }
 
-    if(!checkTimeOut()) {  // only if there wasn't a timeout
-
-        presentTime.off();
-        departedTime.off();
+    if(msfxDone) {
 
         destinationTime.showTextDirect(StrSaving);
+        presentTime.off();
+        departedTime.off();
 
         // Save it (if changed)
         if(oldmsfx != musFolderNum) {
@@ -1326,7 +1387,7 @@ static void doSetAlarm()
     char almBuf[16];
     char almBuf2[16];
     bool blinkSwitch = false;
-    unsigned long blinkNow;
+    unsigned long blinkNow = millis();
     bool alarmDone = false;
     bool newAlarmOnOff = alarmOnOff;
     uint16_t newAlarmHour = (alarmHour <= 23) ? alarmHour : 0;
@@ -1341,13 +1402,10 @@ static void doSetAlarm()
     // On/Off
     sprintf(almBuf2, almFmt, "   " , newAlarmHour, newAlarmMinute);
     sprintf(almBuf, almFmt, newAlarmOnOff ? "ON " : "OFF", newAlarmHour, newAlarmMinute);
-    displaySet->showTextDirect(almBuf);
+    displaySet->showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
     displaySet->on();
 
-    isEnterKeyHeld = false;
-
     timeout = 0;  // reset timeout
-    blinkNow = millis();
 
     // Wait for enter
     while(!checkTimeOut() && !alarmDone) {
@@ -1355,60 +1413,48 @@ static void doSetAlarm()
         // If pressed
         if(checkEnterPress()) {
 
+            timeout = 0;  // button pressed, reset timeout
+
             if(blinkSwitch) {
-                displaySet->showTextDirect(almBuf);
-                blinkSwitch = false;
-                blinkNow = millis();
+                displaySet->showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
             }
 
-            // wait for release
-            while(!checkTimeOut() && checkEnterPress()) {
-                // If hold threshold is passed, return false */
-                myloop();
-                if(isEnterKeyHeld) {
-                    isEnterKeyHeld = false;
-                    alarmDone = true;
-                    break;
-                }
-                delay(10);
-            }
-
-            if(!checkTimeOut() && !alarmDone) {
-
-                timeout = 0;  // button pressed, reset timeout
+            if(!(alarmDone = menuWaitForRelease())) {
 
                 newAlarmOnOff = !newAlarmOnOff;
 
                 sprintf(almBuf, almFmt, newAlarmOnOff ? "ON " : "OFF", newAlarmHour, newAlarmMinute);
-                displaySet->showTextDirect(almBuf);
+                displaySet->showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
+
+                blinkSwitch = false;
+                blinkNow = millis();
 
             }
 
         } else {
 
-            mydelay(50);
-
-            if(millis() - blinkNow > 500) {
+            unsigned long mm = millis();
+            
+            if(mm - blinkNow > 500) {
                 blinkSwitch = !blinkSwitch;
-                displaySet->showTextDirect(blinkSwitch ? almBuf2 : almBuf);
-                blinkNow = millis();
+                displaySet->showTextDirect(blinkSwitch ? almBuf2 : almBuf, CDT_CLEAR|CDT_COLON);
+                blinkNow = mm;
             }
+
+            mydelay(50);
 
         }
 
     }
 
-    if(checkTimeOut()) {
-        return;
-    }
+    if(!alarmDone) return;
 
     // Get hour
-    setUpdate(newAlarmHour, FIELD_HOUR, true);  // force24 here
+    setUpdate(newAlarmHour, FIELD_HOUR, CDD_FORCE24);
     prepareInput(newAlarmHour);
     waitForEnterRelease();
-    setField(newAlarmHour, FIELD_HOUR, 0, 0, true);
-
-    if(checkTimeOut()) {
+    if(!setField(newAlarmHour, FIELD_HOUR, 0, 0, CDD_FORCE24)) {
+        waitAudioDone();    // (keypad; should not be necessary)
         return;
     }
 
@@ -1416,14 +1462,19 @@ static void doSetAlarm()
     setUpdate(newAlarmMinute, FIELD_MINUTE);
     prepareInput(newAlarmMinute);
     waitForEnterRelease();
-    setField(newAlarmMinute, FIELD_MINUTE);
+    if(!setField(newAlarmMinute, FIELD_MINUTE)) {
+        waitAudioDone();    // (keypad; should not be necessary)
+        return;
+    }
 
     // Weekday(s)
     waitForEnterRelease();
     displaySet->showTextDirect(getAlWD(newAlarmWeekday));
+    displaySet->onBlink(2);
+    blinkSwitch = true;
 
-    isEnterKeyHeld = false;
     alarmDone = false;
+    timeout = 0;
 
     // Wait for enter
     while(!checkTimeOut() && !alarmDone) {
@@ -1431,21 +1482,11 @@ static void doSetAlarm()
         // If pressed
         if(checkEnterPress()) {
 
-            // wait for release
-            while(!checkTimeOut() && checkEnterPress()) {
-                // If hold threshold is passed, return false */
-                myloop();
-                if(isEnterKeyHeld) {
-                    isEnterKeyHeld = false;
-                    alarmDone = true;
-                    break;
-                }
-                delay(10);
-            }
+            timeout = 0;  // button pressed, reset timeout
+            displaySet->on();
+            blinkSwitch = false;
 
-            if(!checkTimeOut() && !alarmDone) {
-
-                timeout = 0;  // button pressed, reset timeout
+            if(!(alarmDone = menuWaitForRelease())) {
 
                 newAlarmWeekday++;
                 if(newAlarmWeekday > 9) newAlarmWeekday = 0;
@@ -1458,16 +1499,22 @@ static void doSetAlarm()
 
             mydelay(50);
 
+            if(!blinkSwitch) {
+                displaySet->onBlink(2);
+                blinkSwitch = true;
+            }
+
         }
 
     }
 
-    // Do nothing if there was a timeout waiting for button presses
-    if(!checkTimeOut()) {
+    waitAudioDone();    // For keypad sounds
+    allOff();
+
+    if(alarmDone) {
 
         displaySet->showTextDirect(StrSaving);
-
-        waitAudioDone();
+        displaySet->on();
 
         // Save it (if changed)
         if( (alarmOnOff != newAlarmOnOff)   ||
@@ -1517,14 +1564,19 @@ static void saveAutoInterval()
     write_settings();
 }
 
-static void displayAI(int interval)
+static void displayAI(int interval, bool blink, bool doComment)
 { 
-    destinationTime.showSettingValDirect("INTERVAL", interval, true);
+    uint16_t flags = CDT_CLEAR;
+    if(blink) flags |= CDT_BLINK;
+    
+    destinationTime.showSettingValDirect("INTERVAL", interval, flags);
 
-    if(interval == 0) {
-        presentTime.showTextDirect("OFF");
-    } else {
-        presentTime.showTextDirect("MINUTES");
+    if(doComment) {
+        if(interval == 0) {
+            presentTime.showTextDirect("OFF");
+        } else {
+            presentTime.showTextDirect("MINUTES");
+        }
     }
 }
 
@@ -1535,13 +1587,13 @@ static void doSetAutoInterval()
 {
     bool autoDone = false;
     int newAutoInterval = autoInterval;
+    bool blinkSwitch = false;
+    unsigned long blinkNow = millis();
 
-    displayAI(autoTimeIntervals[newAutoInterval]);
+    displayAI(autoTimeIntervals[newAutoInterval], false, true);
     destinationTime.on();
     presentTime.on();
     departedTime.off();
-
-    isEnterKeyHeld = false;
 
     timeout = 0;  // reset timeout
 
@@ -1551,30 +1603,34 @@ static void doSetAutoInterval()
         // If pressed
         if(checkEnterPress()) {
 
-            // wait for release
-            while(!checkTimeOut() && checkEnterPress()) {
-                // If hold threshold is passed, return false */
-                myloop();
-                if(isEnterKeyHeld) {
-                    isEnterKeyHeld = false;
-                    autoDone = true;
-                    break;
-                }
-                delay(10);
+            timeout = 0;  // button pressed, reset timeout
+
+            if(blinkSwitch) {
+                displayAI(autoTimeIntervals[newAutoInterval], false, false);
             }
 
-            if(!checkTimeOut() && !autoDone) {
-
-                timeout = 0;  // button pressed, reset timeout
+            if(!(autoDone = menuWaitForRelease())) {
 
                 newAutoInterval++;
                 if(newAutoInterval > 5)
                     newAutoInterval = 0;
 
-                displayAI(autoTimeIntervals[newAutoInterval]);
+                displayAI(autoTimeIntervals[newAutoInterval], false, true);
+
+                blinkSwitch = false;
+                blinkNow = millis();
+
             }
 
         } else {
+
+            unsigned long mm = millis();
+
+            if(mm - blinkNow > 500) {
+                blinkSwitch = !blinkSwitch;
+                displayAI(autoTimeIntervals[newAutoInterval], blinkSwitch, false);
+                blinkNow = mm;
+            }
 
             mydelay(50);
 
@@ -1582,12 +1638,11 @@ static void doSetAutoInterval()
 
     }
 
-    if(!checkTimeOut()) {  // only if there wasn't a timeout
-
-        presentTime.off();
-        departedTime.off();
+    if(autoDone) {
 
         destinationTime.showTextDirect(StrSaving);
+        presentTime.off();
+        departedTime.off();
 
         // Save it (if changed)
         if(autoInterval != newAutoInterval) {
@@ -1595,6 +1650,10 @@ static void doSetAutoInterval()
             saveAutoInterval();
             updateConfigPortalValues();
         }
+
+        // End pause if current setting != off
+        if(autoTimeIntervals[autoInterval]) 
+            endPauseAuto();
 
         mydelay(1000);
 
@@ -1605,22 +1664,31 @@ static void doSetAutoInterval()
  * Brightness ##################################################
  */
 
-static void doSetBrightness(clockDisplay* displaySet) {
+static void displayBri(clockDisplay* displaySet, int8_t number, bool blink)
+{
+    uint16_t flags = 0;
+    if(blink) flags |= CDT_BLINK;
+    
+    #ifdef IS_ACAR_DISPLAY
+    displaySet->showSettingValDirect("LV", number, flags);
+    #else
+    displaySet->showSettingValDirect("LVL", number, flags);
+    #endif
+}
 
+
+static bool doSetBrightness(clockDisplay* displaySet)
+{
     int8_t number = displaySet->getBrightness();
     bool briDone = false;
+    bool blinkSwitch = false;
+    unsigned long blinkNow = millis();
 
     // turn on all the segments
     allLampTest();
 
     // Display "LVL"
-    #ifdef IS_ACAR_DISPLAY
-    displaySet->showSettingValDirect("LV", displaySet->getBrightness(), false);
-    #else
-    displaySet->showSettingValDirect("LVL", displaySet->getBrightness(), false);
-    #endif
-
-    isEnterKeyHeld = false;
+    displayBri(displaySet, number, false);
 
     timeout = 0;  // reset timeout
 
@@ -1630,36 +1698,35 @@ static void doSetBrightness(clockDisplay* displaySet) {
         // If pressed
         if(checkEnterPress()) {
 
-            // wait for release
-            while(!checkTimeOut() && checkEnterPress()) {
-                // If hold threshold is passed, return false */
-                myloop();
-                if(isEnterKeyHeld) {
-                    isEnterKeyHeld = false;
-                    briDone = true;
-                    break;
-                }
-                delay(10);
+            timeout = 0;  // button pressed, reset timeout
+
+            if(blinkSwitch) {
+                displayBri(displaySet, number, false);
             }
 
-            if(!checkTimeOut() && !briDone) {
-
-                timeout = 0;  // button pressed, reset timeout
+            if(!(briDone = menuWaitForRelease())) {
 
                 number++;
                 if(number > 15) number = 0;
 
                 displaySet->setBrightness(number);
 
-                #ifdef IS_ACAR_DISPLAY
-                displaySet->showSettingValDirect("LV", number, false);
-                #else
-                displaySet->showSettingValDirect("LVL", number, false);
-                #endif
+                displayBri(displaySet, number, false);
+
+                blinkSwitch = false;
+                blinkNow = millis();
 
             }
 
         } else {
+
+            unsigned long mm = millis();
+
+            if(mm - blinkNow > 500) {
+                blinkSwitch = !blinkSwitch;
+                displayBri(displaySet, number, blinkSwitch);
+                blinkNow = mm;
+            }
 
             mydelay(50);
 
@@ -1668,6 +1735,8 @@ static void doSetBrightness(clockDisplay* displaySet) {
     }
 
     allLampTest();  // turn on all the segments
+
+    return briDone;
 }
 
 /*
@@ -1707,29 +1776,22 @@ static void doShowSensors()
 
     sensNow = millis();
 
+    // Don't use timeOut here, user might want to keep
+    // sensor data displayed for a longer period.
+
     // Wait for enter
     while(!luxDone) {
 
         // If pressed
         if(checkEnterPress()) {
 
-            // wait for release
-            while(checkEnterPress()) {
-                // If hold threshold is passed, bail out
-                myloop();
-                if(isEnterKeyHeld) {
-                    isEnterKeyHeld = false;
-                    luxDone = true;
-                    break;
+            if(!(luxDone = menuWaitForRelease())) {
+                if(maxIdx > 0) {
+                    numIdx++;
+                    if(numIdx > maxIdx) numIdx = 0;
+                    destinationTime.showTextDirect("WAIT");
+                    presentTime.showTextDirect("");
                 }
-                delay(10);
-            }
-
-            if(maxIdx > 0) {
-                numIdx++;
-                if(numIdx > maxIdx) numIdx = 0;
-                destinationTime.showTextDirect("WAIT");
-                presentTime.showTextDirect("");
             }
             
         } else {
@@ -1771,15 +1833,15 @@ static void doShowSensors()
                     hum = tempSens.readHum();
                     if(hum < 0) {
                         #ifdef IS_ACAR_DISPLAY
-                        sprintf(buf, "--%%&", hum);
+                        sprintf(buf, "--\x7f\x80", hum);
                         #else
-                        sprintf(buf, "-- %%&", hum);
+                        sprintf(buf, "-- \x7f\x80", hum);
                         #endif
                     } else {
                         #ifdef IS_ACAR_DISPLAY
-                        sprintf(buf, "%2d%%&", hum);
+                        sprintf(buf, "%2d\x7f\x80", hum);
                         #else
-                        sprintf(buf, "%2d %%&", hum);
+                        sprintf(buf, "%2d \x7f\x80", hum);
                         #endif
                     }
                     #else
@@ -1808,8 +1870,8 @@ static void displayIP()
     wifi_getIP(a, b, c, d);
     
     destinationTime.showTextDirect("IP");
-    presentTime.showHalfIPDirect(a, b, true);
-    departedTime.showHalfIPDirect(c, d, true);
+    presentTime.showHalfIPDirect(a, b, CDT_CLEAR);
+    departedTime.showHalfIPDirect(c, d, CDT_CLEAR);
     
     destinationTime.on();
     presentTime.on();
@@ -1821,6 +1883,11 @@ static void doShowNetInfo()
     int number = 0;
     bool netDone = false;
     char macBuf[16];
+    int maxMI = 2;
+
+    #ifdef TC_HAVEMQTT
+    maxMI = 3;
+    #endif
 
     wifi_getMAC(macBuf);
 
@@ -1836,24 +1903,12 @@ static void doShowNetInfo()
         // If pressed
         if(checkEnterPress()) {
 
-            // wait for release
-            while(!checkTimeOut() && checkEnterPress()) {
-                // If hold threshold is passed, bail out
-                myloop();
-                if(isEnterKeyHeld) {
-                    isEnterKeyHeld = false;
-                    netDone = true;
-                    break;
-                }
-                delay(10);
-            }
+            timeout = 0;  // button pressed, reset timeout
 
-            if(!checkTimeOut() && !netDone) {
-
-                timeout = 0;  // button pressed, reset timeout
+            if(!(netDone = menuWaitForRelease())) {
 
                 number++;
-                if(number > 2) number = 0;
+                if(number > maxMI) number = 0;
                 switch(number) {
                 case 0:
                     displayIP();
@@ -1895,6 +1950,7 @@ static void doShowNetInfo()
                         departedTime.off();
                         break;
                     case 0x10000:
+                    case 0x10003:   // AP-STA, treat as AP (=AP with conn.config'd but not connected)
                         presentTime.showTextDirect("AP MODE");
                         departedTime.off();
                         break;
@@ -1912,9 +1968,23 @@ static void doShowNetInfo()
                 case 2:
                     destinationTime.showTextDirect("MAC");
                     destinationTime.on();
-                    presentTime.showTextDirect(macBuf, true, true);
+                    presentTime.showTextDirect(macBuf, CDT_CLEAR|CDT_CORR6);
                     presentTime.on();
+                    departedTime.off();
                     break;
+                #ifdef TC_HAVEMQTT
+                case 3:
+                    destinationTime.showTextDirect("HOMEASSISTANT");
+                    destinationTime.on();
+                    if(useMQTT) {
+                        presentTime.showTextDirect(mqttState() ? "CONNECTED" : "DISCONNECTED");
+                    } else {
+                        presentTime.showTextDirect("OFF");
+                    }
+                    presentTime.on();
+                    departedTime.off();
+                    break;
+                #endif
                 }
 
             }
@@ -1936,17 +2006,15 @@ void doCopyAudioFiles()
 {
     bool doCancDone = false;
     bool newCanc = false;
-    bool blinkSwitch = false;
-    unsigned long blinkNow = millis();
+    bool blinkSwitch;
     bool delIDfile = false;
 
     // Cancel/Copy
     destinationTime.on();
     presentTime.on();
     departedTime.showTextDirect("CANCEL");
-    departedTime.on();
-
-    isEnterKeyHeld = false;
+    departedTime.onBlink(2);
+    blinkSwitch = true;
 
     timeout = 0;  // reset timeout
 
@@ -1956,28 +2024,12 @@ void doCopyAudioFiles()
         // If pressed
         if(checkEnterPress()) {
 
-            if(blinkSwitch) {
-                departedTime.on();
-                blinkSwitch = false;
-                blinkNow = millis();
-            }
-  
-            // wait for release
-            while(!checkTimeOut() && checkEnterPress()) {
-                // If hold threshold is passed, return false */
-                myloop();
-                if(isEnterKeyHeld) {
-                    isEnterKeyHeld = false;
-                    doCancDone = true;
-                    break;
-                }
-                delay(10);
-            }
-  
-            if(!checkTimeOut() && !doCancDone) {
-  
-                timeout = 0;  // button pressed, reset timeout
-  
+            timeout = 0;  // button pressed, reset timeout
+            departedTime.on();
+            blinkSwitch = false;
+
+            if(!(doCancDone = menuWaitForRelease())) {
+
                 newCanc = !newCanc;
   
                 departedTime.showTextDirect(newCanc ? "PROCEED" : "CANCEL");
@@ -1988,25 +2040,24 @@ void doCopyAudioFiles()
   
             mydelay(50);
 
-            if(millis() - blinkNow > 500) {
-                blinkSwitch = !blinkSwitch;
-                blinkSwitch ? departedTime.off() : departedTime.on();
-                blinkNow = millis();
+            if(!blinkSwitch) {
+                departedTime.onBlink(2);
+                blinkSwitch = true;
             }
   
         }
 
     }
 
-    if(checkTimeOut() || !newCanc) {
-        return;
-    }
+    departedTime.on();
+
+    if(!doCancDone || !newCanc) return;
 
     if(!copy_audio_files()) {
         // If copy fails, re-format flash FS
         departedTime.showTextDirect("FORMATTING");
         formatFlashFS();            // Format
-        rewriteSecondarySettings(); // Re-write alarm/ip/vol settings
+        rewriteSecondarySettings(); // Re-write alarm/reminder/ip/vol settings
         #ifdef TC_DBG 
         Serial.println("Re-writing general settings");
         #endif
@@ -2033,62 +2084,6 @@ void doCopyAudioFiles()
 }
 
 /* *** Helpers ################################################### */
-
-// Show all, month after a short delay
-void animate()
-{
-    #ifdef TC_HAVETEMP
-    if(isRcMode()) {
-        destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit, true);
-    } else
-    #endif
-        destinationTime.showAnimate1();
-
-    presentTime.showAnimate1();
-
-    #ifdef TC_HAVETEMP
-    if(isRcMode() && tempSens.haveHum()) {
-        departedTime.showHumDirect(tempSens.readHum(), true);
-    } else
-    #endif
-        departedTime.showAnimate1();
-        
-    mydelay(80);
-
-    #ifdef TC_HAVETEMP
-    if(isRcMode())
-        destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit);
-    else
-    #endif
-        destinationTime.showAnimate2();
-        
-    presentTime.showAnimate2();
-
-    #ifdef TC_HAVETEMP
-    if(isRcMode() && tempSens.haveHum()) {
-        departedTime.showHumDirect(tempSens.readHum());
-    } else
-    #endif
-        departedTime.showAnimate2();
-}
-
-// Activate lamp test on all displays and turn on
-void allLampTest()
-{
-    destinationTime.on();
-    presentTime.on();
-    departedTime.on();
-    destinationTime.lampTest();
-    presentTime.lampTest();
-    departedTime.lampTest();
-}
-
-void allOff()
-{
-    destinationTime.off();
-    presentTime.off();
-    departedTime.off();
-}
 
 void start_file_copy()
 {
@@ -2126,6 +2121,26 @@ void file_copy_done()
 void file_copy_error()
 {
     departedTime.showTextDirect("ERROR");
+}
+
+/*
+ * Wait for ENTER to be released
+ * Returns 
+ * - true if ENTER was long enough pressed to be considered HELD
+ * - false if ENTER released before considered "held"
+ */
+static bool menuWaitForRelease()
+{
+    while(checkEnterPress()) {
+        myloop();
+        if(isEnterKeyHeld) {
+            isEnterKeyHeld = false;
+            return true;
+        }
+        delay(10);
+    }
+
+    return false;
 }
 
 /*
@@ -2227,13 +2242,13 @@ static void myssdelay(unsigned long mydel)
 static void myloop()
 {
     audio_loop();
-    enterkeyScan();
+    enterkeyScan();   // >= 19ms
     audio_loop();
     wifi_loop();
     audio_loop();
     ntp_loop();
     audio_loop();
     #ifdef TC_HAVEGPS
-    gps_loop();
+    gps_loop();       // >= 12ms
     #endif
 }

@@ -400,6 +400,7 @@ bool tempSensor::begin(unsigned long powerupTime)
         }
         write8(BMx280_REG_CONF,  0xa0);     // t_sb 1000ms; filter off, SPI3w off
         write8(BMx280_REG_CTRLM, 0x23);     // Temp OSx1; Pres skipped; "normal mode"
+        _delayNeeded = 10;
         break;
 
     case SHT40:

@@ -7,8 +7,7 @@
  * RTC Class (DS3231/PCF2129 RTC handling) and DateTime Class
  * 
  * DateTime mirrors the features of RTC; it only works for dates
- * from 1/1/2000 to 31/12/2099. Idea taken from RTCLib by
- * Adafruit.
+ * from 1/1/2000 to 31/12/2099. Inspired by Adafruit's RTCLib.
  * -------------------------------------------------------------------
  * License: MIT
  *
@@ -48,22 +47,41 @@ class DateTime {
 
     public:
 
-        DateTime();
+        DateTime() { yOff = 0; m = 1; d = 1; hh = 0; mm = 0; ss = 0; }
+        
         DateTime(uint16_t year, uint8_t month, uint8_t day, 
-                 uint8_t hour = 0, uint8_t min = 0, uint8_t sec = 0);
-        DateTime(const DateTime &copy);
+                 uint8_t hour = 0, uint8_t min = 0, uint8_t sec = 0)
+                {
+                    if(year >= 2000U) year -= 2000U;
+                    yOff = year; m  = month; d  = day;
+                    hh   = hour; mm = min;   ss = sec;
+                }
+                 
+        DateTime(const DateTime& copy);
 
         uint16_t year()   const { return 2000U + yOff; }
         uint8_t  month()  const { return m; }
         uint8_t  day()    const { return d; }
         uint8_t  hour()   const { return hh; }
-
         uint8_t  minute() const { return mm; }
         uint8_t  second() const { return ss; }
 
         uint8_t  dayOfTheWeek() const;
 
-    protected:
+        void     set(uint16_t yyy, uint8_t mon, uint8_t ddd, 
+                     uint8_t hhh = 0, uint8_t mmm = 0, uint8_t sss = 0) 
+                    {
+                        if(yyy >= 2000U) yyy -= 2000U;
+                        yOff = yyy; m  = mon; d  = ddd; 
+                        hh   = hhh; mm = mmm; ss = sss;
+                    }
+        void     setYear(uint16_t yyy) 
+                    {
+                        if(yyy >= 2000U) yyy -= 2000U;
+                        yOff = yyy; 
+                    }
+
+    private:
 
         uint8_t yOff; // Year offset from 2000
         uint8_t m;    // Month 1-12
@@ -91,10 +109,10 @@ class tcRTC
 
         bool begin(unsigned long powerupTime);
 
-        void adjust(const DateTime &dt);
+        void adjust(const DateTime& dt);
         void adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year);
 
-        DateTime now();
+        void now(DateTime& dt);
 
         void clockOutEnable();
 
@@ -106,9 +124,9 @@ class tcRTC
 
         float getTemperature();
 
-        static uint8_t dowToDS3231(uint8_t d) { return d == 0 ? 7 : d; }
-
     private:
+
+        static uint8_t dowToDS3231(uint8_t d) { return d == 0 ? 7 : d; }
 
         uint8_t read_register(uint8_t reg);
         void    write_register(uint8_t reg, uint8_t val);

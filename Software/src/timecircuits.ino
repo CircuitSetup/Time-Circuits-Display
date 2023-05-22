@@ -1,26 +1,31 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2021-2022 John deGlavina https://circuitsetup.us 
- * (C) 2022 Thomas Winischhofer (A10001986)
+ * (C) 2021-2022 John deGlavina https://circuitsetup.us
+ * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display-A10001986
- * 
- * Clockdisplay and keypad menu code based on code by John Monaco
- * Marmoset Electronics 
- * https://www.marmosetelectronics.com/time-circuits-clock
+ *
  * -------------------------------------------------------------------
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * License: MIT
  * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 /*
@@ -30,8 +35,8 @@
  * Library dependencies:
  * - ESP8266Audio: https://github.com/earlephilhower/ESP8266Audio
  *   (1.9.7 and later for esp-arduino 2.x; 1.9.5 for 1.x)
- * - WifiManager (tablatronix, tzapu; v0.16 and later) https://github.com/tzapu/WiFiManager
- *   (Tested with 2.1.12beta)
+ * - WifiManager (tablatronix, tzapu) https://github.com/tzapu/WiFiManager
+ *   (Tested with 2.0.13beta and 2.0.15-rc1)
  * - ArduinoJSON >= 6.19: https://arduinojson.org/v6/doc/installation/
  * 
  * 
@@ -41,14 +46,151 @@
 
 /*  Changelog
  *
-  *  2023/04/06 (A10001986)
- *    - Audio: Re-do beep; remove all traces of (obsolete) MIXER; Short fx are now played 
- *      without re-scanning the analog input during play-back. Reason: Pot tolerance led to 
- *      "distortions" with very short sounds.
- *    Note that some WiFi activity (key exchange? Re-scan?) might cause distortions 
- *    in mp3 play back. I experienced this when connecting the TCD to a "personal 
- *    hotspot" on an iPhone; every 2 or 3 minutes exactly, there is a small distortion.
- *    Does not happen when the TCD is connected to my home network.
+  *  2023/05/22 (A10001986)
+ *    - 77mmdd sets reminder to month/day, leaving time unchanged (unless hr and min are 
+ *      zero, in which case it sets the reminder to 9am)  
+ *    - MusicPlayer: 88 shows currently played song
+ *    - 11, 44, 77: If alarm/timer/reminder is unset/off, play regular enter sound, not
+ *      the "error" one
+ *    - If Music Player is active, show "ERROR" for bad/invalid input (since the player
+ *      should not be interrupted) (Exception: Programming a Destination Time)
+ *  2023/05/21 (A10001986)
+ *    - Minor optimizations
+ *  2023/05/20 (A10001986)
+ *    - Fix beep modes 2 and 3 with time travel
+ *  2023/05/19 (A10001986)
+ *    - More internal optimizations (reference DateTime instead of copying it over 
+ *      function calls; don't read RTC too often, update dt instead, etc)
+ *  2023/05/18 (A10001986)
+ *    - Internal optimizations (data entry doesn't show leading 0; blink logic; Audio, 
+ *      ClockDisplay: Get rid of bools, use flags; etc)
+ *  2023/05/17 (A10001986)
+ *    - Add yearly/monthly reminder: Type 77mmddhhMM to set a timer that will play a 
+ *      sound yearly on given date, or, if the month is 00, every month on given day. 
+ *      77 displays current reminder, 770 deletes it, 777 displays the days/hours/mins 
+ *      until the next reminder.
+ *      Requires new sound-pack. Reminder always based on real local time.
+ *    - Night mode no longer adheres to "Alarm base is real present time" setting. It 
+ *      is ALWAYS based on real present time now.
+ *    - Display colon in special displays where hours and minutes are used as such.
+ *    - Fix ee1-regression
+ *  2023/05/15 (A10001986)
+ *    - Allow both world clock and room condition mode at the same time.
+ *      If both on, only temp is shown, either in red display (if no TZ for red display 
+ *      was configured) or in yellow display (regardless of a TZ for that display).
+ *      113+ENTER toggles both RC/WC-mode (synchronously).
+ *  2023/05/13 (A10001986)
+ *    - MQTT: Increase reconnect-attempt-interval over time
+ *  2023/05/12 (A10001986)
+ *    - Music Player: Fix going to song# when player is off
+ *    - MQTT: Add async ping to server before trying to connect. This avoids
+ *      "frozen" displays and audio interruptions but requires that the server
+ *      actually answers to ping (ICMP) requests.
+ *  2023/05/11 (A10001986)
+ *    - MQTT: Make (re)connection/subscription async on MQTT protocol level
+ *    - MQTT: Limit re-connection attempts.
+ *  2023/05/10 (A10001986)
+ *    - Detect "APSTA" WiFi Mode correctly for Keypad Menu
+ *    - Optimize menu code; add "blinking" of editable data
+ *    - Minor optimizations for TZ parsing and DST checks
+ *  2023/05/05 (A10001986)
+ *    - Publish "ALARM" via MQTT
+ *    - Fix compilation if GPS is to be left out
+ *  2023/05/04 (A10001986)
+ *    - Ignore MQTT messages with a length of zero; fix long string handling
+ *  2023/05/03 (A10001986)
+ *    - Add missing characters to 7-seg font
+ *    - JS optimization for CP
+ *    - Fix MQTT message scrolling
+ *  2023/05/02 (A10001986)
+ *    - [Pre-compiled binary: Patch WiFiManager::HTTPSend (avoid duplication of String)]
+ *    - HA/MQTT: Publish "REENTRY" for external props; fix error in topic scanning;
+ *      subscribe two topics at a time.
+ *    - time_loop(): Move less timing critical stuff to when there is no half-
+ *      second switch.
+ *  2023/05/01 (A10001986)
+ *    - HA/MQTT changes: More commands supported; commands can be in lower case; 
+ *      no commands while keypad menu or sequences are active;
+ *    - Using MQTT now disables WiFi power save
+ *    - Disable modem sleep to avoid delays in CP and MQTT
+ *  2023/04/29 (A10001986)
+ *    - BETA: Add HomeAssitant/MQTT 3.1.1 support. MTQQ code by Nicholas O'Leary; adapted,
+ *      optimized and minimized by me. Only unencrypted traffic, no TLS/SSL support.
+ *      Used in three ways:
+ *      1) User can send messages to configurable subscribed topic, which are displayed 
+ *      on Destination Time display. Only ASCII text messages supported, no UTF8 or 
+ *      binary payload. If the SD card contains "ha-alert.mp3", it will be played upon
+ *      reception of a message.
+ *      2) User can send commands to TCD (topic "bttf/tcd/cmd"), for example TIMETRAVEL
+ *      or RETURN (as in "return from time travel").
+ *      3) TCD can trigger time travel via MTQQ (topic "bttf/tcd/pub"). This works like
+ *      the "external time travel" for wired props.
+ *      Broker can be configured using IP or domain, optionally with :xxxx for port
+ *      number ("192.168.3.5:1234"); the default port is 1883.  User and password are 
+ *      optional; format is "user" (for no password) or "user:pass".
+ *      Configuring a WiFi power save timeout disables HA/MQTT.
+ *      Broker is strongly recommended to be in same local network; network delays
+ *      can cause sound and other timing issues.
+ *    - Add "homeassitant" menu item to keypad "network" menu to view connection
+ *      status.
+ *    - Heavily optimized Config Portal. It grew to big for the available memory, so
+ *      some options had to be removed. Also, the nice title graphics had to go, it's 
+ *      now the Twin Pine Mall all the way.
+ *  2023/04/25 (A10001986)
+ *    - Minor optimizations (keypad, gps)
+ *  2023/04/23 (A10001986)
+ *    - Further simplify keypad code (and fix [unlikely] problem with several keys
+ *      pressed at the exact same time)
+ *  2023/04/22 (A10001986)
+ *    - Simplify keypad handling
+ *    - Global license is now MIT (with exception). Possibly GPL-infe[c|s]ted parts
+ *      all finally rewritten/removed.
+ *  2023/04/21 (A10001986)
+ *    - Shrink the header gfx in CP to reduce page data size. WiFiManager builds the
+ *      page blob by concatenating Strings, lots of Strings. The big header was one
+ *      of the first Strings (hence "header"), which apparently lead to massive heap
+ *      fragmentation when repeatedly appending other Strings to it, and as a result, 
+ *      sometimes to a blank page in the browser, assumingly caused by a memory issue 
+ *      somewhere down the line.
+ *  2023/04/20 (A10001986)
+ *    - Add "city" (or location name) for World Clock time zones; will be displayed
+ *      for 3 seconds every 10 seconds. Keep empty to have the time displayed the
+ *      whole time (like before).
+ *    - Add tiny delay between BMx820 sensor read-outs
+ *  2023/04/18 (A10001986)
+ *    - Properly respect beepMode 1
+ *    - Better "beep" (less hissing)
+ *  2023/04/17 (A10001986)
+ *    - Remove deprecated EEPROM stuff
+ *  2023/04/16 (A10001986)
+ *    - Better beep mode change feedback
+ *    - Randomize lamptest() for time travel
+ *  2023/04/15 (A10001986)
+ *    - Properly restore dest/dep times on quitting the menu
+ *  2023/04/13 (A10001986)
+ *    - Add beep modes: 000 disables beep, 001 enables beep, 002 and 003 enable beep
+ *      for 30/60 seconds after entering a destination time and/or upon initiating a 
+ *      time travel. If a time travel is triggered by an external button for which a 
+ *      delay is configured, the beep starts when pressing the button and ends 30/60
+ *      seconds after the re-entry.
+ *  2023/04/12 (A10001986)
+ *    - Make "periodic reconnection attempts" a config option; might be undesired in
+ *      car setups.
+ *    - Don't reconnect WiFi for NTP if mp3 is played back or user has used the keypad
+ *      within the last 2 minutes.
+ *  2023/04/11 (A10001986)
+ *    - Add World Clock mode. User can now configure a separate time zone for each the 
+ *      red and yellow displays. 112+ENTER toggles World Clock (WC) mode. Red/yellow 
+ *      displays will show the time in the configured time zones. Entering a destination 
+ *      time, time travel and some other actions disable WC mode.
+ *  2023/04/09 (A10001986)
+ *    - Revisit WiFi reconnection logic: Support case where WiFi network was inaccessible
+ *      during power-up. See comments tc_time.cpp for details.
+ *    - Add keypad menu item "TIME SYNC", shows when last time sync (NTP/GPS) was done.
+ *  2023/04/06 (A10001986) [CS 2.7 Release]
+ *    - Audio: Re-do beep; remove all traces of (obsolete) MIXER; Short fx are now 
+ *      played without re-scanning the analog input during play-back. Reason: Pot 
+ *      tolerance led to audible "distortions" with very short sounds.
  *  2023/04/05 (A10001986)
  *    - WiFi: Reconnect for NTP also if previously in AP-mode, if a WiFi network 
  *      is configured to connect to. This helps for unstable WiFi networks (or ones 
@@ -60,6 +202,12 @@
  *      (both for station as well as AP mode) so non-zero; this causes re-connects for
  *      NTP allowing time synchonization even if some of those reconnecting attempts
  *      fail (because the WiFi network is not found at some attempts).
+ *    - Reset max tx power when connecting to WiFi network (might have been reduced
+ *      when falling-back to AP mode earlier)
+ *    Note that some WiFi activity (key exchange? Re-scan?) might cause distortions 
+ *    in mp3 play back. I experienced this when connecting the TCD to a "personal 
+ *    hotspot" on an iPhone; every 2 or 3 minutes exactly, there is a small distortion.
+ *    Does not happen when the TCD is connected to my home network.
  *  2023/04/04 (A10001986)
  *    - NTP: Do not overwrite previous packet age in case of a bad(outdated) new packet
  *  2023/04/01 (A10001986)
@@ -651,7 +799,7 @@ void setup()
 
     Serial.begin(115200);    
 
-    // PCF8574 only supports 100kHz, can't go to 400 here - Wire.begin(-1, -1, 100000);
+    // PCF8574 only supports 100kHz, can't go to 400 here.
     Wire.begin(-1, -1, 100000);
 
     Serial.println();
@@ -673,4 +821,5 @@ void loop()
     time_loop();
     audio_loop();
     wifi_loop();
+    audio_loop();
 }

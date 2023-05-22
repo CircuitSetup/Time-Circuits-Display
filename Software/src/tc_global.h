@@ -14,12 +14,11 @@
 // Version strings.
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
+#define TC_VERSION "V2.8.0"           // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION "V2.7.0"           // 13 chars max
-#define TC_VERSION_EXTRA "APR062023"  // 13 chars max
+#define TC_VERSION_EXTRA "MAY222023"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION "V2.7.0_A-CAR"     // 12 chars max
-#define TC_VERSION_EXTRA "04062023"   // 12 chars max
+#define TC_VERSION_EXTRA "05222023"   // 12 chars max
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -51,6 +50,9 @@
 //#define TC_HAVESPEEDO
 #define SP_NUM_TYPES    12  // Number of speedo display types supported
 #define SP_MIN_TYPE     0
+// Uncomment to keep speedo showing "00" when neither temp nor GPS speed 
+// are to be displayed instead of switching it off.
+//#define SP_ALWAYS_ON      
 
 // Uncomment for support of a temperature/humidity sensor (MCP9808, BMx280, 
 // SI7021, SHT40, TMP117, AHT20, HTU31D) connected via i2c. Will be used for 
@@ -81,13 +83,18 @@
 // If the pin goes low (by connecting it to GND using a button), a time
 // travel is triggered.
 // Uncomment to include support for ett, see below for pin number
+// This is also needed to receive commands via MQTT
 #define EXTERNAL_TIMETRAVEL_IN
 
 // External time travel (output) ("etto")
 // The defined pin is set HIGH on a time travel, and LOW upon re-entry from 
 // a time travel. See tc_time.c for a timing diagram.
 // Uncomment to include support for etto, see below for pin number
+// This is also needed if MQTT is used to trigger external props
 #define EXTERNAL_TIMETRAVEL_OUT
+
+// Uncomment for HomeAssistant MQTT protocol support
+#define TC_HAVEMQTT
 
 // --- end of config options
 
@@ -145,19 +152,6 @@
 #define EXTERNAL_TIMETRAVEL_IN_PIN  27  // Externally triggered TT (input)
 #define EXTERNAL_TIMETRAVEL_OUT_PIN 14  // TT trigger output
 
-
-/*************************************************************************
- ***                             EEPROM map                            ***
- *************************************************************************/
-
-// EEPROM usage is deprecated/phased out.
- 
-#define SWVOL_PREF        0x00    // volume save location       (2 bytes)
-#define DEST_TIME_PREF    0x08    // destination time prefs     (10 bytes)
-#define PRES_TIME_PREF    0x12    // present time prefs         (10 bytes)
-#define DEPT_TIME_PREF    0x1c    // departure time prefs       (10 bytes)
-#define PRES_LY_PREF      0x2A    // present time's "lastYear"  (4 bytes)
-
 /*************************************************************************
  ***             Display IDs (Do not change, used as index)            ***
  *************************************************************************/
@@ -165,6 +159,13 @@
 #define DISP_DEST     0
 #define DISP_PRES     1
 #define DISP_LAST     2
+
+// Num of characters on display
+#ifdef IS_ACAR_DISPLAY
+#define DISP_LEN      12
+#else
+#define DISP_LEN      13
+#endif
 
 /*************************************************************************
  ***                         TimeCircuits Epoch                        ***

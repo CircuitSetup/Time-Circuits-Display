@@ -10,18 +10,26 @@
  * Based on code by John Monaco, Marmoset Electronics
  * https://www.marmosetelectronics.com/time-circuits-clock
  * -------------------------------------------------------------------
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * License: MIT
+ * 
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef _CLOCKDISPLAY_H
@@ -37,17 +45,32 @@ struct dateStruct {
     uint8_t minute;
 };
 
+#define CD_BUF_SIZE   8  // Buffer size in words (16bit)
+
+// Flags for textDirect() etc (flags)
+#define CDT_CLEAR 0x0001
+#define CDT_CORR6 0x0002
+#define CDT_COLON 0x0004
+#define CDT_BLINK 0x0008
+
+// Flags for xxxDirect (dflags)
+#define CDD_FORCE24 0x0001
+#define CDD_NOLEAD0 0x0002
+
 class clockDisplay {
 
     public:
 
-        clockDisplay(uint8_t did, uint8_t address, int saveAddress);
+        clockDisplay(uint8_t did, uint8_t address);
         void begin();
         void on();
         void onCond();
         void off();
+        void onBlink(uint8_t blink);
+        #if 0
         void realLampTest();
-        void lampTest();
+        #endif
+        void lampTest(bool randomize = false);
 
         void clearBuf();
 
@@ -70,9 +93,15 @@ class clockDisplay {
         void showAnimate1();
         void showAnimate2();
 
-        void setDateTime(DateTime dt);      // Set object date & time using a DateTime ignoring timeDiff
-        void setDateTimeDiff(DateTime dt);  // Set object date & time using a DateTime plus/minus timeDiff
-        void setFromStruct(dateStruct* s);  // Set object date & time from struct; never use this with RTC
+        void showAlt();
+        void setAltText(const char *text);
+
+        void setDateTime(DateTime& dt);          // Set object date & time using a DateTime ignoring timeDiff
+        void setDateTimeDiff(DateTime& dt);      // Set object date & time using a DateTime plus/minus timeDiff
+        void setFromStruct(const dateStruct *s); // Set object date & time from struct; never use this with RTC
+        void setFromParms(int year, int month, int day, int hour, int minute);
+
+        void getToParms(int& year, int& yo, int& month, int& day, int& hour, int& minute);
 
         void setMonth(int monthNum);
         void setDay(int dayNum);
@@ -93,15 +122,17 @@ class clockDisplay {
         uint8_t  getMinute();
         int8_t   getDST();
 
-        void showOnlyMonth(int monthNum);
-        void showOnlyDay(int dayNum);
-        void showOnlyHour(int hourNum, bool force24 = false);
-        void showOnlyMinute(int minuteNum);
-        void showOnlyYear(int yearNum);
+        const char* getMonthString(uint8_t month);
 
-        void showSettingValDirect(const char* setting, int8_t val = -1, bool clear = false);
-        void showTextDirect(const char *text, bool clear = true, bool corr6 = false);
-        void showHalfIPDirect(int a, int b, bool clear = false);
+        void showMonthDirect(int monthNum, uint16_t dflags = 0);
+        void showDayDirect(int dayNum, uint16_t dflags = 0);
+        void showHourDirect(int hourNum, uint16_t dflags = 0);
+        void showMinuteDirect(int minuteNum, uint16_t dflags = 0);
+        void showYearDirect(int yearNum, uint16_t dflags = 0);
+
+        void showTextDirect(const char *text, uint16_t flags = CDT_CLEAR);
+        void showHalfIPDirect(int a, int b, uint16_t flags = 0);
+        void showSettingValDirect(const char* setting, int8_t val = -1, uint16_t flags = 0);
 
         #ifdef TC_HAVETEMP
         void showTempDirect(float temp, bool tempUnit, bool animate = false);
@@ -128,16 +159,13 @@ class clockDisplay {
         uint16_t getLEDAlphaChar(uint8_t value);
         #endif
 
-        uint16_t makeNum(uint8_t num);
-        #if 0
-        uint16_t makeNumN0(uint8_t num);
-        #endif
+        uint16_t makeNum(uint8_t num, uint16_t dflags = 0);
 
         void directCol(int col, int segments);  // directly writes column RAM
 
         void clearDisplay();                    // clears display RAM
         bool handleNM();
-        void showInt(bool animate = false);
+        void showInt(bool animate = false, bool Alt = false);
 
         void colonOn();
         void colonOff();
@@ -154,8 +182,8 @@ class clockDisplay {
 
         uint8_t  _did = 0;
         uint8_t  _address = 0;
-        int      _saveAddress = -1;
-        uint16_t _displayBuffer[8];     // Segments to make current time
+        uint16_t _displayBuffer[CD_BUF_SIZE];
+        uint16_t _displayBufferAlt[CD_BUF_SIZE];
 
         uint16_t _year = 2021;          // keep track of these
         int16_t  _yearoffset = 0;       // Offset for faking years < 2000, > 2098
@@ -178,6 +206,7 @@ class clockDisplay {
         int _oldnm = -1;
         bool _corr6 = false;
         bool _yearDot = false;
+        bool _withColon = false;
 };
 
 #endif

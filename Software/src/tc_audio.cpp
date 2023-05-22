@@ -8,18 +8,26 @@
  * Sound handling
  *
  * -------------------------------------------------------------------
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * License: MIT
+ * 
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #include "tc_global.h"
@@ -73,6 +81,7 @@ static uint16_t maxMusic = 0;
 static uint16_t *playList = NULL;
 static int  mpCurrIdx = 0;
 static bool mpShuffle = false;
+static uint16_t currPlaying = 0;
 
 static const float volTable[20] = {
     0.00, 0.02, 0.04, 0.06,
@@ -133,10 +142,8 @@ void audio_setup()
 
     #ifdef USE_SPIFFS
     myFS0 = new AudioFileSourceSPIFFS();
-    //myFS1 = new AudioFileSourceSPIFFS();
     #else
     myFS0 = new AudioFileSourceLittleFS();
-    //myFS1 = new AudioFileSourceLittleFS();
     #endif
 
     if(haveSD) {
@@ -272,7 +279,7 @@ void mp_play(bool forcePlay)
     
     do {
         if(mp_play_int(forcePlay)) {
-            mpActive = true;
+            mpActive = forcePlay;
             break;
         }
         mpCurrIdx++;
@@ -351,10 +358,19 @@ static bool mp_play_int(bool force)
 
     mp_buildFileName(fnbuf, playList[mpCurrIdx]);
     if(SD.exists(fnbuf)) {
-        if(force) play_file(fnbuf, 1.0, true, true);
+        if(force) play_file(fnbuf, PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
+        currPlaying = playList[mpCurrIdx];
         return true;
     }
     return false;
+}
+
+int mp_get_currently_playing()
+{
+    if(!haveMusic || !mpActive)
+        return -1;
+
+    return currPlaying;
 }
 
 static void mp_buildFileName(char *fnbuf, int num)
@@ -381,24 +397,29 @@ void play_keypad_sound(char key)
 
     if(key) {
         buf[6] = key;
-        play_file(buf, 0.6, true, false, false, false);
+        play_file(buf, PA_CHECKNM, 0.6);
     }
 }
 
 void play_hour_sound(int hour)
 {
     char buf[16];
+    const char *hsnd = "/hour.mp3";
 
     if(!haveSD || mpActive) return;
     // Not even called in night mode
     
     sprintf(buf, "/hour-%02d.mp3", hour);
     if(SD.exists(buf)) {
-        play_file(buf, 1.0, false, false, true, false);
+        play_file(buf, PA_ALLOWSD);
         return;
     }
-    
-    play_file("/hour.mp3", 1.0, false, false, true, false);
+
+    // Check for file so we do not interrupt anything
+    // if the file does not exist
+    if(SD.exists(hsnd)) {
+        play_file(hsnd, PA_ALLOWSD);
+    }
 }
 
 void play_beep()
@@ -408,8 +429,9 @@ void play_beep()
        muteBeep         || 
        mpActive         || 
        audioMute        || 
-       presentTime.getNightMode())
+       presentTime.getNightMode()) {
         return;
+    }
 
     pwrNeedFullNow();
 
@@ -474,16 +496,16 @@ static int skipID3(char *buf)
     return 0;
 }
 
-void play_file(const char *audio_file, float volumeFactor, bool checkNightMode, bool interruptMusic, bool allowSD, bool dynVolume)
+void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
 {
     char buf[10];
     
     if(audioMute) return;
 
-    if(!interruptMusic) {
-        if(mpActive) return;
-    } else {
+    if(flags & PA_INTRMUS) {
         mpActive = false;
+    } else {
+        if(mpActive) return;
     }
 
     pwrNeedFullNow();
@@ -501,10 +523,11 @@ void play_file(const char *audio_file, float volumeFactor, bool checkNightMode, 
     }
 
     curVolFact = volumeFactor;
-    curChkNM   = checkNightMode;
-    dynVol     = dynVolume;
+    curChkNM   = (flags & PA_CHECKNM) ? true : false;
+    dynVol     = (flags & PA_DYNVOL) ? true : false;
 
     // Reset vol smoothing
+    // (user might have turned the pot while no sound was played)
     rawVolIdx = 0;
     anaReadCount = 0;
 
@@ -512,7 +535,7 @@ void play_file(const char *audio_file, float volumeFactor, bool checkNightMode, 
 
     buf[0] = 0;
 
-    if(haveSD && (allowSD || FlashROMode) && mySD0->open(audio_file)) {
+    if(haveSD && ((flags & PA_ALLOWSD) || FlashROMode) && mySD0->open(audio_file)) {
 
         mySD0->read((void *)buf, 10);
         mySD0->seek(skipID3(buf), SEEK_SET);
@@ -543,6 +566,11 @@ void play_file(const char *audio_file, float volumeFactor, bool checkNightMode, 
         #endif
         
     }
+}
+
+bool check_file_SD(const char *audio_file)
+{
+    return (haveSD && SD.exists(audio_file));
 }
 
 // Returns value for volume based on the position of the pot
@@ -642,6 +670,12 @@ static float getVolume()
 bool checkAudioDone()
 {
     if( mp3->isRunning() || beep->isRunning() ) return false;
+    return true;
+}
+
+bool checkMP3Done()
+{
+    if(mp3->isRunning()) return false;
     return true;
 }
 

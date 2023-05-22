@@ -8,18 +8,26 @@
  * Time and Main Controller
  *
  * -------------------------------------------------------------------
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * License: MIT
+ * 
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef _TC_TIME_H
@@ -39,11 +47,24 @@
 
 #define AUTONM_NUM_PRESETS 4
 
-extern unsigned long  powerupMillis;
+#define BEEPM2_SECS 30
+#define BEEPM3_SECS 60
+
+extern unsigned long powerupMillis;
 
 extern uint16_t lastYear;
 
-extern bool couldDST;
+extern bool couldDST[3];
+extern bool haveWcMode;
+extern bool WcHaveTZ1;
+extern bool WcHaveTZ2;
+extern uint8_t destShowAlt, depShowAlt;
+
+extern bool syncTrigger;
+extern bool doAPretry;
+
+extern uint64_t lastAuthTime64;
+extern uint64_t millisEpoch;
 
 extern clockDisplay destinationTime;
 extern clockDisplay presentTime;
@@ -73,18 +94,27 @@ extern unsigned long ctDown;
 extern unsigned long ctDownNow;
 
 #define NUM_AUTOTIMES 11
-extern dateStruct destinationTimes[NUM_AUTOTIMES];
-extern dateStruct departedTimes[NUM_AUTOTIMES];
+extern const dateStruct destinationTimes[NUM_AUTOTIMES];
+extern const dateStruct departedTimes[NUM_AUTOTIMES];
 extern int8_t     autoTime;
 
 // These block various events
 extern bool FPBUnitIsOn;
 extern bool startup;
-extern bool timeTraveled;
+extern bool timeTravelRE;
 extern int  timeTravelP0;
 extern int  timeTravelP1;
 extern int  timeTravelP2;
 extern int  specDisp;
+
+extern uint8_t  mqttDisp;
+#ifdef TC_HAVEMQTT
+extern uint8_t  mqttOldDisp;
+extern char mqttMsg[256];
+extern uint16_t mqttIdx;
+extern int16_t  mqttMaxIdx;
+extern bool     mqttST;
+#endif
 
 // Time Travel difference to RTC
 extern uint64_t timeDifference;
@@ -96,6 +126,11 @@ extern bool timetravelPersistent;
 extern bool waitForFakePowerButton;
 #endif
 
+extern uint8_t beepMode;
+extern bool beepTimer;
+extern unsigned long beepTimeout;
+extern unsigned long beepTimerNow;
+
 void time_boot();
 void time_setup();
 void time_loop();
@@ -103,14 +138,23 @@ void timeTravel(bool doComplete, bool withSpeedo = false);
 void resetPresentTime();
 void pauseAuto();
 bool checkIfAutoPaused();
+void endPauseAuto(void);
+
+void enableWcMode(bool onOff);
+bool toggleWcMode();
+bool isWcMode();
 
 void enableRcMode(bool onOff);
 bool toggleRcMode();
 bool isRcMode();
 
+void animate();
+void allLampTest();
+void allOff();
+
 bool      isLeapYear(int year);
 int       daysInMonth(int month, int year);
-DateTime  myrtcnow();
+void      myrtcnow(DateTime& dt);
 uint64_t  dateToMins(int year, int month, int day, int hour, int minute);
 void      minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
 uint32_t  getHrs1KYrs(int index);
@@ -129,8 +173,12 @@ bool gpsHaveFix();
 void gps_loop();
 #endif
 
-bool  parseTZ(char *tz, int currYear, bool doparseDST = true);
-int   timeIsDST(int year, int month, int day, int hour, int mins, int& currTimeMins);
+int   mins2Date(int year, int month, int day, int hour, int mins);
+bool  parseTZ(int index, int currYear, bool doparseDST = true);
+int   getTzDiff();
+int   timeIsDST(int index, int year, int month, int day, int hour, int mins, int& currTimeMins);
+
+void  setDatesTimesWC(DateTime& dt);
 
 void  ntp_loop();
 void  ntp_short_loop();

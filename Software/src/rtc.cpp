@@ -7,8 +7,7 @@
  * RTC Class (DS3231/PCF2129 RTC handling) and DateTime Class
  * 
  * DateTime mirrors the features of RTC; it only works for dates
- * from 1/1/2000 to 31/12/2099. Idea taken from RTCLib by
- * Adafruit.
+ * from 1/1/2000 to 31/12/2099. Inspired by Adafruit's RTCLib.
  * -------------------------------------------------------------------
  * License: MIT
  *
@@ -25,10 +24,10 @@
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
- * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
- * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
- * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
@@ -64,39 +63,9 @@
  ****************************************************************/
 
 /*
- * Constructor for empty DateTime object (1-Jan-2000 00:00)
- */
-DateTime::DateTime()
-{
-    yOff = 0;
-    m = 1;
-    d = 1;
-    hh = 0;
-    mm = 0;
-    ss = 0;
-}
-
-/*
- * Constructor from (year, month, day, hour, minute, second) 
- */
-DateTime::DateTime(uint16_t year, uint8_t month, uint8_t day,
-                   uint8_t  hour, uint8_t min,   uint8_t sec)
-{
-    if(year >= 2000U)
-        year -= 2000U;
-        
-    yOff = year;
-    m = month;
-    d = day;
-    hh = hour;
-    mm = min;
-    ss = sec;
-}
-
-/*
  *  Copy constructor
  */
-DateTime::DateTime(const DateTime &copy)
+DateTime::DateTime(const DateTime& copy)
     : yOff(copy.yOff), 
       m(copy.m), 
       d(copy.d), 
@@ -174,7 +143,7 @@ bool tcRTC::begin(unsigned long powerupTime)
  *
  * (year: 2000-2099; dayOfWeek: 0=Sun..6=Sat)
  */
-void tcRTC::adjust(const DateTime &dt)
+void tcRTC::adjust(const DateTime& dt)
 {
     adjust(dt.second(),
            dt.minute(),
@@ -242,7 +211,7 @@ void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte day
 /*
  * Get current date/time
  */
-DateTime tcRTC::now() 
+void tcRTC::now(DateTime& dt) 
 {
     uint8_t buffer[7];
 
@@ -250,22 +219,22 @@ DateTime tcRTC::now()
 
     case RTCT_PCF2129:
         read_bytes(PCF2129_TIME, buffer, 7);
-        return DateTime(bcd2bin(buffer[6]) + 2000U,
-                        bcd2bin(buffer[5] & 0x7F),
-                        bcd2bin(buffer[3]),
-                        bcd2bin(buffer[2]),
-                        bcd2bin(buffer[1]),
-                        bcd2bin(buffer[0] & 0x7F));
+        dt.set(bcd2bin(buffer[6]) + 2000U,
+               bcd2bin(buffer[5] & 0x7F),
+               bcd2bin(buffer[3]),
+               bcd2bin(buffer[2]),
+               bcd2bin(buffer[1]),
+               bcd2bin(buffer[0] & 0x7F));
 
     case RTCT_DS3231:
     default:
         read_bytes(DS3231_TIME, buffer, 7);
-        return DateTime(bcd2bin(buffer[6]) + 2000U,
-                        bcd2bin(buffer[5] & 0x7F),
-                        bcd2bin(buffer[4]),
-                        bcd2bin(buffer[2]),
-                        bcd2bin(buffer[1]),
-                        bcd2bin(buffer[0] & 0x7F));
+        dt.set(bcd2bin(buffer[6]) + 2000U,
+               bcd2bin(buffer[5] & 0x7F),
+               bcd2bin(buffer[4]),
+               bcd2bin(buffer[2]),
+               bcd2bin(buffer[1]),
+               bcd2bin(buffer[0] & 0x7F));
     }
 }
 
@@ -378,7 +347,6 @@ float tcRTC::getTemperature()
     switch(_rtcType) {
 
     case RTCT_DS3231:
-    default:
         read_bytes(DS3231_TEMP, buffer, 2);
         return (float)buffer[0] + (float)(buffer[1] >> 6) * 0.25f;
     }

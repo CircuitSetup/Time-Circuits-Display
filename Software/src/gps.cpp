@@ -95,7 +95,7 @@ bool tcGPS::begin(unsigned long powerupTime, bool quickUpdates)
         for(int i = 0; i < 8; i++) {
             testBuf = Wire.read();
             // Bail if illegal characters returned
-            if(testBuf != 0x0A && testBuf != 0x0D && (testBuf < ' ' || testBuf > 0x7e)) {
+            if(testBuf != 0x0a && testBuf != 0x0d && (testBuf < ' ' || testBuf > 0x7e)) {
                 return false;
             }
         }
@@ -114,7 +114,7 @@ bool tcGPS::begin(unsigned long powerupTime, bool quickUpdates)
         // Set update rate to 1000ms
         sendCommand("$PMTK220,1000*1F");
     } else {
-        sendCommand("$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0*34");
+        sendCommand("$PMTK314,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*35");
         // Set update rate to 5000ms
         sendCommand("$PMTK220,5000*1B");
     }
@@ -338,7 +338,7 @@ bool tcGPS::readAndParse(bool doDelay)
         for(int i = 0; i < i2clen; i++) {
             curr_char = Wire.read();
             // Skip "empty data" (ie LF if not preceeded by CR)
-            if((curr_char != 0x0A) || (_last_char == 0x0D)) {
+            if((curr_char != 0x0a) || (_last_char == 0x0d)) {
                  _buffer[buff_max++] = curr_char;
             }
             _last_char = curr_char;
@@ -363,7 +363,7 @@ bool tcGPS::readAndParse(bool doDelay)
         }
 
         // Finish a line on LF
-        if(curr_char == 0x0A) {
+        if(curr_char == 0x0a) {
 
             // terminate current line
             _currentline[_lineidx] = 0;
@@ -477,7 +477,7 @@ bool tcGPS::checkNMEA(char *nmea)
     if(ast - nmea < 16)
         return false;
 
-    if((strncmp(nmea+3, "RMC", 3)) && (strncmp(nmea+3, "ZDA", 3)))
+    if(mystrcmp3(nmea+3, "RMC") && mystrcmp3(nmea+3, "ZDA"))
         return false;
 
     // check checksum
@@ -488,8 +488,8 @@ bool tcGPS::checkNMEA(char *nmea)
     if(*ast != '*')
         return false;
 
-    sum = parseHex(*(ast + 1)) << 4;
-    sum += parseHex(*(ast + 2));
+    sum = parseHex(*(ast+1)) << 4;
+    sum += parseHex(*(ast+2));
 
     for(char *p1 = p + 1; p1 < ast; p1++)
         sum ^= *p1;
@@ -497,14 +497,21 @@ bool tcGPS::checkNMEA(char *nmea)
     return (sum == 0);
 }
 
+bool tcGPS::mystrcmp3(char *src, const char *cmp)
+{
+    if(*(src++) != *(cmp++)) return true;
+    if(*(src++) != *(cmp++)) return true;
+    return (*src != *cmp);
+}
+
 uint8_t tcGPS::parseHex(char c)
 {
     if(c < '0')   return 0;
     if(c <= '9')  return c - '0';
     if(c < 'A')   return 0;
-    if(c <= 'F')  return (c - 'A') + 10;
+    if(c <= 'F')  return c - 'A' + 10;
     if(c < 'a')   return 0;
-    if(c <= 'f')  return (c - 'a') + 10;
+    if(c <= 'f')  return c - 'a' + 10;
     return 0;
 }
 

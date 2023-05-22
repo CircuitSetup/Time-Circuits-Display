@@ -8,18 +8,26 @@
  * Sound handling
  *
  * -------------------------------------------------------------------
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * License: MIT
+ * 
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef _TC_AUDIO_H
@@ -40,8 +48,10 @@ void play_keypad_sound(char key);
 void play_hour_sound(int hour);
 void play_beep();
 void audio_loop();
-void play_file(const char *audio_file, float volumeFactor = 1.0, bool checkNightMode = true, bool interruptMusic = false, bool allowSD = true, bool dynvolume = true);
+void play_file(const char *audio_file, uint16_t flags, float volumeFactor = 1.0);
+bool check_file_SD(const char *audio_file);
 bool checkAudioDone();
+bool checkMP3Done();
 void stopAudio();
 
 void mp_init();
@@ -52,8 +62,14 @@ void mp_prev(bool forcePlay = false);
 int  mp_gotonum(int num, bool force = false);
 void mp_makeShuffle(bool enable);
 bool mp_checkForFolder(int num);
+int  mp_get_currently_playing();
 
 // By default, use the volume knob
 #define DEFAULT_VOLUME 255
+
+#define PA_CHECKNM 0x0001
+#define PA_INTRMUS 0x0002
+#define PA_ALLOWSD 0x0004
+#define PA_DYNVOL  0x0008
 
 #endif

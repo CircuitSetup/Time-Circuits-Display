@@ -6,24 +6,30 @@
  *
  * Keypad_I2C Class, TCButton Class: I2C-Keypad and Button handling
  *
- * Parts of this are customized minimizations of parts of the Keypad 
- * and the OneButton libraries.
- * Authors of Keypad library: Mark Stanley, Alexander Brevig
- * Author of OneButton library: Matthias Hertel
+ * Keypad part inspired by "Keypad" library by M. Stanley & A. Brevig
+ * Fractions of this code are customized, minimized derivates of parts 
+ * of OneButton library by Matthias Hertel.
  * -------------------------------------------------------------------
- * License of original KeyPad library and this program as regards the 
- * Key and Keypad_I2C classes:
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; version
- * 2.1 of the License or later versions.
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>
+ * License of Keypad_I2C class: MIT
+ * 
+ * Permission is hereby granted, free of charge, to any person 
+ * obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, 
+ * merge, publish, distribute, sublicense, and/or sell copies of the 
+ * Software, and to permit persons to whom the Software is furnished to 
+ * do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * -------------------------------------------------------------------
  * Original OneButton library 
  * Copyright (c) 2005-2014 by Matthias Hertel, http://www.mathertel.de/
@@ -61,20 +67,15 @@
 
 #include "input.h"
 
-#define OPEN    LOW
-#define CLOSED  HIGH
+#define OPEN    false
+#define CLOSED  true
 
-static void defaultDelay(unsigned int mydelay);
+#define MAX_ROWS  4
+#define MAX_COLS  3
 
-/*
- * Key class
- */
-
-TCKey::TCKey()
+static void defaultDelay(unsigned int mydelay)
 {
-    kchar = NO_KEY;
-    kstate = TCKS_IDLE;
-    stateChanged = false;
+    delay(mydelay);
 }
 
 /*
@@ -92,15 +93,24 @@ Keypad_I2C::Keypad_I2C(char *userKeymap, const uint8_t *row, const uint8_t *col,
     _rows = numRows;
     _columns = numCols;
 
+    // Avoid crash if called with bad parms
+    if(_rows > MAX_ROWS) _rows = MAX_ROWS;
+    if(_columns > MAX_COLS) _columns = MAX_COLS;
+
     _i2caddr = address;
     _wire = awire;
 
     setScanInterval(10);
     setHoldTime(500);
-    
+
     _keypadEventListener = NULL;
 
     _customDelayFunc = defaultDelay;
+
+    _key.kState = TCKS_IDLE;
+    _key.kChar = 0;
+    _key.kCode = -1;
+    _key.stateChanged = false;
 }
 
 // Initialize I2C
@@ -118,8 +128,6 @@ void Keypad_I2C::begin()
     for(int i = 0; i < _rows; i++) {
         _rowMask |= (1 << _rowPins[i]);
     }
-
-    // Keys cleared by key constructor
 }
 
 void Keypad_I2C::setScanInterval(unsigned int interval)
@@ -142,170 +150,138 @@ void Keypad_I2C::setCustomDelayFunc(void (*myDelay)(unsigned int))
     _customDelayFunc = myDelay;
 }
 
-// Trigger a scan and populate the key list
+// Scan keypad and update key state
 bool Keypad_I2C::scanKeypad()
 {
-    bool keyActivity = false;
+    bool keyChanged = false;
+    unsigned long now = millis();
 
-    if((millis() - _startTime) > _scanInterval) {
-        scanKeys();
-        keyActivity = updateList();
-        _startTime = millis();
+    if((millis() - _scanTime) > _scanInterval) {
+        keyChanged = scanKeys();
+        _scanTime = millis();
     }
 
-    return keyActivity;
+    return keyChanged;
 }
 
 /*
  * Private
  */
 
-// Hardware scan
-void Keypad_I2C::scanKeys()
+// Hardware scan & update key state
+bool Keypad_I2C::scanKeys()
 {
-    uint16_t pinVals[3][16];
-    bool     repeat;
+    uint16_t pinVals[3][MAX_COLS], rm;
+    bool     repeat, haveKey;
     int      maxRetry = 5;
+    int      kc;
+    uint8_t  c, r, d;
 
     do {
 
-        repeat = false;
-      
-        for(uint8_t d = 0; d < 3; d++) {
-    
-            for(uint8_t c = 0; c < _columns; c++) {
-    
+        repeat = haveKey = false;
+
+        for(d = 0; d < 3; d++) {
+
+            for(c = 0; c < _columns; c++) {
+
                 pin_write(_columnPins[c], LOW);
-    
+
                 _wire->requestFrom(_i2caddr, (int)1);
-                pinVals[d][c] = _wire->read() & _rowMask;
-    
+                if((pinVals[d][c] = _wire->read() & _rowMask) != _rowMask) 
+                    haveKey = true;
+
                 pin_write(_columnPins[c], HIGH);
-                
+
             }
-    
+
             if(d < 2) (*_customDelayFunc)(5);
-          
+
         }
 
-        for(uint8_t c = 0; c < _columns; c++) {
+        for(c = 0; c < _columns; c++) {
             if((pinVals[0][c] != pinVals[1][c]) || (pinVals[0][c] != pinVals[2][c])) 
                 repeat = true;
         }
-        
+
     } while(maxRetry-- && repeat);
 
-    for(uint8_t c = 0; c < _columns; c++) {      
-        for(uint8_t r = 0; r < _rows; r++) {
-            // keypress is active low, so invert read result
-            bitWrite(_bitMap[r], c, (pinVals[0][c] & (1 << _rowPins[r])) ? 0 : 1);
-        }
-    }
-}
+    _key.stateChanged = false;
 
-// Manage the list without rearranging the keys
-// Returns true if any of the keys on the list changed state
-bool Keypad_I2C::updateList()
-{
-    // Delete IDLE keys
-    for(uint8_t i = 0; i < KI2C_LISTMAX; i++) {
-        if(_key[i].kstate == TCKS_IDLE) {
-            _key[i].kchar = NO_KEY;
-            _key[i].kcode = -1;
-            _key[i].stateChanged = false;
-        }
-    }
+    // If we currently have an active key, advance its state
+    if(_key.kCode >= 0) {
 
-    // Add new keys to empty slots in the key list
-    for(uint8_t r = 0; r < _rows; r++) {
+        advanceState(!(pinVals[0][_key.kCode % _columns] & (1 << _rowPins[_key.kCode / _columns])));
 
-        for(uint8_t c = 0; c < _columns; c++) {
+    } 
 
-            bool kstate = bitRead(_bitMap[r], c);
-            int  keyCode = r * _columns + c;
-            char keyChar = _keymap[keyCode];
-            int  idx = findInList(keyCode);
+    // If _key is idle, evaluate scanning result
+    if(haveKey && _key.kState == TCKS_IDLE) {
 
-            if(idx > -1) {
-              
-                // Key is already on the list so set its next state
-                nextKeyState(idx, kstate);
-                
-            } else if((idx == -1) && kstate) {
-              
-                // Key is not on the list so add it
-                for(uint8_t i = 0; i < KI2C_LISTMAX; i++) {
-                    // Find an empty slot or don't add key to list
-                    if(_key[i].kchar == NO_KEY) {
-                        _key[i].kchar = keyChar;
-                        _key[i].kcode = keyCode;
-                        _key[i].kstate = TCKS_IDLE;
-                        nextKeyState(i, kstate);
-                        break;
-                    }
+        for(r = 0; r < _rows; r++) {
+
+            rm = 1 << _rowPins[r];
+
+            for(c = 0, kc = r * _columns; c < _columns; c++, kc++) {
+
+                bool newstate = !(pinVals[0][c] & rm);
+
+                if(newstate == CLOSED) {
+
+                    // (New) key pressed, handle it
+                    _key.kCode = kc;
+                    _key.kChar = _keymap[kc];
+                    advanceState(newstate);
+                    goto quitScan;  // bail, _key is busy
+
                 }
-                
             }
         }
+        
     }
+quitScan:
 
-    // Report if any of the keys changed state
-    for(uint8_t i = 0; i < KI2C_LISTMAX; i++) {
-        if(_key[i].stateChanged) return true;
-    }
-
-    return false;
+    return _key.stateChanged;
 }
 
-void Keypad_I2C::nextKeyState(uint8_t idx, bool kstate)
+// State machine. 
+// Unlike TCButton, we do not need to debounce.
+void Keypad_I2C::advanceState(bool newstate)
 {
-    _key[idx].stateChanged = false;
-
-    switch(_key[idx].kstate) {
+    switch(_key.kState) {
     case TCKS_IDLE:
-        if(kstate == CLOSED) {
-            transitionTo(idx, TCKS_PRESSED);
-            _key[idx].holdTimer = millis();
+        if(newstate == CLOSED) {
+            transitionTo(TCKS_PRESSED);
+            _key.startTime = millis();
         }
         break;
 
     case TCKS_PRESSED:
-        if((millis() - _key[idx].holdTimer) > _holdTime)
-            transitionTo(idx, TCKS_HOLD);
-        else if(kstate == OPEN)
-            transitionTo(idx, TCKS_RELEASED);
+        if((millis() - _key.startTime) > _holdTime)
+            transitionTo(TCKS_HOLD);
+        else if(newstate == OPEN)
+            transitionTo(TCKS_RELEASED);
         break;
 
     case TCKS_HOLD:
-        if(kstate == OPEN)
-            transitionTo(idx, TCKS_RELEASED);
+        if(newstate == OPEN)
+            transitionTo(TCKS_RELEASED);
         break;
 
     case TCKS_RELEASED:
-        transitionTo(idx, TCKS_IDLE);
+        _key.kState = TCKS_IDLE;
+        _key.kCode = -1;
         break;
     }
 }
 
-// Search by code for a key in the list of active keys
-// Returns index or -1 if not found
-int Keypad_I2C::findInList(int keyCode)
+void Keypad_I2C::transitionTo(KeyState nextState)
 {
-    for(uint8_t i = 0; i < KI2C_LISTMAX; i++) {
-        if(_key[i].kcode == keyCode)
-            return i;
-    }
+    _key.kState = nextState;
+    _key.stateChanged = true;
 
-    return -1;
-}
-
-void Keypad_I2C::transitionTo(uint8_t idx, KeyState nextState)
-{
-    _key[idx].kstate = nextState;
-    _key[idx].stateChanged = true;
-
-    if(_keypadEventListener != NULL) {
-        _keypadEventListener(_key[idx].kchar, _key[idx].kstate);
+    if(_keypadEventListener) {
+        _keypadEventListener(_key.kChar, _key.kState);
     }
 }
 
@@ -330,10 +306,7 @@ void Keypad_I2C::port_write(uint8_t val)
     _pinState = val;
 }
 
-static void defaultDelay(unsigned int mydelay)
-{
-    delay(mydelay);
-}
+
 
 /*
  * TCButton class
@@ -466,4 +439,3 @@ void TCButton::transitionTo(ButtonState nextState)
     _lastState = _state;
     _state = nextState;
 }
- 

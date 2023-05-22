@@ -377,7 +377,7 @@ void speedDisplay::off()
 void speedDisplay::lampTest()
 {
     Wire.beginTransmission(_address);
-    Wire.write(0x00);  // start at address 0x0
+    Wire.write(0x00);  // start address
 
     for(int i = 0; i < _buf_size*2; i++) {
         Wire.write(0xFF);
@@ -478,7 +478,7 @@ void speedDisplay::show()
     }
 
     Wire.beginTransmission(_address);
-    Wire.write(0x00);  // start at address 0x0
+    Wire.write(0x00);  // start address
 
     for(i = 0; i < _buf_size; i++) {
         Wire.write(_displayBuffer[i] & 0xFF);
@@ -792,7 +792,7 @@ void speedDisplay::directCol(int col, int segments)
 void speedDisplay::clearDisplay()
 {
     Wire.beginTransmission(_address);
-    Wire.write(0x00);  // start at address 0x0
+    Wire.write(0x00);  // start address
 
     for(int i = 0; i < _buf_size*2; i++) {
         Wire.write(0x0);
