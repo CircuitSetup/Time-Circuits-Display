@@ -30,27 +30,37 @@ The Time Circuits Display has been meticulously reproduced to be as accurate as 
 - Time travel to the Destination Time with display effects
 - Return from time travel
 - Automatic rotation of times displayed in the movie (optional rotation intervals, or off)
+- Different modes to turn on/off the beep sound heard in the movie
 #### Present Time as a clock
 - On-board Real Time Clock (RTC)
 - Get accurate time from NTP (network time) when connected to a WiFi network
 - Support for time zones and automatic DST
 - Alarm function (sounds customizable with a SD card)
+- Timer function - easily set a countdown timer
+- Reminder function - play a sound on a specific time on a day of the month or year
 - Play a sound every hour (optional)
 #### Support for external power on/off & other prop control
 - Trigger an external time travel event on other props
 - Trigger a time travel event (on the TCD) from another prop
+- Direct support for a Speedometer with GPS (can get accurate time from GPS)
 - Fake power on & off - TCD will boot, setup WiFi, sync time with NTP, but not start/turn off displays until an active-low button is pressed (useful for turning on/off the displays with a TFC drive switch)
 #### Other features
 - Settings interface web portal
 - Keypad menu for adjusting various settings, viewing IP address, and WiFi status
 - Configurable WiFi connection timeouts and retries
+- Configurable low power mode (turns off WiFi & lowers MCU speed)
+- Music player via SD card
+- Custom audio files via SD card
 - Set a static IP
 - Optional power-up intro with sound
-- SD card support for custom audio files
 - 24-hour clock mode for non-Americans
 - Night mode (displays off or dimmed) & ability to automatically turn on/off by Present Time
+- World clock mode to display time in different time zones
+- Room condition mode - Ability to hook up temperature/humidity, and light sensors
+- MQTT interface to display messages and accept commands via MQTT
 - Option to make time travels persistent over reboots (dates entered stay there instead of rotating)
-- Built-in installer for default audio files in addition to OTA firmware updates
+- Built-in installer for default audio files
+- OTA firmware updates
 
 
 ## Short summary of first steps
