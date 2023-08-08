@@ -46,7 +46,32 @@
 
 /*  Changelog
  *
-  *  2023/07/11 (A10001986)
+ *  2023/08/04 (A10001986)
+ *    - Minor cleanup
+ *  2023/08/03 (A10001986)
+ *    - Fix "animation" and version string on A-Car displays
+ *    - Add compile time options (tc_global.h) for
+ *      - showing BTTF3-like animation when entering a dest time
+ *        (and only then; also not when RC mode is active)
+ *      - reversing AM and PM, like seen in some BTTF2/3 scenes
+ *  2023/07/31 (A10001986)
+ *    - Don't show "REPLACE BATT" on uninitialized clocks
+ *    - Remove old unneeded stuff
+ *  2023/07/25 (A10001986)
+ *    - Loop for adding WiFi parameters
+ *  2023/07/24 (A10001986)
+ *    - Truncate beep sound data (for bin size)
+ *    - Reduce/shrink debug output (for bin size)
+ *  2023/07/22 (A10001986)
+ *    - BTTFN: Add client device type; let others query IP of given type
+ *    - Do some minor binary size crunching
+ *  2023/07/20 (A10001986)
+ *    - Make "beep" ever so slightly shorter
+ *    - Hack to display "0" on CircuitSetup's speedo's fake third digit
+ *      (Enabled by compile-time-option, see tc_global.h)
+ *  2023/07/17 (A10001986)
+ *    - Try to make keypad sounds more immediate
+ *  2023/07/11 (A10001986)
  *    - Clean up
  *  2023/07/09 (A10001986)
  *    - BTTFN: Provide some status info to BTTFN clients
