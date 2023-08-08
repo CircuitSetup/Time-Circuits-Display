@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * speedDisplay Class: Speedo Display
  *
@@ -285,29 +285,28 @@ static struct dispConf {
     uint8_t  dot01_shift;    //   1s dot shift to align in buffer
     uint8_t  colon_pos;      //   Pos of center colon in 16bit buffer (255 = no colon)
     uint16_t colon_bit;      //   The bitmask for the center colon
-    uint8_t  buf_size;       //   total buffer size in words (16bit)
     uint8_t  num_digs;       //   total number of digits/letters
     uint8_t  buf_packed;     //   2 digits in one buffer pos? (0=no, 1=yes) (for 7seg only)
     uint8_t  bufPosArr[4];   //   The buffer positions of each of the digits from left to right
     uint8_t  bufShftArr[4];  //   Shift-value for each digit from left to right
     const uint16_t *fontSeg; //   Pointer to font
 } displays[SP_NUM_TYPES] = {
-  { true,  0, 1, 0, 8, 1, 8, 255,      0, 8, 2, 0, { 0, 1 },       { 0, 8 },       font7segGeneric },  // CircuitSetup Speedo+GPS add-on
-  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)
-  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 8, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)
-  { false, 2, 3, 0, 0, 3, 0, 255,      0, 8, 4, 0, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right)
-  { false, 0, 1, 0, 0, 1, 0, 255,      0, 8, 4, 0, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)
-  { false, 2, 1, 0, 0, 1, 0, 255,      0, 8, 2, 0, { 2, 1 },       { 0, 0, 0, 0 }, font14segGrove },   // SP_GROVE_2DIG14
-  { false, 3, 4, 0, 0, 4, 0,   5, 0x2080, 8, 4, 0, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
-  { false, 1, 2, 0, 0, 2, 0,   5, 0x2080, 8, 4, 0, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
-  { false, 0, 1, 0, 0, 1, 0, 255,      0, 8, 2, 0, { 0, 1 },       { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L, but left tube only (TW wall clock)
-  { true,  0, 1, 0, 0, 1, 0, 255,      0, 8, 2, 0, { 0, 1 },       { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L, but left tube only (TW speedo replica)
+  { true,  0, 1, 0, 8, 1, 8, 255,      0, 2, 0, { 0, 1 },       { 0, 8 },       font7segGeneric },  // CircuitSetup Speedo+GPS add-on
+  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right)
+  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)
+  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)
+  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)
+  { false, 2, 3, 0, 0, 3, 0, 255,      0, 4, 0, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right)
+  { false, 0, 1, 0, 0, 1, 0, 255,      0, 4, 0, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)
+  { false, 2, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 2, 1 },       { 0, 0, 0, 0 }, font14segGrove },   // SP_GROVE_2DIG14
+  { false, 3, 4, 0, 0, 4, 0,   5, 0x2080, 4, 0, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
+  { false, 1, 2, 0, 0, 2, 0,   5, 0x2080, 4, 0, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
+  { false, 0, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 0, 1 },       { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L, but left tube only (TW wall clock)
+  { true,  0, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 0, 1 },       { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L, but left tube only (TW speedo replica)
 // .... for testing only:
-//{ true,  7, 7, 0, 8, 7, 8, 255,      0, 8, 2, 1, { 7 },          { 0, 8 },       font7segGeneric },  // SP_TCD_TEST7
-//{ false, 1, 2, 0, 0, 2, 0, 255,      0, 8, 3, 0, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }, // SP_TCD_TEST14 right
-//{ false, 0, 1, 0, 0, 1, 0, 255,      0, 8, 3, 0, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }  // SP_TCD_TEST14 left
+//{ true,  7, 7, 0, 8, 7, 8, 255,      0, 2, 1, { 7 },          { 0, 8 },       font7segGeneric },  // SP_TCD_TEST7
+//{ false, 1, 2, 0, 0, 2, 0, 255,      0, 3, 0, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }, // SP_TCD_TEST14 right
+//{ false, 0, 1, 0, 0, 1, 0, 255,      0, 3, 0, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }  // SP_TCD_TEST14 left
 };
 
 // Grove 4-digit special handling
@@ -344,7 +343,6 @@ void speedDisplay::begin(int dispType)
     _dot01_shift = displays[dispType].dot01_shift;
     _colon_pos = displays[dispType].colon_pos;
     _colon_bm = displays[dispType].colon_bit;
-    _buf_size = displays[dispType].buf_size;
     _num_digs = displays[dispType].num_digs;
     _buf_packed = displays[dispType].buf_packed;
     _bufPosArr = displays[dispType].bufPosArr;
@@ -379,7 +377,7 @@ void speedDisplay::lampTest()
     Wire.beginTransmission(_address);
     Wire.write(0x00);  // start address
 
-    for(int i = 0; i < _buf_size*2; i++) {
+    for(int i = 0; i < 8*2; i++) {
         Wire.write(0xFF);
     }
     Wire.endTransmission();
@@ -393,7 +391,7 @@ void speedDisplay::clearBuf()
 {
     // must call show() to actually clear display
 
-    for(int i = 0; i < _buf_size; i++) {
+    for(int i = 0; i < 8; i++) {
         _displayBuffer[i] = 0;
     }
 }
@@ -480,7 +478,7 @@ void speedDisplay::show()
     Wire.beginTransmission(_address);
     Wire.write(0x00);  // start address
 
-    for(i = 0; i < _buf_size; i++) {
+    for(i = 0; i < 8; i++) {
         Wire.write(_displayBuffer[i] & 0xFF);
         Wire.write(_displayBuffer[i] >> 8);
     }
@@ -561,6 +559,12 @@ void speedDisplay::setSpeed(int8_t speedNum)
     } else {
         _displayBuffer[_speed_pos10] |= (*(_fontXSeg + (speedNum / 10)) << _dig10_shift);
         _displayBuffer[_speed_pos01] |= (*(_fontXSeg + (speedNum % 10)) << _dig01_shift);
+        #ifdef SP_CS_0ON
+        if(_dispType == SP_CIRCSETUP) {
+            // Hack to display "0" after dot
+            _displayBuffer[2] = 0b00111111;
+        }
+        #endif
     }
     
     if(_dot01) _displayBuffer[_dot_pos01] |= (*(_fontXSeg + 36) << _dot01_shift);
@@ -794,7 +798,7 @@ void speedDisplay::clearDisplay()
     Wire.beginTransmission(_address);
     Wire.write(0x00);  // start address
 
-    for(int i = 0; i < _buf_size*2; i++) {
+    for(int i = 0; i < 8*2; i++) {
         Wire.write(0x0);
     }
 

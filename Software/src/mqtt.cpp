@@ -48,26 +48,14 @@ static void defLooper()
 {
 }
 
-PubSubClient::PubSubClient()
-{
-    this->_state = MQTT_DISCONNECTED;
-    this->_client = NULL;
-    setCallback(NULL);
-    this->bufferSize = 0;
-    setBufferSize(MQTT_MAX_PACKET_SIZE);
-    setKeepAlive(MQTT_KEEPALIVE);
-    setSocketTimeout(MQTT_SOCKET_TIMEOUT);
-    setLooper(defLooper);
-}
-
 PubSubClient::PubSubClient(WiFiClient& client)
 {
     this->_state = MQTT_DISCONNECTED;
-    setClient(client);
+    this->_client = &client;
     this->bufferSize = 0;
     setBufferSize(MQTT_MAX_PACKET_SIZE);
-    setKeepAlive(MQTT_KEEPALIVE);
-    setSocketTimeout(MQTT_SOCKET_TIMEOUT);
+    this->keepAlive = MQTT_KEEPALIVE;
+    this->socketTimeout = MQTT_SOCKET_TIMEOUT * 1000;
     setLooper(defLooper);
 }
 
@@ -629,11 +617,6 @@ void PubSubClient::setLooper(void (*looper)())
     this->looper = looper;
 }
 
-void PubSubClient::setClient(WiFiClient& client)
-{
-    this->_client = &client;
-}
-
 int PubSubClient::state()
 {
     return this->_state;
@@ -658,21 +641,6 @@ bool PubSubClient::setBufferSize(uint16_t size)
     this->bufferSize = size;
     
     return (this->buffer != NULL);
-}
-
-uint16_t PubSubClient::getBufferSize()
-{
-    return this->bufferSize;
-}
-
-void PubSubClient::setKeepAlive(uint16_t keepAlive)
-{
-    this->keepAlive = keepAlive;
-}
-
-void PubSubClient::setSocketTimeout(uint16_t timeout)
-{
-    this->socketTimeout = timeout * 1000;
 }
 
 /*

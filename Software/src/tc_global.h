@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * Global definitions
  */
@@ -11,14 +11,24 @@
 #ifndef _TC_GLOBAL_H
 #define _TC_GLOBAL_H
 
-// Version strings.
+/*************************************************************************
+ ***                           Miscellaneous                           ***
+ *************************************************************************/
+
+// Uncomment if month is 2 digits (7-seg), as in the original A-Car display.
+//#define IS_ACAR_DISPLAY
+
+/*************************************************************************
+ ***                          Version Strings                          ***
+ *************************************************************************/
+
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION "V2.8.0"           // 13 chars max
+#define TC_VERSION "V2.8.99"          // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "MAY222023"  // 13 chars max
+#define TC_VERSION_EXTRA "AUG042023"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "05222023"   // 12 chars max
+#define TC_VERSION_EXTRA "08042023"   // 12 chars max
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -52,7 +62,10 @@
 #define SP_MIN_TYPE     0
 // Uncomment to keep speedo showing "00" when neither temp nor GPS speed 
 // are to be displayed instead of switching it off.
-//#define SP_ALWAYS_ON      
+//#define SP_ALWAYS_ON
+// Uncomment to enable the fake-0 on CircuitSetup's speedo; is not usable
+// as a full third digit, just displays "0" when speed to be displayed
+//#define SP_CS_0ON
 
 // Uncomment for support of a temperature/humidity sensor (MCP9808, BMx280, 
 // SI7021, SHT40, TMP117, AHT20, HTU31D) connected via i2c. Will be used for 
@@ -90,11 +103,14 @@
 // The defined pin is set HIGH on a time travel, and LOW upon re-entry from 
 // a time travel. See tc_time.c for a timing diagram.
 // Uncomment to include support for etto, see below for pin number
-// This is also needed if MQTT is used to trigger external props
+// This is also needed if MQTT or BTTFN is used to trigger external props
 #define EXTERNAL_TIMETRAVEL_OUT
 
 // Uncomment for HomeAssistant MQTT protocol support
 #define TC_HAVEMQTT
+
+// Uncomment for bttf network support
+#define TC_HAVEBTTFN
 
 // --- end of config options
 
@@ -102,15 +118,22 @@
  ***                           Miscellaneous                           ***
  *************************************************************************/
 
-// Uncomment if month is 2 digits (7-seg), as in the original A-Car display.
-//#define IS_ACAR_DISPLAY
-
 // Uncomment if using real GTE/TRW keypad control board
 //#define GTE_KEYPAD 
 
+// Uncomment for alternate "animation" when entering a destination time
+// (Does not affect other situations where animation is shown, like time
+// cycling, or when RC mode is active)
+//#define BTTF3_ANIM
+
+// Uncomment if AM and PM should be reversed (like in BTTF2/3-version of TCD)
+//#define REV_AMPM
+
 // Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino >= 2.x)
-// Since I am on esp32-arduino 1.x, I use SPIFFS.
 //#define USE_SPIFFS
+
+// Uncomment for 2Hz GPS updates for GPS speed (undefined: 1Hz)
+//#define TC_GPSSPEED500
 
 // Custom stuff -----
 //#define TWSOUND         // Use A10001986's sound files
@@ -124,6 +147,18 @@
 #define TC_VERSION "A10001986"
 #endif
 
+/*************************************************************************
+ ***                  esp32-arduino version detection                  ***
+ *************************************************************************/
+
+#if defined __has_include && __has_include(<esp_arduino_version.h>)
+#include <esp_arduino_version.h>
+#ifdef ESP_ARDUINO_VERSION_MAJOR
+    #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(2,0,8)
+    #define HAVE_GETNEXTFILENAME
+    #endif
+#endif
+#endif
 
 /*************************************************************************
  ***                             GPIO pins                             ***
@@ -171,8 +206,6 @@
  ***                         TimeCircuits Epoch                        ***
  *************************************************************************/
 
-#define SECS1900_1970 2208988800ULL
-
 #define SECS1970_2022 1640995200ULL
 #define SECS1970_2023 1672531200ULL
 #define SECS1970_2024 1704067200ULL
@@ -190,7 +223,7 @@
 #define SECS1970_2036 2082758400ULL
 
 // NTP baseline data: Prolong life time of NTP
-// Set this to current year. Stop and leave at 2036.
+// Set this to current year. Stop at 2036.
 #define TCEPOCH       2023
 // Set to SECS1970_xxxx, xxxx being current year. Stop at 2036.
 #define TCEPOCH_SECS  SECS1970_2023

@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * speedDisplay Class: Speedo Display
  *
@@ -147,7 +147,6 @@ class speedDisplay {
         uint8_t  _dot01_shift;    //      1s dot shift to align in buffer
         uint8_t  _colon_pos;      //      Pos of colon in 16bit buffer (255 = no colon)
         uint16_t _colon_bm;       //      bitmask for colon
-        uint8_t  _buf_size;       //      total buffer size in words (16bit)
         uint8_t  _num_digs;       //      total number of digits/letters (max 4)
         uint8_t  _buf_packed;     //      2 digits in one buffer pos? (0=no, 1=yes)
         uint8_t *_bufPosArr;      //      Array of buffer positions for digits left->right

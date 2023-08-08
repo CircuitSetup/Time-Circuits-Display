@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * WiFi and Config Portal handling
  *
@@ -220,9 +220,9 @@ WiFiManagerParameter custom_tempOffNM("toffNM", "Temperature off in night mode",
 
 #ifdef FAKE_POWER_ON
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
-WiFiManagerParameter custom_fakePwrOn("fpo", "Use fake power switch (0=no, 1=yes)", settings.fakePwrOn, 1, "autocomplete='off' title='Enable to use a switch to fake-power-up and fake-power-down the device'");
+WiFiManagerParameter custom_fakePwrOn("fpo", "Use fake power switch (0=no, 1=yes)", settings.fakePwrOn, 1, "autocomplete='off' title='Enable to use a switch to fake-power-up/-down the device'");
 #else // -------------------- Checkbox hack: --------------
-WiFiManagerParameter custom_fakePwrOn("fpo", "Use fake power switch", settings.fakePwrOn, 1, "title='Check to use a switch to fake-power-up and fake-power-down the device' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_fakePwrOn("fpo", "Use fake power switch", settings.fakePwrOn, 1, "title='Check to use a switch to fake-power-up/-down the device' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 #endif
 
@@ -237,30 +237,37 @@ WiFiManagerParameter custom_ettDelay("ettDe", "Delay (ms)", settings.ettDelay, 5
 
 #ifdef EXTERNAL_TIMETRAVEL_OUT
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
-WiFiManagerParameter custom_useETTO("uEtto", "Use compatible external props (0=no, 1=yes)", settings.useETTO, 1, "autocomplete='off' title='Enable to use compatible wired external props to be part of the time travel sequence, eg. FluxCapacitor, SID, etc.'");
+WiFiManagerParameter custom_useETTO("uEtto", "Control props connected by wire (0=no, 1=yes)", settings.useETTO, 1, "autocomplete='off' title='Enable to notify props of a time travel'");
 #else // -------------------- Checkbox hack: --------------
-WiFiManagerParameter custom_useETTO("uEtto", "Use compatible external props", settings.useETTO, 1, "autocomplete='off' title='Check to use compatible wired external props to be part of the time travel sequence, eg. Flux Capacitor, SID, etc.' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_useETTO("uEtto", "Control props connected by wire", settings.useETTO, 1, "autocomplete='off' title='Check to notify props of a time travel' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 #endif // EXTERNAL_TIMETRAVEL_OUT
+#ifdef TC_HAVEGPS
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
-WiFiManagerParameter custom_playTTSnd("plyTTS", "Play time travel sounds (0=no, 1=yes)", settings.playTTsnds, 1, "autocomplete='off' title='Disable if other props provide time travel sound.'");
+WiFiManagerParameter custom_qGPS("qGPS", "Provide GPS speed for wireless props (0=no, 1=yes)", settings.quickGPS, 1, "autocomplete='off' title='Enable for frequently updated GPS speed for wireless props'");
 #else // -------------------- Checkbox hack: --------------
-WiFiManagerParameter custom_playTTSnd("plyTTS", "Play time travel sounds", settings.playTTsnds, 1, "autocomplete='off' title='Uncheck if other props provide time travel sound.' type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_qGPS("qGPS", "Provide GPS speed for wireless props", settings.quickGPS, 1, "autocomplete='off' title='Check for frequently updated GPS speed for wireless props' type='checkbox'", WFM_LABEL_AFTER);
+#endif // -------------------------------------------------
+#endif // TC_HAVEGPS
+#ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
+WiFiManagerParameter custom_playTTSnd("plyTTS", "Play time travel sounds (0=no, 1=yes)", settings.playTTsnds, 1, "autocomplete='off' title='Disable if other props provide time travel sound'");
+#else // -------------------- Checkbox hack: --------------
+WiFiManagerParameter custom_playTTSnd("plyTTS", "Play time travel sounds", settings.playTTsnds, 1, "autocomplete='off' title='Uncheck if other props provide time travel sound' type='checkbox'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 
 #ifdef TC_HAVEMQTT
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
-WiFiManagerParameter custom_useMQTT("uMQTT", "Use Home Assistant (0=no, 1=yes)", settings.useMQTT, 1, "autocomplete='off'");
+WiFiManagerParameter custom_useMQTT("uMQTT", "Use HA/MQTT 3.1.1 (0=no, 1=yes)", settings.useMQTT, 1, "autocomplete='off'");
 #else // -------------------- Checkbox hack: --------------
 WiFiManagerParameter custom_useMQTT("uMQTT", "Use Home Assistant (MQTT 3.1.1)", settings.useMQTT, 1, "type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 WiFiManagerParameter custom_mqttServer("ha_server", "<br>Broker IP[:port] or domain[:port]", settings.mqttServer, 79, "pattern='[a-zA-Z0-9.-:]+' placeholder='Example: 192.168.1.5'");
 WiFiManagerParameter custom_mqttUser("ha_usr", "User[:Password]", settings.mqttUser, 63, "placeholder='Example: ronald:mySecret'");
-WiFiManagerParameter custom_mqttTopic("ha_topic", "Topic to subscribe to", settings.mqttTopic, 127, "placeholder='Example: home/outside/temperature'");
+WiFiManagerParameter custom_mqttTopic("ha_topic", "Topic to display", settings.mqttTopic, 127, "placeholder='Optional. Example: home/alarm/status'");
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
-WiFiManagerParameter custom_pubMQTT("pMQTT", "Send commands for external props", settings.pubMQTT, 1, "autocomplete='off'");
+WiFiManagerParameter custom_pubMQTT("pMQTT", "Send event notifications (0=no, 1=yes)", settings.pubMQTT, 1, "autocomplete='off' title='Enable to send out time travel/alarm notifications'");
 #else // -------------------- Checkbox hack: --------------
-WiFiManagerParameter custom_pubMQTT("pMQTT", "Send commands for external props", settings.pubMQTT, 1, "type='checkbox' style='margin-top:5px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_pubMQTT("pMQTT", "Send event notifications", settings.pubMQTT, 1, "type='checkbox' style='margin-top:5px' title='Check to send out time travel/alarm notifications'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 #endif // HAVEMQTT
 
@@ -299,7 +306,7 @@ WiFiManagerParameter custom_sectend_foot("</div><p></p>");
 #define TC_MENUSIZE 7
 static const char* wifiMenu[TC_MENUSIZE] = {"wifi", "param", "sep", "restart", "update", "sep", "custom" };
 
-static const char* myHead = "<link rel='shortcut icon' type='image/png' href='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAA9QTFRFjpCRzMvH9tgx8iU9Q7YkHP8yywAAAC1JREFUeNpiYEQDDIwMKAAkwIwEiBTAMIMFCRApgGEGExIgUgDDDHQBNAAQYADhYgGBZLgAtAAAAABJRU5ErkJggg=='><script>function wlp(){return window.location.pathname;}function getn(x){return document.getElementsByTagName(x)}function ge(x){return document.getElementById(x)}function c(l){ge('s').value=l.getAttribute('data-ssid')||l.innerText||l.textContent;p=l.nextElementSibling.classList.contains('l');ge('p').disabled=!p;if(p){ge('p').placeholder='';ge('p').focus();}}window.onload=function(){xx=false;document.title='Time Circuits';if(ge('s')&&ge('dns')){xx=true;xxx=document.title;yyy='Configure WiFi';aa=ge('s').parentElement;bb=aa.innerHTML;dd=bb.search('<hr>');ee=bb.search('<button');cc='<div class=\"sects\">'+bb.substring(0,dd)+'</div><div class=\"sects\">'+bb.substring(dd+4,ee)+'</div>'+bb.substring(ee);aa.innerHTML=cc;document.querySelectorAll('a[href=\"#p\"]').forEach((userItem)=>{userItem.onclick=function(){c(this);return false;}});if(aa=ge('s')){aa.oninput=function(){if(this.placeholder.length>0&&this.value.length==0){ge('p').placeholder='********';}}}}if(ge('uploadbin')||wlp()=='/u'||wlp()=='/wifisave'){xx=true;xxx=document.title;yyy=(wlp()=='/wifisave')?'Configure WiFi':'Firmware update';aa=document.getElementsByClassName('wrap');if(aa.length>0){if((bb=ge('uploadbin'))){aa[0].style.textAlign='center';bb.parentElement.onsubmit=function(){aa=ge('uploadbin');if(aa){aa.disabled=true;aa.innerHTML='Please wait'}}}aa=getn('H3');if(aa.length>0){aa[0].remove()}aa=getn('H1');if(aa.length>0){aa[0].remove()}}}if(ge('ttrp')||wlp()=='/param'){xx=true;xxx=document.title;yyy='Setup';}if(ge('ebnew')){xx=true;bb=getn('H3');aa=getn('H1');xxx=aa[0].innerHTML;yyy=bb[0].innerHTML;ff=aa[0].parentNode;ff.style.position='relative';}if(xx){zz=(Math.random()>0.8);dd=document.createElement('div');dd.classList.add('tpm0');dd.innerHTML='<div class=\"tpm\"><div class=\"tpm2\"><img src=\"data:image/png;base64,'+(zz?'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAZQTFRFSp1tAAAA635cugAAAAJ0Uk5T/wDltzBKAAAAbUlEQVR42tzXwRGAQAwDMdF/09QQQ24MLkDj77oeTiPA1wFGQiHATOgDGAp1AFOhDWAslAHMhS6AQKgCSIQmgEgoAsiEHoBQqAFIhRaAWCgByIVXAMuAdcA6YBlwALAKePzgd71QAByP71uAAQC+xwvdcFg7UwAAAABJRU5ErkJggg==':'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAZQTFRFSp1tAAAA635cugAAAAJ0Uk5T/wDltzBKAAAAgElEQVR42tzXQQqDABAEwcr/P50P2BBUdMhee6j7+lw8i4BCD8MiQAjHYRAghAh7ADWMMAcQww5jADHMsAYQwwxrADHMsAYQwwxrADHMsAYQwwxrgLgOPwKeAjgrrACcFkYAzgu3AN4C3AV4D3AP4E3AHcDF+8d/YQB4/Pn+CjAAMaIIJuYVQ04AAAAASUVORK5CYII=')+'\" class=\"tpm3\"></div><H1 class=\"tpmh1\"'+(zz?' style=\"margin-left:1.2em\"':'')+'>'+xxx+'</H1>'+'<H3 class=\"tpmh3\"'+(zz?' style=\"padding-left:4.5em\"':'')+'>'+yyy+'</div></div>';}if(ge('ebnew')){bb[0].remove();aa[0].replaceWith(dd);}if((ge('s')&&ge('dns'))||ge('uploadbin')||wlp()=='/u'||wlp()=='/wifisave'||ge('ttrp')||wlp()=='/param'){aa=document.getElementsByClassName('wrap');if(aa.length>0){aa[0].insertBefore(dd,aa[0].firstChild);aa[0].style.position='relative';}}}</script><style type='text/css'>body{font-family:-apple-system,BlinkMacSystemFont,system-ui,'Segoe UI',Roboto,'Helvetica Neue',Verdana,Helvetica}H1,H2{margin-top:0px;margin-bottom:0px;text-align:center;}H3{margin-top:0px;margin-bottom:5px;text-align:center;}div.msg{border:1px solid #ccc;border-left-width:15px;border-radius:20px;background:linear-gradient(320deg,rgb(255,255,255) 0%,rgb(235,234,233) 100%);}button{transition-delay:250ms;margin-top:10px;margin-bottom:10px;color:#fff;background-color:#225a98;font-variant-caps:all-small-caps;}button.DD{color:#000;border:4px ridge #999;border-radius:2px;background:#e0c942;background-image:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAADBQTFRF////AAAAMyks8+AAuJYi3NHJo5aQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbP19EwAAAAh0Uk5T/////////wDeg71ZAAAA4ElEQVR42qSTyxLDIAhF7yChS/7/bwtoFLRNF2UmRr0H8IF4/TBsY6JnQFvTJ8D0ncChb0QGlDvA+hkw/yC4xED2Z2L35xwDRSdqLZpFIOU3gM2ox6mA3tnDPa8UZf02v3q6gKRH/Eyg6JZBqRUCRW++yFYIvCjNFIt9OSC4hol/ItH1FkKRQgAbi0ty9f/F7LM6FimQacPbAdG5zZVlWdfvg+oEpl0Y+jzqIJZ++6fLqlmmnq7biZ4o67lgjBhA0kvJyTww/VK0hJr/LHvBru8PR7Dpx9MT0f8e72lvAQYALlAX+Kfw0REAAAAASUVORK5CYII=');background-repeat:no-repeat;background-origin:content-box;background-size:contain;}br{display:block;font-size:1px;content:''}input[type='checkbox']{display:inline-block;margin-top:10px}input{border:thin inset}small{display:none}em > small{display:inline}form{margin-block-end:0;}.tpm{border:1px solid black;border-radius:5px;padding:0 0 0 0px;min-width:18em;}.tpm2{position:absolute;top:-0.7em;z-index:130;left:0.7em;}.tpm3{width:4em;height:4em;}.tpmh1{font-variant-caps:all-small-caps;margin-left:2em;}.tpmh3{background:#000;font-size:0.6em;color:#ffa;padding-left:7em;margin-left:0.5em;margin-right:0.5em;border-radius:5px}.sects{background-color:#eee;border-radius:7px;margin-bottom:20px;padding-bottom:7px;padding-top:7px}.tpm0{position:relative;width:300px;margin:0 auto 0 auto;}.headl{margin:0 0 3px 0;padding:0}.cmp0{margin:0;padding:0;}.sel0{font-size:90%;width:auto;margin-left:10px;vertical-align:baseline;}</style>";
+static const char* myHead = "<link rel='shortcut icon' type='image/png' href='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAA9QTFRFjpCRzMvH9tgx8iU9Q7YkHP8yywAAAC1JREFUeNpiYEQDDIwMKAAkwIwEiBTAMIMFCRApgGEGExIgUgDDDHQBNAAQYADhYgGBZLgAtAAAAABJRU5ErkJggg=='><script>function wlp(){return window.location.pathname;}function getn(x){return document.getElementsByTagName(x)}function ge(x){return document.getElementById(x)}function c(l){ge('s').value=l.getAttribute('data-ssid')||l.innerText||l.textContent;p=l.nextElementSibling.classList.contains('l');ge('p').disabled=!p;if(p){ge('p').placeholder='';ge('p').focus();}}window.onload=function(){xx=false;document.title='Time Circuits';if(ge('s')&&ge('dns')){xx=true;xxx=document.title;yyy='Configure WiFi';aa=ge('s').parentElement;bb=aa.innerHTML;dd=bb.search('<hr>');ee=bb.search('<button');cc='<div class=\"sects\">'+bb.substring(0,dd)+'</div><div class=\"sects\">'+bb.substring(dd+4,ee)+'</div>'+bb.substring(ee);aa.innerHTML=cc;document.querySelectorAll('a[href=\"#p\"]').forEach((userItem)=>{userItem.onclick=function(){c(this);return false;}});if(aa=ge('s')){aa.oninput=function(){if(this.placeholder.length>0&&this.value.length==0){ge('p').placeholder='********';}}}}if(ge('uploadbin')||wlp()=='/u'||wlp()=='/wifisave'){xx=true;xxx=document.title;yyy=(wlp()=='/wifisave')?'Configure WiFi':'Firmware update';aa=document.getElementsByClassName('wrap');if(aa.length>0){if((bb=ge('uploadbin'))){aa[0].style.textAlign='center';bb.parentElement.onsubmit=function(){aa=ge('uploadbin');if(aa){aa.disabled=true;aa.innerHTML='Please wait'}}}aa=getn('H3');if(aa.length>0){aa[0].remove()}aa=getn('H1');if(aa.length>0){aa[0].remove()}}}if(ge('ttrp')||wlp()=='/param'){xx=true;xxx=document.title;yyy='Setup';}if(ge('ebnew')){xx=true;bb=getn('H3');aa=getn('H1');xxx=aa[0].innerHTML;yyy=bb[0].innerHTML;ff=aa[0].parentNode;ff.style.position='relative';}if(xx){zz=(Math.random()>0.8);dd=document.createElement('div');dd.classList.add('tpm0');dd.innerHTML='<div class=\"tpm\"><div class=\"tpm2\"><img src=\"data:image/png;base64,'+(zz?'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAZQTFRFSp1tAAAA635cugAAAAJ0Uk5T/wDltzBKAAAAbUlEQVR42tzXwRGAQAwDMdF/09QQQ24MLkDj77oeTiPA1wFGQiHATOgDGAp1AFOhDWAslAHMhS6AQKgCSIQmgEgoAsiEHoBQqAFIhRaAWCgByIVXAMuAdcA6YBlwALAKePzgd71QAByP71uAAQC+xwvdcFg7UwAAAABJRU5ErkJggg==':'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAZQTFRFSp1tAAAA635cugAAAAJ0Uk5T/wDltzBKAAAAgElEQVR42tzXQQqDABAEwcr/P50P2BBUdMhee6j7+lw8i4BCD8MiQAjHYRAghAh7ADWMMAcQww5jADHMsAYQwwxrADHMsAYQwwxrADHMsAYQwwxrgLgOPwKeAjgrrACcFkYAzgu3AN4C3AV4D3AP4E3AHcDF+8d/YQB4/Pn+CjAAMaIIJuYVQ04AAAAASUVORK5CYII=')+'\" class=\"tpm3\"></div><H1 class=\"tpmh1\"'+(zz?' style=\"margin-left:1.2em\"':'')+'>'+xxx+'</H1>'+'<H3 class=\"tpmh3\"'+(zz?' style=\"padding-left:4.5em\"':'')+'>'+yyy+'</div></div>';}if(ge('ebnew')){bb[0].remove();aa[0].replaceWith(dd);}if((ge('s')&&ge('dns'))||ge('uploadbin')||wlp()=='/u'||wlp()=='/wifisave'||ge('ttrp')||wlp()=='/param'){aa=document.getElementsByClassName('wrap');if(aa.length>0){aa[0].insertBefore(dd,aa[0].firstChild);aa[0].style.position='relative';}}}</script><style type='text/css'>body{font-family:-apple-system,BlinkMacSystemFont,system-ui,'Segoe UI',Roboto,'Helvetica Neue',Verdana,Helvetica}H1,H2{margin-top:0px;margin-bottom:0px;text-align:center;}H3{margin-top:0px;margin-bottom:5px;text-align:center;}div.msg{border:1px solid #ccc;border-left-width:15px;border-radius:20px;background:linear-gradient(320deg,rgb(255,255,255) 0%,rgb(235,234,233) 100%);}button{transition-delay:250ms;margin-top:10px;margin-bottom:10px;color:#fff;background-color:#225a98;font-variant-caps:all-small-caps;}button.DD{color:#000;border:4px ridge #999;border-radius:2px;background:#e0c942;background-image:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAADBQTFRF////AAAAMyks8+AAuJYi3NHJo5aQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbP19EwAAAAh0Uk5T/////////wDeg71ZAAAA4ElEQVR42qSTyxLDIAhF7yChS/7/bwtoFLRNF2UmRr0H8IF4/TBsY6JnQFvTJ8D0ncChb0QGlDvA+hkw/yC4xED2Z2L35xwDRSdqLZpFIOU3gM2ox6mA3tnDPa8UZf02v3q6gKRH/Eyg6JZBqRUCRW++yFYIvCjNFIt9OSC4hol/ItH1FkKRQgAbi0ty9f/F7LM6FimQacPbAdG5zZVlWdfvg+oEpl0Y+jzqIJZ++6fLqlmmnq7biZ4o67lgjBhA0kvJyTww/VK0hJr/LHvBru8PR7Dpx9MT0f8e72lvAQYALlAX+Kfw0REAAAAASUVORK5CYII=');background-repeat:no-repeat;background-origin:content-box;background-size:contain;}br{display:block;font-size:1px;content:''}input[type='checkbox']{display:inline-block;margin-top:10px}input{border:thin inset}small{display:none}em > small{display:inline}form{margin-block-end:0;}.tpm{border:1px solid black;border-radius:5px;padding:0 0 0 0px;min-width:18em;}.tpm2{position:absolute;top:-0.7em;z-index:130;left:0.7em;}.tpm3{width:4em;height:4em;}.tpmh1{font-variant-caps:all-small-caps;font-weight:normal;margin-left:2em;}.tpmh3{background:#000;font-size:0.6em;color:#ffa;padding-left:7em;margin-left:0.5em;margin-right:0.5em;border-radius:5px}.sects{background-color:#eee;border-radius:7px;margin-bottom:20px;padding-bottom:7px;padding-top:7px}.tpm0{position:relative;width:20em;margin:0 auto 0 auto;}.headl{margin:0 0 3px 0;padding:0}.cmp0{margin:0;padding:0;}.sel0{font-size:90%;width:auto;margin-left:10px;vertical-align:baseline;}</style>";
 
 static const char* myCustMenu = "<form action='/erase' method='get' onsubmit='return confirm(\"This erases the WiFi config and reboots. The clock will restart in access point mode. Are you sure?\");'><button id='ebnew' class='DD'>Erase WiFi Config</button></form><br/><img style='display:block;margin:10px auto 10px auto;' src='data:image/png;base64,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'><div style='font-size:9px;margin-left:auto;margin-right:auto;text-align:center;'>Version " TC_VERSION " (" TC_VERSION_EXTRA ")<br>Powered by <a href='https://github.com/realA10001986/Time-Circuits-Display' target=_blank>A10001986</a></div>";
 
@@ -359,7 +366,6 @@ static void waitConnectCallback();
 
 static void setupStaticIP();
 static bool isIp(char *str);
-static void ipToString(char *str, IPAddress ip);
 static IPAddress stringToIp(char *str);
 
 static void getParam(String name, char *destBuf, size_t length);
@@ -389,6 +395,102 @@ static void mqttSubscribe();
 void wifi_setup()
 {
     int temp;
+    
+    WiFiManagerParameter *parmArray[] = {
+      
+      &custom_sectstart_head, 
+      &custom_ttrp, 
+      &custom_alarmRTC, 
+      &custom_playIntro, 
+      &custom_mode24, 
+      &custom_beep_aint,
+
+      &custom_sectstart, 
+      &custom_hostName, 
+      &custom_wifiConRetries, 
+      &custom_wifiConTimeout, 
+      &custom_wifiPRe,
+      &custom_wifiOffDelay, 
+      &custom_wifiAPOffDelay,
+
+      &custom_sectstart_wi,   // (ss_wi contains wifiHint from section above)
+      &custom_timeZone, 
+      &custom_ntpServer,   
+      &custom_sectstart_wc, 
+      &custom_timeZone1, &custom_timeZoneN1,
+      &custom_timeZone2, &custom_timeZoneN2,
+    
+      &custom_sectstart_nm, 
+      &custom_dtNmOff, &custom_ptNmOff, &custom_ltNmOff,
+      &custom_autoNMTimes, 
+      &custom_autoNMOn, &custom_autoNMOff,
+    #ifdef TC_HAVELIGHT
+      &custom_uLS, &custom_lxLim,
+    #endif
+
+    #ifdef TC_HAVETEMP
+      &custom_sectstart_te, 
+      &custom_tempUnit, 
+      &custom_tempOffs,
+    #endif
+
+    #ifdef TC_HAVESPEEDO
+      &custom_sectstart, 
+      &custom_speedoType, 
+      &custom_speedoBright, 
+      &custom_speedoFact,
+    #ifdef TC_HAVEGPS
+      &custom_useGPSS,
+    #endif
+    #ifdef TC_HAVETEMP
+      &custom_useDpTemp, 
+      &custom_tempBright, 
+      &custom_tempOffNM,
+    #endif
+    #endif
+
+    #ifdef FAKE_POWER_ON
+      &custom_sectstart, 
+      &custom_fakePwrOn,
+    #endif
+    
+    #ifdef EXTERNAL_TIMETRAVEL_IN
+      &custom_sectstart_et, 
+      &custom_ettDelay,  
+      //&custom_ettLong,
+    #endif
+    
+      &custom_sectstart,
+    #ifdef EXTERNAL_TIMETRAVEL_OUT
+      &custom_useETTO,
+    #endif
+    #ifdef TC_HAVEGPS
+      &custom_qGPS,
+    #endif
+      &custom_playTTSnd,
+
+    #ifdef TC_HAVEMQTT
+      &custom_sectstart, 
+      &custom_useMQTT, 
+      &custom_mqttServer, 
+      &custom_mqttUser, 
+      &custom_mqttTopic,
+    #ifdef EXTERNAL_TIMETRAVEL_OUT
+      &custom_pubMQTT,
+    #endif
+    #endif
+    
+      &custom_sectstart_mp, 
+      &custom_shuffle,
+
+      &custom_sectstart, 
+      &custom_CfgOnSD, 
+      //&custom_sdFrq, 
+      &custom_sectend_foot,
+      
+      NULL
+    };
+      
 
     // Explicitly set mode, esp allegedly defaults to STA_AP
     WiFi.mode(WIFI_MODE_STA);
@@ -434,100 +536,12 @@ void wifi_setup()
     //wm.setRemoveDuplicateAPs(false);
 
     wm.setMenu(wifiMenu, TC_MENUSIZE);
-    
-    wm.addParameter(&custom_sectstart_head);// 6
-    wm.addParameter(&custom_ttrp);
-    wm.addParameter(&custom_alarmRTC);
-    wm.addParameter(&custom_playIntro);
-    wm.addParameter(&custom_mode24);
-    wm.addParameter(&custom_beep_aint);
-    
-    wm.addParameter(&custom_sectstart);     // 7
-    wm.addParameter(&custom_hostName);
-    wm.addParameter(&custom_wifiConRetries);
-    wm.addParameter(&custom_wifiConTimeout);
-    wm.addParameter(&custom_wifiPRe);
-    wm.addParameter(&custom_wifiOffDelay);
-    wm.addParameter(&custom_wifiAPOffDelay);
-    
-    wm.addParameter(&custom_sectstart_wi);  // 3    (ss_wi contains wifiHint from section above)
-    wm.addParameter(&custom_timeZone);
-    wm.addParameter(&custom_ntpServer);   
 
-    wm.addParameter(&custom_sectstart_wc);  // 5
-    wm.addParameter(&custom_timeZone1);
-    wm.addParameter(&custom_timeZoneN1);
-    wm.addParameter(&custom_timeZone2);
-    wm.addParameter(&custom_timeZoneN2);
-    
-    wm.addParameter(&custom_sectstart_nm);  // 9
-    wm.addParameter(&custom_dtNmOff);
-    wm.addParameter(&custom_ptNmOff);
-    wm.addParameter(&custom_ltNmOff);
-    wm.addParameter(&custom_autoNMTimes);
-    wm.addParameter(&custom_autoNMOn);
-    wm.addParameter(&custom_autoNMOff);
-    #ifdef TC_HAVELIGHT
-    wm.addParameter(&custom_uLS);
-    wm.addParameter(&custom_lxLim);
-    #endif
-
-    #ifdef TC_HAVETEMP
-    wm.addParameter(&custom_sectstart_te);  // 3
-    wm.addParameter(&custom_tempUnit);
-    wm.addParameter(&custom_tempOffs);
-    #endif
-
-    #ifdef TC_HAVESPEEDO
-    wm.addParameter(&custom_sectstart);     // 8
-    wm.addParameter(&custom_speedoType);
-    wm.addParameter(&custom_speedoBright);
-    wm.addParameter(&custom_speedoFact);
-    #ifdef TC_HAVEGPS
-    wm.addParameter(&custom_useGPSS);
-    #endif
-    #ifdef TC_HAVETEMP
-    wm.addParameter(&custom_useDpTemp);
-    wm.addParameter(&custom_tempBright);
-    wm.addParameter(&custom_tempOffNM);
-    #endif
-    #endif
-
-    #ifdef FAKE_POWER_ON
-    wm.addParameter(&custom_sectstart);     // 2
-    wm.addParameter(&custom_fakePwrOn);
-    #endif
-    
-    #ifdef EXTERNAL_TIMETRAVEL_IN
-    wm.addParameter(&custom_sectstart_et);  // 2
-    wm.addParameter(&custom_ettDelay);
-    //wm.addParameter(&custom_ettLong);
-    #endif
-    
-    wm.addParameter(&custom_sectstart);     // 3
-    #ifdef EXTERNAL_TIMETRAVEL_OUT
-    wm.addParameter(&custom_useETTO);
-    #endif
-    wm.addParameter(&custom_playTTSnd);
-
-    #ifdef TC_HAVEMQTT
-    wm.addParameter(&custom_sectstart);     // 6
-    wm.addParameter(&custom_useMQTT);
-    wm.addParameter(&custom_mqttServer);
-    wm.addParameter(&custom_mqttUser);
-    wm.addParameter(&custom_mqttTopic);
-    #ifdef EXTERNAL_TIMETRAVEL_OUT
-    wm.addParameter(&custom_pubMQTT);
-    #endif
-    #endif
-    
-    wm.addParameter(&custom_sectstart_mp);  // 2
-    wm.addParameter(&custom_shuffle);
-
-    wm.addParameter(&custom_sectstart);     // 3
-    wm.addParameter(&custom_CfgOnSD);
-    //wm.addParameter(&custom_sdFrq);
-    wm.addParameter(&custom_sectend_foot);
+    temp = 0;
+    while(parmArray[temp]) {
+        wm.addParameter(parmArray[temp]);
+        temp++;
+    }
 
     updateConfigPortalValues();
 
@@ -841,6 +855,9 @@ void wifi_loop()
             #ifdef EXTERNAL_TIMETRAVEL_OUT
             mystrcpy(settings.useETTO, &custom_useETTO);
             #endif
+            #ifdef TC_HAVEGPS
+            mystrcpy(settings.quickGPS, &custom_qGPS);
+            #endif
             mystrcpy(settings.playTTsnds, &custom_playTTSnd);
 
             #ifdef TC_HAVEMQTT
@@ -896,6 +913,9 @@ void wifi_loop()
             
             #ifdef EXTERNAL_TIMETRAVEL_OUT
             strcpyCB(settings.useETTO, &custom_useETTO);
+            #endif
+            #ifdef TC_HAVEGPS
+            strcpyCB(settings.quickGPS, &custom_qGPS);
             #endif
             strcpyCB(settings.playTTsnds, &custom_playTTSnd);
 
@@ -962,7 +982,7 @@ void wifi_loop()
     
     if(wifiInAPMode) {
         // Disable WiFi in AP mode after a configurable delay (if > 0)
-        if(wifiAPOffDelay > 0) {
+        if(wifiAPOffDelay > 0 && !bttfnHaveClients) {
             if(!wifiAPIsOff && (millis() - wifiAPModeNow >= wifiAPOffDelay)) {
                 wifiOff(false);
                 wifiAPIsOff = true;
@@ -975,7 +995,7 @@ void wifi_loop()
         }
     } else {
         // Disable WiFi in STA mode after a configurable delay (if > 0)
-        if(origWiFiOffDelay > 0) {
+        if(origWiFiOffDelay > 0 && !bttfnHaveClients) {
             if(!wifiIsOff && (millis() - wifiOnNow >= wifiOffDelay)) {
                 wifiOff(false);
                 wifiIsOff = true;
@@ -1306,11 +1326,21 @@ static void saveParamsCallback()
 }
 
 // This is called before a firmware updated is initiated.
-// Disable WiFi-off-timers.
+// Disable WiFi-off-timers and audio.
 static void preUpdateCallback()
 {
     wifiAPOffDelay = 0;
     origWiFiOffDelay = 0;
+
+    stopAudio();
+
+    allOff();
+    #ifdef TC_HAVESPEEDO
+    if(useSpeedo) speedo.off();
+    #endif
+    destinationTime.resetBrightness();
+    destinationTime.showTextDirect("UPDATING");
+    destinationTime.on();
 }
 
 // Grab static IP parameters from WiFiManager's server.
@@ -1552,6 +1582,9 @@ void updateConfigPortalValues()
     #ifdef EXTERNAL_TIMETRAVEL_OUT
     custom_useETTO.setValue(settings.useETTO, 1);
     #endif
+    #ifdef TC_HAVEGPS
+    custom_qGPS.setValue(settings.quickGPS, 1);
+    #endif
     custom_playTTSnd.setValue(settings.playTTsnds, 1);
     #ifdef TC_HAVEMQTT
     custom_useMQTT.setValue(settings.useMQTT, 1);
@@ -1596,6 +1629,9 @@ void updateConfigPortalValues()
     //#endif
     #ifdef EXTERNAL_TIMETRAVEL_OUT
     setCBVal(&custom_useETTO, settings.useETTO);
+    #endif
+    #ifdef TC_HAVEGPS
+    setCBVal(&custom_qGPS, settings.quickGPS);
     #endif
     setCBVal(&custom_playTTSnd, settings.playTTsnds);
     #ifdef TC_HAVEMQTT
@@ -1691,11 +1727,14 @@ static bool isIp(char *str)
         str++;
     }
 
-    return true;
+    if(segs == 3)
+        return true;
+
+    return false;
 }
 
 // IPAddress to string
-static void ipToString(char *str, IPAddress ip)
+void ipToString(char *str, IPAddress ip)
 {
     sprintf(str, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 }
@@ -1783,19 +1822,12 @@ static void setCBVal(WiFiManagerParameter *el, char *sv)
 }
 #endif
 
-#ifdef TC_HAVEMQTT
-static void strcpyutf8(char *dst, const char *src, unsigned int len)
+int16_t filterOutUTF8(char *src, char *dst, int srcLen = 0, int maxChars = 99999)
 {
-    strncpy(dst, src, len - 1);
-    dst[len - 1] = 0;
-}
-
-static int16_t filterOutUTF8(char *src, char *dst)
-{
-    int i, j, slen = strlen(src);
+    int i, j, slen = srcLen ? srcLen : strlen(src);
     unsigned char c, d, e, f;
 
-    for(i = 0, j = 0; i < slen; i++) {
+    for(i = 0, j = 0; i < slen && j <= maxChars; i++) {
         c = (unsigned char)src[i];
         if(c >= 32 && c < 127 - 1) {    // 127 = °, non-std, skip
             if(c >= 'a' && c <= 'z') c &= ~0x20;
@@ -1822,6 +1854,13 @@ static int16_t filterOutUTF8(char *src, char *dst)
     dst[j] = 0;
 
     return j;
+}
+
+#ifdef TC_HAVEMQTT
+static void strcpyutf8(char *dst, const char *src, unsigned int len)
+{
+    strncpy(dst, src, len - 1);
+    dst[len - 1] = 0;
 }
 
 static void mqttLooper()
@@ -1954,7 +1993,7 @@ static void mqttCallback(char *topic, byte *payload, unsigned int length)
 }
 
 #ifdef TC_DBG
-#define MQTT_FAILCOUNT 6 //120
+#define MQTT_FAILCOUNT 6
 #else
 #define MQTT_FAILCOUNT 120
 #endif
@@ -2049,9 +2088,13 @@ static void mqttSubscribe()
     if(!mqttSubAttempted) {
         if(!mqttClient.subscribe("bttf/tcd/cmd", settings.mqttTopic)) {
             if(!mqttClient.subscribe("bttf/tcd/cmd")) {
+                #ifdef TC_DBG
                 Serial.println("MQTT: Failed to subscribe to all topics");
+                #endif
             } else {
+                #ifdef TC_DBG
                 Serial.println("MQTT: Failed to subscribe to user topic");
+                #endif
             }
         } else {
             #ifdef TC_DBG

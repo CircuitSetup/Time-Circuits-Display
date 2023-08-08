@@ -46,7 +46,73 @@
 
 /*  Changelog
  *
-  *  2023/05/22 (A10001986)
+  *  2023/07/11 (A10001986)
+ *    - Clean up
+ *  2023/07/09 (A10001986)
+ *    - BTTFN: Provide some status info to BTTFN clients
+ *    - Config Portal: Rename some options for simplification/briefness
+ *    - Internal flag-cleanup/fix
+ *  2023/07/07 (A10001986)
+ *    - Block WiFi power-saving as long as BTTFN clients are present
+ *    - GPS speed: Increase update rate to twice per second for smoother speedo display.
+ *      Also, add CP option "Quick GPS updates" for peripherals that poll the TCD for 
+ *      speed (such as SID). If neither this nor the option "Display GPS speed" is set, 
+ *      GPS rate is every 5 seconds; if either is set, twice per second.
+ *    - Extend mere "network polling" into "BTTF network" ("BTTFN"): TCD now not only 
+ *      answers to polling requests (time, temp, lux, speed), but also sends notifications
+ *      to known clients about time timetravel and alarm. Those notifications are only
+ *      sent, if MQTT is disabled or "send commands for other props" is unchecked.
+ *    - BTTFN: Show connected clients in keypad menu (hostname, IP). This helps finding 
+ *      out the IP address of other props when they are connected to the TCD's AP.
+ *  2023/06/27 (A10001986)
+ *    - Fix isIp()
+ *  2023/06/26 (A10001986)
+ *    - Network polling: Add response marker
+ *  2023/06/23 (A10001986)
+ *    - Add network data polling facility (time, speed, temperature), in preparation for
+ *      other bttf props
+ *  2023/06/19 (A10001986)
+ *    - Fake power: Turn on keypad LEDs in sync with displays
+ *    - Re-do beep sound (better sync'd under ESP32-Arduino 2.0.9)
+ *    - Display "updating" and stop audio upon OTA fw update
+ *  2023/06/12 (A10001986)
+ *    - Don't show audio installer if in FlashROMode
+ *  2023/06/06 (A10001986)
+ *    - Avoid sound distortion on newly initialized clocks by saving lastYear in setup(),
+ *      and skip NTP/GPS update during startup sequence. (Writing to flash is slow enough
+ *      to cause sound disturbances)
+ *    - Reduce read access to NVM by caching
+ *  2023/06/02 (A10001986)
+ *    - Display Title & Artist from ID3 tags when typing 55ENTER to display the 
+ *      currently played song. (ID3v2 only)
+ *  2023/05/30 (A10001986)
+ *    - MusicPlayer: 55ENTER shows currently played song (changed this from 88 to avoid
+ *      going to song 0 by accident)
+ *    - MusicPlayer: Add "auto-renamer". User can now put his mp3-files with original
+ *      names (eg "Dire Straits - Money For Nothing.mp3") in the musicX folders on the 
+ *      SD and they will be automatically renamed to "000.mp3" and so on. File names are 
+ *      sorted alphabetically before renaming (in order to keep some kind of order; 
+ *      without sorting, the order would be more or less random).
+ *      This also works if files are added to a music folder that already contains some
+ *      files with numerical file names.
+ *      The process can take up to 10 minutes for 1000 files, perhaps even longer. Mac
+ *      users are advised to delete the "._"-files before putting the SD back into the
+ *      TCD, as removing these files speeds up the process.
+ *      Remember: 128kbps maximum bit rate. Recoding from higher bit rates is still up
+ *      to the user. Tools to do this batch-wise are plenty, for Mac and Windows MediaHuman 
+ *      Audio Converter (https://www.mediahuman.com/download3.html), for example.
+ *    * Switched to esp32-arduino 2.0.9 for pre-compiled binary. If you compile and upload 
+ *      using the IDE, settings will be lost and audio files will have to be re-installed.
+ *      If upgrading via the Config Portal's "Update" feature, everything stays. 
+ *    * Updated WiFiManager to 2.0.16rc2 for pre-compiled binary.
+ *    * The source code now includes a subset of the ESP8266Audio library version 1.9.5
+ *      with some patches. The reason for this is that ESP8266Audio 1.9.7 is somehow 
+ *      broken (delays playback for some reason, spits out i2s errors) and I don't know 
+ *      what the future holds for this library. I need a stable basis with predictable 
+ *      behavior.
+ *  2023/05/23 (A10001986)
+ *    - Keypad: 440ENTER deletes timer (4400 still does, too; added for uniformity)
+ *  2023/05/22 (A10001986)
  *    - 77mmdd sets reminder to month/day, leaving time unchanged (unless hr and min are 
  *      zero, in which case it sets the reminder to 9am)  
  *    - MusicPlayer: 88 shows currently played song
@@ -801,7 +867,8 @@ void setup()
 
     // PCF8574 only supports 100kHz, can't go to 400 here.
     Wire.begin(-1, -1, 100000);
-
+    //Wire.begin();
+    
     Serial.println();
     
     time_boot();
@@ -816,10 +883,15 @@ void setup()
 void loop() 
 {
     keypad_loop();
+    audio_loop();
     scanKeypad();
     ntp_loop();
+    audio_loop();
     time_loop();
     audio_loop();
     wifi_loop();
     audio_loop();
+    #ifdef TC_HAVEBTTFN
+    bttfn_loop();
+    #endif
 }

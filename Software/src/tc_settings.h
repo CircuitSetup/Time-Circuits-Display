@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * Settings handling
  *
@@ -82,9 +82,10 @@ extern uint8_t musFolderNum;
 #define DEF_USE_LIGHT       0     // Default: No i2c light sensor
 #define DEF_LUX_LIMIT       3     // Default Lux for night mode
 #define DEF_USE_ETTO        0     // Default: 0: No external props
+#define DEF_QUICK_GPS       0     // Default: Slow GPS updates
 #define DEF_PLAY_TT_SND     1     // Default 1: Play time travel sounds (0: Do not; for use with external equipment)
 #define DEF_SHUFFLE         0     // Music Player: Do not shuffle by default
-#define DEF_CFG_ON_SD       0     // Default: Save alarm/volume settings in flash memory
+#define DEF_CFG_ON_SD       1     // Default: Save alarm/volume settings on SD
 #define DEF_SD_FREQ         0     // SD/SPI frequency: Default 16MHz
 
 struct Settings {
@@ -145,6 +146,9 @@ struct Settings {
 #endif // HAVESPEEDO
 #ifdef EXTERNAL_TIMETRAVEL_OUT
     char useETTO[4]         = MS(DEF_USE_ETTO);
+#endif
+#ifdef TC_HAVEGPS
+    char quickGPS[4]        = MS(DEF_QUICK_GPS);
 #endif
     char playTTsnds[4]      = MS(DEF_PLAY_TT_SND);
     char shuffle[4]         = MS(DEF_SHUFFLE);

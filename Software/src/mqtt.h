@@ -49,12 +49,12 @@
 #define MQTT_MAX_PACKET_SIZE 512
 #endif
 
-// MQTT_KEEPALIVE : keepAlive interval in Seconds. Override with setKeepAlive()
+// MQTT_KEEPALIVE : keepAlive interval in Seconds.
 #ifndef MQTT_KEEPALIVE
 #define MQTT_KEEPALIVE 15
 #endif
 
-// MQTT_SOCKET_TIMEOUT: socket timeout interval in Seconds. Override with setSocketTimeout()
+// MQTT_SOCKET_TIMEOUT: socket timeout interval in Seconds.
 #ifndef MQTT_SOCKET_TIMEOUT
 #define MQTT_SOCKET_TIMEOUT 15
 #endif
@@ -109,7 +109,6 @@
 class PubSubClient {
 
     public:
-        PubSubClient();
         PubSubClient(WiFiClient& client);
     
         ~PubSubClient();
@@ -118,12 +117,8 @@ class PubSubClient {
         void setServer(const char *domain, uint16_t port);
         void setCallback(void (*callback)(char *, uint8_t *, unsigned int));
         void setLooper(void (*looper)());
-        void setClient(WiFiClient& client);
-        void setKeepAlive(uint16_t keepAlive);
-        void setSocketTimeout(uint16_t timeout);
     
         bool setBufferSize(uint16_t size);
-        uint16_t getBufferSize();
     
         bool connect(const char *id);
         bool connect(const char *id, const char *user, const char *pass);

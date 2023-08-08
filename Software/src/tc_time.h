@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * Time and Main Controller
  *
@@ -116,6 +116,8 @@ extern int16_t  mqttMaxIdx;
 extern bool     mqttST;
 #endif
 
+extern bool bttfnHaveClients;
+
 // Time Travel difference to RTC
 extern uint64_t timeDifference;
 extern bool     timeDiffUp;
@@ -148,7 +150,7 @@ void enableRcMode(bool onOff);
 bool toggleRcMode();
 bool isRcMode();
 
-void animate();
+void animate(bool withLEDs = false);
 void allLampTest();
 void allOff();
 
@@ -182,5 +184,11 @@ void  setDatesTimesWC(DateTime& dt);
 
 void  ntp_loop();
 void  ntp_short_loop();
+
+#ifdef TC_HAVEBTTFN
+int  bttfnNumClients();
+bool bttfnGetClientInfo(int c, char **id, uint8_t **ip, uint8_t *type);
+void bttfn_loop();
+#endif
 
 #endif

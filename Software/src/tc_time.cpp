@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * Time and Main Controller
  *
@@ -106,17 +106,13 @@
 // The external prop has ETTO_LEAD_TIME ms to play its pre-tt sequence. After
 // ETTO_LEAD_TIME ms, 88mph is reached, and the actual tt takes place.
 #define ETTO_LEAD_TIME      5000
-// Trigger mode:
-// true:  Pulse for ETTO_PULSE_DURATION ms on tt start minus leadTime
-// false: LOW->HIGH on tt start minus leadTime, HIGH->LOW on start of reentry
-#define ETTO_USE_PULSE      false
-// If ETTO_USE_PULSE is true, pulse for approx. ETTO_PULSE_DURATION ms
-#define ETTO_PULSE_DURATION 1000
 // End of ETTO config
 
 // Native NTP
 #define NTP_PACKET_SIZE 48
 #define NTP_DEFAULT_LOCAL_PORT 1337
+
+#define SECS1900_1970 2208988800ULL
 
 unsigned long        powerupMillis = 0;
 static unsigned long lastMillis = 0;
@@ -198,13 +194,10 @@ static long          triggerP1LeadTime = 0;
 #ifdef EXTERNAL_TIMETRAVEL_OUT
 static bool          useETTO = DEF_USE_ETTO;
 static bool          useETTOWired = DEF_USE_ETTO;
-static bool          ettoUsePulse = ETTO_USE_PULSE;
 static long          ettoLeadTime = ETTO_LEAD_TIME;
 static bool          triggerETTO = false;
 static long          triggerETTOLeadTime = 0;
 static unsigned long triggerETTONow = 0;
-static bool          ettoPulse = false;
-static unsigned long ettoPulseNow = 0;
 static long          ettoLeadPoint = 0;
 #endif
 
@@ -252,6 +245,7 @@ static bool alarmRTC = true;
 
 bool useGPS      = true;
 bool useGPSSpeed = false;
+bool quickGPSupdates = false;
 
 // TZ/DST status & data
 static bool checkDST        = false;
@@ -265,6 +259,9 @@ static int  tzDiffGMTDST[3] = { 0, 0, 0 };               // Difference to UTC in
 static int  tzDiff[3]       = { 0, 0, 0 };               // difference between DST and non-DST in minutes
 static int  DSTonMins[3]    = { -1, -1, -1 };            // DST-on date/time in minutes since 1/1 00:00 (in non-DST time)
 static int  DSToffMins[3]   = { 600000, 600000, 600000}; // DST-off date/time in minutes since 1/1 00:00 (in DST time)
+#ifdef TC_DBG
+static const char *badTZ = "Failed to parse TZ\n";
+#endif
 
 // WC stuff
 bool        WcHaveTZ1  = false;
@@ -290,7 +287,8 @@ static uint32_t      NTPmsSinceSecond = 0;
 static bool          NTPPacketDue = false;
 static bool          NTPWiFiUp = false;
 static uint8_t       NTPfailCount = 0;
-static uint8_t       NTPUDPID[4] = { 0, 0, 0, 0};
+static const uint8_t NTPUDPHD[4] = { 'T', 'C', 'D', '1' };
+static uint32_t      NTPUDPID    = 0;
  
 // The RTC object
 tcRTC rtc(2, (uint8_t[2*2]){ PCF2129_ADDR, RTCT_PCF2129, 
@@ -517,6 +515,33 @@ static const int16_t tt_p0_delays[88] =
 static long tt_p0_totDelays[88];
 #endif
 
+// BTTF UDP
+bool bttfnHaveClients = false;
+#define BTTFN_NOT_PREPARE  1
+#define BTTFN_NOT_TT       2
+#define BTTFN_NOT_REENTRY  3
+#define BTTFN_NOT_ABORT_TT 4
+#define BTTFN_NOT_ALARM    5
+#define BTTFN_TYPE_ANY     0    // Any, unknown or no device
+#define BTTFN_TYPE_FLUX    1    // Flux Capacitor
+#define BTTFN_TYPE_SID     2    // SID
+#define BTTFN_TYPE_PCG     3    // Plutonium chamber gauge panel
+#ifdef TC_HAVEBTTFN
+#define BTTFN_VERSION              1
+#define BTTF_PACKET_SIZE          48
+#define BTTF_DEFAULT_LOCAL_PORT 1338
+#define BTTFN_MAX_CLIENTS          5
+static const uint8_t BTTFUDPHD[4] = { 'B', 'T', 'T', 'F'};
+static WiFiUDP       bttfUDP;
+static UDP*          tcdUDP;
+static byte          BTTFUDPBuf[BTTF_PACKET_SIZE];
+static uint8_t       bttfnClientIP[BTTFN_MAX_CLIENTS][4]  = { { 0 } };
+static char          bttfnClientID[BTTFN_MAX_CLIENTS][13] = { { 0 } };
+static uint8_t       bttfnClientType[BTTFN_MAX_CLIENTS] = { 0 };
+static unsigned long bttfnClientALIVE[BTTFN_MAX_CLIENTS] = { 0 };
+static unsigned long bttfnlastExpire = 0;
+#endif
+
 static void myCustomDelay(unsigned int mydel);
 static void myIntroDelay(unsigned int mydel, bool withGPS = true);
 static void waitAudioDoneIntro();
@@ -548,6 +573,7 @@ static void triggerLongTT();
 #ifdef EXTERNAL_TIMETRAVEL_OUT
 static void ettoPulseStart();
 static void ettoPulseEnd();
+static void sendNetWorkMsg(const char *pl, unsigned int len, uint8_t bttfnMsg);
 #endif
 
 // Time calculations
@@ -565,6 +591,12 @@ static uint32_t NTPGetSecsSinceTCepoch();
 static bool NTPGetLocalTime(int& year, int& month, int& day, int& hour, int& minute, int& second, int& isDST);
 static bool NTPHaveLocalTime();
 
+// BTTF network stuff
+#ifdef TC_HAVEBTTFN
+static void bttfn_setup();
+static void bttfn_notify(uint8_t event);
+static void bttfn_expire_clients();
+#endif
 
 /*
  * time_boot()
@@ -594,18 +626,16 @@ void time_setup()
     bool rtcbad = false;
     bool tzbad = false;
     bool haveGPS = false;
+    bool isVirgin = false;
     #ifdef TC_HAVEGPS
     bool haveAuthTimeGPS = false;
     #endif
+    const char *funcName = "time_setup: ";
 
     Serial.println(F("Time Circuits Display version " TC_VERSION " " TC_VERSION_EXTRA));
 
     // Power management: Set CPU speed
     // to maximum and start timer
-    #ifdef TC_DBG
-    Serial.print("Initial CPU speed is ");
-    Serial.println(getCpuFrequencyMhz(), DEC);
-    #endif
     pwrNeedFullNow(true);
 
     // Pin for monitoring seconds from RTC
@@ -629,21 +659,23 @@ void time_setup()
     // Init external time travel output ("etto")
     #ifdef EXTERNAL_TIMETRAVEL_OUT
     pinMode(EXTERNAL_TIMETRAVEL_OUT_PIN, OUTPUT);
-    ettoPulseEnd();
+    digitalWrite(EXTERNAL_TIMETRAVEL_OUT_PIN, LOW);
     #endif
 
     // RTC setup
     if(!rtc.begin(powerupMillis)) {
 
-        Serial.println(F("time_setup: Couldn't find RTC. Panic!"));
+        const char *rtcNotFound = "RTC NOT FOUND";
+        uint8_t r = HIGH;
+        
+        destinationTime.showTextDirect(rtcNotFound);
+        Serial.printf("%s%s\n", funcName, rtcNotFound);
 
         // Blink white LED forever
-        pinMode(WHITE_LED_PIN, OUTPUT);
         while(1) {
-            digitalWrite(WHITE_LED_PIN, HIGH);
+            digitalWrite(WHITE_LED_PIN, r);
             delay(1000);
-            digitalWrite(WHITE_LED_PIN, LOW);
-            delay(1000);
+            r ^= HIGH;
         }
     }
 
@@ -656,7 +688,7 @@ void time_setup()
         rtc.adjust(0, 0, 0, dayOfWeek(1, 1, 2023), 1, 1, 23);
        
         #ifdef TC_DBG
-        Serial.println(F("time_setup: RTC lost power, setting default time."));
+        Serial.printf("%sRTC lost power, setting default time\n", funcName);
         #endif
 
         rtcbad = true;
@@ -695,8 +727,11 @@ void time_setup()
     // Determine if user wanted Time Travels to be persistent
     timetravelPersistent = ((int)atoi(settings.timesPers) > 0);
 
+    // Set initial brightness for present time displqy
+    presentTime.setBrightness((int)atoi(settings.presTimeBright), true);
+    
     // Load present time settings (yearOffs, timeDifference, isDST)
-    presentTime.load((int)atoi(settings.presTimeBright));
+    presentTime.load();
 
     if(!timetravelPersistent) {
         timeDifference = 0;
@@ -722,42 +757,41 @@ void time_setup()
     
     #ifdef TC_HAVESPEEDO
     if(useSpeedo) {
+        // 'useGPSSpeed' strictly means "display GPS speed on speedo"
         useGPSSpeed = ((int)atoi(settings.useGPSSpeed) > 0);
     }
     #endif
 
+    quickGPSupdates = (useGPSSpeed || ((int)atoi(settings.quickGPS) > 0));
+
     // Check for GPS receiver
     // Do so regardless of usage in order to eliminate
     // VEML7700 light sensor with identical i2c address
-    if(myGPS.begin(powerupMillis, useGPSSpeed)) {
+    if(myGPS.begin(powerupMillis, quickGPSupdates)) {
 
         myGPS.setCustomDelayFunc(myCustomDelay);
         haveGPS = true;
-        
-        if(useGPS || useGPSSpeed) {
           
-            // Clear so we don't add to stampAge unnecessarily in
-            // boot strap
-            GPSupdateFreq = GPSupdateFreqMin = 0;
-            
-            // We know now we have a possible source for auth time
-            couldHaveAuthTime = true;
-            
-            // Fetch data already in Receiver's buffer [120ms]
-            for(int i = 0; i < 10; i++) myGPS.loop(true);
-            
-            #ifdef TC_DBG
-            Serial.println(F("time_setup: GPS Receiver found and initialized"));
-            #endif
-
-        } 
+        // Clear so we don't add to stampAge unnecessarily in
+        // boot strap
+        GPSupdateFreq = GPSupdateFreqMin = 0;
+        
+        // We know now we have a possible source for auth time
+        couldHaveAuthTime = true;
+        
+        // Fetch data already in Receiver's buffer [120ms]
+        for(int i = 0; i < 10; i++) myGPS.loop(true);
+        
+        #ifdef TC_DBG
+        Serial.printf("%sGPS Receiver found\n", funcName);
+        #endif
 
     } else {
       
         useGPS = useGPSSpeed = false;
         
         #ifdef TC_DBG
-        Serial.println(F("time_setup: GPS Receiver not found"));
+        Serial.printf("%sGPS Receiver not found\n", funcName);
         #endif
         
     }
@@ -786,7 +820,7 @@ void time_setup()
     if(!(parseTZ(0, 2022))) {
         tzbad = true;
         #ifdef TC_DBG
-        Serial.println(F("time_setup: Failed to parse TZ"));
+        Serial.printf("%s%s", funcName, badTZ);
         #endif
     }
     
@@ -799,7 +833,7 @@ void time_setup()
         lastAuthTime64 = lastAuthTime;
         
         #ifdef TC_DBG
-        Serial.println(F("time_setup: RTC set through NTP"));        
+        Serial.printf("%sRTC set through NTP\n", funcName);        
         #endif
         
     } else {
@@ -814,7 +848,7 @@ void time_setup()
             for(int i = 0; i < 10; i++) {
                 for(int j = 0; j < 4; j++) myGPS.loop(true);
                 #ifdef TC_DBG
-                if(i == 0) Serial.println(F("time_setup: First attempt to read time from GPS"));
+                if(i == 0) Serial.printf("%sFirst attempt to read time from GPS\n", funcName);
                 #endif
                 if(getGPStime(dt)) {
                     // So we have authoritative time now
@@ -823,7 +857,7 @@ void time_setup()
                     lastAuthTime64 = lastAuthTime;
                     haveAuthTimeGPS = true;
                     #ifdef TC_DBG
-                    Serial.println(F("time_setup: RTC set through GPS"));
+                    Serial.printf("%sRTC set through GPS\n", funcName);
                     #endif
                     break;
                 }
@@ -899,9 +933,6 @@ void time_setup()
             haveTZName2 = true;
         }
     }
-    #ifdef TC_DBG
-    Serial.printf("time_setup: haveWcMode %d\n", haveWcMode);
-    #endif
  
     // If we are switched on after a year switch, re-do
     // RTC year-translation.
@@ -941,9 +972,11 @@ void time_setup()
 
         }
 
-        presentTime.saveLastYear(rtcYear);
         lastYear = rtcYear;
     }
+
+    // Write lastYear to NVM
+    presentTime.saveLastYear(lastYear);
 
     // Load to display
     presentTime.setDateTimeDiff(dt);
@@ -959,42 +992,51 @@ void time_setup()
     // as long as time matches DST flag setting (which it does even
     // if we have no authTime).
     #ifdef TC_HAVEGPS
-    if(useGPS || useGPSSpeed) {
+    if(useGPS) {
         if(!haveAuthTimeGPS && (haveAuthTime || !rtcbad)) {
             setGPStime();
         }
         
         // Set ms between GPS polls
         // Need more updates if speed is to be displayed
-        // RMC is around 85 chars, so three fit in the 255 byte buffer. 
-        // With speed, the buffer fills in 3 seconds; without in 15 seconds;
-        // Then there is ZDA every 5 seconds; -> 2.4 / 12.5 seconds.
+        // RMC is 72-85 chars, so three fit in the 255 byte buffer.
+        #ifndef TC_GPSSPEED500 
+        // At 1000ms, the buffer fills in 3 seconds.
+        // Then there is ZDA every 5 seconds -> 2.4 / 12.5 seconds.
         // The update freq of 250ms means the entire buffer is read 
         // - once per second with speed,
-        // - every 2 seconds without speed. 
-        // Good enough.
-        GPSupdateFreq    = useGPSSpeed ? 250 : 500;
-        GPSupdateFreqMin = useGPSSpeed ? 500 : 500;
+        // - every 2 seconds without speed.
+        GPSupdateFreq    = quickGPSupdates ? 250 : 500;
+        GPSupdateFreqMin = quickGPSupdates ? 250 : 500;
+        #else
+        // At 500ms, the buffer fills in 1.5 seconds + ZDA
+        // At 200ms, the entire buffer is read in 0.75 secs
+        GPSupdateFreq    = quickGPSupdates ? 200 : 500;
+        GPSupdateFreqMin = quickGPSupdates ? 200 : 500;
+        #endif
     }
     #endif
 
+    // Set initial brightness for dest & last time dep displays
+    destinationTime.setBrightness((int)atoi(settings.destTimeBright), true);
+    departedTime.setBrightness((int)atoi(settings.lastTimeBright), true);
+
     // Load destination time (and set to default if invalid)
-    if(!destinationTime.load((int)atoi(settings.destTimeBright))) {
+    if(!destinationTime.load()) {
         destinationTime.setYearOffset(0);
         destinationTime.setFromStruct(&destinationTimes[0]);
-        destinationTime.setBrightness((int)atoi(settings.destTimeBright));
         destinationTime.save();
+        isVirgin = true;
     }
 
     // Load departed time (and set to default if invalid)
-    if(!departedTime.load((int)atoi(settings.lastTimeBright))) {
+    if(!departedTime.load()) {
         departedTime.setYearOffset(0);
         departedTime.setFromStruct(&departedTimes[0]);
-        departedTime.setBrightness((int)atoi(settings.lastTimeBright));
         departedTime.save();
     }
 
-    // Load autoInterval ("time cycling interval") from settings
+    // Load (copy) autoInterval ("time cycling interval") from settings
     loadAutoInterval();
 
     // Load alarm from alarmconfig file
@@ -1161,10 +1203,15 @@ void time_setup()
     #endif
     #endif
 
+    // Start bttf network
+    #ifdef TC_HAVEBTTFN
+    bttfn_setup();
+    #endif
+    
     // Show "REPLACE BATTERY" message if RTC battery is low or depleted
     // Note: This also shows up the first time you power-up the clock
     // AFTER a battery change.
-    if(rtcbad || rtc.battLow()) {
+    if((rtcbad && !isVirgin) || rtc.battLow()) {
         destinationTime.showTextDirect("REPLACE");
         presentTime.showTextDirect("BATTERY");
         destinationTime.on();
@@ -1184,9 +1231,6 @@ void time_setup()
 
     // Invoke audio file installer if SD content qualifies
     if(check_allow_CPA()) {
-        #ifdef TC_DBG
-        Serial.println(F("time_setup: calling doCopyAudioFiles()"));
-        #endif
         destinationTime.showTextDirect("INSTALL");
         presentTime.showTextDirect("AUDIO FILES?");
         destinationTime.on();
@@ -1271,7 +1315,7 @@ void time_setup()
         leds_off();
 
         #ifdef TC_DBG
-        Serial.println(F("time_setup: waiting for fake power on"));
+        Serial.printf("%swaiting for fake power on\n", funcName);
         #endif
 
     } else {
@@ -1300,6 +1344,7 @@ void time_loop()
     unsigned long millisNow = millis();
     #ifdef TC_DBG
     int dbgLastMin;
+    const char *funcName = "time_loop: ";
     #endif
 
     // millisEpoch counter
@@ -1318,7 +1363,6 @@ void time_loop()
                     startup = true;
                     startupSound = true;
                     FPBUnitIsOn = true;
-                    leds_on();
                     if(beepMode >= 2)      startBeepTimer();
                     else if(beepMode == 1) muteBeep = false;
                     destinationTime.setBrightness(255); // restore brightnesses
@@ -1343,18 +1387,20 @@ void time_loop()
                 if(FPBUnitIsOn) {
                     startup = false;
                     startupSound = false;
+                    triggerP1 = 0;
+                    #ifdef EXTERNAL_TIMETRAVEL_OUT
+                    triggerETTO = false;
+                    ettoPulseEnd();
+                    if(useETTO || bttfnHaveClients) {
+                        if(timeTravelP0 || timeTravelP1 || timeTravelRE || timeTravelP2) {
+                            sendNetWorkMsg("ABORT_TT\0", 9, BTTFN_NOT_ABORT_TT);
+                        }
+                    }
+                    #endif
                     timeTravelP0 = 0;
                     timeTravelP1 = 0;
                     timeTravelRE = false;
                     timeTravelP2 = 0;
-                    triggerP1 = 0;
-                    #ifdef EXTERNAL_TIMETRAVEL_OUT
-                    triggerETTO = false;
-                    if(useETTO && !ettoUsePulse) {
-                        ettoPulseEnd();
-                        ettoPulse = false;
-                    }
-                    #endif
                     FPBUnitIsOn = false;
                     cancelEnterAnim(false);
                     cancelETTAnim();
@@ -1387,7 +1433,7 @@ void time_loop()
 
     // Turn display on after startup delay
     if(startup && (millis() - startupNow >= STARTUP_DELAY)) {
-        animate();
+        animate(true);
         startup = false;
         #ifdef TC_HAVESPEEDO
         if(useSpeedo && !useGPSSpeed) {
@@ -1416,25 +1462,14 @@ void time_loop()
     #endif
 
     #ifdef EXTERNAL_TIMETRAVEL_OUT
-    // Timer for start of ETTO signal/pulse
+    // Timer for start of ETTO signal
     if(triggerETTO && (millis() - triggerETTONow >= triggerETTOLeadTime)) {
+        sendNetWorkMsg("TIMETRAVEL\0", 11, BTTFN_NOT_TT);
         ettoPulseStart();
         triggerETTO = false;
-        ettoPulse = true;
-        ettoPulseNow = millis();
-        #ifdef TC_HAVEMQTT
-        if(useMQTT && pubMQTT) {
-            mqttPublish("bttf/tcd/pub", "TIMETRAVEL\0", 11);
-        }
-        #endif
         #ifdef TC_DBG
         Serial.println(F("ETTO triggered"));
         #endif
-    }
-    // Timer to end ETTO pulse
-    if(ettoUsePulse && ettoPulse && (millis() - ettoPulseNow >= ETTO_PULSE_DURATION)) {
-        ettoPulseEnd();
-        ettoPulse = false;
     }
     #endif
 
@@ -1570,7 +1605,7 @@ void time_loop()
 
         // Read GPS, and display GPS speed or temperature
         #ifdef TC_HAVEGPS
-        if(useGPS || useGPSSpeed) {
+        if(useGPS) {
             if(millisNow - lastLoopGPS >= GPSupdateFreq) {
                 lastLoopGPS = millisNow;
                 // call loop with doDelay true; delay not needed but
@@ -1587,7 +1622,7 @@ void time_loop()
         // Can only reduce when GPS is not used and WiFi is off
         if(!pwrLow && checkAudioDone() &&
                       #ifdef TC_HAVEGPS
-                      !useGPS && !useGPSSpeed &&
+                      !useGPS &&
                       #endif
                                  (wifiIsOff || wifiAPIsOff) && (millisNow - pwrFullNow >= 5*60*1000)) {
             setCpuFrequencyMhz(80);
@@ -1596,7 +1631,7 @@ void time_loop()
             #ifdef TC_DBG
             Serial.printf("Reduced CPU speed to %d\n", getCpuFrequencyMhz());
             #endif
-        }   
+        }
 
         // Beep auto modes
         if(beepTimer && (millisNow - beepTimerNow > beepTimeout)) {
@@ -1637,7 +1672,7 @@ void time_loop()
             }
         }
 
-    } 
+    }
     
     y = digitalRead(SECONDS_IN_PIN);
     if(y != x) {
@@ -1725,14 +1760,14 @@ void time_loop()
 
             #ifdef TC_DBG
             if(dt.second() == 35) {
-                Serial.printf("time_loop: %d %d %d %d %d\n", couldHaveAuthTime, itsTime, doWiFi, haveAuthTime, syncTrigger);
+                Serial.printf("%s%d %d %d %d %d\n", funcName, couldHaveAuthTime, itsTime, doWiFi, haveAuthTime, syncTrigger);
             }
             #endif
             
             if( couldHaveAuthTime       &&
                 itsTime                 &&
                 (GPShasTime || doWiFi)  &&
-                !timeTravelP0 && !timeTravelP1 && !timeTravelRE && !timeTravelP2 ) {
+                !startup && !timeTravelP0 && !timeTravelP1 && !timeTravelRE && !timeTravelP2 ) {
 
                 if(!autoReadjust) {
 
@@ -1770,7 +1805,7 @@ void time_loop()
                         lastYear = dt.year() - presentTime.getYearOffset();
 
                         #ifdef TC_DBG
-                        Serial.println(F("time_loop: RTC re-adjusted using NTP or GPS"));
+                        Serial.printf("%sRTC re-adjusted using NTP or GPS\n", funcName);
                         #endif
 
                         if(timeDifference) {
@@ -1801,7 +1836,7 @@ void time_loop()
                         checkDST = couldDST[0];
 
                         #ifdef TC_DBG
-                        Serial.println(F("time_loop: RTC re-adjustment via NTP/GPS failed"));
+                        Serial.printf("%sRTC re-adjustment via NTP/GPS failed\n", funcName);
                         #endif
 
                     }
@@ -1842,7 +1877,7 @@ void time_loop()
     
                     if(thisYear > 9999) {
                         #ifdef TC_DBG
-                        Serial.println(F("time_loop: Rollover 9999->1 detected"));
+                        Serial.printf("%sRollover 9999->1 detected\n", funcName);
                         #endif
 
                         // We do not roll over to year "0".
@@ -1863,7 +1898,7 @@ void time_loop()
                     // Parse TZ and set up DST data for now current year
                     if(!(parseTZ(0, thisYear))) {
                         #ifdef TC_DBG
-                        Serial.println(F("time_loop: [year change] Failed to parse TZ"));
+                        Serial.printf("%s[year change] %s", funcName, badTZ);
                         #endif
                     }
     
@@ -1936,7 +1971,7 @@ void time_loop()
                             int16_t  yOffs = 0;
         
                             #ifdef TC_DBG
-                            Serial.printf("time_loop: DST change detected: %d -> %d\n", presentTime.getDST(), myDST);
+                            Serial.printf("%sDST change detected: %d -> %d\n", funcName, presentTime.getDST(), myDST);
                             #endif
         
                             presentTime.setDST(myDST);
@@ -2011,7 +2046,7 @@ void time_loop()
 
             // Update "lastYear" and save to NVM
             lastYear = dt.year() - presentTime.getYearOffset();
-            presentTime.saveLastYear(lastYear);
+            presentTime.saveLastYear(lastYear);            
 
             // Debug log beacon
             #ifdef TC_DBG
@@ -2100,10 +2135,8 @@ void time_loop()
                         if(!alarmDone) {
                             play_file("/alarm.mp3", PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
                             alarmDone = true;
-                            #ifdef TC_HAVEMQTT
-                            if(useMQTT && pubMQTT) {
-                                mqttPublish("bttf/tcd/pub", "ALARM\0", 6);
-                            }
+                            #ifdef EXTERNAL_TIMETRAVEL_OUT
+                            sendNetWorkMsg("ALARM\0", 6, BTTFN_NOT_ALARM);
                             #endif
                         }
                     } else {
@@ -2332,7 +2365,7 @@ void time_loop()
         } else if(!startup && !timeTravelRE && FPBUnitIsOn) {
 
             #ifdef TC_HAVEMQTT
-            if(mqttDisp) { 
+            if(mqttDisp) {
                 if(!specDisp) {
                     destinationTime.showTextDirect(mqttMsg + mqttIdx);
                     if(mqttST) {
@@ -2474,8 +2507,8 @@ void timeTravel(bool doComplete, bool withSpeedo)
         timetravelP0Delay = 2000;
         triggerP1 = false;
         #ifdef EXTERNAL_TIMETRAVEL_OUT
-        triggerETTO = ettoPulse = false;
-        if(useETTO) ettoPulseEnd();
+        triggerETTO = false;
+        ettoPulseEnd();
         #endif
 
         #ifdef TC_HAVEGPS
@@ -2498,12 +2531,11 @@ void timeTravel(bool doComplete, bool withSpeedo)
             // This add'l delay is put into timetravelP0Delay.
 
             #ifdef EXTERNAL_TIMETRAVEL_OUT
-            if(useETTO) {
+            if(useETTO || bttfnHaveClients) {
 
                 triggerETTO = true;
                 triggerP1 = true;
-                triggerETTONow = triggerP1Now = ttUnivNow;
-
+                
                 if(currTotDur >= ettoLeadPoint || currTotDur >= pointOfP1) {
 
                     if(currTotDur >= ettoLeadPoint && currTotDur >= pointOfP1) {
@@ -2547,6 +2579,15 @@ void timeTravel(bool doComplete, bool withSpeedo)
 
                 }
 
+                // If there is time between NOW and ETTO_LEAD start, send
+                // PREPARE message to networked clients.
+                if(triggerETTOLeadTime > 500) {
+                    sendNetWorkMsg("PREPARE\0", 8, BTTFN_NOT_PREPARE);
+                }
+                
+                ttUnivNow = millis();
+                triggerETTONow = triggerP1Now = ttUnivNow;
+
             } else
             #endif
             if(currTotDur >= pointOfP1) {
@@ -2581,10 +2622,10 @@ void timeTravel(bool doComplete, bool withSpeedo)
     if(doComplete) {
 
         #ifdef EXTERNAL_TIMETRAVEL_OUT
-        if(useETTO) {
+        if(useETTO || bttfnHaveClients) {
+
             triggerP1 = true;
             triggerETTO = true;
-            triggerETTONow = triggerP1Now = ttUnivNow;
 
             if(ettoLeadTime >= (TT_P1_POINT88 + TT_SNDLAT)) {
                 triggerETTOLeadTime = 0;
@@ -2592,7 +2633,14 @@ void timeTravel(bool doComplete, bool withSpeedo)
             } else {
                 triggerP1LeadTime = 0;
                 triggerETTOLeadTime = (TT_P1_POINT88 + TT_SNDLAT) - ettoLeadTime;
+
+                if(triggerETTOLeadTime > 500) {
+                    sendNetWorkMsg("PREPARE\0", 8, BTTFN_NOT_PREPARE);
+                }
             }
+
+            ttUnivNow = millis();
+            triggerETTONow = triggerP1Now = ttUnivNow;
 
             return;
         }
@@ -2655,6 +2703,14 @@ void timeTravel(bool doComplete, bool withSpeedo)
         timeDiffUp = false;
     }
 
+    // For external props: Signal Re-Entry
+    #ifdef EXTERNAL_TIMETRAVEL_OUT
+    if(useETTO || bttfnHaveClients) {
+        sendNetWorkMsg("REENTRY\0", 8, BTTFN_NOT_REENTRY);
+    }
+    ettoPulseEnd();
+    #endif
+
     // Save presentTime settings (timeDifference) if to be persistent
     if(timetravelPersistent) {
         presentTime.save();
@@ -2666,18 +2722,6 @@ void timeTravel(bool doComplete, bool withSpeedo)
         timeTravelP2 = 1;
         timetravelP0Now = ttUnivNow;
         timetravelP0Delay = 2000;
-    }
-    #endif
-
-    // For external props: Signal Re-Entry by ending tigger signal
-    #ifdef EXTERNAL_TIMETRAVEL_OUT
-    if(useETTO) {
-        ettoPulseEnd();
-        #ifdef TC_HAVEMQTT
-        if(useMQTT && pubMQTT) {
-            mqttPublish("bttf/tcd/pub", "REENTRY\0", 8);
-        }
-        #endif
     }
     #endif
 }
@@ -2700,6 +2744,7 @@ static void ettoPulseStart()
     digitalWrite(WHITE_LED_PIN, HIGH);
     #endif
 }
+
 static void ettoPulseEnd()
 {
     if(useETTOWired) {
@@ -2709,7 +2754,26 @@ static void ettoPulseEnd()
     digitalWrite(WHITE_LED_PIN, LOW);
     #endif
 }
-#endif
+
+// Send notification message via MQTT -or- BTTFN.
+// If MQTT is enabled in settings, and "Send event notifications"
+// is checked, send via MQTT (regardless of connection status). 
+// Otherwise, send via BTTFN.
+// Props can rely on getting only ONE notification message if they listen
+// to both MQTT and BTTFN.
+static void sendNetWorkMsg(const char *pl, unsigned int len, uint8_t bttfnMsg)
+{
+    #ifdef TC_HAVEMQTT
+    if(useMQTT && pubMQTT) {
+        mqttPublish("bttf/tcd/pub", pl, len);
+        return;
+    }
+    #endif
+    #ifdef TC_HAVEBTTFN
+    bttfn_notify(bttfnMsg);
+    #endif
+}
+#endif  // EXTERNAL_TIMETRAVEL_OUT
 
 /*
  * Reset present time to actual present time
@@ -2902,7 +2966,7 @@ void myrtcnow(DateTime& dt)
     }
 
     if(retries > 0) {
-        Serial.printf("myrtcnow: %d retries needed to read RTC. Check your i2c cabling.\n", retries);
+        Serial.printf("%d retries reading RTC. Check your i2c cabling.\n", retries);
     }
 }
 
@@ -3048,7 +3112,7 @@ static void dispIdleZero(bool force)
 #endif
 
 // Show all, month after a short delay
-void animate()
+void animate(bool withLEDs)
 {
     #ifdef TC_HAVETEMP
     if(isRcMode() && (!isWcMode() || !WcHaveTZ1)) {
@@ -3071,6 +3135,10 @@ void animate()
     } else
     #endif
         departedTime.showAnimate1();
+
+    if(withLEDs) {
+        leds_on();
+    }
         
     mydelay(80);
 
@@ -3212,7 +3280,7 @@ static bool getNTPTime(bool weHaveAuthTime, DateTime& dt)
             if(tzHasDST[0] && (tzForYear[0] != nyear)) {
                 if(!(parseTZ(0, nyear))) {
                     #ifdef TC_DBG
-                    Serial.println(F("getNTPTime: Failed to parse TZ"));
+                    Serial.printf("getNTPTime: %s", badTZ);
                     #endif
                 }
             }
@@ -3291,7 +3359,7 @@ static bool getGPStime(DateTime& dt)
     if(tzHasDST[0] && (tzForYear[0] != nyear)) {
         if(!(parseTZ(0, nyear))) {
             #ifdef TC_DBG
-            Serial.println(F("getGPStime: Failed to parse TZ"));
+            Serial.printf("getGPStime: %s", badTZ);
             #endif
         }
     }
@@ -3321,7 +3389,7 @@ static bool getGPStime(DateTime& dt)
     if(tzHasDST[0] && (tzForYear[0] != nyear)) {
         if(!(parseTZ(0, nyear))) {
             #ifdef TC_DBG
-            Serial.println(F("getGPStime: Failed to parse TZ"));
+            Serial.printf("getGPStime: %s", badTZ);
             #endif
         }
     }
@@ -3349,7 +3417,7 @@ static bool setGPStime()
     uint64_t utcMins;
     DateTime dt;
 
-    if(!useGPS && !useGPSSpeed)
+    if(!useGPS)
         return false;
 
     #ifdef TC_DBG
@@ -3381,7 +3449,7 @@ static bool setGPStime()
 
 bool gpsHaveFix()
 {
-    if(!useGPS && !useGPSSpeed)
+    if(!useGPS)
         return false;
         
     return myGPS.fix;
@@ -3389,7 +3457,7 @@ bool gpsHaveFix()
 
 static bool gpsHaveTime()
 {
-    if(!useGPS && !useGPSSpeed)
+    if(!useGPS)
         return false;
         
     return myGPS.haveTime();
@@ -3401,7 +3469,7 @@ static bool gpsHaveTime()
  */
 void gps_loop()
 {
-    if(!useGPS && !useGPSSpeed)
+    if(!useGPS)
         return;
 
     if(millis() - lastLoopGPS > GPSupdateFreqMin) {
@@ -4209,26 +4277,18 @@ static bool NTPTriggerUpdate()
 }
 
 static void NTPSendPacket()
-{
-    unsigned long mymillis = millis();
-    
+{   
     memset(NTPUDPBuf, 0, NTP_PACKET_SIZE);
 
-    NTPUDPBuf[0] = B11100011; // LI, Version, Mode
-    NTPUDPBuf[1] = 0;         // Stratum
-    NTPUDPBuf[2] = 6;         // Polling Interval
-    NTPUDPBuf[3] = 0xEC;      // Peer Clock Precision
+    NTPUDPBuf[0] = 0b11100011; // LI, Version, Mode
+    NTPUDPBuf[1] = 0;          // Stratum
+    NTPUDPBuf[2] = 6;          // Polling Interval
+    NTPUDPBuf[3] = 0xEC;       // Peer Clock Precision
 
-    NTPUDPBuf[12] = 'T';      // Ref ID, anything
-    NTPUDPBuf[13] = 'C';
-    NTPUDPBuf[14] = 'D';
-    NTPUDPBuf[15] = '1';
+    memcpy(NTPUDPBuf + 12, NTPUDPHD, 4);  // Ref ID, anything
 
     // Transmit, use as id
-    NTPUDPBuf[40] = NTPUDPID[0] = ((mymillis >> 24) & 0xff);      
-    NTPUDPBuf[41] = NTPUDPID[1] = ((mymillis >> 16) & 0xff);
-    NTPUDPBuf[42] = NTPUDPID[2] = ((mymillis >>  8) & 0xff);
-    NTPUDPBuf[43] = NTPUDPID[3] = (mymillis         & 0xff);
+    *((uint32_t *)(NTPUDPBuf + 40)) = NTPUDPID = (uint32_t)millis();
 
     myUDP->beginPacket(settings.ntpServer, 123);
     myUDP->write(NTPUDPBuf, NTP_PACKET_SIZE);
@@ -4263,10 +4323,8 @@ static void NTPCheckPacket()
 
     // Basic validity check
     if((NTPUDPBuf[0] & 0x3f) != 0x24) return;
-    if(NTPUDPBuf[24] != NTPUDPID[0] || 
-       NTPUDPBuf[25] != NTPUDPID[1] || 
-       NTPUDPBuf[26] != NTPUDPID[2] || 
-       NTPUDPBuf[27] != NTPUDPID[3]) {
+
+    if(*((uint32_t *)(NTPUDPBuf + 24)) != NTPUDPID) {
         #ifdef TC_DBG
         Serial.println("NTPCheckPacket: Bad packet ID (outdated packet?)");
         #endif
@@ -4361,7 +4419,7 @@ static bool NTPGetLocalTime(int& year, int& month, int& day, int& hour, int& min
     if(tzHasDST[0] && tzForYear[0] != year) {
         if(!(parseTZ(0, year))) {
             #ifdef TC_DBG
-            Serial.println(F("NTPGetLocalTime: Failed to parse TZ"));
+            Serial.printf("NTPGetLocalTime: %s", badTZ);
             #endif
         }
     }
@@ -4380,3 +4438,335 @@ static bool NTPHaveLocalTime()
 
     return true;
 }
+
+/**************************************************************
+ ***                                                        ***
+ ***               BTTF-network communication               ***
+ ***                                                        ***
+ **************************************************************/
+
+#ifdef TC_HAVEBTTFN
+int bttfnNumClients()
+{
+    int i;
+    
+    for(i = 0; i < BTTFN_MAX_CLIENTS; i++) {
+      if(!bttfnClientIP[i][0])
+          break;
+    }
+    return i;
+}
+
+bool bttfnGetClientInfo(int c, char **id, uint8_t **ip, uint8_t *type)
+{
+    if(c > BTTFN_MAX_CLIENTS - 1)
+        return false;
+        
+    if(!bttfnClientIP[c][0])
+        return false;
+        
+    *id = bttfnClientID[c];
+    *ip = bttfnClientIP[c];
+
+    *type = bttfnClientType[c];
+
+    return true;
+}
+
+static bool bttfnValChar(char *s, int i)
+{
+    char a = s[i];
+
+    if(a == '-') return true;
+    if(a < '0') return false;
+    if(a > '9' && a < 'A') return false;
+    if(a < 'Z') return true;
+    if(a > 'a' && a < 'z') {
+        s[i] &= ~0x20;
+        return true;
+    }
+    return false; 
+}
+
+static bool bttfnipcmp(uint8_t *ip1, uint8_t *ip2)
+{
+    for(int i = 0; i < 4; i++) {
+        if(*ip1++ != *ip2++) return true;
+    }
+    return false;
+}
+
+static void storeBTTFNClient(uint8_t *ip, char *id, uint8_t type)
+{
+    int     i;
+    uint8_t *pip;
+    bool    badName = false;
+
+    // Check if already in list, search for free slot
+    for(i = 0; i < BTTFN_MAX_CLIENTS; i++) {
+        pip = bttfnClientIP[i];
+        if(!*pip)
+            break;
+        else if(!bttfnipcmp(pip, ip))
+            break;
+    }
+
+    // Bail if no slot available
+    if(i == BTTFN_MAX_CLIENTS)
+        return;
+
+    bttfnHaveClients = true;
+
+    *pip++ = *ip++;
+    *pip++ = *ip++;
+    *pip++ = *ip++;
+    *pip = *ip;
+    
+    if(!*id) {
+        badName = true;
+    } else {
+        for(int j = 0; j < 12; j++) {
+            if(!id[j]) break;
+            if(!bttfnValChar(id, j)) {
+                badName = true;
+                break;
+            }
+        }
+    }
+    
+    if(badName) {
+        strcpy(bttfnClientID[i], "UNKNOWN");
+    } else {
+        strncpy(bttfnClientID[i], id, 12);
+        bttfnClientID[i][12] = 0;
+    }
+
+    bttfnClientType[i] = type;
+
+    bttfnClientALIVE[i] = millis();
+}
+
+static void bttfn_expire_clients()
+{
+    bool didST = false;
+    int k, numClients = 0;
+    unsigned long now = millis();
+
+    if(now - bttfnlastExpire < 57*1000)
+        return;
+        
+    bttfnlastExpire = now;
+    
+    for(int i = 0; i < BTTFN_MAX_CLIENTS; i++) {
+        uint8_t *pip = bttfnClientIP[i];
+        if(*pip) {
+            numClients++;
+            if(millis() - bttfnClientALIVE[i] > 5*60*1000) {
+                *pip = 0;
+                numClients--;
+                didST = true;
+            }
+        }
+    }
+
+    bttfnHaveClients = (numClients > 0);
+
+    if(!didST)
+        return;
+
+    for(int j = 0; j < BTTFN_MAX_CLIENTS - 1; j++) {
+        if(!bttfnClientIP[j][0]) {
+            for(k = j + 1; k < BTTFN_MAX_CLIENTS; k++) {
+                if(bttfnClientIP[k][0]) {
+                    memcpy(bttfnClientIP[j], bttfnClientIP[k], 4);
+                    memcpy(bttfnClientID[j], bttfnClientID[k], 13);
+                    bttfnClientType[j] = bttfnClientType[k];
+                    bttfnClientALIVE[j] = bttfnClientALIVE[k];
+                    bttfnClientIP[k][0] = 0;
+                    bttfnClientType[k] = 0;
+                    break;
+                }
+            }
+            if(k == BTTFN_MAX_CLIENTS) break;
+        }
+    }
+}
+
+static void bttfn_setup()
+{
+    tcdUDP = &bttfUDP;
+    tcdUDP->begin(BTTF_DEFAULT_LOCAL_PORT);
+}
+
+void bttfn_loop()
+{
+    uint8_t tip[4] = { 0 };
+    uint8_t a = 0, parm = 0;
+    int16_t temp = 0;
+    //uint8_t reqVersion;
+
+    int psize = tcdUDP->parsePacket();
+
+    if(!psize) {
+        bttfn_expire_clients();
+        return;
+    }
+    
+    tcdUDP->read(BTTFUDPBuf, BTTF_PACKET_SIZE);
+
+    // Check header
+    if(memcmp(BTTFUDPBuf, BTTFUDPHD, 4))
+        return;
+
+    // Check checksum
+    for(int i = 4; i < BTTF_PACKET_SIZE - 1; i++) {
+        a += BTTFUDPBuf[i] ^ 0x55;
+    }
+    if(BTTFUDPBuf[BTTF_PACKET_SIZE - 1] != a)
+        return;
+
+    // If response marker set, bail - is illegal
+    if(BTTFUDPBuf[4] & 0x80)
+        return;
+        
+    if(BTTFUDPBuf[4] > BTTFN_VERSION)
+        return;
+
+    // For future use
+    //reqVersion = BTTFUDPBuf[4];
+
+    // Add response marker to version byte
+    BTTFUDPBuf[4] |= 0x80;
+
+    // Store client ip/id for notifications and keypad menu
+    IPAddress t = tcdUDP->remoteIP();
+    for(int i = 0; i < 4; i++) tip[i] = t[i];
+    storeBTTFNClient(tip, (char *)BTTFUDPBuf + 10, (uint8_t)BTTFUDPBuf[10+13]);
+
+    // Retrieve (optional) request parameter
+    parm = BTTFUDPBuf[24];
+    
+    // Clear, but leave serial# (BTTFUDPBuf + 6-9) untouched
+    memset(BTTFUDPBuf + 10, 0, BTTF_PACKET_SIZE - 10);
+
+    // Eval query and build reply into BTTFUDPBuf
+    if(BTTFUDPBuf[5] & 0x01) {    // time
+        DateTime dt;
+        myrtcnow(dt);
+        temp = dt.year() - presentTime.getYearOffset();
+        BTTFUDPBuf[10] = (uint16_t)temp & 0xff;
+        BTTFUDPBuf[11] = (uint16_t)temp >> 8;
+        BTTFUDPBuf[12] = (uint8_t)dt.month();
+        BTTFUDPBuf[13] = (uint8_t)dt.day();
+        BTTFUDPBuf[14] = (uint8_t)dt.hour();
+        BTTFUDPBuf[15] = (uint8_t)dt.minute();
+        BTTFUDPBuf[16] = (uint8_t)dt.second();
+        BTTFUDPBuf[17] = (uint8_t)dt.dayOfTheWeek();
+    }
+    if(BTTFUDPBuf[5] & 0x02) {    // speed  (-1 if unavailable)
+        temp = -1;
+        #ifdef TC_HAVEGPS
+        if(useGPS) {
+            temp = myGPS.getSpeed();
+        }
+        #endif
+        BTTFUDPBuf[18] = (uint16_t)temp & 0xff;
+        BTTFUDPBuf[19] = (uint16_t)temp >> 8;
+    }
+    if(BTTFUDPBuf[5] & 0x04) {    // temperature (-32768 if unavailable)
+        temp = -32768;
+        #ifdef TC_HAVETEMP
+        if(useTemp) {
+            float tempf = tempSens.readLastTemp();
+            if(!isnan(tempf)) {
+                temp = (int16_t)(tempf * 100.0);
+            }
+        }
+        #endif
+        BTTFUDPBuf[20] = (uint16_t)temp & 0xff;
+        BTTFUDPBuf[21] = (uint16_t)temp >> 8;
+    }
+    if(BTTFUDPBuf[5] & 0x08) {    // lux (-1 if unavailable)
+        int32_t temp32 = -1;
+        #ifdef TC_HAVELIGHT
+        if(useLight) {
+            temp32 = lightSens.readLux();
+        }
+        #endif
+        BTTFUDPBuf[22] =  (uint32_t)temp32        & 0xff;
+        BTTFUDPBuf[23] = ((uint32_t)temp32 >>  8) & 0xff;
+        BTTFUDPBuf[24] = ((uint32_t)temp32 >> 16) & 0xff;
+        BTTFUDPBuf[25] = ((uint32_t)temp32 >> 24) & 0xff;
+    }
+    if(BTTFUDPBuf[5] & 0x10) {    // Status flags
+        a = 0;
+        if(presentTime.getNightMode()) a |= 0x01; // bit 0: Night mode (0: off, 1: on)
+        #ifdef FAKE_POWER_ON
+        if(!FPBUnitIsOn)               a |= 0x02; // bit 1: Fake power (0: on,  1: off)
+        #endif
+        // bits 7-2 for future use
+        BTTFUDPBuf[26] = a;
+    }
+    if(BTTFUDPBuf[5] & 0x20) {    // Request IP of given device type
+        if(parm) {
+            for(int i = 0; i < BTTFN_MAX_CLIENTS; i++) {
+                if(parm == bttfnClientType[i]) {
+                    for(int j = 0; j < 4; j++) {
+                        BTTFUDPBuf[27+j] = bttfnClientIP[i][j];
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // Calc checksum
+    a = 0;
+    for(int i = 4; i < BTTF_PACKET_SIZE - 1; i++) {
+        a += BTTFUDPBuf[i] ^ 0x55;
+    }
+    BTTFUDPBuf[BTTF_PACKET_SIZE - 1] = a;
+
+    tcdUDP->beginPacket(tcdUDP->remoteIP(), tcdUDP->remotePort());
+    tcdUDP->write(BTTFUDPBuf, BTTF_PACKET_SIZE);
+    tcdUDP->endPacket();
+}
+
+// Send event notification to known clients
+static void bttfn_notify(uint8_t event)
+{
+    IPAddress ip;
+
+    // No clients?
+    if(!bttfnClientIP[0][0])
+        return;
+    
+    memset(BTTFUDPBuf, 0, BTTF_PACKET_SIZE);
+
+    // ID
+    memcpy(BTTFUDPBuf, BTTFUDPHD, 4);
+
+    BTTFUDPBuf[4] = BTTFN_VERSION + 0x40; // Version + notify marker
+    BTTFUDPBuf[5] = event;                // Store event id
+
+    // Checksum
+    uint8_t a = 0;
+    for(int i = 4; i < BTTF_PACKET_SIZE - 1; i++) {
+        a += BTTFUDPBuf[i] ^ 0x55;
+    }
+    BTTFUDPBuf[BTTF_PACKET_SIZE - 1] = a;
+
+    // Send out to all known clients
+    for(int i = 0; i < BTTFN_MAX_CLIENTS; i++) {
+        if(!bttfnClientIP[i][0])
+            break;
+        ip[0] = bttfnClientIP[i][0];
+        ip[1] = bttfnClientIP[i][1];
+        ip[2] = bttfnClientIP[i][2];
+        ip[3] = bttfnClientIP[i][3];
+        tcdUDP->beginPacket(ip, BTTF_DEFAULT_LOCAL_PORT);
+        tcdUDP->write(BTTFUDPBuf, BTTF_PACKET_SIZE);
+        tcdUDP->endPacket();
+    }
+}
+#endif

@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * Clockdisplay Class: Handles the TC LED segment displays
  *
@@ -91,7 +91,12 @@ class clockDisplay {
 
         void show();
         void showAnimate1();
+        #ifdef BTTF3_ANIM
+        void showAnimate2(int until = CD_BUF_SIZE);
+        void showAnimate3(int mystep);
+        #else
         void showAnimate2();
+        #endif
 
         void showAlt();
         void setAltText(const char *text);
@@ -141,7 +146,7 @@ class clockDisplay {
 
         bool    save();
         bool    saveYOffs();
-        bool    load(int initialBrightness = -1);
+        bool    load();
         int16_t loadYOffs();
         int8_t  loadDST();
 
@@ -161,9 +166,9 @@ class clockDisplay {
 
         uint16_t makeNum(uint8_t num, uint16_t dflags = 0);
 
-        void directCol(int col, int segments);  // directly writes column RAM
+        void directCol(int col, int segments);
 
-        void clearDisplay();                    // clears display RAM
+        void clearDisplay();
         bool handleNM();
         void showInt(bool animate = false, bool Alt = false);
 
@@ -207,6 +212,9 @@ class clockDisplay {
         bool _corr6 = false;
         bool _yearDot = false;
         bool _withColon = false;
+
+        int8_t _Cache = -1;
+        char   _CacheData[10];
 };
 
 #endif

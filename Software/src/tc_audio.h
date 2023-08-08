@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * Sound handling
  *
@@ -42,6 +42,8 @@ extern uint8_t curVolume;
 
 extern bool haveMusic;
 extern bool mpActive;
+extern bool haveId3;
+extern char id3[];
 
 void audio_setup();
 void play_keypad_sound(char key);
@@ -53,15 +55,16 @@ bool check_file_SD(const char *audio_file);
 bool checkAudioDone();
 bool checkMP3Done();
 void stopAudio();
+void decodeID3(char *artist, char *track);
 
-void mp_init();
+void mp_init(bool isSetup = false);
 void mp_play(bool forcePlay = true);
 bool mp_stop();
 void mp_next(bool forcePlay = false);
 void mp_prev(bool forcePlay = false);
 int  mp_gotonum(int num, bool force = false);
 void mp_makeShuffle(bool enable);
-bool mp_checkForFolder(int num);
+int  mp_checkForFolder(int num);
 int  mp_get_currently_playing();
 
 // By default, use the volume knob
@@ -71,5 +74,7 @@ int  mp_get_currently_playing();
 #define PA_INTRMUS 0x0002
 #define PA_ALLOWSD 0x0004
 #define PA_DYNVOL  0x0008
+#define PA_NOID3TS 0x0010
+#define PA_LOOPNOW 0x0020
 
 #endif

@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * Keypad handling
  *
@@ -115,7 +115,7 @@ static unsigned long lastKeyPressed = 0;
 #define DATELEN_INT    5   // xxxxx         reset
 #define DATELEN_TIME   4   // HHMM          dt: hour, minute
 #define DATELEN_CODE   3   // xxx           special codes
-#define DATELEN_ALSH   2   // 11            show alarm time/wd
+#define DATELEN_ALSH   2   // 11            show alarm time/wd, etc.
 #define DATELEN_CMIN   DATELEN_ALSH     // min length of code entry
 #define DATELEN_CMAX   DATELEN_QALM     // max length of code entry
 #define DATELEN_MAX    DATELEN_ALL      // max length of possible entry
@@ -132,6 +132,9 @@ bool menuActive = false;
 static bool doKey = false;
 
 static unsigned long enterDelay = 0;
+
+static char btxt[32];
+static char ctxt[32];
 
 static TCButton enterKey = TCButton(ENTER_BUTTON_PIN,
     false,    // Button is active HIGH
@@ -599,20 +602,27 @@ void keypad_loop()
                 specDisp = 10;
                 validEntry = true;
 
-            } else if(code == 88 && haveMusic) {
+            } else if((code == 88 || code == 55) && haveMusic) {
 
+                specDisp = 10;
                 if(mpActive) {
                     #ifdef IS_ACAR_DISPLAY
                     sprintf(atxt, "PLAYING  %03d", mp_get_currently_playing());
                     #else
                     sprintf(atxt, "PLAYING   %03d", mp_get_currently_playing());
                     #endif
+                    if(haveId3) {
+                        decodeID3(ctxt, btxt);
+                        if(*ctxt || *btxt) {
+                            if(!*ctxt) strcpy(ctxt, "UNKNOWN");
+                            if(!*btxt) strcpy(btxt, "UNKNOWN");
+                            specDisp = 20;
+                        }
+                    }
                 } else {
                     strcpy(atxt, "STOPPED");
                 }
-
                 destinationTime.showTextDirect(atxt, CDT_CLEAR);
-                specDisp = 10;
                 validEntry = true;
               
             } else
@@ -699,6 +709,17 @@ void keypad_loop()
                 } else {
                     invalidEntry = true;
                 }
+                break;
+            case 440:
+                #ifdef IS_ACAR_DISPLAY
+                sprintf(atxt, "%s OFF", tmr);
+                #else
+                sprintf(atxt, "%s  OFF", tmr);
+                #endif
+                destinationTime.showTextDirect(atxt);
+                ctDown = 0;
+                specDisp = 10;
+                validEntry = true;
                 break;
             case 770:
                 remMonth = remDay = remHour = remMin = 0;
@@ -970,10 +991,6 @@ void keypad_loop()
             char spTxtS1[EE1_KL1] = { 181, 244, 186, 138, 187, 138, 179, 138, 179, 131, 179, 139, 179 };
             #endif
 
-            #ifdef TC_DBG
-            Serial.printf("Date entered: [%s]\n", dateBuffer);
-            #endif
-
             temp1 = read2digs(0);
             temp2 = read2digs(2);
             
@@ -1132,6 +1149,7 @@ void keypad_loop()
             break;
         case 2:
         case 10:
+        case 20:
             specDisp++;
             if(specDisp == 3) destinationTime.onCond();
             else              { destinationTime.resetBrightness(); destinationTime.on(); }
@@ -1152,8 +1170,17 @@ void keypad_loop()
             enterDelay = EE1_DELAY3;
             play_file("/ee1.mp3", PA_CHECKNM|PA_INTRMUS);
             break;
+        case 21:
+        case 22:
+            destinationTime.showTextDirect(specDisp == 21 ? btxt : ctxt);
+            specDisp++;
+            timeNow = millis();
+            enterWasPressed = true;
+            enterDelay = SPEC_DELAY;
+            break;
         case 4:
         case 11:
+        case 23:
             specDisp = 0;
             break;
         default:
@@ -1210,6 +1237,15 @@ void keypad_loop()
             } else {
             #endif
 
+                #ifdef BTTF3_ANIM
+                for(int i = 0; i < 12; i++) {
+                    destinationTime.showAnimate3(i);
+                    if(needDepTime) {
+                        departedTime.showAnimate3(i);
+                    }
+                    mydelay(5);
+                }
+                #else
                 destinationTime.showAnimate1();
                 if(needDepTime) {
                     departedTime.showAnimate1();
@@ -1219,6 +1255,7 @@ void keypad_loop()
                 if(needDepTime) {
                     departedTime.showAnimate2();
                 }
+                #endif
 
             #ifdef TC_HAVETEMP
             }

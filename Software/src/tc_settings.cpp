@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * Settings & file handling
  * 
@@ -175,6 +175,8 @@ void settings_setup()
         SPIFFS.format();
         if(SPIFFS.begin()) haveFS = true;
 
+        destinationTime.showTextDirect("");
+
     }
 
     if(haveFS) {
@@ -200,8 +202,8 @@ void settings_setup()
     } else {
 
         Serial.println(F("failed.\nThis is very likely a hardware problem."));
-        Serial.println(F("*** Since the internal storage is unavailable, all settings/states will be stored on"));
-        Serial.println(F("*** the SD card (if available)")); 
+        Serial.println(F("*** All settings/states will be stored on the SD card (if available)"));
+
     }
     
     // Set up SD card
@@ -273,7 +275,8 @@ void settings_setup()
     configOnSD = (haveSD && ((settings.CfgOnSD[0] != '0') || FlashROMode));
 
     // Check if SD contains our default sound files
-    if(haveFS && haveSD) {
+    // We don't do that if in FlashROMode mode, of course
+    if(haveFS && haveSD && !FlashROMode) {
         allowCPA = check_if_default_audio_present();
     }
 
@@ -311,7 +314,7 @@ static bool read_settings(File configFile)
 
     jsonSize = json.memoryUsage();
     if(jsonSize > JSON_SIZE) {
-        Serial.printf("%s: ERROR: Config file too large (%d vs %d), memory corrupted, awaiting doom.\n", funcName, jsonSize, JSON_SIZE);
+        Serial.printf("%s: ERROR: Config too large (%d vs %d), memory corrupted.\n", funcName, jsonSize, JSON_SIZE);
     }
     
     #ifdef TC_DBG
@@ -426,6 +429,9 @@ static bool read_settings(File configFile)
         
         #ifdef EXTERNAL_TIMETRAVEL_OUT
         wd |= CopyCheckValidNumParm(json["useETTO"], settings.useETTO, sizeof(settings.useETTO), 0, 1, DEF_USE_ETTO);
+        #endif
+        #ifdef TC_HAVEGPS
+        wd |= CopyCheckValidNumParm(json["quickGPS"], settings.quickGPS, sizeof(settings.quickGPS), 0, 1, DEF_QUICK_GPS);
         #endif
         wd |= CopyCheckValidNumParm(json["playTTsnds"], settings.playTTsnds, sizeof(settings.playTTsnds), 0, 1, DEF_PLAY_TT_SND);
 
@@ -545,6 +551,9 @@ void write_settings()
 
     #ifdef EXTERNAL_TIMETRAVEL_OUT
     json["useETTO"] = settings.useETTO;
+    #endif
+    #ifdef TC_HAVEGPS
+    json["quickGPS"] = settings.quickGPS;
     #endif
     json["playTTsnds"] = settings.playTTsnds;
 
@@ -1287,13 +1296,6 @@ static bool check_if_default_audio_present()
         #endif
     }
 
-    #ifdef TC_DBG
-    for(i = 0; i < (10+NUM_AUDIOFILES); i++) {
-        Serial.printf("%d, ", sizes[i]);
-    }
-    Serial.println("");
-    #endif
-
     return true;
 }
 
@@ -1428,27 +1430,19 @@ void rewriteSecondarySettings()
     bool oldconfigOnSD = configOnSD;
     
     #ifdef TC_DBG
-    Serial.println("Re-writing IP settings");
+    Serial.println("Re-writing seconday settings");
     #endif
+    
     writeIpSettings();
 
     // Create current alarm/volume settings on flash FS
     // regardless of SD-option
     configOnSD = false;
     
-    #ifdef TC_DBG
-    Serial.println("Re-writing alarm settings");
-    #endif
     saveAlarm();
 
-    #ifdef TC_DBG
-    Serial.println("Re-writing reminder settings");
-    #endif
     saveReminder();
     
-    #ifdef TC_DBG
-    Serial.println("Re-writing volume");
-    #endif
     saveCurVolume();
     
     configOnSD = oldconfigOnSD;

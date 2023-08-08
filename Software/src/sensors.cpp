@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * Sensor Class: Temperature/humidty and Light Sensor handling
  *
@@ -384,7 +384,7 @@ bool tempSensor::begin(unsigned long powerupTime)
             _BMx280_CD_H4 *= 1048576;
         }
 
-        #ifdef TC_DBG
+        #ifdef TC_DBG_SENS
         Serial.printf("BMx280 T calib values: %d %d %d\n", _BMx280_CD_T1, _BMx280_CD_T2, _BMx280_CD_T3);
         if(_haveHum) {
             Serial.printf("BMx280 H calib values: %d %d %d %d %d %d\n", 

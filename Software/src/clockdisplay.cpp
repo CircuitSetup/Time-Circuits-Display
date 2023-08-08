@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
  *
  * Clockdisplay Class: Handles the TC LED segment displays
  *
@@ -79,6 +79,18 @@ static const char months[12][4] = {
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
     "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
 };
+
+#ifdef BTTF3_ANIM
+static const uint8_t idxtbl[] = {
+        0, 
+        CD_DAY_POS, CD_DAY_POS, 
+        CD_YEAR_POS, CD_YEAR_POS, 
+        CD_YEAR_POS + 1, CD_YEAR_POS + 1, 
+        CD_HOUR_POS, 
+        CD_HOUR_POS, CD_HOUR_POS, 
+        CD_MIN_POS, CD_MIN_POS
+};
+#endif
 
 static const char *nullStr = "";
 
@@ -345,6 +357,7 @@ void clockDisplay::showAnimate1()
 }
 
 // Show month, assumes showAnimate1() was called before
+#ifndef BTTF3_ANIM
 void clockDisplay::showAnimate2()
 {
     if(_nightmode && _NmOff)
@@ -358,6 +371,66 @@ void clockDisplay::showAnimate2()
     }
     Wire.endTransmission();
 }
+
+#else
+
+void clockDisplay::showAnimate2(int until)
+{
+    if(_nightmode && _NmOff)
+        return;
+
+    Wire.beginTransmission(_address);
+    Wire.write(0x00);
+    for(int i = 0; i < until; i++) {
+        Wire.write(_displayBuffer[i] & 0xff);
+        Wire.write(_displayBuffer[i] >> 8);
+    }
+    for(int i = until; i < CD_BUF_SIZE; i++) {
+        Wire.write(0x00);
+        Wire.write(0x00);
+    }
+    Wire.endTransmission();
+}
+
+void clockDisplay::showAnimate3(int mystep)
+{
+    uint16_t buf;
+    uint16_t *bu;
+    
+    if(!mystep) {
+        if(!handleNM())
+            return;
+        off();
+        AMPMoff();
+        colonOff();
+        showAnimate2(CD_DAY_POS);
+        on();
+        if(_NmOff) _oldnm = 0;
+    }
+    
+    uint8_t lim = idxtbl[mystep] + 1;
+    
+    switch(mystep) {
+    case 1:
+    case 3:
+    case 5:
+    case 8:
+    case 10:
+        bu = &_displayBuffer[idxtbl[mystep]];
+        buf = *bu;
+        *bu &= 0xff;
+        showAnimate2(lim);
+        *bu = buf;
+        break;
+    case 7:
+        if(!_mode24) {
+            (_hour < 12) ? AM() : PM();
+        }
+    default:
+        showAnimate2(lim);
+    }
+}
+#endif // BTTF3_ANIM
 
 void clockDisplay::showAlt()
 {
@@ -459,9 +532,6 @@ void clockDisplay::setYear(uint16_t yearNum)
     #endif
     
     if((int16_t)yearNum - _yearoffset < 0) {    // ny0: < 1
-        #ifdef TC_DBG
-        Serial.printf("Clockdisplay: setYear: Bad year: %d / yearOffset %d\n", yearNum, _yearoffset);
-        #endif
         yearNum = _yearoffset;                  // ny0: yo+1
     }
 
@@ -721,6 +791,9 @@ void clockDisplay::showHalfIPDirect(int a, int b, uint16_t flags)
     const char *fmt = "%3d   %3d";
     #endif
 
+    if(a > 255) a = 255;    // Avoid buf overflow if numbers too high
+    if(b > 255) b = 255;
+
     #ifdef IS_ACAR_DISPLAY
     sprintf(buf, (a >= 100) ? fmt1 : fmt2, a, b);
     #else
@@ -806,6 +879,7 @@ void clockDisplay::showHumDirect(int hum, bool animate)
 }
 #endif
 
+
 // Save & load data ------------------------------------------------------------
 
 
@@ -822,10 +896,6 @@ bool clockDisplay::save()
 
         // Non-RTC: Save time
 
-        #ifdef TC_DBG
-        Serial.println(F("Clockdisplay: Saving non-RTC settings"));
-        #endif
-
         savBuf[0] = _year & 0xff;
         savBuf[1] = (_year >> 8) & 0xff;
         savBuf[2] = _yearoffset & 0xff;
@@ -839,10 +909,6 @@ bool clockDisplay::save()
     } else {
 
         // RTC: Save IsDST, yearoffs, timeDiff
-        
-        #ifdef TC_DBG
-        Serial.println(F("Clockdisplay: Saving RTC settings"));
-        #endif
 
         savBuf[0] = _isDST + 1;
         
@@ -875,10 +941,6 @@ bool clockDisplay::saveYOffs()
 
     // RTC: Save yearoffs; zero timeDifference
 
-    #ifdef TC_DBG
-    Serial.println(F("Clockdisplay: Saving RTC/YOffs setting"));
-    #endif
-
     memset(savBuf, 0, 10);
     
     savBuf[0] = _isDST + 1;
@@ -907,10 +969,6 @@ bool clockDisplay::saveLastYear(uint16_t theYear)
     _lastWrittenLY = loadLastYear();
     if(_lastWrittenLY == theYear)
         return true;
-
-    #ifdef TC_DBG
-    Serial.printf("Clockdisplay: Saving RTC/LastYear to %s\n", FlashROMode ? "SD" : "Flash");
-    #endif
     
     savBuf[0] = theYear & 0xff;
     savBuf[1] = (theYear >> 8) & 0xff;    
@@ -932,24 +990,13 @@ bool clockDisplay::saveLastYear(uint16_t theYear)
  * Load data from NVM storage
  *
  */
-bool clockDisplay::load(int initialBrightness)
+bool clockDisplay::load()
 {
     uint8_t loadBuf[10];
-
-    if(initialBrightness >= 0) {
-        if(initialBrightness > 15)
-            initialBrightness = 15;
-
-        _origBrightness = initialBrightness;
-    }
 
     if(!isRTC()) {
 
         if(loadNVMData(loadBuf)) {
-
-            #ifdef TC_DBG
-            Serial.println(F("Clockdisplay: Loaded non-RTC settings"));
-            #endif
 
             setYearOffset((loadBuf[3] << 8) | loadBuf[2]);
             setYear((loadBuf[1] << 8) | loadBuf[0]);
@@ -957,9 +1004,6 @@ bool clockDisplay::load(int initialBrightness)
             setDay(loadBuf[5]);
             setHour(loadBuf[6]);
             setMinute(loadBuf[7]);
-
-            // Set initial _brightness
-            setBrightness(_origBrightness);
 
             return true;
 
@@ -983,10 +1027,6 @@ bool clockDisplay::load(int initialBrightness)
 
               timeDiffUp = loadBuf[8] ? true : false;
 
-              #ifdef TC_DBG
-              Serial.println(F("Clockdisplay: Loaded RTC settings"));
-              #endif
-
         } else {
 
               _isDST = -1;
@@ -995,21 +1035,10 @@ bool clockDisplay::load(int initialBrightness)
 
               timeDifference = 0;
 
-              #ifdef TC_DBG
-              Serial.println(F("Clockdisplay: Invalid RTC data"));
-              #endif
-
         }
-
-        // Reinstate _brightness to keep old behavior
-        setBrightness(_origBrightness);
 
         return true;
     }
-
-    #ifdef TC_DBG
-    Serial.println(F("Clockdisplay: Invalid Non-RTC data"));
-    #endif
 
     // Do NOT clear NVM if data is invalid.
     // All 0s are as bad, wait for NVM to be
@@ -1101,45 +1130,65 @@ bool clockDisplay::saveNVMData(uint8_t *savBuf, bool noReadChk)
         }
     }
 
-    if(!skipSave) {
-        #ifdef TC_DBG
-        Serial.printf("saveNVMData to %s\n", FlashROMode ? "SD" : "Flash");
-        #endif
-        for(uint8_t i = 0; i < 9; i++) {
-            sum += (savBuf[i] ^ 0x55);
-        }
-        savBuf[9] = sum & 0xff;
-        if(FlashROMode) {
-            return writeFileToSD(fnEEPROM[_did], savBuf, 10);
-        } else {
-            return writeFileToFS(fnEEPROM[_did], savBuf, 10);
-        }
+    if(skipSave)
+        return true;
+
+    for(uint8_t i = 0; i < 9; i++) {
+        sum += (savBuf[i] ^ 0x55);
     }
-    return true;
+    savBuf[9] = sum & 0xff;
+
+    if(FlashROMode) {
+        skipSave = writeFileToSD(fnEEPROM[_did], savBuf, 10);
+    } else {
+        skipSave = writeFileToFS(fnEEPROM[_did], savBuf, 10);
+    }
+
+    // Copy to cache regardless of result of write; otherwise
+    // the load function would read corrupt data instead of
+    // using the ok data in the cache.
+    memcpy(_CacheData, savBuf, 10);
+    _Cache = 2;
+
+    return skipSave;
 }
 
 bool clockDisplay::loadNVMData(uint8_t *loadBuf)
 {
     uint16_t sum = 0;
-    uint8_t  mxor = 0x55;
+    bool dataOk = false;
 
     memset(loadBuf, 0, 10);
 
-    #ifdef TC_DBG
-    Serial.printf("loadNVMData from %s\n", FlashROMode ? "SD" : "Flash");
-    #endif
-        
-    if(FlashROMode) {
-        readFileFromSD(fnEEPROM[_did], loadBuf, 10);
-    } else {
-        readFileFromFS(fnEEPROM[_did], loadBuf, 10);
+    if(_Cache == 2) {
+        memcpy(loadBuf, _CacheData, 10);
+        for(uint8_t i = 0; i < 9; i++) {
+           sum += (loadBuf[i] ^ 0x55);
+        }
+        dataOk = ((sum & 0xff) == loadBuf[9]);
     }
 
-    for(uint8_t i = 0; i < 9; i++) {
-        sum += (loadBuf[i] ^ mxor);
+    if(!dataOk) {
+
+        _Cache = -1;  // Invalidate; either empty or corrupt
+            
+        if(FlashROMode) {
+            readFileFromSD(fnEEPROM[_did], loadBuf, 10);
+        } else {
+            readFileFromFS(fnEEPROM[_did], loadBuf, 10);
+        }
+
+        for(uint8_t i = 0; i < 9; i++) {
+           sum += (loadBuf[i] ^ 0x55);
+        }
+        dataOk = ((sum & 0xff) == loadBuf[9]);
+        if(dataOk) {
+            memcpy(_CacheData, loadBuf, 10);
+            _Cache = 2;
+        }
     }
 
-    return ((sum & 0xff) == loadBuf[9]);
+    return dataOk;
 }
 
 // Returns bit pattern for provided value 0-9 or number provided as a char '0'-'9'
@@ -1273,11 +1322,10 @@ void clockDisplay::showInt(bool animate, bool Alt)
     Wire.write(0x00);
 
     if(animate) {
-        for(i = 0; i < CD_MONTH_SIZE; i++) {
+        for(i = 0; i < CD_DAY_POS; i++) {
             Wire.write(0x00);  // blank month
             Wire.write(0x00);
         }
-        i = CD_DAY_POS;
     }
 
     for(; i < CD_BUF_SIZE; i++) {
@@ -1304,14 +1352,24 @@ void clockDisplay::colonOff()
 
 void clockDisplay::AM()
 {
+#ifndef REV_AMPM
     _displayBuffer[CD_AMPM_POS] |= 0x0080;
     _displayBuffer[CD_AMPM_POS] &= 0x7FFF;
+#else
+    _displayBuffer[CD_AMPM_POS] |= 0x8000;
+    _displayBuffer[CD_AMPM_POS] &= 0xFF7F;
+#endif
 }
 
 void clockDisplay::PM()
 {
+#ifndef REV_AMPM  
     _displayBuffer[CD_AMPM_POS] |= 0x8000;
     _displayBuffer[CD_AMPM_POS] &= 0xFF7F;
+#else
+    _displayBuffer[CD_AMPM_POS] |= 0x0080;
+    _displayBuffer[CD_AMPM_POS] &= 0x7FFF;
+#endif    
 }
 
 void clockDisplay::AMPMoff()
@@ -1330,12 +1388,20 @@ void clockDisplay::directAMPM(int val1, int val2)
 
 void clockDisplay::directAM()
 {
+#ifndef REV_AMPM  
     directAMPM(0x80, 0x00);
+#else
+    directAMPM(0x00, 0x80);
+#endif    
 }
 
 void clockDisplay::directPM()
 {
+#ifndef REV_AMPM  
     directAMPM(0x00, 0x80);
+#else
+    directAMPM(0x80, 0x00);
+#endif
 }
 
 void clockDisplay::directAMPMoff()
