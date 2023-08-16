@@ -4,18 +4,20 @@ This folder holds all files necessary for immediate installation on your Time Ci
 
 ### Firmware installation
 
+#### Updating Firmware
 If a previous version of the Time Circuits firmware was installed on your device, you can upload the provided binary to update to the current version: 
 - Download the latest version of the firmware from here
-- Go to the TCD Config Portal
+- Go to the TCD Config Portal ([https://github.com/CircuitSetup/Time-Circuits-Display/wiki/8.-WiFi-Connection-&-TCD-Settings#connecting-to-your-wifi-network](see here for how to connect to it) - you do not need to connect the TCD to your WiFi network to access it)
 - Click on "Update"
 - Select the previously downloaded binary (.bin)
 - Click "Update"
 
 The TCD will restart.
 
+#### Clean Install
 For a fresh installation, the provided binary is not usable. You'll need to use the Arduino IDE or PlatformIO, download the sketch source code, all required libraries (info in the timecircuits.ino file) and compile it. Then upload the sketch to the device. This method is the one for fresh ESP32 boards and/or folks familiar with Arduino programming.
 
-### Audio file installation
+#### Audio file installation
 
 The sound pack is not updated as often as the firmware itself. If you have previously installed the latest version of the sound-pack, you normally don't have to re-install the audio files when you update the firmware. Only if either a new version of the sound-pack is released here, or your clock is quiet after a firmware update, a re-installation is needed.
 
