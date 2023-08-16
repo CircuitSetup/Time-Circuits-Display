@@ -4,9 +4,16 @@ This folder holds all files necessary for immediate installation on your Time Ci
 
 ### Firmware installation
 
-If a previous version of the Time Circuits firmware was installed on your device, you can upload the provided binary to update to the current version: Go to the Config Portal, click on "Update" and select a binary (.bin) file provided here.
+If a previous version of the Time Circuits firmware was installed on your device, you can upload the provided binary to update to the current version: 
+- Download the latest version of the firmware from here
+- Go to the TCD Config Portal
+- Click on "Update"
+- Select the previously downloaded binary (.bin)
+- Click "Update"
 
-For a fresh installation, the provided binary is not usable. You'll need to use the Arduino IDE or PlatformIO, download the sketch source code, all required libraries (info in the .ino file) and compile it. Then upload the sketch to the device. This method is the one for fresh ESP32 boards and/or folks familiar with Arduino programming.
+The TCD will restart.
+
+For a fresh installation, the provided binary is not usable. You'll need to use the Arduino IDE or PlatformIO, download the sketch source code, all required libraries (info in the timecircuits.ino file) and compile it. Then upload the sketch to the device. This method is the one for fresh ESP32 boards and/or folks familiar with Arduino programming.
 
 ### Audio file installation
 
