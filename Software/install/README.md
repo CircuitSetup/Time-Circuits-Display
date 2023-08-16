@@ -7,7 +7,7 @@ This folder holds all files necessary for immediate installation on your Time Ci
 #### Updating Firmware
 If a previous version of the Time Circuits firmware was installed on your device, you can upload the provided binary to update to the current version: 
 - Download the latest version of the firmware from here
-- Go to the TCD Config Portal ([https://github.com/CircuitSetup/Time-Circuits-Display/wiki/8.-WiFi-Connection-&-TCD-Settings#connecting-to-your-wifi-network](see here for how to connect to it) - you do not need to connect the TCD to your WiFi network to access it)
+- Go to the TCD Config Portal ((https://github.com/CircuitSetup/Time-Circuits-Display/wiki/8.-WiFi-Connection-&-TCD-Settings#connecting-to-your-wifi-network)[see here for how to connect to it] - you do not need to connect the TCD to your WiFi network to access it)
 - Click on "Update"
 - Select the previously downloaded binary (.bin)
 - Click "Update"
