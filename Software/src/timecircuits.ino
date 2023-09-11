@@ -46,6 +46,8 @@
 
 /*  Changelog
  *
+ *  2023/08/14 (A10001986)
+ *    - (Remove historic and pointless casts for atoi)
  *  2023/08/04 (A10001986)
  *    - Minor cleanup
  *  2023/08/03 (A10001986)

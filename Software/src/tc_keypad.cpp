@@ -203,10 +203,10 @@ void keypad_setup()
     ettKey.attachPress(ettKeyPressed);
     ettKey.attachLongPressStart(ettKeyHeld);
 
-    ettDelay = (int)atoi(settings.ettDelay);
+    ettDelay = atoi(settings.ettDelay);
     if(ettDelay > ETT_MAX_DEL) ettDelay = ETT_MAX_DEL;
 
-    ettLong = ((int)atoi(settings.ettLong) > 0);
+    ettLong = (atoi(settings.ettLong) > 0);
 #endif
 
     dateBuffer[0] = '\0';
@@ -1473,11 +1473,15 @@ bool toggleNightMode()
 void leds_on()
 {
     if(FPBUnitIsOn && !destinationTime.getNightMode()) {
+        #ifndef GTE_KEYPAD
         digitalWrite(LEDS_PIN, HIGH);
+        #endif
     }
 }
 
 void leds_off()
 {
+    #ifndef GTE_KEYPAD
     digitalWrite(LEDS_PIN, LOW);
+    #endif
 }

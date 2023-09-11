@@ -168,6 +168,9 @@ static bool          didTriggerP1 = false;
 static float         ttP0TimeFactor = 1.0;
 #ifdef TC_HAVEGPS
 static unsigned long dispGPSnow = 0;
+#ifdef NOT_MY_RESPONSIBILITY
+static bool          GPSabove88 = false;
+#endif
 #endif
 #ifdef SP_ALWAYS_ON
 static unsigned long dispIdlenow = 0;
@@ -646,7 +649,7 @@ void time_setup()
 
     // Init fake power switch
     #ifdef FAKE_POWER_ON
-    waitForFakePowerButton = ((int)atoi(settings.fakePwrOn) > 0);
+    waitForFakePowerButton = (atoi(settings.fakePwrOn) > 0);
     if(waitForFakePowerButton) {
         fakePowerOnKey.setPressTicks(10);     // ms after short press is assumed (default 400)
         fakePowerOnKey.setLongPressTicks(50); // ms after long press is assumed (default 800)
@@ -711,7 +714,7 @@ void time_setup()
     departedTime.begin();
 
     // Initialize clock mode: 12 hour vs 24 hour
-    bool mymode24 = ((int)atoi(settings.mode24) > 0);
+    bool mymode24 = (atoi(settings.mode24) > 0);
     presentTime.set1224(mymode24);
     destinationTime.set1224(mymode24);
     departedTime.set1224(mymode24);
@@ -720,15 +723,15 @@ void time_setup()
     presentTime.setRTC(true);
 
     // Configure behavior in night mode
-    destinationTime.setNMOff(((int)atoi(settings.dtNmOff) > 0));
-    presentTime.setNMOff(((int)atoi(settings.ptNmOff) > 0));
-    departedTime.setNMOff(((int)atoi(settings.ltNmOff) > 0));
+    destinationTime.setNMOff((atoi(settings.dtNmOff) > 0));
+    presentTime.setNMOff((atoi(settings.ptNmOff) > 0));
+    departedTime.setNMOff((atoi(settings.ltNmOff) > 0));
 
     // Determine if user wanted Time Travels to be persistent
-    timetravelPersistent = ((int)atoi(settings.timesPers) > 0);
+    timetravelPersistent = (atoi(settings.timesPers) > 0);
 
     // Set initial brightness for present time displqy
-    presentTime.setBrightness((int)atoi(settings.presTimeBright), true);
+    presentTime.setBrightness(atoi(settings.presTimeBright), true);
     
     // Load present time settings (yearOffs, timeDifference, isDST)
     presentTime.load();
@@ -745,7 +748,7 @@ void time_setup()
     // See if speedo display is to be used
     #ifdef TC_HAVESPEEDO
     {
-        int temp = (int)atoi(settings.speedoType);
+        int temp = atoi(settings.speedoType);
         if(temp >= SP_NUM_TYPES) temp = 99;
         useSpeedo = (temp != 99);
     }
@@ -758,11 +761,11 @@ void time_setup()
     #ifdef TC_HAVESPEEDO
     if(useSpeedo) {
         // 'useGPSSpeed' strictly means "display GPS speed on speedo"
-        useGPSSpeed = ((int)atoi(settings.useGPSSpeed) > 0);
+        useGPSSpeed = (atoi(settings.useGPSSpeed) > 0);
     }
     #endif
 
-    quickGPSupdates = (useGPSSpeed || ((int)atoi(settings.quickGPS) > 0));
+    quickGPSupdates = (useGPSSpeed || (atoi(settings.quickGPS) > 0));
 
     // Check for GPS receiver
     // Do so regardless of usage in order to eliminate
@@ -1018,8 +1021,8 @@ void time_setup()
     #endif
 
     // Set initial brightness for dest & last time dep displays
-    destinationTime.setBrightness((int)atoi(settings.destTimeBright), true);
-    departedTime.setBrightness((int)atoi(settings.lastTimeBright), true);
+    destinationTime.setBrightness(atoi(settings.destTimeBright), true);
+    departedTime.setBrightness(atoi(settings.lastTimeBright), true);
 
     // Load destination time (and set to default if invalid)
     if(!destinationTime.load()) {
@@ -1047,12 +1050,12 @@ void time_setup()
     loadReminder();
 
     // Auto-NightMode
-    autoNightModeMode = (int)atoi(settings.autoNMPreset);
+    autoNightModeMode = atoi(settings.autoNMPreset);
     if(autoNightModeMode > AUTONM_NUM_PRESETS) autoNightModeMode = 10;
     autoNightMode = (autoNightModeMode != 10);
-    autoNMOnHour = (int)atoi(settings.autoNMOn);
+    autoNMOnHour = atoi(settings.autoNMOn);
     if(autoNMOnHour > 23) autoNMOnHour = 0;
-    autoNMOffHour = (int)atoi(settings.autoNMOff);
+    autoNMOffHour = atoi(settings.autoNMOff);
     if(autoNMOffHour > 23) autoNMOffHour = 0;
     if(autoNightMode && (autoNightModeMode == 0)) {
         if((autoNightMode = (autoNMOnHour != autoNMOffHour))) {
@@ -1075,10 +1078,10 @@ void time_setup()
     }
 
     // Set up alarm base: RTC or current "present time"
-    alarmRTC = ((int)atoi(settings.alarmRTC) > 0);
+    alarmRTC = (atoi(settings.alarmRTC) > 0);
 
     // Set up option to play/mute time travel sounds
-    playTTsounds = ((int)atoi(settings.playTTsnds) > 0);
+    playTTsounds = (atoi(settings.playTTsnds) > 0);
 
     // Set power-up setting for beep
     muteBeep = true;
@@ -1092,9 +1095,9 @@ void time_setup()
     // Set up speedo display
     #ifdef TC_HAVESPEEDO
     if(useSpeedo) {
-        speedo.begin((int)atoi(settings.speedoType));
+        speedo.begin(atoi(settings.speedoType));
 
-        speedo.setBrightness((int)atoi(settings.speedoBright), true);
+        speedo.setBrightness(atoi(settings.speedoBright), true);
         speedo.setDot(true);
 
         // Speed factor for acceleration curve
@@ -1150,17 +1153,17 @@ void time_setup()
     #ifdef TC_HAVETEMP
     useTemp = true;   // Used by default if detected
     #ifdef TC_HAVESPEEDO
-    dispTemp = ((int)atoi(settings.dispTemp) > 0);
+    dispTemp = (atoi(settings.dispTemp) > 0);
     #else
     dispTemp = false;
     #endif
     if(tempSens.begin(powerupMillis)) {
         tempSens.setCustomDelayFunc(myCustomDelay);
-        tempUnit = ((int)atoi(settings.tempUnit) > 0);
+        tempUnit = (atoi(settings.tempUnit) > 0);
         tempSens.setOffset((float)atof(settings.tempOffs));
         #ifdef TC_HAVESPEEDO
-        tempBrightness = (int)atoi(settings.tempBright);
-        tempOffNM = ((int)atoi(settings.tempOffNM) > 0);
+        tempBrightness = atoi(settings.tempBright);
+        tempOffNM = (atoi(settings.tempOffNM) > 0);
         if(!useSpeedo || useGPSSpeed) dispTemp = false;
         if(dispTemp) {
             #ifdef FAKE_POWER_ON
@@ -1182,7 +1185,7 @@ void time_setup()
     #endif
 
     #ifdef TC_HAVELIGHT
-    useLight = ((int)atoi(settings.useLight) > 0);
+    useLight = (atoi(settings.useLight) > 0);
     luxLimit = atoi(settings.luxLimit);
     if(useLight) {
         if(lightSens.begin(haveGPS, powerupMillis)) {
@@ -1197,7 +1200,7 @@ void time_setup()
 
     // Set up tt trigger for external props (wired & mqtt)
     #ifdef EXTERNAL_TIMETRAVEL_OUT
-    useETTO = useETTOWired = ((int)atoi(settings.useETTO) > 0);
+    useETTO = useETTOWired = (atoi(settings.useETTO) > 0);
     #ifdef TC_HAVEMQTT
     if(useMQTT && pubMQTT) useETTO = true;
     #endif
@@ -1259,7 +1262,7 @@ void time_setup()
         allOff();
     }
 
-    if((int)atoi(settings.playIntro)) {
+    if(atoi(settings.playIntro)) {
         const char *t1 = "             BACK";
         const char *t2 = "TO";
         const char *t3 = "THE FUTURE";
@@ -1613,6 +1616,19 @@ void time_loop()
                 myGPS.loop(true);
                 #ifdef TC_HAVESPEEDO
                 dispGPSSpeed(true);
+                #endif
+                #ifdef NOT_MY_RESPONSIBILITY
+                if(myGPS.getSpeed() >= 88) {
+                    if(!GPSabove88) {
+                        if(FPBUnitIsOn && !presentTime.getNightMode() &&
+                           !startup && !timeTravelP0 && !timeTravelP1 && !timeTravelRE && !timeTravelP2) {
+                            timeTravel(true, false);
+                        }
+                        GPSabove88 = true;
+                    }
+                } else if(myGPS.getSpeed() < 30) {
+                    GPSabove88 = false;
+                }
                 #endif
             }
         }
@@ -2732,6 +2748,7 @@ static void triggerLongTT()
     timetravelP1Now = millis();
     timetravelP1Delay = TT_P1_DELAY_P1;
     timeTravelP1 = 1;
+    timeTravelP2 = 0;
 }
 
 #ifdef EXTERNAL_TIMETRAVEL_OUT

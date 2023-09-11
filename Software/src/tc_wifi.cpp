@@ -522,12 +522,12 @@ void wifi_setup()
     wm.setShowStaticFields(true);
     wm.setShowDnsFields(true);
 
-    temp = (int)atoi(settings.wifiConTimeout);
+    temp = atoi(settings.wifiConTimeout);
     if(temp < 7) temp = 7;
     if(temp > 25) temp = 25;
     wm.setConnectTimeout(temp);
 
-    temp = (int)atoi(settings.wifiConRetries);
+    temp = atoi(settings.wifiConRetries);
     if(temp < 1) temp = 1;
     if(temp > 15) temp = 15;
     wm.setConnectRetries(temp);
@@ -566,7 +566,7 @@ void wifi_setup()
     // This determines if, after a fall-back to AP mode,
     // the device should periodically retry to connect
     // to a configured WiFi network; see time_loop().
-    doAPretry = ((int)atoi(settings.wifiPRetry) > 0);
+    doAPretry = (atoi(settings.wifiPRetry) > 0);
 
     // Configure static IP
     if(loadIpSettings()) {
@@ -589,9 +589,9 @@ void wifi_setup()
     wifiConnect(true);
     
 #ifdef TC_HAVEMQTT
-    useMQTT = ((int)atoi(settings.useMQTT) > 0);
+    useMQTT = (atoi(settings.useMQTT) > 0);
     #ifdef EXTERNAL_TIMETRAVEL_OUT
-    pubMQTT = ((int)atoi(settings.pubMQTT) > 0);
+    pubMQTT = (atoi(settings.pubMQTT) > 0);
     #endif
     
     if((!settings.mqttServer[0]) || // No server -> no MQTT
@@ -1811,14 +1811,14 @@ static void mystrcpy(char *sv, WiFiManagerParameter *el)
 #ifndef TC_NOCHECKBOXES
 static void strcpyCB(char *sv, WiFiManagerParameter *el)
 {
-    strcpy(sv, ((int)atoi(el->getValue()) > 0) ? "1" : "0");
+    strcpy(sv, (atoi(el->getValue()) > 0) ? "1" : "0");
 }
 
 static void setCBVal(WiFiManagerParameter *el, char *sv)
 {
     const char makeCheck[] = "1' checked a='";
     
-    el->setValue(((int)atoi(sv) > 0) ? makeCheck : "1", 14);
+    el->setValue((atoi(sv) > 0) ? makeCheck : "1", 14);
 }
 #endif
 
