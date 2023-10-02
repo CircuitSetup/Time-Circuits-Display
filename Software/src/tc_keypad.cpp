@@ -4,6 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
+ * http://tcd.backtothefutu.re
  *
  * Keypad handling
  *
@@ -98,6 +99,7 @@ static bool needDepTime = false;
 #ifdef EXTERNAL_TIMETRAVEL_IN
 bool                 isEttKeyPressed = false;
 bool                 isEttKeyHeld = false;
+bool                 isEttKeyImmediate = false;
 static unsigned long ettNow = 0;
 static bool          ettDelayed = false;
 static unsigned long ettDelay = 0; // ms
@@ -108,9 +110,11 @@ static unsigned long timeNow = 0;
 
 static unsigned long lastKeyPressed = 0;
 
+#define DATELEN_STPR  14   // 99mmddyyyyHHMM  spt: month, day, year, hour, min
 #define DATELEN_ALL   12   // mmddyyyyHHMM  dt: month, day, year, hour, min
 #define DATELEN_REM   10   // 77mmddHHMM    set reminder
 #define DATELEN_DATE   8   // mmddyyyy      dt: month, day, year
+#define DATELEN_ECMD   7   // xyyyyyy       6-digit command for FC, SID, PG
 #define DATELEN_QALM   6   // 11HHMM/888xxx 11, hour, min (alarm-set shortcut); 888xxx (mp)
 #define DATELEN_INT    5   // xxxxx         reset
 #define DATELEN_TIME   4   // HHMM          dt: hour, minute
@@ -118,7 +122,11 @@ static unsigned long lastKeyPressed = 0;
 #define DATELEN_ALSH   2   // 11            show alarm time/wd, etc.
 #define DATELEN_CMIN   DATELEN_ALSH     // min length of code entry
 #define DATELEN_CMAX   DATELEN_QALM     // max length of code entry
+#ifdef HAVE_STALE_PRESENT
+#define DATELEN_MAX    DATELEN_STPR
+#else
 #define DATELEN_MAX    DATELEN_ALL      // max length of possible entry
+#endif
 
 static char dateBuffer[DATELEN_MAX + 2];
 char        timeBuffer[8];
@@ -165,6 +173,7 @@ static void setupWCMode();
 static void buildRemString(char *buf);
 static void buildRemOffString(char *buf);
 static void mykpddelay(unsigned int mydel);
+static void prepareReboot();
 
 /*
  * keypad_setup()
@@ -248,7 +257,7 @@ static void keypadEvent(char key, KeyState kstate)
         switch(key) {
         case '0':    // "0" held down -> time travel
             doKey = false;
-            // Complete timeTravel, with speedo
+            // Complete timeTravel, with speedo, (with Lead)
             timeTravel(true, true);
             break;
         case '9':    // "9" held down -> return from time travel
@@ -368,6 +377,7 @@ static void enterKeyHeld()
 static void ettKeyPressed()
 {
     isEttKeyPressed = true;
+    // Do not touch isEttKeyImmediate here
     pwrNeedFullNow();
 }
 
@@ -445,7 +455,7 @@ void keypad_loop()
         isEnterKeyHeld = false;
         isEnterKeyPressed = false;
         #ifdef EXTERNAL_TIMETRAVEL_IN
-        isEttKeyPressed = false;
+        isEttKeyPressed = isEttKeyImmediate = false;
         isEttKeyHeld = false;
         #endif
 
@@ -456,21 +466,22 @@ void keypad_loop()
 #ifdef EXTERNAL_TIMETRAVEL_IN
     if(isEttKeyHeld) {
         resetPresentTime();
-        isEttKeyPressed = isEttKeyHeld = false;
+        isEttKeyPressed = isEttKeyHeld = isEttKeyImmediate = false;
     } else if(isEttKeyPressed) {
-        if(!ettDelay) {
-            timeTravel(ettLong, true);
+        if(!ettDelay || isEttKeyImmediate) {
+            // (MQTT with lead, otherwise without)
+            timeTravel(ettLong, true, isEttKeyImmediate ? false : true);
             ettDelayed = false;
         } else {
             ettNow = millis();
             ettDelayed = true;
             startBeepTimer();
         }
-        isEttKeyPressed = isEttKeyHeld = false;
+        isEttKeyPressed = isEttKeyHeld = isEttKeyImmediate = false;
     }
     if(ettDelayed) {
         if(millis() - ettNow >= ettDelay) {
-            timeTravel(ettLong, true);
+            timeTravel(ettLong, true, true);
             ettDelayed = false;
         }
     }
@@ -497,7 +508,7 @@ void keypad_loop()
         #ifdef EXTERNAL_TIMETRAVEL_IN
         // No external tt while in menu mode,
         // so reset flag upon menu exit
-        isEttKeyPressed = isEttKeyHeld = false;
+        isEttKeyPressed = isEttKeyHeld = isEttKeyImmediate = false;
         #endif
 
         menuActive = false;
@@ -528,6 +539,12 @@ void keypad_loop()
         if(strLen != DATELEN_ALL  &&
            strLen != DATELEN_REM  &&
            strLen != DATELEN_DATE &&
+           #ifdef TC_HAVEBTTFN
+           strLen != DATELEN_ECMD &&
+           #endif
+           #ifdef HAVE_STALE_PRESENT
+           strLen != DATELEN_STPR &&
+           #endif
            (strLen < DATELEN_CMIN ||
             strLen > DATELEN_CMAX) ) {
 
@@ -786,10 +803,10 @@ void keypad_loop()
                 specDisp = 10;
                 validEntry = true;
                 break;
-            case 000:
-            case 001:
-            case 002:
-            case 003:
+            case 0:
+            case 1:
+            case 2:
+            case 3:
                 setBeepMode(code);
                 #ifdef IS_ACAR_DISPLAY
                 sprintf(atxt, "BEEP MODE  %1d", beepMode);
@@ -801,6 +818,29 @@ void keypad_loop()
                 specDisp = 10;
                 // Play no sound, ie no xxvalidEntry
                 break;
+            case 9:
+                send_refill_msg();
+                validEntry = true;
+                break;
+            case 990:
+            case 991:
+                rcModeState = carMode;
+                carMode = (code == 991);
+                if(rcModeState != carMode) {
+                    saveCarMode();
+                    prepareReboot();
+                    delay(1000);
+                    esp_restart();
+                }
+                validEntry = true;
+                break;
+            #ifdef HAVE_STALE_PRESENT
+            case 999:
+                stalePresent = !stalePresent;
+                saveStaleTime((void *)&stalePresentTime[0], stalePresent);
+                validEntry = true;
+                break;
+            #endif
             default:
                 invalidEntry = true;
             }
@@ -808,17 +848,7 @@ void keypad_loop()
         } else if(strLen == DATELEN_INT) {
 
             if(!(strncmp(dateBuffer, "64738", 5))) {
-                mp_stop();
-                stopAudio();
-                allOff();
-                #ifdef TC_HAVESPEEDO
-                if(useSpeedo) speedo.off();
-                #endif
-                destinationTime.resetBrightness();
-                destinationTime.showTextDirect("REBOOTING");
-                destinationTime.on();
-                delay(ENTER_DELAY);
-                digitalWrite(WHITE_LED_PIN, LOW);
+                prepareReboot();
                 esp_restart();
             }
 
@@ -939,6 +969,30 @@ void keypad_loop()
             specDisp = 10;
             validEntry = true;
 
+        #ifdef TC_HAVEBTTFN
+        } else if( (strLen == DATELEN_TIME || strLen == DATELEN_ECMD) && 
+                        (dateBuffer[0] == '3' ||
+                         dateBuffer[0] == '6' || 
+                         dateBuffer[0] == '9')) {
+                      
+            uint32_t cmd;
+            if(strLen == DATELEN_TIME) 
+                cmd = ((dateBuffer[1] - '0') * 100) + read2digs(2);
+            else 
+                cmd = (read2digs(1) * 10000) + (read2digs(3) * 100) + read2digs(5);
+            switch(dateBuffer[0]) {
+            case '3':
+                bttfnSendFluxCmd(cmd);
+                break;
+            case '6':
+                bttfnSendSIDCmd(cmd);
+                break;
+            default:
+                bttfnSendPCGCmd(cmd);
+            }
+            validEntry = true;
+        #endif
+        
         } else if(strLen == DATELEN_REM) {
 
             if(read2digs(0) == 77) {
@@ -977,6 +1031,45 @@ void keypad_loop()
             
             invalidEntry = !validEntry;
 
+        #ifdef HAVE_STALE_PRESENT
+        } else if(strLen == DATELEN_STPR) {
+
+            if(read2digs(0) == 99) {
+                int temp1 = read2digs(2);
+                int temp2 = read2digs(4);
+
+                stalePresentTime[0].year = ((int)read2digs(6) * 100) + read2digs(8);
+
+                if(temp1 < 1)  temp1 = 1;
+                if(temp1 > 12) temp1 = 12;
+                if(temp2 < 1)  temp2 = 1;
+                int temp3 = daysInMonth(temp1, stalePresentTime[0].year);
+                if(temp2 > temp3) temp2 = temp3;
+                stalePresentTime[0].month = temp1;
+                stalePresentTime[0].day = temp2;
+                
+                temp1 = read2digs(10);
+                if(temp1 < 0) temp1 = 0;
+                if(temp1 > 23) temp1 = 23;
+                stalePresentTime[0].hour = temp1;
+                
+                temp1  = read2digs(12);
+                if(temp1 < 0) temp1 = 0;
+                if(temp1 > 59) temp1 = 59;
+                stalePresentTime[0].minute = temp1;
+
+                memcpy((void *)&stalePresentTime[1], (void *)&stalePresentTime[0], sizeof(dateStruct));
+
+                stalePresent = true;
+
+                saveStaleTime((void *)&stalePresentTime[0], stalePresent);
+                
+                validEntry = true;
+            } else {
+                invalidEntry = true;
+            }
+            
+        #endif  
         } else {
 
             int _setMonth = -1, _setDay = -1, _setYear = -1;
@@ -1277,8 +1370,8 @@ void keypad_loop()
 void cancelEnterAnim(bool reenableDT)
 {
     if(enterWasPressed) {
+      
         enterWasPressed = false;
-        
         digitalWrite(WHITE_LED_PIN, LOW);
         
         if(reenableDT) {
@@ -1305,7 +1398,8 @@ void cancelEnterAnim(bool reenableDT)
                 departedTime.onCond();
             }
         }
-        
+
+        destShowAlt = depShowAlt = 0;     // Reset TZ-Name-Animation
         needDepTime = false;
         specDisp = 0;
     }
@@ -1366,6 +1460,21 @@ static void buildRemOffString(char *buf)
     #else
     strcpy(buf, "REMINDER  OFF");
     #endif
+}
+
+static void prepareReboot()
+{
+    mp_stop();
+    stopAudio();
+    allOff();
+    #ifdef TC_HAVESPEEDO
+    if(useSpeedo) speedo.off();
+    #endif
+    destinationTime.resetBrightness();
+    destinationTime.showTextDirect("REBOOTING");
+    destinationTime.on();
+    delay(ENTER_DELAY);
+    digitalWrite(WHITE_LED_PIN, LOW);
 }
 
 /*
@@ -1473,15 +1582,11 @@ bool toggleNightMode()
 void leds_on()
 {
     if(FPBUnitIsOn && !destinationTime.getNightMode()) {
-        #ifndef GTE_KEYPAD
         digitalWrite(LEDS_PIN, HIGH);
-        #endif
     }
 }
 
 void leds_off()
 {
-    #ifndef GTE_KEYPAD
     digitalWrite(LEDS_PIN, LOW);
-    #endif
 }

@@ -4,6 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
+ * http://tcd.backtothefutu.re
  *
  * Time and Main Controller
  *
@@ -92,11 +93,12 @@
 
 // Time between the phases of (long) time travel
 // Sum of all must be 8000
-#define TT_P1_DELAY_P1  1400                                                                    // Normal
-#define TT_P1_DELAY_P2  (4200-TT_P1_DELAY_P1)                                                   // Light flicker
-#define TT_P1_DELAY_P3  (5800-(TT_P1_DELAY_P2+TT_P1_DELAY_P1))                                  // Off
-#define TT_P1_DELAY_P4  (6800-(TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))                   // Random display I
-#define TT_P1_DELAY_P5  (8000-(TT_P1_DELAY_P4+TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))    // Random display II
+#define TT_P1_TOTAL     8000
+#define TT_P1_DELAY_P1  1400                                                                        // Normal
+#define TT_P1_DELAY_P2  (4200-TT_P1_DELAY_P1)                                                       // Light flicker
+#define TT_P1_DELAY_P3  (5800-(TT_P1_DELAY_P2+TT_P1_DELAY_P1))                                      // Off
+#define TT_P1_DELAY_P4  (6800-(TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1))                       // Random display I
+#define TT_P1_DELAY_P5  (TT_P1_TOTAL-(TT_P1_DELAY_P4+TT_P1_DELAY_P3+TT_P1_DELAY_P2+TT_P1_DELAY_P1)) // Random display II
 // ACTUAL POINT OF TIME TRAVEL:
 #define TT_P1_POINT88   1000    // ms into "starttravel" sample, when 88mph is reached.
 #define TT_SNDLAT        400    // DO NOT CHANGE
@@ -106,6 +108,7 @@
 // The external prop has ETTO_LEAD_TIME ms to play its pre-tt sequence. After
 // ETTO_LEAD_TIME ms, 88mph is reached, and the actual tt takes place.
 #define ETTO_LEAD_TIME      5000
+#define ETTO_LAT              50  // DO NOT CHANGE
 // End of ETTO config
 
 // Native NTP
@@ -192,16 +195,21 @@ static unsigned long timetravelP1Now = 0;
 static unsigned long timetravelP1Delay = 0;
 int                  timeTravelP1 = 0;
 static bool          triggerP1 = false;
+static bool          triggerP1NoLead = false;
 static unsigned long triggerP1Now = 0;
 static long          triggerP1LeadTime = 0;
 #ifdef EXTERNAL_TIMETRAVEL_OUT
 static bool          useETTO = DEF_USE_ETTO;
 static bool          useETTOWired = DEF_USE_ETTO;
-static long          ettoLeadTime = ETTO_LEAD_TIME;
+static bool          useETTOWiredNoLead = false;
+static long          ettoLeadTime = ETTO_LEAD_TIME - ETTO_LAT;
 static bool          triggerETTO = false;
 static long          triggerETTOLeadTime = 0;
 static unsigned long triggerETTONow = 0;
 static long          ettoLeadPoint = 0;
+static long          origEttoLeadPoint = 0;
+static uint16_t      bttfnTTLeadTime = 0;
+static long          ettoBase;
 #endif
 
 // The timetravel re-entry sequence
@@ -344,6 +352,14 @@ lightSensor lightSens(5,
 
 static int8_t minNext  = 0;
 int8_t        autoTime = 0;  // Selects date/time from array below
+
+#ifdef HAVE_STALE_PRESENT
+bool          stalePresent = false;
+dateStruct stalePresentTime[2] = {
+    {1985, 10, 26,  1, 22},         // original for backup
+    {1985, 10, 26,  1, 22}          // changed during use
+};
+#endif
 
 #ifndef TWPRIVATE //  ----------------- OFFICIAL
 
@@ -525,6 +541,10 @@ bool bttfnHaveClients = false;
 #define BTTFN_NOT_REENTRY  3
 #define BTTFN_NOT_ABORT_TT 4
 #define BTTFN_NOT_ALARM    5
+#define BTTFN_NOT_REFILL   6
+#define BTTFN_NOT_FLUX_CMD 7
+#define BTTFN_NOT_SID_CMD  8
+#define BTTFN_NOT_PCG_CMD  9
 #define BTTFN_TYPE_ANY     0    // Any, unknown or no device
 #define BTTFN_TYPE_FLUX    1    // Flux Capacitor
 #define BTTFN_TYPE_SID     2    // SID
@@ -571,12 +591,14 @@ static void dispIdleZero(bool force = false);
 #endif
 #endif
 
-static void triggerLongTT();
+static void triggerLongTT(bool noLead = false);
+static void copyPresentToDeparted(bool isReturn);
 
 #ifdef EXTERNAL_TIMETRAVEL_OUT
 static void ettoPulseStart();
+static void ettoPulseStartNoLead();
 static void ettoPulseEnd();
-static void sendNetWorkMsg(const char *pl, unsigned int len, uint8_t bttfnMsg);
+static void sendNetWorkMsg(const char *pl, unsigned int len, uint8_t bttfnMsg, uint16_t bttfnPayload = 0, uint16_t bttfnPayload2 = 0);
 #endif
 
 // Time calculations
@@ -597,7 +619,7 @@ static bool NTPHaveLocalTime();
 // BTTF network stuff
 #ifdef TC_HAVEBTTFN
 static void bttfn_setup();
-static void bttfn_notify(uint8_t event);
+static void bttfn_notify(uint8_t targetType, uint8_t event, uint16_t payload = 0, uint16_t payload2 = 0);
 static void bttfn_expire_clients();
 #endif
 
@@ -607,6 +629,12 @@ static void bttfn_expire_clients();
  */
 void time_boot()
 {
+    // Reset TT-out as early as possible
+    #ifdef EXTERNAL_TIMETRAVEL_OUT
+    pinMode(EXTERNAL_TIMETRAVEL_OUT_PIN, OUTPUT);
+    digitalWrite(EXTERNAL_TIMETRAVEL_OUT_PIN, LOW);
+    #endif
+    
     // Start the displays early to clear them
     presentTime.begin();
     destinationTime.begin();
@@ -982,7 +1010,14 @@ void time_setup()
     presentTime.saveLastYear(lastYear);
 
     // Load to display
-    presentTime.setDateTimeDiff(dt);
+    #ifdef HAVE_STALE_PRESENT
+    loadStaleTime((void *)&stalePresentTime[0], stalePresent);
+    memcpy((void *)&stalePresentTime[1], (void *)&stalePresentTime[0], sizeof(dateStruct));
+    if(stalePresent)
+        presentTime.setFromStruct(&stalePresentTime[1]);
+    else
+    #endif
+        presentTime.setDateTimeDiff(dt);
 
     // If we don't have authTime, DST status (time & flag) might be 
     // wrong at this point if we're switched on after a long time. 
@@ -1110,7 +1145,8 @@ void time_setup()
             pointOfP1 += (unsigned long)(((float)(tt_p0_delays[i])) / ttP0TimeFactor);
         }
         #ifdef EXTERNAL_TIMETRAVEL_OUT
-        ettoLeadPoint = pointOfP1 - ettoLeadTime;   // Can be negative!
+        ettoBase = pointOfP1;
+        ettoLeadPoint = origEttoLeadPoint = ettoBase - ettoLeadTime;   // Can be negative!
         #endif
         pointOfP1 -= TT_P1_POINT88;
         pointOfP1 -= TT_SNDLAT;     // Correction for sound/mp3 latency
@@ -1199,11 +1235,25 @@ void time_setup()
     #endif
 
     // Set up tt trigger for external props (wired & mqtt)
+    // useETTO means either wired or MQTT (with pub); not BTTFN.
     #ifdef EXTERNAL_TIMETRAVEL_OUT
     useETTO = useETTOWired = (atoi(settings.useETTO) > 0);
+    if(useETTOWired) {
+        useETTOWiredNoLead = (atoi(settings.noETTOLead) > 0);
+        if(useETTOWiredNoLead) {
+            useETTO = useETTOWired = false;
+        }
+    }
     #ifdef TC_HAVEMQTT
     if(useMQTT && pubMQTT) useETTO = true;
     #endif
+    #endif
+
+    // Preset this for BTTFN status requests during boot
+    #ifdef FAKE_POWER_ON
+    if(waitForFakePowerButton) {
+        FPBUnitIsOn = false;
+    }
     #endif
 
     // Start bttf network
@@ -1246,7 +1296,7 @@ void time_setup()
         isEnterKeyHeld = false;
         isEnterKeyPressed = false;
         #ifdef EXTERNAL_TIMETRAVEL_IN
-        isEttKeyPressed = false;
+        isEttKeyPressed = isEttKeyImmediate = false;
         isEttKeyHeld = false;
         #endif
     }
@@ -1390,12 +1440,12 @@ void time_loop()
                 if(FPBUnitIsOn) {
                     startup = false;
                     startupSound = false;
-                    triggerP1 = 0;
+                    triggerP1 = false;
                     #ifdef EXTERNAL_TIMETRAVEL_OUT
                     triggerETTO = false;
                     ettoPulseEnd();
                     if(useETTO || bttfnHaveClients) {
-                        if(timeTravelP0 || timeTravelP1 || timeTravelRE || timeTravelP2) {
+                        if(timeTravelP0 || (timeTravelP1 > 0) || timeTravelRE || timeTravelP2) {
                             sendNetWorkMsg("ABORT_TT\0", 9, BTTFN_NOT_ABORT_TT);
                         }
                     }
@@ -1459,7 +1509,7 @@ void time_loop()
     #if defined(EXTERNAL_TIMETRAVEL_OUT) || defined(TC_HAVESPEEDO)
     // Timer for starting P1 if to be delayed
     if(triggerP1 && (millis() - triggerP1Now >= triggerP1LeadTime)) {
-        triggerLongTT();
+        triggerLongTT(triggerP1NoLead);
         triggerP1 = false;
     }
     #endif
@@ -1467,7 +1517,7 @@ void time_loop()
     #ifdef EXTERNAL_TIMETRAVEL_OUT
     // Timer for start of ETTO signal
     if(triggerETTO && (millis() - triggerETTONow >= triggerETTOLeadTime)) {
-        sendNetWorkMsg("TIMETRAVEL\0", 11, BTTFN_NOT_TT);
+        sendNetWorkMsg("TIMETRAVEL\0", 11, BTTFN_NOT_TT, bttfnTTLeadTime, TT_P1_TOTAL);
         ettoPulseStart();
         triggerETTO = false;
         #ifdef TC_DBG
@@ -1561,12 +1611,18 @@ void time_loop()
     #endif  // TC_HAVESPEEDO
 
     // Time travel animation, phase 1: Display disruption
-    if(timeTravelP1 && (millis() - timetravelP1Now >= timetravelP1Delay)) {
+    if((timeTravelP1 > 0) && (millis() - timetravelP1Now >= timetravelP1Delay)) {
         timeTravelP1++;
         timetravelP1Now = millis();
         switch(timeTravelP1) {
         case 2:
+            #ifdef TC_DBG
+            Serial.printf("TT initiated %d\n", millis());
+            #endif
+            ettoPulseStartNoLead();
+            #ifndef TT_NO_ANIM
             allOff();
+            #endif
             timetravelP1Delay = TT_P1_DELAY_P2;
             break;
         case 3:
@@ -1622,11 +1678,11 @@ void time_loop()
                     if(!GPSabove88) {
                         if(FPBUnitIsOn && !presentTime.getNightMode() &&
                            !startup && !timeTravelP0 && !timeTravelP1 && !timeTravelRE && !timeTravelP2) {
-                            timeTravel(true, false);
+                            timeTravel(true, false, true);
+                            GPSabove88 = true;
                         }
-                        GPSabove88 = true;
                     }
-                } else if(myGPS.getSpeed() < 30) {
+                } else if(myGPS.getSpeed() < 10) {
                     GPSabove88 = false;
                 }
                 #endif
@@ -2043,7 +2099,12 @@ void time_loop()
             }
 
             // Write time to presentTime display
-            presentTime.setDateTimeDiff(dt);
+            #ifdef HAVE_STALE_PRESENT
+            if(stalePresent)
+                presentTime.setFromStruct(&stalePresentTime[1]);
+            else
+            #endif
+                presentTime.setDateTimeDiff(dt);
 
             // Handle WC mode (load dates/times for dest/dep display)
             // (Restoring not needed, done elsewhere)
@@ -2296,7 +2357,13 @@ void time_loop()
 
         x = y;
 
-        if(timeTravelP1 > 1) {
+        #ifndef TT_NO_ANIM
+        if(timeTravelP1 > 1)
+        #else
+        if(0) 
+        #endif    
+        {
+            
             int ii = 5, tt;
             switch(timeTravelP1) {
             case 2:
@@ -2482,7 +2549,7 @@ void time_loop()
  *  This is also called from tc_keypad.cpp
  */
 
-void timeTravel(bool doComplete, bool withSpeedo)
+void timeTravel(bool doComplete, bool withSpeedo, bool forceNoLead)
 {
     int   tyr = 0;
     int   tyroffs = 0;
@@ -2512,6 +2579,8 @@ void timeTravel(bool doComplete, bool withSpeedo)
     // Pause autoInterval-cycling so user can play undisturbed
     pauseAuto();
 
+    ttUnivNow = millis();
+
     /*
      * Complete sequence with speedo: Initiate P0 (speed count-up)
      *
@@ -2525,6 +2594,8 @@ void timeTravel(bool doComplete, bool withSpeedo)
         #ifdef EXTERNAL_TIMETRAVEL_OUT
         triggerETTO = false;
         ettoPulseEnd();
+        ettoLeadPoint = origEttoLeadPoint;
+        bttfnTTLeadTime = ettoLeadTime;
         #endif
 
         #ifdef TC_HAVEGPS
@@ -2535,6 +2606,27 @@ void timeTravel(bool doComplete, bool withSpeedo)
                 timetravelP0Delay = 0;
                 if(timeTravelP0Speed < 88) {
                     currTotDur = tt_p0_totDelays[timeTravelP0Speed];
+                    #ifdef EXTERNAL_TIMETRAVEL_OUT
+                    #ifdef TC_HAVEBTTFN
+                    if(!useETTO && bttfnHaveClients) {
+                        if(currTotDur >= ettoLeadPoint) {
+                            // Calc time until 88 for bttfn clients
+                            if(ettoLeadPoint < pointOfP1) {
+                                if(currTotDur >= pointOfP1) {
+                                    ettoLeadPoint = pointOfP1;
+                                    bttfnTTLeadTime = ettoBase - pointOfP1;
+                                } else {
+                                    ettoLeadPoint = currTotDur;
+                                    bttfnTTLeadTime = ettoBase - currTotDur;
+                                }
+                                if(bttfnTTLeadTime > ETTO_LAT) {
+                                    bttfnTTLeadTime -= ETTO_LAT;
+                                }
+                            }
+                        }
+                    }
+                    #endif
+                    #endif
                 }
             }
         }
@@ -2550,7 +2642,6 @@ void timeTravel(bool doComplete, bool withSpeedo)
             if(useETTO || bttfnHaveClients) {
 
                 triggerETTO = true;
-                triggerP1 = true;
                 
                 if(currTotDur >= ettoLeadPoint || currTotDur >= pointOfP1) {
 
@@ -2587,9 +2678,6 @@ void timeTravel(bool doComplete, bool withSpeedo)
 
                 } else {
 
-                    //triggerP1LeadTime = pointOfP1 - currTotDur;
-                    //triggerETTOLeadTime = ettoLeadPoint - currTotDur;
-                    //timetravelP0Delay = 0;
                     triggerP1LeadTime = pointOfP1 - currTotDur + timetravelP0Delay;
                     triggerETTOLeadTime = ettoLeadPoint - currTotDur + timetravelP0Delay;
 
@@ -2607,15 +2695,16 @@ void timeTravel(bool doComplete, bool withSpeedo)
             } else
             #endif
             if(currTotDur >= pointOfP1) {
-                 triggerP1 = true;
                  triggerP1Now = ttUnivNow;
                  triggerP1LeadTime = 0;
                  timetravelP0Delay = currTotDur - pointOfP1;
             } else {
-                 triggerP1 = true;
                  triggerP1Now = ttUnivNow;
                  triggerP1LeadTime = pointOfP1 - currTotDur + timetravelP0Delay;
             }
+
+            triggerP1 = true;
+            triggerP1NoLead = false;
 
             speedo.setSpeed(timeTravelP0Speed);
             speedo.setBrightness(255);
@@ -2627,7 +2716,14 @@ void timeTravel(bool doComplete, bool withSpeedo)
 
             return;
         }
+        
         // If (actual) speed >= 88, trigger P1 immediately
+        
+        if(!useETTO) {
+            // If we have GPS speed and its >= 88, don't waste
+            // time on the lead (unless external props need it)
+            forceNoLead = true;
+        }
     }
     #endif
 
@@ -2640,15 +2736,32 @@ void timeTravel(bool doComplete, bool withSpeedo)
         #ifdef EXTERNAL_TIMETRAVEL_OUT
         if(useETTO || bttfnHaveClients) {
 
-            triggerP1 = true;
-            triggerETTO = true;
+            long  ettoLeadT = ettoLeadTime;
+            long  P1_88 = TT_P1_POINT88 + TT_SNDLAT;
 
-            if(ettoLeadTime >= (TT_P1_POINT88 + TT_SNDLAT)) {
+            triggerP1 = true;
+            triggerP1NoLead = false;
+            triggerETTO = true;
+            
+            if(forceNoLead && !useETTO) {
+                P1_88 = 0;
+                triggerP1NoLead = true;
+            }
+
+            bttfnTTLeadTime = ettoLeadTime;
+
+            #ifdef TC_HAVEBTTFN
+            if(!useETTO) {
+                bttfnTTLeadTime = ettoLeadT = P1_88;
+            }
+            #endif
+
+            if(ettoLeadT >= P1_88) {
                 triggerETTOLeadTime = 0;
-                triggerP1LeadTime = ettoLeadTime - (TT_P1_POINT88 + TT_SNDLAT);
+                triggerP1LeadTime = ettoLeadT - P1_88;
             } else {
                 triggerP1LeadTime = 0;
-                triggerETTOLeadTime = (TT_P1_POINT88 + TT_SNDLAT) - ettoLeadTime;
+                triggerETTOLeadTime = P1_88 - ettoLeadT;
 
                 if(triggerETTOLeadTime > 500) {
                     sendNetWorkMsg("PREPARE\0", 8, BTTFN_NOT_PREPARE);
@@ -2658,11 +2771,19 @@ void timeTravel(bool doComplete, bool withSpeedo)
             ttUnivNow = millis();
             triggerETTONow = triggerP1Now = ttUnivNow;
 
+            // Set now to block input and other interfering actions.
+            // Will be set to something valid in triggerLongTT().
+            timeTravelP1 = -1;
+
             return;
         }
         #endif
 
-        triggerLongTT();
+        triggerP1 = false;
+        #ifdef EXTERNAL_TIMETRAVEL_OUT
+        triggerETTO = false;
+        #endif
+        triggerLongTT(forceNoLead);
 
         return;
     }
@@ -2680,12 +2801,7 @@ void timeTravel(bool doComplete, bool withSpeedo)
     allOff();
 
     // Copy present time to last time departed
-    departedTime.setYear(presentTime.getDisplayYear());
-    departedTime.setMonth(presentTime.getMonth());
-    departedTime.setDay(presentTime.getDay());
-    departedTime.setHour(presentTime.getHour());
-    departedTime.setMinute(presentTime.getMinute());
-    departedTime.setYearOffset(0);
+    copyPresentToDeparted(false);
 
     // We only save the new time to NVM if user wants persistence.
     // Might not be preferred; first, this messes with the user's custom
@@ -2742,11 +2858,12 @@ void timeTravel(bool doComplete, bool withSpeedo)
     #endif
 }
 
-static void triggerLongTT()
+static void triggerLongTT(bool noLead)
 {
-    if(playTTsounds) play_file("/travelstart.mp3", PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
+    if(playTTsounds) play_file( noLead ? "/travelstart2.mp3" : "/travelstart.mp3", 
+                                        PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
     timetravelP1Now = millis();
-    timetravelP1Delay = TT_P1_DELAY_P1;
+    timetravelP1Delay = noLead ? 0 : TT_P1_DELAY_P1;
     timeTravelP1 = 1;
     timeTravelP2 = 0;
 }
@@ -2756,19 +2873,40 @@ static void ettoPulseStart()
 {
     if(useETTOWired) {
         digitalWrite(EXTERNAL_TIMETRAVEL_OUT_PIN, HIGH);
+        #ifdef TC_DBG
+        digitalWrite(WHITE_LED_PIN, HIGH);
+        Serial.printf("ETTO Start %d\n", millis());
+        #endif
     }
-    #ifdef TC_DBG
-    digitalWrite(WHITE_LED_PIN, HIGH);
-    #endif
+}
+
+static void ettoPulseStartNoLead()
+{
+    if(useETTOWiredNoLead) {
+        digitalWrite(EXTERNAL_TIMETRAVEL_OUT_PIN, HIGH);
+        #ifdef TC_DBG
+        digitalWrite(WHITE_LED_PIN, HIGH);
+        Serial.printf("ETTO Start (no lead) %d\n", millis());
+        #endif
+    }
 }
 
 static void ettoPulseEnd()
 {
-    if(useETTOWired) {
+    if(useETTOWired || useETTOWiredNoLead) {
         digitalWrite(EXTERNAL_TIMETRAVEL_OUT_PIN, LOW);
+        #ifdef TC_DBG
+        digitalWrite(WHITE_LED_PIN, LOW);
+        #endif
     }
-    #ifdef TC_DBG
-    digitalWrite(WHITE_LED_PIN, LOW);
+}
+
+void send_refill_msg()
+{
+    #ifdef EXTERNAL_TIMETRAVEL_OUT
+    if(useETTO || bttfnHaveClients) {
+        sendNetWorkMsg("REFILL\0", 8, BTTFN_NOT_REFILL);
+    }
     #endif
 }
 
@@ -2778,7 +2916,7 @@ static void ettoPulseEnd()
 // Otherwise, send via BTTFN.
 // Props can rely on getting only ONE notification message if they listen
 // to both MQTT and BTTFN.
-static void sendNetWorkMsg(const char *pl, unsigned int len, uint8_t bttfnMsg)
+static void sendNetWorkMsg(const char *pl, unsigned int len, uint8_t bttfnMsg, uint16_t bttfnPayload, uint16_t bttfnPayload2)
 {
     #ifdef TC_HAVEMQTT
     if(useMQTT && pubMQTT) {
@@ -2787,10 +2925,25 @@ static void sendNetWorkMsg(const char *pl, unsigned int len, uint8_t bttfnMsg)
     }
     #endif
     #ifdef TC_HAVEBTTFN
-    bttfn_notify(bttfnMsg);
+    bttfn_notify(BTTFN_TYPE_ANY, bttfnMsg, bttfnPayload, bttfnPayload2);
     #endif
 }
 #endif  // EXTERNAL_TIMETRAVEL_OUT
+
+#ifdef TC_HAVEBTTFN
+void bttfnSendFluxCmd(uint32_t payload)
+{
+    bttfn_notify(BTTFN_TYPE_FLUX, BTTFN_NOT_FLUX_CMD, payload & 0xffff, payload >> 16);
+}
+void bttfnSendSIDCmd(uint32_t payload)
+{
+    bttfn_notify(BTTFN_TYPE_SID, BTTFN_NOT_SID_CMD, payload & 0xffff, payload >> 16);
+}
+void bttfnSendPCGCmd(uint32_t payload)
+{
+    bttfn_notify(BTTFN_TYPE_PCG, BTTFN_NOT_PCG_CMD, payload & 0xffff, payload >> 16);
+}
+#endif
 
 /*
  * Reset present time to actual present time
@@ -2823,12 +2976,7 @@ void resetPresentTime()
     allOff();
 
     // Copy "present" time to last time departed
-    departedTime.setYear(presentTime.getDisplayYear());
-    departedTime.setMonth(presentTime.getMonth());
-    departedTime.setDay(presentTime.getDay());
-    departedTime.setHour(presentTime.getHour());
-    departedTime.setMinute(presentTime.getMinute());
-    departedTime.setYearOffset(0);
+    copyPresentToDeparted(true);
 
     // We only save the new time if user wants persistence.
     // Might not be preferred; first, this messes with the user's 
@@ -2847,6 +2995,29 @@ void resetPresentTime()
 
     // Beep auto mode: Restart timer
     startBeepTimer();
+}
+
+static void copyPresentToDeparted(bool isReturn)
+{
+    #ifdef HAVE_STALE_PRESENT
+    departedTime.setYear(stalePresent ? stalePresentTime[1].year : presentTime.getDisplayYear());
+    departedTime.setMonth(stalePresent ? stalePresentTime[1].month : presentTime.getMonth());
+    departedTime.setDay(stalePresent ? stalePresentTime[1].day : presentTime.getDay());
+    departedTime.setHour(stalePresent ? stalePresentTime[1].hour : presentTime.getHour());
+    departedTime.setMinute(stalePresent ? stalePresentTime[1].minute : presentTime.getMinute());
+    stalePresentTime[1].year = isReturn ? stalePresentTime[0].year : destinationTime.getYear();
+    stalePresentTime[1].month = isReturn ? stalePresentTime[0].month : destinationTime.getMonth();
+    stalePresentTime[1].day = isReturn ? stalePresentTime[0].day : destinationTime.getDay();
+    stalePresentTime[1].hour = isReturn ? stalePresentTime[0].hour : destinationTime.getHour();
+    stalePresentTime[1].minute = isReturn ? stalePresentTime[0].minute : destinationTime.getMinute();
+    #else
+    departedTime.setYear(presentTime.getDisplayYear());
+    departedTime.setMonth(presentTime.getMonth());
+    departedTime.setDay(presentTime.getDay());
+    departedTime.setHour(presentTime.getHour());
+    departedTime.setMinute(presentTime.getMinute());
+    #endif
+    departedTime.setYearOffset(0);
 }
 
 // Pause autoInverval-updating for 30 minutes
@@ -2902,9 +3073,12 @@ static void myIntroDelay(unsigned int mydel, bool withGPS)
 {
     unsigned long startNow = millis();
     while(millis() - startNow < mydel) {
-        delay(5);
+        delay((mydel > 100) ? 10 : 5);    // delay(5) does not allow for UDP traffic
         audio_loop();
         ntp_short_loop();
+        #ifdef TC_HAVEBTTFN
+        bttfn_loop();
+        #endif
         #ifdef TC_HAVEGPS
         if(withGPS) gps_loop();
         #endif
@@ -2919,6 +3093,9 @@ static void waitAudioDoneIntro()
     while(!checkAudioDone() && timeout--) {
         audio_loop();
         ntp_short_loop();
+        #ifdef TC_HAVEBTTFN
+        bttfn_loop();
+        #endif
         #ifdef TC_HAVEGPS
         gps_loop();
         #endif
@@ -4497,8 +4674,8 @@ static bool bttfnValChar(char *s, int i)
     if(a == '-') return true;
     if(a < '0') return false;
     if(a > '9' && a < 'A') return false;
-    if(a < 'Z') return true;
-    if(a > 'a' && a < 'z') {
+    if(a <= 'Z') return true;
+    if(a >= 'a' && a <= 'z') {
         s[i] &= ~0x20;
         return true;
     }
@@ -4750,7 +4927,7 @@ void bttfn_loop()
 }
 
 // Send event notification to known clients
-static void bttfn_notify(uint8_t event)
+static void bttfn_notify(uint8_t targetType, uint8_t event, uint16_t payload, uint16_t payload2)
 {
     IPAddress ip;
 
@@ -4765,7 +4942,11 @@ static void bttfn_notify(uint8_t event)
 
     BTTFUDPBuf[4] = BTTFN_VERSION + 0x40; // Version + notify marker
     BTTFUDPBuf[5] = event;                // Store event id
-
+    BTTFUDPBuf[6] = payload & 0xff;       // store payload
+    BTTFUDPBuf[7] = payload >> 8;         //
+    BTTFUDPBuf[8] = payload2 & 0xff;      // store payload 2
+    BTTFUDPBuf[9] = payload2 >> 8;        //
+    
     // Checksum
     uint8_t a = 0;
     for(int i = 4; i < BTTF_PACKET_SIZE - 1; i++) {
@@ -4777,13 +4958,15 @@ static void bttfn_notify(uint8_t event)
     for(int i = 0; i < BTTFN_MAX_CLIENTS; i++) {
         if(!bttfnClientIP[i][0])
             break;
-        ip[0] = bttfnClientIP[i][0];
-        ip[1] = bttfnClientIP[i][1];
-        ip[2] = bttfnClientIP[i][2];
-        ip[3] = bttfnClientIP[i][3];
-        tcdUDP->beginPacket(ip, BTTF_DEFAULT_LOCAL_PORT);
-        tcdUDP->write(BTTFUDPBuf, BTTF_PACKET_SIZE);
-        tcdUDP->endPacket();
+        if(!targetType || targetType == bttfnClientType[i]) {
+            ip[0] = bttfnClientIP[i][0];
+            ip[1] = bttfnClientIP[i][1];
+            ip[2] = bttfnClientIP[i][2];
+            ip[3] = bttfnClientIP[i][3];
+            tcdUDP->beginPacket(ip, BTTF_DEFAULT_LOCAL_PORT);
+            tcdUDP->write(BTTFUDPBuf, BTTF_PACKET_SIZE);
+            tcdUDP->endPacket();
+        }
     }
 }
 #endif

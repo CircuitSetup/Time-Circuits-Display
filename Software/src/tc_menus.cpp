@@ -4,6 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
+ * http://tcd.backtothefutu.re
  *
  * Keypad Menu handling
  *
@@ -704,8 +705,16 @@ quitMenu:
     resetKeypadState();
 
     // Restore present time
+    
     myrtcnow(dt);
-    presentTime.setDateTimeDiff(dt);
+    
+    #ifdef HAVE_STALE_PRESENT
+    if(stalePresent)
+        presentTime.setFromStruct(&stalePresentTime[1]);
+    else
+    #endif
+        presentTime.setDateTimeDiff(dt);
+
     if(isWcMode()) {
         setDatesTimesWC(dt);
     }

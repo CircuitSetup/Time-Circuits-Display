@@ -4,6 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
+ * http://tcd.backtothefutu.re
  *
  * Settings handling
  *
@@ -33,6 +34,7 @@
 #ifndef _TC_SETTINGS_H
 #define _TC_SETTINGS_H
 
+extern bool haveFS;
 extern bool haveSD;
 extern bool FlashROMode;
 
@@ -51,7 +53,7 @@ extern uint8_t musFolderNum;
 #define DEF_BEEP            0     // 0-1:  Default: 0 = annoying beep(tm) off
 #define DEF_AUTOROTTIMES    1     // 0-5;  Default: Auto-rotate every 5th minute
 #define DEF_HOSTNAME        "timecircuits"
-#define DEF_WIFI_RETRY      3     // 1-15; Default: 3 retries
+#define DEF_WIFI_RETRY      3     // 1-10; Default: 3 retries
 #define DEF_WIFI_TIMEOUT    7     // 7-25; Default: 7 seconds
 #define DEF_WIFI_OFFDELAY   0     // 0/10-99; Default 0 = Never power down WiFi in STA-mode
 #define DEF_WIFI_APOFFDELAY 0     // 0/10-99; Default 0 = Never power down WiFi in AP-mode
@@ -82,6 +84,7 @@ extern uint8_t musFolderNum;
 #define DEF_USE_LIGHT       0     // Default: No i2c light sensor
 #define DEF_LUX_LIMIT       3     // Default Lux for night mode
 #define DEF_USE_ETTO        0     // Default: 0: No external props
+#define DEF_NO_ETTO_LEAD    0     // Default: 0: ETTO with ETTO_LEAD lead time; 1 without
 #define DEF_QUICK_GPS       0     // Default: Slow GPS updates
 #define DEF_PLAY_TT_SND     1     // Default 1: Play time travel sounds (0: Do not; for use with external equipment)
 #define DEF_SHUFFLE         0     // Music Player: Do not shuffle by default
@@ -96,6 +99,8 @@ struct Settings {
     char beep[4]            = MS(DEF_BEEP);
     char autoRotateTimes[4] = MS(DEF_AUTOROTTIMES);   
     char hostName[32]       = DEF_HOSTNAME;
+    char systemID[8]        = "";
+    char appw[10]           = "";
     char wifiConRetries[4]  = MS(DEF_WIFI_RETRY);
     char wifiConTimeout[4]  = MS(DEF_WIFI_TIMEOUT);
     char wifiOffDelay[4]    = MS(DEF_WIFI_OFFDELAY);
@@ -146,6 +151,7 @@ struct Settings {
 #endif // HAVESPEEDO
 #ifdef EXTERNAL_TIMETRAVEL_OUT
     char useETTO[4]         = MS(DEF_USE_ETTO);
+    char noETTOLead[4]      = MS(DEF_NO_ETTO_LEAD);
 #endif
 #ifdef TC_HAVEGPS
     char quickGPS[4]        = MS(DEF_QUICK_GPS);
@@ -186,11 +192,18 @@ void saveAlarm();
 bool loadReminder();
 void saveReminder();
 
+void saveCarMode();
+
 bool loadCurVolume();
 void saveCurVolume();
 
 bool loadMusFoldNum();
 void saveMusFoldNum();
+
+#ifdef HAVE_STALE_PRESENT
+void loadStaleTime(void *target, bool& currentOn);
+void saveStaleTime(void *source, bool currentOn);
+#endif
 
 void copySettings();
 

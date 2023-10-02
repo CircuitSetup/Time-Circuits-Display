@@ -4,6 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
+ * http://tcd.backtothefutu.re
  *
  * Global definitions
  */
@@ -24,11 +25,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION "V2.8.99"          // 13 chars max
+#define TC_VERSION "V2.9"          // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "AUG162023"  // 13 chars max
+#define TC_VERSION_EXTRA "SEP302023"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "08162023"   // 12 chars max
+#define TC_VERSION_EXTRA "09302023"   // 12 chars max
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -112,6 +113,11 @@
 // Uncomment for bttf network support
 #define TC_HAVEBTTFN
 
+// Uncomment to include stale present time mode
+// 99mmddyyyyhhMM sets (and enables) a stale present time; 
+// 999 toggles between stale time and normal operation
+//#define HAVE_STALE_PRESENT
+
 // --- end of config options
 
 /*************************************************************************
@@ -129,7 +135,11 @@
 // Uncomment if AM and PM should be reversed (like in BTTF2/3-version of TCD)
 //#define REV_AMPM
 
+// Uncomment to disable the tt animation
+//#define TT_NO_ANIM
+
 // Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino >= 2.x)
+// I stick with SPIFFS for now.
 //#define USE_SPIFFS
 
 // Uncomment for 2Hz GPS updates for GPS speed (undefined: 1Hz)

@@ -4,6 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
+ * http://tcd.backtothefutu.re
  *
  * Time and Main Controller
  *
@@ -98,6 +99,11 @@ extern const dateStruct destinationTimes[NUM_AUTOTIMES];
 extern const dateStruct departedTimes[NUM_AUTOTIMES];
 extern int8_t     autoTime;
 
+#ifdef HAVE_STALE_PRESENT
+extern bool       stalePresent;
+extern dateStruct stalePresentTime[2];
+#endif
+
 // These block various events
 extern bool FPBUnitIsOn;
 extern bool startup;
@@ -136,8 +142,9 @@ extern unsigned long beepTimerNow;
 void time_boot();
 void time_setup();
 void time_loop();
-void timeTravel(bool doComplete, bool withSpeedo = false);
+void timeTravel(bool doComplete, bool withSpeedo = false, bool forceNoLead = false);
 void resetPresentTime();
+void send_refill_msg();
 void pauseAuto();
 bool checkIfAutoPaused();
 void endPauseAuto(void);
@@ -189,6 +196,9 @@ void  ntp_short_loop();
 int  bttfnNumClients();
 bool bttfnGetClientInfo(int c, char **id, uint8_t **ip, uint8_t *type);
 void bttfn_loop();
+void bttfnSendFluxCmd(uint32_t payload);
+void bttfnSendSIDCmd(uint32_t payload);
+void bttfnSendPCGCmd(uint32_t payload);
 #endif
 
 #endif

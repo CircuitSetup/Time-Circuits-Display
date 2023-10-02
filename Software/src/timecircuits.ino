@@ -46,6 +46,88 @@
 
 /*  Changelog
  *
+  *  2023/09/30 (A10001986)
+ *    - Make remote commands for FC, SID, PD 32bit
+ *    - Stale Present Time: Make persistent over reboots/power-downs
+ *    * Stale Present Time feature enabled in precompiled binary
+ *  2023/09/26 (A10001986)
+ *    - Add second payload to BTTFN notifications
+ *    - Fix delayed TT-P1; sequence-checks would fail during run of delay.
+ *  2023/09/24 (A10001986) [sound-pack-20230924]
+ *    - Make timetravel more immediate for some hardware configurations and in
+ *      some situations. Enhances inter-operability with third party props.
+ *      !!! Requires new sound-pack !!!
+ *  2023/09/23 (A10001986)
+ *    - Add remote control facility through TCD keypad for Flux Capacitor, SID and 
+ *      Plutonium Gauges via BTTFN.
+ *      3xxx = Flux Capacitor, 6xxx = SID, 9xxx = Plutonium Gauges. 
+ *      See docs of respective prop for more information.
+ *    - Add REFILL network command for Plutonium gauges; triggered by
+ *      009ENTER.
+ *    - Fix display of BTTFN client names
+ *  2023/09/16 (A10001986)
+ *    - haveFS check before attempting to open audio file from flashFS
+ *  2023/09/13 (A10001986)
+ *    - Add compile time option to disable tt sequence display flicker
+ *      (TT_NO_ANIM)
+ *  2023/09/11 (A10001986)
+ *    - Guard SPIFFS/LittleFS calls with FS check
+*  2023/09/10 (A10001986)
+ *    - If specific config file not found on SD, read from FlashFS - but only
+ *      if it is mounted.
+ *    - New link to time zones in CP
+ *  2023/09/09 (A10001986)
+ *    - If SD mount fails at 16Mhz, retry at 25Mhz
+ *    - If specific config file not found on SD, read from FlashFS
+ *  2023/09/08 (A10001986)
+ *    - Add custom "stale present time" mode:
+ *      ) 99mmddyyyyhhMM sets a stale present time
+ *      ) 999 toggles between stale time and normal operation.
+ *      [feature disabled in precompiled binary]
+ *  2023/09/06 (A10001986)
+ *    - Change link in CP
+ *  2023/09/04 (A10001986)
+ *    - Add option to signal time travel on TT_OUT/IO13 without 5 seconds lead. This
+ *      is for signalling a time travel to third party props. For CircuitSetup
+ *      original props (if they are connected by wire) this option must NOT be set.
+ *      Time travels are still approx 1.4 seconds delayed (time between button press
+ *      or TT_IN going active and actual time travel start) because the TCD's time
+ *      travel sound starts before the time travel starts.
+ *  2023/09/02 (A10001986)
+ *    - Make lead time for time travel variable for BTTFN clients. This is especially
+ *      important for when GPS is in action. Triggering a TT at high speeds (> 80mph)
+ *      was delayed due to the fixed 5000ms ETTO_LEAD. It still is for wired clients
+ *      and MQTT, but if only BTTFN is active (ie no wired clients, MQTT off or not
+ *      publishing events), the delay is now reduced dynamically.
+ *  2023/08/31 (A10001986)
+ *    - WiFi connect retry: When no network config'd, set retry to 1
+ *  2023/08/28 (A10001986)
+ *    - Config Portal: Clicking on header logo jumps to main menu page
+ *    - Holding ENTER during boot not only deletes static IP config (as before), but
+ *       also temporarily clears AP mode WiFi password (until reboot).
+ *  2023/08/27 (A10001986)
+ *    - Add "AP name appendix" setting; allows unique AP names when running multiple 
+ *      TCDs in AP mode in close range. 7 characters, 0-9/a-z/A-Z/- only, will be 
+ *      added to "TCD-AP".
+ *    - Add AP password: Allows to configure a WPA2 password for the TCD's AP mode
+ *      (empty or 8 characters, 0-9/a-z/A-Z/- only)
+ *    - Increase JSON max size for main settings
+ *    - Some text changes in Config Portal
+ *    - Fix string copy function for 0-length-strings
+ *    - Fix HTML pattern attributes for text fields
+ *  2023/08/25 (A10001986)
+ *    - Restrict WiFi conn retrys to 10 (like WiFiManager)
+ *  2023/08/24 (A10001986)
+ *    - Add "car mode": Reboots (and stays) in AP-mode. This speeds up boot in a car
+ *      without deleting the WiFi configuration; car mode is enabled by typing 991ENTER,
+ *      and disabled with 990ENTER. Car mode needs to be enabled if the TCD is acting
+ *      as AP for FC/SID and all props are powered up simultaneously.
+ *    - Fix fake-power-up for peripherals during boot
+ *  2023/08/20 (A10001986)
+ *    - MQTT-induced TT is now always immediate, does not honor the delay configured
+ *      for the external time travel button
+ *  2023/08/19 (A10001986)
+ *    - Minor debug code change (no binary change)
  *  2023/08/14 (A10001986)
  *    - (Remove historic and pointless casts for atoi)
  *  2023/08/04 (A10001986)

@@ -4,6 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
+ * http://tcd.backtothefutu.re
  *
  * Keypad handling
  *
@@ -38,6 +39,7 @@ extern bool isEnterKeyHeld;
 #ifdef EXTERNAL_TIMETRAVEL_IN
 extern bool isEttKeyPressed;
 extern bool isEttKeyHeld;
+extern bool isEttKeyImmediate;
 #endif
 extern bool menuActive;
 

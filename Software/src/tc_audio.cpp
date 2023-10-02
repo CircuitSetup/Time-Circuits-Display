@@ -4,6 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
+ * http://tcd.backtothefutu.re
  *
  * Sound handling
  *
@@ -1016,9 +1017,9 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
         #endif
     }
     #ifdef USE_SPIFFS
-      else if(SPIFFS.exists(audio_file) && myFS0->open(audio_file))
+      else if(haveFS && SPIFFS.exists(audio_file) && myFS0->open(audio_file))
     #else    
-      else if(myFS0->open(audio_file))
+      else if(haveFS && myFS0->open(audio_file))
     #endif
     {
         if(!(flags & PA_NOID3TS)) {
