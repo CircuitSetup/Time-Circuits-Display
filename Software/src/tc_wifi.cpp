@@ -286,9 +286,9 @@ WiFiManagerParameter custom_shuffle("musShu", "Shuffle at startup", settings.shu
 #endif // -------------------------------------------------
 
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
-WiFiManagerParameter custom_CfgOnSD("CfgOnSD", "Save alarm/volume on SD (0=no, 1=yes)<br><span style='font-size:80%'>Enable this to avoid flash wear</span>", settings.CfgOnSD, 1, "autocomplete='off'");
+WiFiManagerParameter custom_CfgOnSD("CfgOnSD", "Save secondary settings on SD (0=no, 1=yes)<br><span style='font-size:80%'>Enable this to avoid flash wear</span>", settings.CfgOnSD, 1, "autocomplete='off'");
 #else // -------------------- Checkbox hack: --------------
-WiFiManagerParameter custom_CfgOnSD("CfgOnSD", "Save alarm/volume settings on SD<br><span style='font-size:80%'>Check this to avoid flash wear</span>", settings.CfgOnSD, 1, "autocomplete='off' type='checkbox' class='mt5'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_CfgOnSD("CfgOnSD", "Save secondary settings on SD<br><span style='font-size:80%'>Check this to avoid flash wear</span>", settings.CfgOnSD, 1, "autocomplete='off' type='checkbox' class='mt5'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
 //WiFiManagerParameter custom_sdFrq("sdFrq", "SD clock speed (0=16Mhz, 1=4Mhz)<br><span style='font-size:80%'>Slower access might help in case of problems with SD cards</span>", settings.sdFreq, 1, "autocomplete='off'");

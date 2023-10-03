@@ -1012,7 +1012,9 @@ void time_setup()
     // Load to display
     #ifdef HAVE_STALE_PRESENT
     loadStaleTime((void *)&stalePresentTime[0], stalePresent);
-    memcpy((void *)&stalePresentTime[1], (void *)&stalePresentTime[0], sizeof(dateStruct));
+    if(!timetravelPersistent) {
+        memcpy((void *)&stalePresentTime[1], (void *)&stalePresentTime[0], sizeof(dateStruct));
+    }
     if(stalePresent)
         presentTime.setFromStruct(&stalePresentTime[1]);
     else
@@ -2846,6 +2848,11 @@ void timeTravel(bool doComplete, bool withSpeedo, bool forceNoLead)
     // Save presentTime settings (timeDifference) if to be persistent
     if(timetravelPersistent) {
         presentTime.save();
+        #ifdef HAVE_STALE_PRESENT
+        if(stalePresent) {
+            saveStaleTime((void *)&stalePresentTime[0], stalePresent);
+        }
+        #endif
     }
 
     // If speedo was used: Initiate P2: Count speed down
@@ -2991,6 +2998,11 @@ void resetPresentTime()
     // Save presentTime settings (timeDifference) if to be persistent
     if(timetravelPersistent) {
         presentTime.save();
+        #ifdef HAVE_STALE_PRESENT
+        if(stalePresent) {
+            saveStaleTime((void *)&stalePresentTime[0], stalePresent);
+        }
+        #endif
     }
 
     // Beep auto mode: Restart timer

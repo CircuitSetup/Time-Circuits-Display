@@ -53,6 +53,9 @@
 #include "tc_audio.h"
 #include "tc_time.h"
 #include "tc_wifi.h"
+#ifdef HAVE_STALE_PRESENT
+#include "clockdisplay.h"
+#endif
 
 // Size of main config JSON
 // Needs to be adapted when config grows
@@ -1094,7 +1097,7 @@ void loadStaleTime(void *target, bool& currentOn)
 {
     bool haveConfigFile = false;
     File configFile;
-    uint8_t loadBuf[8];
+    uint8_t loadBuf[1+(2*sizeof(dateStruct))+1];
     uint16_t sum = 0;
     
     if(!haveFS && !configOnSD)
@@ -1107,26 +1110,26 @@ void loadStaleTime(void *target, bool& currentOn)
         haveConfigFile = readFileFromFS(stCfgName, loadBuf, sizeof(loadBuf));
     }
 
-    for(uint8_t i = 0; i < 7; i++) {
+    for(uint8_t i = 0; i < 1+(2*sizeof(dateStruct)); i++) {
         sum += (loadBuf[i] ^ 0x55);
     }
-    if(((sum & 0xff) == loadBuf[7])) {
+    if(((sum & 0xff) == loadBuf[1+(2*sizeof(dateStruct))])) {
         currentOn = loadBuf[0] ? true : false;
-        memcpy(target, (void *)&loadBuf[1], 6);
+        memcpy(target, (void *)&loadBuf[1], 2*sizeof(dateStruct));
     }
 }
 
 void saveStaleTime(void *source, bool currentOn)
 {
-    uint8_t savBuf[8];
+    uint8_t savBuf[1+(2*sizeof(dateStruct))+1];
     uint16_t sum = 0;
 
     savBuf[0] = currentOn;
-    memcpy((void *)&savBuf[1], source, 6);
-    for(uint8_t i = 0; i < 7; i++) {
+    memcpy((void *)&savBuf[1], source, 2*sizeof(dateStruct));
+    for(uint8_t i = 0; i < 1+(2*sizeof(dateStruct)); i++) {
         sum += (savBuf[i] ^ 0x55);
     }
-    savBuf[7] = sum & 0xff;
+    savBuf[1+(2*sizeof(dateStruct))] = sum & 0xff;
     
     if(configOnSD) {
         writeFileToSD(stCfgName, savBuf, sizeof(savBuf));
@@ -1149,7 +1152,7 @@ void copySettings()
 
     if(configOnSD || !FlashROMode) {
         #ifdef TC_DBG
-        Serial.println(F("copySettings: Copying alarm/vol/etc settings to other medium"));
+        Serial.println(F("copySettings: Copying secondary settings to other medium"));
         #endif
         saveCurVolume();
         saveAlarm();
@@ -1559,20 +1562,19 @@ void rewriteSecondarySettings()
     bool oldconfigOnSD = configOnSD;
     
     #ifdef TC_DBG
-    Serial.println("Re-writing seconday settings");
+    Serial.println("Re-writing secondary settings");
     #endif
     
     writeIpSettings();
 
-    // Create current alarm/volume settings on flash FS
+    // Create current secondary settings on flash FS
     // regardless of SD-option
     configOnSD = false;
-    
-    saveAlarm();
 
+    saveCurVolume();
+    saveAlarm();
     saveReminder();
     saveCarMode();
-    saveCurVolume();
     
     configOnSD = oldconfigOnSD;
 
