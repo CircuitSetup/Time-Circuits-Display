@@ -4,7 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * http://tcd.backtothefutu.re
+ * https://tcd.backtothefutu.re
  *
  * Global definitions
  */
@@ -27,9 +27,9 @@
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
 #define TC_VERSION "V2.9"          // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "OCT022023"  // 13 chars max
+#define TC_VERSION_EXTRA "OCT102023"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "10022023"   // 12 chars max
+#define TC_VERSION_EXTRA "10102023"   // 12 chars max
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -113,9 +113,9 @@
 // Uncomment for bttf network support
 #define TC_HAVEBTTFN
 
-// Uncomment to include stale present time mode
-// 99mmddyyyyhhMM sets (and enables) a stale present time; 
-// 999 toggles between stale time and normal operation
+// Uncomment to include Exhibition mode
+// 99mmddyyyyhhMM sets (and enables) EM with fixed present time as given; 
+// 999 toggles between EM and normal operation
 //#define HAVE_STALE_PRESENT
 
 // --- end of config options

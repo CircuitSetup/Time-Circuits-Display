@@ -4,7 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * http://tcd.backtothefutu.re
+ * https://tcd.backtothefutu.re
  *
  * Clockdisplay Class: Handles the TC LED segment displays
  *
@@ -584,9 +584,9 @@ void clockDisplay::setMinute(int minNum)
 void clockDisplay::setColon(bool col)
 {
     // set true to turn it on
-    // colon is off in night mode
+    // colon is on in night mode
     
-    _colon = _nightmode ? false : col;
+    _colon = _nightmode ? true : col;
 }
 
 void clockDisplay::setDST(int8_t isDST)

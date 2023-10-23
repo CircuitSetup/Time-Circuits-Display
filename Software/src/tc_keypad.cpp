@@ -4,7 +4,7 @@
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * http://tcd.backtothefutu.re
+ * https://tcd.backtothefutu.re
  *
  * Keypad handling
  *
@@ -476,6 +476,7 @@ void keypad_loop()
             ettNow = millis();
             ettDelayed = true;
             startBeepTimer();
+            send_wakeup_msg();
         }
         isEttKeyPressed = isEttKeyHeld = isEttKeyImmediate = false;
     }
@@ -1213,6 +1214,9 @@ void keypad_loop()
 
             // Beep auto mode: Restart timer
             startBeepTimer();
+
+            // Send "wakeup" to network clients
+            send_wakeup_msg();
         }
 
         if(validEntry) {
@@ -1557,6 +1561,11 @@ void nightModeOn()
 {
     setNightMode(true);
     leds_off();
+    // Expire beep timer
+    if(beepMode >= 2) {
+        beepTimer = false;
+        muteBeep = true;
+    }
 }
 
 void nightModeOff()

@@ -3,7 +3,8 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
- * https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ * https://github.com/realA10001986/Time-Circuits-Display
+ * https://tcd.backtothefutu.re
  *
  * -------------------------------------------------------------------
  * License: MIT
@@ -33,11 +34,9 @@
  * Needs ESP32 Arduino framework: https://github.com/espressif/arduino-esp32
  *
  * Library dependencies:
- * - ESP8266Audio: https://github.com/earlephilhower/ESP8266Audio
- *   (1.9.7 and later for esp-arduino 2.x; 1.9.5 for 1.x)
- * - WifiManager (tablatronix, tzapu) https://github.com/tzapu/WiFiManager
- *   (Tested with 2.0.13beta and 2.0.15-rc1)
- * - ArduinoJSON >= 6.19: https://arduinojson.org/v6/doc/installation/
+ *   - WifiManager (tablatronix, tzapu) https://github.com/tzapu/WiFiManager
+ *     (Tested with 2.0.13beta, 2.0.15-rc1, 2.0.16rc2)
+ *   - ArduinoJSON >= 6.19: https://arduinojson.org/v6/doc/installation/
  * 
  * 
  * Detailed installation and compilation instructions are here:
@@ -46,6 +45,17 @@
 
 /*  Changelog
  *
+ *  2023/10/10 (A10001986)
+ *    - Fix P1 length sent to BTTFN clients
+ *  2023/10/05 (A10001986)
+ *    - Colons on in night mode
+ *    - Send wakeup to network clients after entering a destination date, upon
+ *      return-from-time-travel, and when a delayed tt (ETT) is triggered. 
+ *      IAW: Whenever the beep timer is(would be) restarted, the wakeup is sent.
+ *    - Auto-expire beep-timer when entering night mode (for consistency with 
+ *      other props)
+ *  2023/10/04 (A10001986)
+ *    - Don't use speedo if not detected
  *  2023/10/02 (A10001986)
  *    - Exhibition mode: Honor "Make time travels persistent" option properly
  *  2023/09/30 (A10001986) [released by CS as 2.9]

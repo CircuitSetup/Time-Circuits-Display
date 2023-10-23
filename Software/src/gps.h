@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * http://tcd.backtothefutu.re
+ * https://tcd.backtothefutu.re
  *
  * GPS Class: GPS receiver handling and data parsing
  *

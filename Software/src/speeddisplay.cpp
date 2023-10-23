@@ -3,7 +3,7 @@
  * CircuitSetup.us Time Circuits Display
  * (C) 2022-2023 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * http://tcd.backtothefutu.re
+ * https://tcd.backtothefutu.re
  *
  * speedDisplay Class: Speedo Display
  *
@@ -325,7 +325,7 @@ speedDisplay::speedDisplay(uint8_t address)
 }
 
 // Start the display
-void speedDisplay::begin(int dispType)
+bool speedDisplay::begin(int dispType)
 {
     if(dispType < SP_MIN_TYPE || dispType >= SP_NUM_TYPES) {
         #ifdef TC_DBG
@@ -333,6 +333,11 @@ void speedDisplay::begin(int dispType)
         #endif
         dispType = SP_MIN_TYPE;
     }
+
+    // Check for speedo on i2c bus
+    Wire.beginTransmission(_address);
+    if(Wire.endTransmission(true))
+        return false;
 
     _dispType = dispType;
     _is7seg = displays[dispType].is7seg;
@@ -357,6 +362,8 @@ void speedDisplay::begin(int dispType)
     setBrightness(15);   // setup initial brightness
     clearDisplay();      // clear display RAM
     on();                // turn it on
+
+    return true;
 }
 
 // Turn on the display
