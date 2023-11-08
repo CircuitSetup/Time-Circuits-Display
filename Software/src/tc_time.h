@@ -196,7 +196,7 @@ void  ntp_short_loop();
 #ifdef TC_HAVEBTTFN
 int  bttfnNumClients();
 bool bttfnGetClientInfo(int c, char **id, uint8_t **ip, uint8_t *type);
-void bttfn_loop();
+bool bttfn_loop();
 void bttfnSendFluxCmd(uint32_t payload);
 void bttfnSendSIDCmd(uint32_t payload);
 void bttfnSendPCGCmd(uint32_t payload);

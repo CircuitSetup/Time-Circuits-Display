@@ -192,4 +192,65 @@ class TCButton {
         unsigned long _startTime;
 };
 
+#ifdef TC_HAVE_RE
+/*
+ * TCRotEnc class
+ */
+
+#define TC_RE_TYPE_ADA4991    0
+
+// Ada4991
+
+#define SEESAW_STATUS_BASE  0x00
+#define SEESAW_ENCODER_BASE 0x11
+
+#define SEESAW_STATUS_HW_ID   0x01
+#define SEESAW_STATUS_VERSION 0x02
+#define SEESAW_STATUS_SWRST   0x7F
+
+#define SEESAW_ENCODER_STATUS   0x00
+#define SEESAW_ENCODER_INTENSET 0x10
+#define SEESAW_ENCODER_INTENCLR 0x20
+#define SEESAW_ENCODER_POSITION 0x30
+#define SEESAW_ENCODER_DELTA    0x40
+
+#define SEESAW_HW_ID_CODE_SAMD09   0x55
+#define SEESAW_HW_ID_CODE_TINY806  0x84
+#define SEESAW_HW_ID_CODE_TINY807  0x85
+#define SEESAW_HW_ID_CODE_TINY816  0x86
+#define SEESAW_HW_ID_CODE_TINY817  0x87
+#define SEESAW_HW_ID_CODE_TINY1616 0x88
+#define SEESAW_HW_ID_CODE_TINY1617 0x89
+
+class TCRotEnc {
+  
+    public:
+        TCRotEnc(int numTypes, uint8_t addrArr[], TwoWire *awire = &Wire);
+        bool begin();
+        void zeroPos();
+        int16_t updateFakeSpeed(bool force = false);
+
+    private:
+        int32_t getEncPos();
+        void    reset(void);
+        int     read(uint8_t base, uint8_t reg, uint8_t *buf, uint8_t num);
+        void    write(uint8_t base, uint8_t reg, uint8_t *buf, uint8_t num);
+
+        int           _numTypes = 0;
+        uint8_t       _addrArr[4*2];    // up to 4 types fit here
+        int8_t        _st = -1;
+        
+        int           _i2caddr;
+        TwoWire       *_wire;
+
+        uint8_t       _hwtype;
+
+        int16_t       fakeSpeed = 0;
+        int16_t       targetSpeed = 0;
+        int32_t       rotEncPos = 0;
+        unsigned long lastUpd = 0;
+        unsigned long lastFUpd = 0;
+};
+#endif  // TC_HAVE_RE
+
 #endif

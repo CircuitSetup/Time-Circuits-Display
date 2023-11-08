@@ -2248,6 +2248,9 @@ void doCopyAudioFiles()
     dt_showTextDirect("REBOOTING");
     dt_on();
 
+    unmount_fs();
+    delay(500);
+
     esp_restart();
 }
 

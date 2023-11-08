@@ -34,7 +34,6 @@
 #include "tc_global.h"
 
 #include <Arduino.h>
-#include <ArduinoJson.h>
 
 #ifdef TC_MDNS
 #include <ESPmDNS.h>
@@ -548,6 +547,11 @@ void wifi_setup()
     wm.setCleanConnect(true);
     //wm.setRemoveDuplicateAPs(false);
 
+    #ifdef WIFIMANAGER_2_0_17
+    wm._preloadwifiscan = false;
+    wm._asyncScan = true;
+    #endif
+
     wm.setMenu(wifiMenu, TC_MENUSIZE);
 
     temp = 0;
@@ -977,6 +981,8 @@ void wifi_loop()
 
         }
 
+        stopAudio();
+
         // Write settings if requested, or no settings file exists
         if(shouldSaveConfig > 1 || !checkConfigExists()) {
             write_settings();
@@ -986,8 +992,6 @@ void wifi_loop()
 
         // Reset esp32 to load new settings
 
-        stopAudio();
-
         allOff();
         #ifdef TC_HAVESPEEDO
         if(useSpeedo) speedo.off();
@@ -996,11 +1000,14 @@ void wifi_loop()
         destinationTime.showTextDirect("REBOOTING");
         destinationTime.on();
 
+        unmount_fs();
+
         #ifdef TC_DBG
         Serial.println(F("Config Portal: Restarting ESP...."));
         #endif
-
         Serial.flush();
+
+        delay(500);
 
         esp_restart();
     }
@@ -1353,6 +1360,10 @@ void wifiStartCP()
 {
     if(wifiInAPMode || wifiIsOff)
         return;
+
+    #ifdef TC_DBG
+    Serial.println("Starting CP");
+    #endif
 
     wm.startWebPortal();
 }

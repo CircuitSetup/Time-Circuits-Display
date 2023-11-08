@@ -830,7 +830,8 @@ void keypad_loop()
                 if(rcModeState != carMode) {
                     saveCarMode();
                     prepareReboot();
-                    delay(1000);
+                    unmount_fs();
+                    delay(500);
                     esp_restart();
                 }
                 validEntry = true;
@@ -850,6 +851,8 @@ void keypad_loop()
 
             if(!(strncmp(dateBuffer, "64738", 5))) {
                 prepareReboot();
+                unmount_fs();
+                delay(500);
                 esp_restart();
             }
 

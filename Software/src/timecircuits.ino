@@ -44,7 +44,35 @@
  */
 
 /*  Changelog
- *
+ *  TODO: Way (option) to reverse rot enc direction
+ *  2023/11/06-07 (A10001986)
+ *    - Abort audio file installer on first error
+ *    - Add TSL2591 light sensor support (yet untested), since 2561 is discontinued.
+ *    - Fixes for rotatry encoder
+ *    - Fix boot loop when SP_ALWAYS_ON is enabled
+ *  2023/11/05 (A10001986)
+ *    - Settings: (De)serialize JSON from/to buffer instead of file
+ *    - Customize ArduinoJSON compile-time options to reduce bin size
+ *  2023/11/04 (A10001986)
+ *    - Add premlimiary support for a rotary encoder to select "speed" to be 
+ *      displayed on the speedo, and provided to BTTFN clients as (fake) "GPS 
+ *      speed". Only hardware type currently supported is the Adafruit 4991.
+ *    - Unmount filesystems before reboot
+ *    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ *    * Switched to LittleFS. Settings will be reset to defaults, and audio files have
+ *      to be re-installed after updating from any previous version.
+ *    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ *  2023/11/02 (A10001986)
+ *    * WiFiManager: Disable pre-scanning of WiFi networks when starting the CP.
+ *      Scanning is now only done when accessing the "Configure WiFi" page.
+ *      To do that in your own installation, set _preloadwifiscan to false
+ *      in WiFiManager.h
+ *  2023/10/31 (A10001986)
+ *    - Further defer starting the Config Portal in some cases to avoid WiFi scan 
+ *      that interferes with BTTFN discover and initial communication
+ *  2023/10/30 (A10001986)
+ *    - BTTFN: Clients can now discover the TCD's IP address through the TCD's 
+ *      hostname. Uses multicast, not DNS.
  *  2023/10/10 (A10001986)
  *    - Fix P1 length sent to BTTFN clients
  *  2023/10/05 (A10001986)

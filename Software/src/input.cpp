@@ -64,6 +64,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "tc_global.h"
+
 #include <Arduino.h>
 
 #include "input.h"
@@ -440,3 +442,198 @@ void TCButton::transitionTo(ButtonState nextState)
     _lastState = _state;
     _state = nextState;
 }
+
+#ifdef TC_HAVE_RE
+
+/*
+ * TCRotEnc class
+ */
+
+TCRotEnc::TCRotEnc(int numTypes, uint8_t addrArr[], TwoWire *awire)
+{
+    _numTypes = min(4, numTypes);
+
+    for(int i = 0; i < _numTypes * 2; i++) {
+        _addrArr[i] = addrArr[i];
+    }
+
+    _wire = awire;
+}
+
+bool TCRotEnc::begin()
+{
+    bool foundSt = false;
+    uint8_t buf[4];
+
+    for(int i = 0; i < _numTypes * 2; i += 2) {
+
+        _i2caddr = _addrArr[i];
+
+        switch(_addrArr[i+1]) {
+        case TC_RE_TYPE_ADA4991:
+            _wire->beginTransmission(_i2caddr);
+            if(!_wire->endTransmission(true))
+                foundSt = true;
+            break;
+        }
+
+        if(foundSt) {
+            _st = _addrArr[i+1];
+
+            #ifdef TC_DBG
+            const char *tpArr[4] = { "ADA4991", "unknown", "unknown", "unknown" };
+            Serial.printf("Rotary encoder: Detected %s\n", tpArr[_st]);
+            #endif
+
+            break;
+        }
+    }
+
+    switch(_st) {
+      
+    case TC_RE_TYPE_ADA4991:
+        reset();
+        delay(10);
+    
+        if(read(SEESAW_STATUS_BASE, SEESAW_STATUS_HW_ID, buf, 1) != 1) {
+            return false;
+        }
+    
+        switch(buf[0]) {
+        case SEESAW_HW_ID_CODE_SAMD09:
+        case SEESAW_HW_ID_CODE_TINY806:
+        case SEESAW_HW_ID_CODE_TINY807:
+        case SEESAW_HW_ID_CODE_TINY816:
+        case SEESAW_HW_ID_CODE_TINY817:
+        case SEESAW_HW_ID_CODE_TINY1616:
+        case SEESAW_HW_ID_CODE_TINY1617:
+            _hwtype = buf[0];
+            break;
+        default:
+            return false;
+        }
+    
+        // Check for board type
+        read(SEESAW_STATUS_BASE, SEESAW_STATUS_VERSION, buf, 4);   
+        if( (((uint32_t)buf[0] <<  8) | 
+              (uint32_t)buf[1]) != 4991) {
+            return false;
+        }
+
+        break;
+
+    default:
+        return false;
+    }
+
+    zeroPos();
+
+    return true;
+}
+
+void TCRotEnc::zeroPos()
+{
+    rotEncPos = getEncPos();
+    fakeSpeed = targetSpeed = 0;
+}
+
+#define HWUPD_DELAY 100   // ms between hw polls
+#define FUPD_DELAY  20    // ms between fakeSpeed updates
+
+#define OFF_SLOTS   5
+
+int16_t TCRotEnc::updateFakeSpeed(bool force)
+{
+    bool timeout = (millis() - lastUpd > HWUPD_DELAY);
+    
+    if(force || timeout || (fakeSpeed != targetSpeed)) {
+
+        if(force || timeout) {
+            lastUpd = millis();
+            
+            int32_t t = rotEncPos;
+            rotEncPos = getEncPos();
+
+            //Serial.printf("Rot pos %x\n", rotEncPos);
+
+            // If turned in + direction, don't start from 
+            // <0, but 0: If we're at -3 (which is displayed
+            // as 0), and user turns +, we don't want -2, but 1.
+            if(t - rotEncPos > 0) {
+                if(targetSpeed < 0) targetSpeed = 0;
+            }
+            targetSpeed += (t - rotEncPos);
+            if(targetSpeed < -OFF_SLOTS) targetSpeed = -OFF_SLOTS;
+            else if(targetSpeed > 88)    targetSpeed = 88;
+        }
+        
+        if(fakeSpeed != targetSpeed) {
+            if(targetSpeed < 0) {
+                fakeSpeed = targetSpeed;
+            } else if(force || (millis() - lastFUpd > FUPD_DELAY)) {
+                if(fakeSpeed < targetSpeed) fakeSpeed++;
+                else fakeSpeed--;
+                lastFUpd = millis();
+            }
+        }
+
+    }
+
+    if(fakeSpeed >= 0)                return fakeSpeed;
+    if(fakeSpeed >= -(OFF_SLOTS - 1)) return 0;
+    return -1;
+}
+
+int32_t TCRotEnc::getEncPos()
+{
+    uint8_t buf[4];
+
+    switch(_st) {
+      
+    case TC_RE_TYPE_ADA4991:
+        read(SEESAW_ENCODER_BASE, SEESAW_ENCODER_POSITION, buf, 4);
+        return (int32_t)(
+                    ((uint32_t)buf[0] << 24) | 
+                    ((uint32_t)buf[1] << 16) |
+                    ((uint32_t)buf[2] <<  8) | 
+                     (uint32_t)buf[3]
+                );
+    }
+
+    return 0;
+}
+
+void TCRotEnc::reset()
+{
+    uint8_t buf = 0xff;
+    
+    write(SEESAW_STATUS_BASE, SEESAW_STATUS_SWRST, &buf, 1);
+}
+
+int TCRotEnc::read(uint8_t base, uint8_t reg, uint8_t *buf, uint8_t num)
+{
+    int i2clen;
+    
+    _wire->beginTransmission(_i2caddr);
+    _wire->write(base);
+    _wire->write(reg);
+    _wire->endTransmission(true);
+    delay(1);
+    i2clen = _wire->requestFrom(_i2caddr, (int)num);
+    for(int i = 0; i < i2clen; i++) {
+        buf[i] = _wire->read();
+    }
+    return i2clen;
+}
+
+void TCRotEnc::write(uint8_t base, uint8_t reg, uint8_t *buf, uint8_t num)
+{
+    _wire->beginTransmission(_i2caddr);
+    _wire->write(base);
+    _wire->write(reg);
+    for(int i = 0; i < num; i++) {
+        _wire->write(buf[i]);
+    }
+    _wire->endTransmission();
+}
+#endif 

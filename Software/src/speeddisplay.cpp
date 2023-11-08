@@ -369,13 +369,18 @@ bool speedDisplay::begin(int dispType)
 // Turn on the display
 void speedDisplay::on()
 {
+    if(_onCache > 0) return;
     directCmd(0x80 | 1);
+    _onCache = 1;
+    _briCache = 0xfe;
 }
 
 // Turn off the display
 void speedDisplay::off()
 {
+    if(!_onCache) return;
     directCmd(0x80);
+    _onCache = 0;
 }
 
 // Turn on all LEDs
@@ -425,7 +430,10 @@ uint8_t speedDisplay::setBrightnessDirect(uint8_t level)
     if(level > 15)
         level = 15;
 
-    directCmd(0xE0 | level);  // Dimming command
+    if(level != _briCache) {
+        directCmd(0xE0 | level);  // Dimming command
+        _briCache = level;
+    }
 
     return level;
 }
@@ -491,12 +499,12 @@ void speedDisplay::show()
         Wire.write(_displayBuffer[i] >> 8);
     }
 
+    Wire.endTransmission();
+
     // Save last value written to _colon_pos
     if(_colon_pos < 255) {
         _lastBufPosCol = _displayBuffer[_colon_pos];
     }
-
-    Wire.endTransmission();
 }
 
 

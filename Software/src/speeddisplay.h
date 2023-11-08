@@ -128,6 +128,9 @@ class speedDisplay {
         uint8_t _address;
         uint16_t _displayBuffer[8];
 
+        int8_t _onCache = -1;                   // Cache for on/off
+        uint8_t _briCache = 0xfe;               // Cache for brightness
+
         bool _dot01 = false;
         bool _colon = false;
 

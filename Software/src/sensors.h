@@ -45,6 +45,7 @@ class tcSensor {
 
         void     prepareRead(uint16_t regno);
         uint16_t read16(uint16_t regno, bool LSBfirst = false);
+        void read16x2(uint16_t regno, uint16_t& t1, uint16_t& t2);
         uint8_t  read8(uint16_t regno);
         void     write16(uint16_t regno, uint16_t value, bool LSBfirst = false);
         void     write8(uint16_t regno, uint8_t value);
@@ -122,6 +123,7 @@ class tempSensor : tcSensor {
 
 enum {
     LST_TSL2561 = 0,  // 0x29 (unsupported: 0x39, 0x49)
+    LST_TSL2591,      // 0x29
     LST_BH1750,       // 0x23 (unsupported: 0x5c)
     LST_VEML7700,     // 0x48, 0x10 (also used for VEML6030)
     LST_LTR3xx,       // 0x29
@@ -148,6 +150,7 @@ class lightSensor : tcSensor {
 
         int32_t  LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
         uint32_t TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
+        int32_t  TSL2591CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
 
         int     _numTypes = 0;
         uint8_t _addrArr[8*2];    // up to 8 sensor types fit here

@@ -25,11 +25,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION "V2.9"          // 13 chars max
+#define TC_VERSION "V2.9.1"          // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "OCT102023"  // 13 chars max
+#define TC_VERSION_EXTRA "NOV072023"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "10102023"   // 12 chars max
+#define TC_VERSION_EXTRA "11072023"   // 12 chars max
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -43,6 +43,9 @@
 // <hostname> is configurable in the Config Portal
 // This needs to be commented if WiFiManager provides mDNS
 #define TC_MDNS
+
+// Uncomment when using WiFiManager 2.0.17 or later
+//#define WIFIMANAGER_2_0_17
 
 // Uncomment this if WiFiManager has mDNS enabled
 //#define TC_WM_HAS_MDNS          
@@ -61,12 +64,14 @@
 //#define TC_HAVESPEEDO
 #define SP_NUM_TYPES    12  // Number of speedo display types supported
 #define SP_MIN_TYPE     0
+#ifdef TC_HAVESPEEDO
 // Uncomment to keep speedo showing "00" when neither temp nor GPS speed 
 // are to be displayed instead of switching it off.
 //#define SP_ALWAYS_ON
 // Uncomment to enable the fake-0 on CircuitSetup's speedo; is not usable
 // as a full third digit, just displays "0" when speed to be displayed
 //#define SP_CS_0ON
+#endif
 
 // Uncomment for support of a temperature/humidity sensor (MCP9808, BMx280, 
 // SI7021, SHT40, TMP117, AHT20, HTU31D) connected via i2c. Will be used for 
@@ -113,10 +118,18 @@
 // Uncomment for bttf network support
 #define TC_HAVEBTTFN
 
+// Uncomment for bttfn discover (multicast)
+#ifdef TC_HAVEBTTFN
+#define TC_BTTFN_MC
+#endif
+
 // Uncomment to include Exhibition mode
 // 99mmddyyyyhhMM sets (and enables) EM with fixed present time as given; 
 // 999 toggles between EM and normal operation
 //#define HAVE_STALE_PRESENT
+
+// Uncomment for rotary encoder support
+#define TC_HAVE_RE
 
 // --- end of config options
 
@@ -139,7 +152,6 @@
 //#define TT_NO_ANIM
 
 // Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino >= 2.x)
-// I stick with SPIFFS for now.
 //#define USE_SPIFFS
 
 // Uncomment for 2Hz GPS updates for GPS speed (undefined: 1Hz)

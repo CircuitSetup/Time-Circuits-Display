@@ -60,9 +60,9 @@ extern uint8_t musFolderNum;
 #define DEF_WIFI_PRETRY     1     // Default: Nightly, periodic WiFi reconnection attempts for time sync
 #define DEF_NTP_SERVER      "pool.ntp.org"
 #define DEF_TIMEZONE        "UTC0"// Default: UTC; Posix format
-#define DEF_BRIGHT_DEST     15    // 1-15; Default: medium brightness
-#define DEF_BRIGHT_PRES     15
-#define DEF_BRIGHT_DEPA     15
+#define DEF_BRIGHT_DEST     10    // 1-15; Default: medium brightness
+#define DEF_BRIGHT_PRES     10
+#define DEF_BRIGHT_DEPA     10
 #define DEF_AUTONM_PRESET   10    // Default: AutoNM disabled
 #define DEF_AUTONM_ON       0     // Default: Both 0
 #define DEF_AUTONM_OFF      0
@@ -72,7 +72,7 @@ extern uint8_t musFolderNum;
 #define DEF_FAKE_PWR        0     // 0-1;  Default: 0 = Do not use external fake "power" switch
 #define DEF_ETT_DELAY       0     // in ms; Default 0: ETT immediately
 #define DEF_ETT_LONG        1     // [removed] 0: Ext. TT short (reentry), 1: long
-#define DEF_SPEEDO_TYPE     0     // Default display type: CircuitSetup
+#define DEF_SPEEDO_TYPE     99    // Default display type: None
 #define DEF_SPEEDO_FACT     2.0   // Speedo factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
 #define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness for speed
 #define DEF_USE_GPS_SPEED   0     // 0: Do not use GPS speed on speedo display
@@ -183,6 +183,9 @@ extern struct Settings settings;
 extern struct IPSettings ipsettings;
 
 void settings_setup();
+
+void unmount_fs();
+
 void write_settings();
 bool checkConfigExists();
 

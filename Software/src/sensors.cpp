@@ -21,7 +21,8 @@
  * AHT20/AM2315C: 0x38                [temperature, humidity]
  * HTU31D:        0x41 [non-default]  [temperature, humidity]
  * 
- * TSL2561:       0x29 
+ * TSL2561:       0x29
+ * TSL2591:       0x29
  * LTR303/329:    0x29
  * BH1750:        0x23
  * VEML6030:      0x10, 0x48 [non-default]
@@ -85,7 +86,7 @@ uint16_t tcSensor::read16(uint16_t regno, bool LSBfirst)
     i2clen = Wire.requestFrom(_address, (uint8_t)2);
 
     if(i2clen > 0) {
-        value = Wire.read() << 8;
+        value = (Wire.read() << 8);
         value |= Wire.read();
     }
     
@@ -94,6 +95,24 @@ uint16_t tcSensor::read16(uint16_t regno, bool LSBfirst)
     }
 
     return value;
+}
+
+void tcSensor::read16x2(uint16_t regno, uint16_t& t1, uint16_t& t2)
+{
+    size_t i2clen = 0;
+
+    prepareRead(regno);
+
+    i2clen = Wire.requestFrom(_address, (uint8_t)4);
+
+    if(i2clen > 0) {
+        t1 = Wire.read();
+        t1 |= (Wire.read() << 8);
+        t2 = Wire.read();
+        t2 |= (Wire.read() << 8);
+    } else {
+        t1 = t2 = 0;
+    }
 }
 
 uint8_t tcSensor::read8(uint16_t regno)
@@ -658,12 +677,12 @@ float tempSensor::BMx280_CalcTemp(uint32_t ival, uint32_t hval)
 /*****************************************************************
  * lightSensor Class
  * 
- * Supports TSL2561, LTR3xx, BH1750, VEML7700/6030 light sensors
+ * Supports TSL25[6/9]1, LTR3xx, BH1750, VEML7700/6030 light sensors
  * 
  * Sensors are set for indoor conditions and might overflow (in 
  * which case -1 is returned) or report bad lux values outdoors
  * or if subject to intensive IR light (from eg cameras).
- * The settings for LTR3xx, TSL2561 and BH1750 can be changed by 
+ * The settings for LTR3xx, TSL25x1 and BH1750 can be changed by
  * #defines below. VEML7700/6030 auto-adjust.
  * 
  ****************************************************************/
@@ -677,15 +696,41 @@ float tempSensor::BMx280_CalcTemp(uint32_t ival, uint32_t hval)
 #define TSL2561_ADC0    0x8c    // LSBFirst
 #define TSL2561_ADC1    0x8e    // LSBFirst
 
-#define TLS_GAIN_LOW    0x00
-#define TLS_GAIN_HIGH   0x10
+#define TSL_GAIN_LOW    0x00
+#define TSL_GAIN_HIGH   0x10
 
-#define TLS_IT_13       0x00
-#define TLS_IT_101      0x01
-#define TLS_IT_402      0x02
+#define TSL_IT_13       0x00
+#define TSL_IT_101      0x01
+#define TSL_IT_402      0x02
 
-#define TLS_USE_GAIN    TLS_GAIN_LOW    // to be adjusted (TLS_GAIN_xxx)
-#define TLS_USE_IT      TLS_IT_101      // to be adjusted (TLS_IT_xxx)
+#define TSL_USE_GAIN    TSL_GAIN_LOW    // to be adjusted (TSL_GAIN_xxx)
+#define TSL_USE_IT      TSL_IT_101      // to be adjusted (TSL_IT_xxx)
+
+#define TSL2591_ENABLE  0xa0
+#define TSL2591_CFG     0xa1
+#define TSL2591_ID      0xb2
+#define TSL2591_STATUS  0xb3
+#define TSL2591_ALS0    0xb4  // LSBFirst
+#define TSL2591_ALS1    0xb6  // LSBFirst
+
+#define TSL2591_GAIN_L  0x00
+#define TSL2591_GAIN_M  0x10
+#define TSL2591_GAIN_H  0x20
+#define TSL2591_GAIN_X  0x30
+
+#define TSL2591_IT_100  0x00
+#define TSL2591_IT_200  0x01
+#define TSL2591_IT_300  0x02
+#define TSL2591_IT_400  0x03
+#define TSL2591_IT_500  0x04
+#define TSL2591_IT_600  0x05
+
+#define TLS9_USE_GAIN   TSL2591_GAIN_L  // to be adjusted (TSL2591_GAIN_x)
+#define TLS9_USE_IT     TSL2591_IT_100  // to be adjusted (TSL2591_IT_xxx)
+
+static const float TLS2591GainFacts[4] = {
+      1.0, 25.0, 400.0, 9500.0
+};
 
 #define LTR303_DUMMY    0x100
 #define LTR303_CTRL     0x80
@@ -770,7 +815,7 @@ static const float resFact[6][4] = {
 // Store i2c address
 lightSensor::lightSensor(int numTypes, uint8_t addrArr[])
 {
-    _numTypes = min(6, numTypes);
+    _numTypes = min(8, numTypes);
 
     for(int i = 0; i < _numTypes * 2; i++) {
         _addrArr[i] = addrArr[i];
@@ -797,40 +842,41 @@ bool lightSensor::begin(bool skipLast, unsigned long powerupTime)
 
         _address = _addrArr[i];
 
-        switch(_addrArr[i+1]) {
-        case LST_LTR3xx:
-            // Needs to be checked before the TSL2561
-            Wire.beginTransmission(_address);
-            if(!Wire.endTransmission(true)) {
+        Wire.beginTransmission(_address);
+        if(!Wire.endTransmission(true)) {
+
+            switch(_addrArr[i+1]) {
+            case LST_LTR3xx:
+                // Needs to be checked before the TSL2561
                 if((read8(LTR303_MID) == 0x05) &&
                    ((read8(LTR303_PID) & 0xf0) == 0xa0)) {
                     // 303 and 329 share part number. Smart move.
                     foundSt = true;
                 }
-            }
-            break;
-        case LST_TSL2561:
-            // LTR3xx must be tested for before this
-            Wire.beginTransmission(_address);
-            if(!Wire.endTransmission(true)) {
+                break;
+            case LST_TSL2561:
+                // LTR3xx must be tested for before this
                 if((read8(TSL2561_ID) & 0xf0) == 0x50) {
                     foundSt = true;
                 }
-            }
-            break;
-        case LST_BH1750:
-        case LST_VEML7700:
-            Wire.beginTransmission(_address);
-            if(!Wire.endTransmission(true)) {
+                break;
+            case LST_TSL2591:
+                // LTR3xx must be tested for before this
+                if(read8(TSL2591_ID) == 0x50) {
+                    foundSt = true;
+                }
+                break;
+            case LST_BH1750:
+            case LST_VEML7700:
                 foundSt = true;
             }
-        }
-
+        } 
+        
         if(foundSt) {
             _st = _addrArr[i+1];
             
             #ifdef TC_DBG
-            const char *tpArr[4] = { "TSL2561", "BH1750", "VEML7700/6030", "LTR303/329" };
+            const char *tpArr[5] = { "TSL2561", "TSL2591", "BH1750", "VEML7700/6030", "LTR303/329" };
             Serial.printf("Light sensor: Detected %s\n", tpArr[_st]);
             #endif
             
@@ -851,7 +897,13 @@ bool lightSensor::begin(bool skipLast, unsigned long powerupTime)
     case LST_TSL2561:
         write8(TSL2561_CTRL, 0x03); // Power up
         write8(TSL2561_ICTRL, 0);   // no interrupts
-        write8(TSL2561_TIM, TLS_USE_GAIN | TLS_USE_IT);
+        write8(TSL2561_TIM, TSL_USE_GAIN | TSL_USE_IT);
+        break;
+
+    case LST_TSL2591:
+        write8(TSL2591_ENABLE, 0x01);   // Power up
+        write8(TSL2591_CFG, TLS9_USE_GAIN | TLS9_USE_IT);
+        write8(TSL2591_ENABLE, 0x03);   // Enable, Power up
         break;
         
     case LST_BH1750:
@@ -893,7 +945,7 @@ int32_t lightSensor::readLux()
 
 void lightSensor::loop()
 {
-    uint16_t temp;
+    uint16_t temp, temp2;
     uint32_t temp1;
     unsigned long elapsed = millis() - _lastAccess;
 
@@ -902,17 +954,36 @@ void lightSensor::loop()
         if(elapsed < 500)
             return;
 
-        temp  = read16(TSL2561_ADC0, true);
-        temp1 = read16(TSL2561_ADC1, true);
+        //temp  = read16(TSL2561_ADC0, true);
+        //temp1 = read16(TSL2561_ADC1, true);
+        read16x2(TSL2561_ADC0, temp, temp2);
+        temp1 = temp2;
 
         if(temp1 == 0) {
             _lux = 0;
         } else if( ((temp1 << 1) <= temp) && (temp <= 4900)) {
-            _lux = TSL2561CalcLux(TLS_USE_GAIN, TLS_USE_IT, temp, temp1);
+            _lux = TSL2561CalcLux(TSL_USE_GAIN, TSL_USE_IT, temp, temp1);
         } else {
             // IR-overload, human eye light level not determinable
             _lux = -1;
         }
+        break;
+
+    case LST_TSL2591:
+        if(elapsed < 700)
+            return;
+
+        //temp  = read16(TSL2591_ALS0, true);
+        //temp1 = read16(TSL2591_ALS1, true);
+        read16x2(TSL2591_ALS0, temp, temp2);
+
+        if(temp == 0xffff || temp2 == 0xffff) {
+            _lux = -1;
+        //} else if(temp == 0) {
+        //    _lux = 0;
+        } else {
+            _lux = TSL2591CalcLux(TLS9_USE_GAIN, TLS9_USE_IT, temp, temp2);
+        } 
         break;
 
     case LST_LTR3xx:
@@ -1042,15 +1113,15 @@ void lightSensor::VEML7700OnOff(bool enable, bool doWait)
 
 int32_t lightSensor::LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1)
 {
-    double gains[]   = {   1.0,   2.0,   4.0,  8.0, 48.0, 96.0 };
+    float gains[]   = {   1.0,   2.0,   4.0,  8.0, 48.0, 96.0 };
     int32_t maxLux[] = { 64000, 32000, 16000, 8000, 1300, 600 };
-    double its[]     = { 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0 };
+    float its[]     = { 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0 };
     //                   50   100  150  200  250  300  350  400
     int32_t lux = -1;
-    double dch0 = (double)ch0;
-    double dch1 = (double)ch1;
+    float dch0 = (float)ch0;
+    float dch1 = (float)ch1;
 
-    double ratio = dch1 / (dch0 + dch1);
+    float ratio = dch1 / (dch0 + dch1);
 
     if(ratio < 0.45)
         lux = (int32_t)((1.7743 * dch0 + 1.1059 * dch1) / gains[iGain] / its[tInt]);
@@ -1111,17 +1182,17 @@ uint32_t lightSensor::TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, 
     int32_t  temp;
 
     switch(tInt) {
-    case TLS_IT_13:   // 13.7 msec
+    case TSL_IT_13:   // 13.7 msec
         chScale = TSL2561_CHSCALE_TINT0;
         break;
-    case TLS_IT_101:  // 101 msec
+    case TSL_IT_101:  // 101 msec
         chScale = TSL2561_CHSCALE_TINT1;
         break;
     default: // assume no scaling
         chScale = (1 << TSL2561_CH_SCALE);
     }
 
-    if(iGain == TLS_GAIN_LOW) chScale <<= 4;
+    if(iGain == TSL_GAIN_LOW) chScale <<= 4;
 
     channel0 = (ch0 * chScale) >> TSL2561_CH_SCALE;
     channel1 = (ch1 * chScale) >> TSL2561_CH_SCALE;
@@ -1155,6 +1226,66 @@ uint32_t lightSensor::TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, 
     temp += (1 << (TSL2561_LUX_SCALE - 1));
 
     return (temp >> TSL2561_LUX_SCALE);
+}
+
+// TSL2561: Calculate Lux from ch0 and ch1 data
+// Various sources
+#define TSL2591_MAX_COUNT_100MS 36863
+#define TSL2591_MAX_COUNT       65535
+
+#define TSL2591_LUX_DGF     408.0F   //  Device/Glass factor (GA 7.7, DF 53] ...or rather 1032.9 ?
+#define TSL2591_LUX_COEFB   1.64F
+#define TSL2591_LUX_COEFC   0.59F
+#define TSL2591_LUX_COEFD   0.86F
+
+#define TLS2691_USE_LEGACY           // Use TAOS/AMS generic (old) lux calculation (written for 2671)
+#define LSENS_DBG
+
+int32_t lightSensor::TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t temp, uint32_t temp1)
+{
+    if(iTime == TSL2591_IT_100) {
+        if(temp > TSL2591_MAX_COUNT_100MS || temp1 > TSL2591_MAX_COUNT_100MS) {
+            #ifdef LSENS_DBG
+            Serial.printf("LSens: Max Count alert: 0x%x 0x%x\n", temp, temp1);
+            #endif
+            return -1;
+        }
+    }
+
+    if(temp == 0) {
+        #ifdef LSENS_DBG
+        Serial.printf("LSens: temp is zero (temp1 %x)\n", temp1);
+        #endif
+        return 0;
+    }
+
+    float tme = (iTime * 100.0F) + 100.0F;
+    float gain = TLS2591GainFacts[iGain >> 4];    
+    float cpl = (tme * gain) / TSL2591_LUX_DGF;
+
+    if(isnan(cpl)) {
+        #ifdef LSENS_DBG
+        Serial.println("LSens: cpl is NaN");
+        #endif
+        return -1;
+    }
+    
+    float ch0 = (float)temp, ch1 = (float)temp1;
+
+    #ifdef TLS2691_USE_LEGACY
+    float lux1 = (ch0 - (TSL2591_LUX_COEFB * ch1)) / cpl;
+    float lux2 = ((TSL2591_LUX_COEFC * ch0) - (TSL2591_LUX_COEFD * ch1)) / cpl;
+    #else
+    if(temp == 0) return 0;
+    float lux1 = ((ch0 - ch1)) * (1.0F - (ch1 / ch0)) / cpl;
+    float lux2 = 0.0;
+    #endif
+
+    #ifdef LSENS_DBG
+    Serial.printf("LSens: 0x%x 0x%x lux1 %.2f lux2 %f.2\n", temp, temp1, lux1, lux2);
+    #endif
+
+    return (int32_t)max(lux1, lux2);
 }
 
 #endif // TC_HAVELIGHT
