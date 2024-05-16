@@ -1,11 +1,15 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * Keypad_I2C Class, TCButton Class: I2C-Keypad and Button handling
+ * 
+ * TCRotEnc: Rotary Encoder handling:
+ * Supports Adafruit 4991, DuPPA I2CEncoder 2.1, DFRobot Gravity 360
+ * DuPPA I2CEncoder 2.1 must be set to i2c address 0x01 (A0 closed).
  *
  * Keypad part inspired by "Keypad" library by M. Stanley & A. Brevig
  * Fractions of this code are customized, minimized derivates of parts 
@@ -97,13 +101,7 @@ class Keypad_I2C {
                    uint8_t numRows, uint8_t numCols,
                    int address, TwoWire *awire = &Wire);
 
-        void begin();
-
-        // Setter for custom delay function
-        void setCustomDelayFunc(void (*myDelay)(unsigned int));
-
-        void setScanInterval(unsigned int interval);
-        void setHoldTime(unsigned int holdTime);
+        void begin(unsigned int scanInterval, unsigned int holdTime, void (*myDelay)(unsigned long));
 
         void addEventListener(void (*listener)(char, KeyState));
 
@@ -139,7 +137,7 @@ class Keypad_I2C {
         TwoWire       *_wire;
 
         // Ptr to custom delay function
-        void (*_customDelayFunc)(unsigned int) = NULL;
+        void (*_customDelayFunc)(unsigned long) = NULL;
 };
 
 /*
@@ -159,9 +157,7 @@ class TCButton {
     public:
         TCButton(const int pin, const boolean activeLow = true, const bool pullupActive = true);
       
-        void setDebounceTicks(const int ticks);
-        void setPressTicks(const int ticks);
-        void setLongPressTicks(const int ticks);
+        void setTicks(const int debounceTs, const int pressTs, const int lPressTs);
       
         void attachPress(void (*newFunction)(void));
         void attachLongPressStart(void (*newFunction)(void));
@@ -197,59 +193,48 @@ class TCButton {
  * TCRotEnc class
  */
 
-#define TC_RE_TYPE_ADA4991    0
-
-// Ada4991
-
-#define SEESAW_STATUS_BASE  0x00
-#define SEESAW_ENCODER_BASE 0x11
-
-#define SEESAW_STATUS_HW_ID   0x01
-#define SEESAW_STATUS_VERSION 0x02
-#define SEESAW_STATUS_SWRST   0x7F
-
-#define SEESAW_ENCODER_STATUS   0x00
-#define SEESAW_ENCODER_INTENSET 0x10
-#define SEESAW_ENCODER_INTENCLR 0x20
-#define SEESAW_ENCODER_POSITION 0x30
-#define SEESAW_ENCODER_DELTA    0x40
-
-#define SEESAW_HW_ID_CODE_SAMD09   0x55
-#define SEESAW_HW_ID_CODE_TINY806  0x84
-#define SEESAW_HW_ID_CODE_TINY807  0x85
-#define SEESAW_HW_ID_CODE_TINY816  0x86
-#define SEESAW_HW_ID_CODE_TINY817  0x87
-#define SEESAW_HW_ID_CODE_TINY1616 0x88
-#define SEESAW_HW_ID_CODE_TINY1617 0x89
+#define TC_RE_TYPE_ADA4991    0     // Adafruit 4991            https://www.adafruit.com/product/4991
+#define TC_RE_TYPE_DUPPAV2    1     // DuPPA I2CEncoder V2.1    https://www.duppa.net/shop/i2cencoder-v2-1/
+#define TC_RE_TYPE_DFRGR360   2     // DFRobot Gravity 360      https://www.dfrobot.com/product-2575.html
+#define TC_RE_TYPE_CS         3     // CircuitSetup             <yet to be designed>
 
 class TCRotEnc {
   
     public:
         TCRotEnc(int numTypes, uint8_t addrArr[], TwoWire *awire = &Wire);
-        bool begin();
-        void zeroPos();
+        bool    begin(bool forSpeed);
+        void    zeroPos(int offs = 0);
+        void    disabledPos();
         int16_t updateFakeSpeed(bool force = false);
+        int     updateVolume(int curVol, bool force = false);
+
+        bool    IsOff();
 
     private:
         int32_t getEncPos();
-        void    reset(void);
-        int     read(uint8_t base, uint8_t reg, uint8_t *buf, uint8_t num);
-        void    write(uint8_t base, uint8_t reg, uint8_t *buf, uint8_t num);
+        int     read(uint16_t base, uint8_t reg, uint8_t *buf, uint8_t num);
+        void    write(uint16_t base, uint8_t reg, uint8_t *buf, uint8_t num);
+
+        bool    zeroEnc(int offs = 0);
 
         int           _numTypes = 0;
-        uint8_t       _addrArr[4*2];    // up to 4 types fit here
+        uint8_t       _addrArr[6*2];    // up to 6 types fit here
         int8_t        _st = -1;
+        int8_t        _type = 0;        // 0=speed; 1=vol
         
         int           _i2caddr;
         TwoWire       *_wire;
 
-        uint8_t       _hwtype;
+        //uint8_t       _hwtype;
 
         int16_t       fakeSpeed = 0;
         int16_t       targetSpeed = 0;
         int32_t       rotEncPos = 0;
         unsigned long lastUpd = 0;
         unsigned long lastFUpd = 0;
+
+        int           dfrgain;
+        int           dfroffslots;
 };
 #endif  // TC_HAVE_RE
 

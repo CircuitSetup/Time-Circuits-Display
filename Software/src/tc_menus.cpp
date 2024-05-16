@@ -2,9 +2,9 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * Keypad Menu handling
  *
@@ -150,7 +150,7 @@
  *     - After the third display, "SAVING" is displayed briefly and the menu 
  *       is left automatically.
  *
- * How to find out the IP address, WiFi status and MAC address
+ * How to find out the IP address, WiFi status, MAC address, HA Status
  *
  *     - Hold ENTER to invoke main menu
  *     - Press ENTER until "NET-WORK" is shown
@@ -312,17 +312,15 @@ static void doShowSensors();
 #endif
 static void displayIP();
 static void doShowNetInfo();
-#ifdef TC_HAVEBTTFN
 static void doShowBTTFNInfo();
-#endif
 static bool menuWaitForRelease();
 static bool checkEnterPress();
 static void prepareInput(uint16_t number);
 
 static bool checkTimeOut();
 
+static void menudelay(unsigned long mydel);
 static void myssdelay(unsigned long mydel);
-static void myloop();
 
 static void dt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR)
 {
@@ -372,6 +370,8 @@ void enter_menu()
 
     mpActive = mp_stop();
     stopAudio();
+
+    flushDelayedSave();
 
     // start with first menu item
     mode_min = check_allow_CPA() ? MODE_CPA : MODE_ALRM;
@@ -549,7 +549,7 @@ void enter_menu()
         // Save to NVM (regardless of persistence mode)
         displaySet->save();
 
-        mydelay(1000);
+        menudelay(1000);
 
     } else if(menuItemNum == MODE_VOL) {
 
@@ -630,7 +630,7 @@ void enter_menu()
             updateConfigPortalValues();
         }
 
-        mydelay(1000);
+        menudelay(1000);
 
     } else if(menuItemNum == MODE_NET) {   // Show network info
 
@@ -640,7 +640,6 @@ void enter_menu()
         // Show net info
         doShowNetInfo();
 
-    #ifdef TC_HAVEBTTFN
     } else if(menuItemNum == MODE_CLI) {   // Show bttfn clients
 
         allOff();
@@ -648,8 +647,7 @@ void enter_menu()
 
         // Show client info
         doShowBTTFNInfo();
-
-    #endif  
+ 
     #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
     } else if(menuItemNum == MODE_SENS) {   // Show light sensor info
 
@@ -698,7 +696,7 @@ quitMenu:
     // Done, turn off displays
     allOff();
 
-    mydelay(500);
+    menudelay(500);
 
     waitForEnterRelease();
 
@@ -728,11 +726,17 @@ quitMenu:
     presentTime.setNightMode(preNM);
     departedTime.setNightMode(depNM);
 
-    myloop();
+    myloops(true);
 
     // make time_loop immediately re-eval auto-nm
     // unless manual-override
     if(manualNightMode < 0) forceReEvalANM = true;
+
+    // Re-set RotEnc for volume (ie ignore all
+    // changes while in menu; adjust to cur level)
+    #ifdef TC_HAVE_RE
+    re_vol_reset();
+    #endif
 
     // Restart mp if it was active before entering the menu
     if(mpActive) mp_play();
@@ -767,9 +771,6 @@ static bool menuSelect(int& number, int mode_min)
             #else
             if(number == MODE_SENS) number++;
             #endif
-            #ifndef TC_HAVEBTTFN
-            if(number == MODE_CLI) number++;
-            #endif
             if(number > MODE_MAX) number = mode_min;
 
             // Show only the selected display, or menu item text
@@ -777,7 +778,7 @@ static bool menuSelect(int& number, int mode_min)
 
         } else {
 
-            mydelay(50);
+            menudelay(50);
 
         }
 
@@ -896,7 +897,7 @@ static void menuShow(int number)
             pt_on();
             lt_off();
         } else {
-            uint64_t ago = (((uint64_t)millis() + millisEpoch) - lastAuthTime64) / 1000;
+            uint64_t ago = (millis64() - lastAuthTime64) / 1000;
             if(ago > 24*60*60) {
                 sprintf(buf, "%d DAYS", ago / (24*60*60));
             } else if(ago > 60*60) {
@@ -912,7 +913,6 @@ static void menuShow(int number)
             lt_on();
         }
         break;
-    #ifdef TC_HAVEBTTFN
     case MODE_CLI:
         #ifdef IS_ACAR_DISPLAY
         dt_showTextDirect("BTTFN");
@@ -925,7 +925,6 @@ static void menuShow(int number)
         dt_on();
         lt_off();
         break;
-    #endif
     case MODE_VER:  // Version info
         dt_showTextDirect("VERSION");
         dt_on();
@@ -1000,7 +999,7 @@ static void prepareInput(uint16_t number)
  *
  * number - a value we're updating (pre-set and result of input)
  * field - field being modified, this will be displayed as it is updated
- * year, month - check checking maximum day number
+ * year, month - for checking maximum day number, etc.
  *
  */
 static bool setField(uint16_t& number, uint8_t field, int year, int month, uint16_t dflags)
@@ -1009,7 +1008,7 @@ static bool setField(uint16_t& number, uint8_t field, int year, int month, uint1
     int lowerLimit;
     int i;
     uint16_t setNum = 0, prevNum = number;
-    int16_t  numVal = 0;
+    int numVal = 0;
     int numChars = 2;
     bool someupddone = false;
     unsigned long blinkNow = 0;
@@ -1078,7 +1077,7 @@ static bool setField(uint16_t& number, uint8_t field, int year, int month, uint1
             blinkSwitch = false;
         }
 
-        mydelay(10);
+        menudelay(10);
 
         if(!blinkSwitch && (millis() - blinkNow > 500)) {
             displaySet->onBlink(2);
@@ -1105,12 +1104,17 @@ static bool setField(uint16_t& number, uint8_t field, int year, int month, uint1
     }
     if(numVal < lowerLimit) numVal = lowerLimit;
     if(numVal > upperLimit) numVal = upperLimit;
+    #ifdef TC_JULIAN_CAL
+    if(field == FIELD_DAY) {
+        correctNonExistingDate(year, month, numVal);
+    }
+    #endif
     number = numVal;
 
     // Display (corrected) number for .5 seconds
     setUpdate((uint16_t)numVal, field, dflags);
 
-    mydelay(500);
+    menudelay(500);
 
     return true;
 }
@@ -1130,7 +1134,7 @@ static void showCurVolHWSW(bool blink)
             lt_showTextDirect("KNOB");
             lt_on();
         } else {
-            dt_showTextDirect("FIXED");
+            dt_showTextDirect("SELECT");
             pt_showTextDirect("LEVEL");
             lt_off();
         }
@@ -1161,7 +1165,7 @@ static void showCurVol(bool blink, bool doComment)
 static void doSetVolume()
 {
     bool volDone = false;
-    uint8_t oldVol = curVolume;
+    int oldVol = curVolume;
     unsigned long playNow;
     bool triggerPlay = false;
     bool blinkSwitch = false;
@@ -1207,7 +1211,7 @@ static void doSetVolume()
                 blinkNow = mm;
             }
 
-            mydelay(50);
+            menudelay(50);
 
         }
 
@@ -1215,8 +1219,13 @@ static void doSetVolume()
 
     if(volDone && curVolume != 255) {
 
-        curVolume = (oldVol == 255) ? 0 : oldVol;
-
+        if(oldVol == 255) {
+            curVolume = getSWVolFromHWVol();
+            triggerPlay = true;
+        } else {
+            curVolume = oldVol;
+        }
+        
         showCurVol(false, true);
 
         timeout = 0;  // reset timeout
@@ -1227,6 +1236,8 @@ static void doSetVolume()
         volDone = false;
 
         waitForEnterRelease();
+
+        playNow = millis();
 
         // Wait for enter
         while(!checkTimeOut() && !volDone) {
@@ -1269,7 +1280,7 @@ static void doSetVolume()
                     triggerPlay = false;
                 }
 
-                mydelay(50);
+                menudelay(50);
 
             }
         }
@@ -1290,7 +1301,7 @@ static void doSetVolume()
         if(oldVol != curVolume) {
             saveCurVolume();
         }
-        mydelay(1000);
+        menudelay(1000);
 
     } else {
 
@@ -1389,7 +1400,7 @@ static void doSetMSfx()
                 blinkNow = mm;
             }
 
-            mydelay(50);
+            menudelay(50);
 
         }
 
@@ -1407,7 +1418,7 @@ static void doSetMSfx()
             mp_init();
         }
 
-        mydelay(1000);
+        menudelay(1000);
 
     } else {
 
@@ -1520,7 +1531,7 @@ static void doSetAlarm()
                 blinkNow = mm;
             }
 
-            mydelay(50);
+            menudelay(50);
 
         }
 
@@ -1576,7 +1587,7 @@ static void doSetAlarm()
 
         } else {
 
-            mydelay(50);
+            menudelay(50);
 
             if(!blinkSwitch) {
                 displaySet->onBlink(2);
@@ -1609,7 +1620,7 @@ static void doSetAlarm()
             saveAlarm();
         }
 
-        mydelay(1000);
+        menudelay(1000);
     }
 }
 
@@ -1711,7 +1722,7 @@ static void doSetAutoInterval()
                 blinkNow = mm;
             }
 
-            mydelay(50);
+            menudelay(50);
 
         }
 
@@ -1734,7 +1745,7 @@ static void doSetAutoInterval()
         if(autoTimeIntervals[autoInterval]) 
             endPauseAuto();
 
-        mydelay(1000);
+        menudelay(1000);
 
     }
 }
@@ -1807,7 +1818,7 @@ static bool doSetBrightness(clockDisplay* displaySet)
                 blinkNow = mm;
             }
 
-            mydelay(50);
+            menudelay(50);
 
         }
 
@@ -1875,7 +1886,7 @@ static void doShowSensors()
             
         } else {
 
-            mydelay(50);
+            menudelay(50);
 
             if(millis() - sensNow > 3000) {
                 switch(numberArr[numIdx]) {
@@ -2070,7 +2081,7 @@ static void doShowNetInfo()
 
         } else {
 
-            mydelay(50);
+            menudelay(50);
 
         }
 
@@ -2080,7 +2091,6 @@ static void doShowNetInfo()
 /*
  * Show BTTFN network clients ##################################
  */
-#ifdef TC_HAVEBTTFN
 static void displayClient(int numCli, int number)
 {
     uint8_t *ip;
@@ -2157,14 +2167,13 @@ void doShowBTTFNInfo()
 
         } else {
 
-            mydelay(50);
+            menudelay(50);
             numCli = bttfnNumClients();
 
         }
 
     }
 }
-#endif
 
 /*
  * Install default audio files from SD to flash FS #############
@@ -2206,7 +2215,7 @@ void doCopyAudioFiles()
   
         } else {
   
-            mydelay(50);
+            menudelay(50);
 
             if(!blinkSwitch) {
                 departedTime.onBlink(2);
@@ -2231,7 +2240,7 @@ void doCopyAudioFiles()
         #endif
         write_settings();           // Re-write general settings
         if(!copy_audio_files()) {   // Retry copy
-            mydelay(3000);
+            menudelay(3000);
         } else {
             delIDfile = true;
         }
@@ -2239,10 +2248,11 @@ void doCopyAudioFiles()
         delIDfile = true;
     }
 
-    if(delIDfile)
+    if(delIDfile) {
         delete_ID_file();
+    }
     
-    mydelay(2000);
+    menudelay(2000);
 
     allOff();
     dt_showTextDirect("REBOOTING");
@@ -2303,7 +2313,7 @@ void file_copy_error()
 static bool menuWaitForRelease()
 {
     while(checkEnterPress()) {
-        myloop();
+        myloops(true);
         if(isEnterKeyHeld) {
             isEnterKeyHeld = false;
             return true;
@@ -2338,7 +2348,7 @@ void waitForEnterRelease()
 {
     while(1) {
         while(digitalRead(ENTER_BUTTON_PIN)) {
-            mydelay(10);
+            menudelay(10);
         }
         myssdelay(30);
         if(!digitalRead(ENTER_BUTTON_PIN))
@@ -2354,7 +2364,7 @@ void waitAudioDone()
     int timeout = 200;
 
     while(!checkAudioDone() && timeout--) {
-        mydelay(10);
+        menudelay(10);
     }
 }
 
@@ -2378,16 +2388,16 @@ static bool checkTimeOut()
 }
 
 /*
- * MyDelay:
- * Calls myloop() periodically
+ * MenuDelay:
+ * Calls myloops() periodically
  */
-void mydelay(unsigned long mydel)
+static void menudelay(unsigned long mydel)
 {
     unsigned long startNow = millis();
-    myloop();
+    myloops(true);
     while(millis() - startNow < mydel) {
         delay(5);
-        myloop();
+        myloops(true);
     }
 }
 
@@ -2409,23 +2419,25 @@ static void myssdelay(unsigned long mydel)
 /*
  *  Do this during enter_menu whenever we are caught in a while() loop
  *  This allows other stuff to proceed
+ *  menuMode is true when this is called from the keypad menu
+ *  menuMode is false when called from elsewhere
  */
-static void myloop()
+void myloops(bool menuMode)
 {
     audio_loop();
-    enterkeyScan();   // >= 19ms
-    audio_loop();
-    wifi_loop();
-    audio_loop();
-    ntp_loop();
-    audio_loop();
-    #ifdef TC_HAVEGPS
-    gps_loop();       // >= 12ms
+    if(menuMode) {
+        enterkeyScan();   // >= 19ms
+        audio_loop();
+        wifi_loop();
+        audio_loop();
+        ntp_loop();
+        audio_loop();
+    }
+    #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE)
+    gps_loop(menuMode);  // 6-12ms without delay, 8-13ms with delay
     #endif
-    #ifdef TC_HAVEBTTFN
-    #ifdef TC_HAVEGPS
+    #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE)
     audio_loop();
     #endif
     bttfn_loop();
-    #endif
 }

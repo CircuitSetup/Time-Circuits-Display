@@ -1,9 +1,9 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * GPS Class: GPS receiver handling and data parsing
  *
@@ -45,10 +45,7 @@ class tcGPS {
     public:
 
         tcGPS(uint8_t address);
-        bool    begin(unsigned long powerupTime, bool quickUpdates);
-
-        // Setter for custom delay function
-        void    setCustomDelayFunc(void (*myDelay)(unsigned int));
+        bool    begin(unsigned long powerupTime, int quickUpdates, int speedRate, void (*myDelay)(unsigned long));
 
         void    loop(bool doDelay);
 
@@ -56,25 +53,17 @@ class tcGPS {
         bool    haveTime();
         bool    getDateTime(struct tm *timeInfo, unsigned long *fixAge, unsigned long updInt);
         bool    setDateTime(struct tm *timeinfo);
-
-        int16_t speed = -1;
+        
         bool    fix = false;
 
     private:
 
         bool    readAndParse(bool doDelay = true);
 
-        void    sendCommand(const char *);
+        void    sendCommand(const char *, const char *);
 
         bool    parseNMEA(char *nmea, unsigned long nmeaTS);
         bool    checkNMEA(char *nmea);
-
-        uint8_t parseHex(char c);
-        bool    mystrcmp3(char *src, const char *cmp);
-        uint8_t AToI2(char *buf);
-        uint16_t AToI4(char *buf);
-        unsigned long  getFracs(char *buf);
-        char * gotoNext(char *t);
 
         uint8_t _address;
 
@@ -83,6 +72,7 @@ class tcGPS {
         //#define GPS_LENBUFLIMIT 0x07
         //uint8_t _lenArr[8] = { 32, 32, 32, 32, 32, 32, 32, 31 };
         int     _lenIdx = 0;
+        int     _lenLimit = GPS_LENBUFLIMIT;
 
         char    _buffer[GPS_MAX_I2C_LEN];
         char    _last_char = 0;
@@ -92,8 +82,10 @@ class tcGPS {
         uint8_t _lineidx = 0;
         unsigned long _currentTS = 0;
 
+        int     _speed = -1;
         bool    _haveSpeed = false;
         unsigned long _curspdTS = 0;
+        char     _sbuf[16];
 
         char    _curTime[8]   = { 0, 0, 0, 0, 0, 0, 0, 0 };
         unsigned long _curFrac;
@@ -111,7 +103,7 @@ class tcGPS {
         bool    _haveDateTime2 = false;
 
         // Ptr to custom delay function
-        void (*_customDelayFunc)(unsigned int) = NULL;
+        void (*_customDelayFunc)(unsigned long) = NULL;
 };
 
 #endif

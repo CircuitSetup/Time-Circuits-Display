@@ -2,9 +2,9 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * Settings handling
  *
@@ -44,7 +44,8 @@ extern uint8_t musFolderNum;
 #define XMS(s) #s
 
 // Default settings - change settings in the web interface 192.168.4.1
-// For list of time zones, see https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+// For list of time zones, see 
+// https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 
 #define DEF_TIMES_PERS      0     // 0-1;  Default: 0 = TimeTravel not persistent
 #define DEF_ALARM_RTC       1     // 0-1;  Default: 1 = Alarm is RTC-based (otherwise 0 = presentTime-based)
@@ -75,7 +76,8 @@ extern uint8_t musFolderNum;
 #define DEF_SPEEDO_TYPE     99    // Default display type: None
 #define DEF_SPEEDO_FACT     2.0   // Speedo factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
 #define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness for speed
-#define DEF_USE_GPS_SPEED   0     // 0: Do not use GPS speed on speedo display
+#define DEF_USE_GPS_SPEED   0     // 0: Do not show GPS speed on speedo display
+#define DEF_SPD_UPD_RATE    1     // 0:1Hz, 1:2Hz, 2:4Hz, 3:5Hz; default 2Hz
 #define DEF_DISP_TEMP       1     // 1: Display temperature (if available) on speedo
 #define DEF_TEMP_BRIGHT     3     // Default temperature brightness
 #define DEF_TEMP_OFF_NM     1     // Default: temperature off in night mode
@@ -142,6 +144,7 @@ struct Settings {
     char speedoFact[6]      = MS(DEF_SPEEDO_FACT);
 #ifdef TC_HAVEGPS
     char useGPSSpeed[4]     = MS(DEF_USE_GPS_SPEED);
+    char spdUpdRate[4]      = MS(DEF_SPD_UPD_RATE);
 #endif
 #ifdef TC_HAVETEMP
     char dispTemp[4]        = MS(DEF_DISP_TEMP);
@@ -198,7 +201,7 @@ void saveReminder();
 void saveCarMode();
 
 bool loadCurVolume();
-void saveCurVolume();
+void saveCurVolume(bool useCache = true);
 
 bool loadMusFoldNum();
 void saveMusFoldNum();
@@ -219,7 +222,6 @@ bool copy_audio_files();
 
 bool check_allow_CPA();
 void delete_ID_file();
-
 bool audio_files_present();
 
 void waitForEnterRelease();
@@ -232,6 +234,5 @@ bool readFileFromSD(const char *fn, uint8_t *buf, int len);
 bool writeFileToSD(const char *fn, uint8_t *buf, int len);
 bool readFileFromFS(const char *fn, uint8_t *buf, int len);
 bool writeFileToFS(const char *fn, uint8_t *buf, int len);
-
 
 #endif

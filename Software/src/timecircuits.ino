@@ -44,7 +44,123 @@
  */
 
 /*  Changelog
- *  TODO: Way (option) to reverse rot enc direction
+ *  2024/01/22 (A10001986)
+ *    - Save Exh-mode settings when reformatting Flash FS or when copying from
+ *      or to SD
+ *  2024/01/21 (A10001986)
+ *    - BTTFN no longer compile time option, always included
+ *    - Major cleanup (code re-ordering, no functional changes)
+ *  2024/01/18 (A10001986)
+ *    - Fix WiFi menu size
+ *  2024/01/16 (A10001986)
+ *    - Keypad menu: Propose volume level similar to current knob position when
+ *      switching from knob to pre-selected level.
+ *  2024/01/15 (A10001986)
+ *    - Flush outstanding delayed saves before rebooting and on fake-power-off
+ *    - Remove "Restart" menu item from CP, can't let WifiManager reboot behind
+ *      our back.
+ *  2024/01/14  (A10001986)
+ *    - RotEnc: There are primary and secondary RotEncs now, ie you can connect
+ *      two rotary encoders, one for Speed (as before), one for Volume.
+ *      The primary RotEnc is used for Speed. A secondary RotEnc can be connected
+ *      for volume. Secondary RotEncs use different i2c addresses.
+ *      Using a RotEnc for volume requires disabling the volume knob by selecting 
+ *      a software-controlled level the keypad menu's "Volume" settings. 
+ *      RotEnc-changed volume is saved 10 seconds after last change.
+ *  2024/01/13  (A10001986)
+ *    - New keypad codes:
+ *      300-319 sets volume level; 399 activates volume pot; those are short-cuts
+ *      to avoid the keypad menu to change the volume selection.
+ *  2024/01/06  (A10001986)
+ *    - Minor optimizations in time loop; fix timer and reminder suppression
+ *      when alarm wouldn't sound because of weekday mismatch
+ *  2024/01/03  (A10001986)
+ *    - Add "aux" network commands for custom props (8xxx and 8xxxxxx)
+ *  2024/01/01  (A10001986)
+ *    - Switch epoch definitions to 2024
+ *  2023/12/28  (A10001986)
+ *    - GPS: Make speedo update rate user-configurable; code simplifications.
+ *    - CP: Save space by building select boxes in loops
+ *  2023/12/27  (A10001986)
+ *    - GPS: Switch to VTG sentence as main speed source for 200ms and 250ms
+ *      polling rates; fake 1 and 2mph (GPS data is unreliable at very low 
+ *      speeds).
+ *  2023/12/26  (A10001986)
+ *    - GPS: Increase speed update for speedo-display to 5Hz; more is pointless
+ *      as speed gets increasingly jumpy (it already is at 5Hz); better pace-
+ *      keeping for GPS polling and displaying speed
+ *    - Properly implement millis64()
+ *    - Convert some remaining double math into float
+ *  2023/12/23  (A10001986)
+ *    - GPS: Sync read rate to update rate for smooth speedo display
+ *  2023/12/22  (A10001986)
+ *    - GPS: Minor changes (use caps for checksum; re-order setDate code)
+ *  2023/12/21  (A10001986)
+ *    - Some further minor code changes to reduce bin size
+ *    - GPS: Read 128 bytes at a time in 4Hz mode; get rid of delay.
+ *  2023/12/20  (A10001986)
+ *    - Some code size reductions (reduced number of setters in classes)
+ *  2023/12/19  (A10001986)
+ *    - GPS: Add 4Hz speed update rate compile time option. This is only for when 
+ *      displaying speed on the speedo, but puts more stress on overall timing.
+ *  2023/12/18  (A10001986)
+ *    - Some minor optimizations when calculating local time (hand previously
+ *      calculated mins to localToDST)
+ *  2023/12/13  (A10001986)
+ *    - Keypad input length check logic fix
+ *  2023/12/12  (A10001986)
+ *    - Display Exhibition Mode status upon enabling/disabling Exh Mode
+ *    - Overwrite Exh Mode time on TT / Return from TT only if Exh Mode is
+ *      currently on.
+ *  2023/12/11  (A10001986)
+ *    - Add support for Julian calendar for the period of Jan 1, 1, until either
+ *      Sep 2, 1752, or Oct 4, 1582 (defined at compile time, not user configurable, 
+ *      due to pre-calculated tables).
+ *      Pre-compiled binary uses 1752, the time machine was built in the USA
+ *      after all.
+ *      If the option "Make time travels persistent" is set while updating,
+ *      your present time will be wrong afterwards.
+ *    - 33+ENTER shows weekday of currently displayed "present time" date.
+ *  2023/12/08  (A10001986)
+ *    - Add way to trigger TT from props connected via BTTFN
+ *    - Play no sound on TCD on "refill" command
+ *    - Overrule RotEnc's "fakeSpeed" already in P0 of TT; this avoids a
+ *      mismatch on BTTFN-connected props during their TT sequence.
+ *  2023/12/03  (A10001986)
+ *    - Sound update (new sound-pack)
+ *  2023/11/24  (A10001986)
+ *    - Support for DuPPA I2CEncoder 2.1 verified working (no changes)
+ *  2023/11/22  (A10001986)
+ *    - Speed up date/time transmission to BTTFN clients, and add 24hr flag
+ *    - Start beep timer when RotEnc it moved
+ *    - Add signal bit for BTTF clients so that they know if "speed" is from 
+ *      GPS or RotEnc
+ *    - Clean up delay methods
+ *  2023/11/19  (A10001986)
+ *    - RotEnc: Transmit speedo count-down in P2 to BTTF clients if RotEnc
+ *      was in use at the time of the trigger.
+ *    - RotEnc logic fixes (reset to "disabled" pos if disabled before 
+ *      time travel; don't update during P2; after templock timeout, reset 
+ *      enc to "disabled" pos; etc.)
+ *  2023/11/18  (A10001986)
+ *    - RotEnc: Start from displayed speed when triggering a tt via keypad
+ *      or external trigger
+ *  2023/11/16  (A10001986)
+ *    - Finalize support for MS8607 temp+hum sensor; verified working.
+ *  2023/11/15  (A10001986)
+ *    - Finalize support for DFRobot Gravity 360 rotary encoder, verified working. 
+ *    - Logic fixes for all rotary encoders
+ *    * Switched to esp32-arduino 2.0.14 for pre-compiled binary.
+ *  2023/11/13  (A10001986)
+ *    - Prepare support for DuPPa V2.1 rotary encoder (https://www.duppa.net/shop/i2cencoder-v2-1/)
+ *      ("Mini" not supported due to i2c address conflict)
+ *    - Prepare support for DFRobot Gravity 360 rotary encoder (https://www.dfrobot.com/product-2575.html)
+ *  2023/11/10  (A10001986)
+ *    - TSL2591 light sensor verified working
+ *  2023/11/09  (A10001986)
+ *    - Prepare support for MS8607 temp+hum sensor (yet untested)
+ *  2023/11/08  (A10001986)
+ *    - Fixes for rot enc (direction; some logic)
  *  2023/11/06-07 (A10001986)
  *    - Abort audio file installer on first error
  *    - Add TSL2591 light sensor support (yet untested), since 2561 is discontinued.
@@ -1012,13 +1128,14 @@ void setup()
 {
     powerupMillis = millis();
 
-    Serial.begin(115200);    
+    Serial.begin(115200);
+    Serial.println();
 
+    // I2C init
+    // Make sure our i2c buf is 128 bytes
+    Wire.setBufferSize(128);
     // PCF8574 only supports 100kHz, can't go to 400 here.
     Wire.begin(-1, -1, 100000);
-    //Wire.begin();
-    
-    Serial.println();
     
     time_boot();
     settings_setup();
@@ -1029,7 +1146,7 @@ void setup()
 }
 
 
-void loop() 
+void loop()
 {
     keypad_loop();
     audio_loop();
@@ -1040,7 +1157,5 @@ void loop()
     audio_loop();
     wifi_loop();
     audio_loop();
-    #ifdef TC_HAVEBTTFN
     bttfn_loop();
-    #endif
 }

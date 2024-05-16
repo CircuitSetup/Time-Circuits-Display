@@ -1,16 +1,20 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * speedDisplay Class: Speedo Display
  *
  * This is designed for CircuitSetup's Speedo display and other 
  * HT16K33-based displays, like the "Grove - 0.54" Dual/Quad 
- * Alphanumeric Display" or some displays with the Adafruit
- * i2c backpack (878, 1911, 1270; product numbers vary with color).
+ * Alphanumeric Display" or some displays with an Adafruit i2c
+ * backpack:
+ * ADA-878/877/5599 (other colors: 879/880/881/1002/5601/5602/5603/5604)
+ * ADA-1270/1271 (other colors: 1269)
+ * ADA-1911/1910 (other colors: 1912/2157/2158/2160)
+ * 
  * The i2c slave address must be 0x70.
  * -------------------------------------------------------------------
  * License: MIT
@@ -293,17 +297,17 @@ static struct dispConf {
     const uint16_t *fontSeg; //   Pointer to font
 } displays[SP_NUM_TYPES] = {
   { true,  0, 1, 0, 8, 1, 8, 255,      0, 2, 0, { 0, 1 },       { 0, 8 },       font7segGeneric },  // CircuitSetup Speedo+GPS add-on
-  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)
-  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)
-  { false, 2, 3, 0, 0, 3, 0, 255,      0, 4, 0, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right)
-  { false, 0, 1, 0, 0, 1, 0, 255,      0, 4, 0, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)
+  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right) (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
+  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)  (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
+  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)  (ADA-1270/1271;1269)
+  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)   (ADA-1270/1271;1269)
+  { false, 2, 3, 0, 0, 3, 0, 255,      0, 4, 0, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right) (ADA-1911/1910;1912/2157/2158/2160)
+  { false, 0, 1, 0, 0, 1, 0, 255,      0, 4, 0, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)  (ADA-1911/1910;1912/2157/2158/2160)
   { false, 2, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 2, 1 },       { 0, 0, 0, 0 }, font14segGrove },   // SP_GROVE_2DIG14
   { false, 3, 4, 0, 0, 4, 0,   5, 0x2080, 4, 0, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
   { false, 1, 2, 0, 0, 2, 0,   5, 0x2080, 4, 0, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
-  { false, 0, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 0, 1 },       { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L, but left tube only (TW wall clock)
-  { true,  0, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 0, 1 },       { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L, but left tube only (TW speedo replica)
+  { false, 0, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 0, 1 },       { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L(ADA-1911), but left tube only (TW wall clock)
+  { true,  0, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 0, 1 },       { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L(ADA-878), but left tube only (TW speedo replica) - needs rewiring
 // .... for testing only:
 //{ true,  7, 7, 0, 8, 7, 8, 255,      0, 2, 1, { 7 },          { 0, 8 },       font7segGeneric },  // SP_TCD_TEST7
 //{ false, 1, 2, 0, 0, 2, 0, 255,      0, 3, 0, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }, // SP_TCD_TEST14 right
@@ -600,7 +604,7 @@ void speedDisplay::setTemperature(float temp)
         else if(temp <= -10.0) setText("Lo");
         else if(t >= 100.0) setText("Hi");
         else if(temp >= 10.0 || temp < 0.0) {
-            t = (int)((float)round(temp));
+            t = (int)roundf(temp);
             sprintf(buf, "%d", t);
             setText(buf);
         } else {
@@ -613,7 +617,7 @@ void speedDisplay::setTemperature(float temp)
         else if(temp <= -100.0) setText("Low");
         else if(t >= 1000.0) setText("Hi");
         else if(temp >= 100.0 || temp <= -10.0) {
-            t = (int)((float)round(temp));
+            t = (int)roundf(temp);
             sprintf(buf, "%d", t);
             setText(buf);
         } else {

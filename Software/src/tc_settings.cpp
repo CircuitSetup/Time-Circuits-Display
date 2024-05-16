@@ -2,9 +2,9 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * Settings & file handling
  * 
@@ -68,24 +68,6 @@
 // Needs to be adapted when config grows
 #define JSON_SIZE 2500
 
-/* If SPIFFS/LittleFS is mounted */
-bool haveFS = false;
-
-/* If a SD card is found */
-bool haveSD = false;
-
-/* If SD contains default audio files */
-static bool allowCPA = false;
-
-/* Music Folder Number */
-uint8_t musFolderNum = 0;
-
-/* Save alarm/volume on SD? */
-static bool configOnSD = false;
-
-/* Paranoia: No writes Flash-FS  */
-bool FlashROMode = false;
-
 #define NUM_AUDIOFILES 20
 #define SND_ENTER_IDX  8
 #ifndef TWSOUND
@@ -96,39 +78,45 @@ bool FlashROMode = false;
 #define SND_STARTUP_LEN 18419
 #endif
 static const char *audioFiles[NUM_AUDIOFILES] = {
-      "/alarm.mp3",
-      "/alarmoff.mp3",
-      "/alarmon.mp3",
-      "/baddate.mp3",
-      "/ee1.mp3",
-      "/ee2.mp3",
-      "/ee3.mp3",
-      "/ee4.mp3",
-      "/enter.mp3",
-      "/intro.mp3",
-      "/nmoff.mp3",
-      "/nmon.mp3",
-      "/ping.mp3",
-      "/reminder.mp3",
-      "/shutdown.mp3",
-      "/startup.mp3",
-      "/timer.mp3",
-      "/timetravel.mp3",
-      "/travelstart.mp3",
-      "/travelstart2.mp3"
+    "/alarm.mp3",
+    "/alarmoff.mp3",
+    "/alarmon.mp3",
+    "/baddate.mp3",
+    "/ee1.mp3",
+    "/ee2.mp3",
+    "/ee3.mp3",
+    "/ee4.mp3",
+    "/enter.mp3",
+    "/intro.mp3",
+    "/nmoff.mp3",
+    "/nmon.mp3",
+    "/ping.mp3",
+    "/reminder.mp3",
+    "/shutdown.mp3",
+    "/startup.mp3",
+    "/timer.mp3",
+    "/timetravel.mp3",
+    "/travelstart.mp3",
+    "/travelstart2.mp3"
 };
-static const char *IDFN = "/TCD_def_snd.txt";
+static const char *IDFN   = "/TCD_def_snd.txt";
+static const char *CONFN  = "/TCDA.bin";
+static const char *CONFND = "/TCDA.old";
+static const char *CONID  = "TCDA";
+static uint32_t   soa = 0;
+static bool       ic = false;
+static uint8_t*   f(uint8_t *d, uint32_t m, int y) { return d; }
 
 static const char *cfgName    = "/config.json";     // Main config (flash)
+static const char *ipCfgName  = "/ipconfig.json";   // IP config (flash)
+static const char *volCfgName = "/tcdvolcfg.json";  // Volume config (flash/SD)
 static const char *almCfgName = "/tcdalmcfg.json";  // Alarm config (flash/SD)
 static const char *remCfgName = "/tcdremcfg.json";  // Reminder config (flash/SD)
-static const char *volCfgName = "/tcdvolcfg.json";  // Volume config (flash/SD)
-static const char *musCfgName = "/tcdmcfg.json";    // Music config (SD)
-static const char *ipCfgName  = "/ipconfig.json";   // IP config (flash)
-static const char *cmCfgName  = "/cmconfig.json";   // Carmode (flash/SD)
 #ifdef HAVE_STALE_PRESENT
 static const char *stCfgName  = "/stconfig";        // Exhib Mode (flash/SD)
 #endif
+static const char *musCfgName = "/tcdmcfg.json";    // Music config (SD)
+static const char *cmCfgName  = "/cmconfig.json";   // Carmode (flash/SD)
 
 static const char *fsNoAvail = "File System not available";
 static const char *failFileWrite = "Failed to open file for writing";
@@ -136,30 +124,52 @@ static const char *failFileWrite = "Failed to open file for writing";
 static const char *badConfig = "Settings bad/missing/incomplete; writing new file";
 #endif
 
+/* If SPIFFS/LittleFS is mounted */
+bool haveFS = false;
+
+/* If a SD card is found */
+bool haveSD = false;
+
+/* Save alarm/volume on SD? */
+static bool configOnSD = false;
+
+/* Paranoia: No writes Flash-FS  */
+bool FlashROMode = false;
+
+/* If SD contains default audio files */
+static bool allowCPA = false;
+
+/* Music Folder Number */
+uint8_t musFolderNum = 0;
+
+/* Cache */
+static uint8_t  prevSavedVol = 254;
+static uint8_t* (*r)(uint8_t *, uint32_t, int);
+
 static bool read_settings(File configFile);
-
-static void deleteReminder();
-
-static void loadCarMode();
 
 static bool CopyCheckValidNumParm(const char *json, char *text, uint8_t psize, int lowerLim, int upperLim, int setDefault);
 static bool CopyCheckValidNumParmF(const char *json, char *text, uint8_t psize, float lowerLim, float upperLim, float setDefault);
 static bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault);
 static bool checkValidNumParmF(char *text, float lowerLim, float upperLim, float setDefault);
 
+static void deleteReminder();
+static void loadCarMode();
+
+static bool check_if_default_audio_present();
+static void cfc(File& sfile, int& haveErr);
 static void open_and_copy(const char *fn, int& haveErr);
 static bool filecopy(File source, File dest);
-static bool check_if_default_audio_present();
 
 static bool CopyIPParm(const char *json, char *text, uint8_t psize);
+
+static DeserializationError readJSONCfgFile(JsonDocument& json, File& configFile, const char *funcName);
+static bool writeJSONCfgFile(const JsonDocument& json, const char *fn, bool useSD, const char *funcName);
 
 extern void start_file_copy();
 extern void file_copy_progress();
 extern void file_copy_done();
 extern void file_copy_error();
-
-static DeserializationError readJSONCfgFile(JsonDocument& json, File& configFile, const char *funcName);
-static bool writeJSONCfgFile(const JsonDocument& json, const char *fn, bool useSD, const char *funcName);
 
 /*
  * settings_setup()
@@ -312,14 +322,14 @@ void settings_setup()
     // Determine if alarm/reminder/volume/carmode settings are to be stored on SD
     configOnSD = (haveSD && ((settings.CfgOnSD[0] != '0') || FlashROMode));
 
-    // Check if SD contains our default sound files
-    // We don't do that if in FlashROMode mode, of course
-    if(haveFS && haveSD && !FlashROMode) {
-        allowCPA = check_if_default_audio_present();
-    }
-
     // Load carMode setting
     loadCarMode();
+    
+    // Check if SD contains the default sound files
+    // (Don't do that if in FlashROMode mode)
+    if((r = e) && !FlashROMode && haveSD && haveFS) {
+        allowCPA = check_if_default_audio_present();
+    }
 
     // Allow user to delete static IP data by holding ENTER
     // while booting
@@ -481,6 +491,7 @@ static bool read_settings(File configFile)
         wd |= CopyCheckValidNumParmF(json["speedoFact"], settings.speedoFact, sizeof(settings.speedoFact), 0.5, 5.0, DEF_SPEEDO_FACT);
         #ifdef TC_HAVEGPS
         wd |= CopyCheckValidNumParm(json["useGPSSpeed"], settings.useGPSSpeed, sizeof(settings.useGPSSpeed), 0, 1, DEF_USE_GPS_SPEED);
+        wd |= CopyCheckValidNumParm(json["spdUpdRate"], settings.spdUpdRate, sizeof(settings.spdUpdRate), 0, 3, DEF_SPD_UPD_RATE);
         #endif
         #ifdef TC_HAVETEMP
         wd |= CopyCheckValidNumParm(json["dispTemp"], settings.dispTemp, sizeof(settings.dispTemp), 0, 1, DEF_DISP_TEMP);
@@ -542,9 +553,6 @@ static bool read_settings(File configFile)
 
 void write_settings()
 {
-    bool success = false;
-    char *buf;
-    size_t bufSize;
     const char *funcName = "write_settings";
     DynamicJsonDocument json(JSON_SIZE);
     //StaticJsonDocument<JSON_SIZE> json;
@@ -609,6 +617,7 @@ void write_settings()
     json["speedoFact"] = (const char *)settings.speedoFact;
     #ifdef TC_HAVEGPS
     json["useGPSSpeed"] = (const char *)settings.useGPSSpeed;
+    json["spdUpdRate"] = (const char *)settings.spdUpdRate;
     #endif
     #ifdef TC_HAVETEMP
     json["dispTemp"] = (const char *)settings.dispTemp;
@@ -730,7 +739,7 @@ static bool checkValidNumParmF(char *text, float lowerLim, float upperLim, float
         }
     }
 
-    f = atof(text);
+    f = strtof(text, NULL);
 
     if(f < lowerLim) {
         sprintf(text, "%1.1f", lowerLim);
@@ -764,6 +773,77 @@ static bool openCfgFileRead(const char *fn, File& f)
     }
 
     return haveConfigFile;
+}
+
+/*
+ *  Load/save the Volume
+ */
+
+bool loadCurVolume()
+{
+    const char *funcName = "loadCurVolume";
+    char temp[6];
+    bool writedefault = true;
+    File configFile;
+
+    curVolume = DEFAULT_VOLUME;
+
+    if(!haveFS && !configOnSD) {
+        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+        return false;
+    }
+
+    #ifdef TC_DBG
+    Serial.printf("%s: Loading from %s\n", funcName, configOnSD ? "SD" : "flash FS");
+    #endif
+
+    if(openCfgFileRead(volCfgName, configFile)) {
+        StaticJsonDocument<512> json;
+        if(!readJSONCfgFile(json, configFile, funcName)) {
+            if(!CopyCheckValidNumParm(json["volume"], temp, sizeof(temp), 0, 255, 255)) {
+                int ncv = atoi(temp);
+                if((ncv >= 0 && ncv <= 19) || ncv == 255) {
+                    curVolume = ncv;
+                    writedefault = false;
+                }
+            }
+        } 
+        configFile.close();
+    }
+
+    if(writedefault) {
+        #ifdef TC_DBG
+        Serial.printf("%s: %s\n", funcName, badConfig);
+        #endif
+        saveCurVolume(false);
+    } else {
+        prevSavedVol = curVolume;
+    }
+
+    return true;
+}
+
+void saveCurVolume(bool useCache)
+{
+    const char *funcName = "saveCurVolume";
+    char buf[6];
+    StaticJsonDocument<512> json;
+
+    if(useCache && (prevSavedVol == curVolume)) {
+        return;
+    }
+
+    if(!haveFS && !configOnSD) {
+        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+        return;
+    }
+
+    sprintf(buf, "%d", curVolume);
+    json["volume"] = (const char *)buf;
+
+    if(writeJSONCfgFile(json, volCfgName, configOnSD, funcName)) {
+        prevSavedVol = curVolume;
+    }
 }
 
 /*
@@ -976,70 +1056,6 @@ void saveCarMode()
 }
 
 /*
- *  Load/save the Volume
- */
-
-bool loadCurVolume()
-{
-    const char *funcName = "loadCurVolume";
-    char temp[6];
-    bool writedefault = true;
-    bool haveConfigFile = false;
-    File configFile;
-
-    curVolume = DEFAULT_VOLUME;
-
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
-        return false;
-    }
-
-    #ifdef TC_DBG
-    Serial.printf("%s: Loading from %s\n", funcName, configOnSD ? "SD" : "flash FS");
-    #endif
-
-    if(openCfgFileRead(volCfgName, configFile)) {
-        StaticJsonDocument<512> json;
-        if(!readJSONCfgFile(json, configFile, funcName)) {
-            if(!CopyCheckValidNumParm(json["volume"], temp, sizeof(temp), 0, 255, 255)) {
-                uint8_t ncv = atoi(temp);
-                if((ncv >= 0 && ncv <= 19) || ncv == 255) {
-                    curVolume = ncv;
-                    writedefault = false;
-                } 
-            }
-        } 
-        configFile.close();
-    }
-
-    if(writedefault) {
-        #ifdef TC_DBG
-        Serial.printf("%s: %s\n", funcName, badConfig);
-        #endif
-        saveCurVolume();
-    }
-
-    return true;
-}
-
-void saveCurVolume()
-{
-    const char *funcName = "saveCurVolume";
-    char buf[6];
-    StaticJsonDocument<512> json;
-
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
-        return;
-    }
-
-    sprintf(buf, "%d", curVolume);
-    json["volume"] = (const char *)buf;
-
-    writeJSONCfgFile(json, volCfgName, configOnSD, funcName);
-}
-
-/*
  * Save/load stale present time
  */
 
@@ -1060,7 +1076,8 @@ void loadStaleTime(void *target, bool& currentOn)
         haveConfigFile = readFileFromFS(stCfgName, loadBuf, sizeof(loadBuf));
     }
 
-    if(!haveConfigFile) return;
+    if(!haveConfigFile) 
+        return;
 
     for(uint8_t i = 0; i < 1+(2*sizeof(dateStruct)); i++) {
         sum += (loadBuf[i] ^ 0x55);
@@ -1069,6 +1086,8 @@ void loadStaleTime(void *target, bool& currentOn)
         currentOn = loadBuf[0] ? true : false;
         memcpy(target, (void *)&loadBuf[1], 2*sizeof(dateStruct));
     }
+
+    return;
 }
 
 void saveStaleTime(void *source, bool currentOn)
@@ -1090,30 +1109,6 @@ void saveStaleTime(void *source, bool currentOn)
     }
 }
 #endif
-
-/* Copy alarm/volume settings from/to SD if user
- * changed "save to SD"-option in CP
- */
-
-void copySettings()
-{   
-    if(!haveSD || !haveFS) 
-        return;
-
-    configOnSD = !configOnSD;
-
-    if(configOnSD || !FlashROMode) {
-        #ifdef TC_DBG
-        Serial.println(F("copySettings: Copying secondary settings to other medium"));
-        #endif
-        saveCurVolume();
-        saveAlarm();
-        saveReminder();
-        saveCarMode();
-    }
-
-    configOnSD = !configOnSD;
-}
 
 /*
  * Load/save Music Folder Number
@@ -1287,11 +1282,22 @@ bool check_allow_CPA()
     return allowCPA;
 }
 
+static uint32_t getuint32(uint8_t *buf)
+{
+    uint32_t t = 0;
+    for(int i = 3; i >= 0; i--) {
+      t <<= 8;
+      t += buf[i];
+    }
+    return t;
+}
+
 static bool check_if_default_audio_present()
 {
     File file;
     size_t ts;
     int i, idx = 0;
+    uint8_t dbuf[16];
     char dtmf_buf[16] = "/Dtmf-0.mp3\0";
     size_t sizes[10+NUM_AUDIOFILES] = {
       4178, 4178, 4178, 4178, 4178, 4178, 3760, 3760, 4596, 3760, // DTMF
@@ -1304,6 +1310,25 @@ static bool check_if_default_audio_present()
 
     if(!haveSD)
         return false;
+
+    for(i = 0; i < 10+NUM_AUDIOFILES; i++) {
+        soa += sizes[i];
+    }
+
+    if(SD.exists(CONFN)) {
+        if(file = SD.open(CONFN, FILE_READ)) {
+            file.read(dbuf, 10);
+            file.close();
+            if((!memcmp(dbuf, CONID, 4)) && 
+               ((*(dbuf+4) & 0x7f) == 1) &&
+               (*(dbuf+5) == (10+NUM_AUDIOFILES)) &&
+               (getuint32(dbuf+6) == soa)) {
+                ic = true;
+                if(!(*(dbuf+4) & 0x80)) r=f;
+            }
+        }
+        return ic;
+    }
 
     // If identifier missing, quit now
     if(!(SD.exists(IDFN))) {
@@ -1366,17 +1391,33 @@ bool copy_audio_files()
 
     start_file_copy();
 
-    /* Copy DTMF files */
-    for(i = 0; i < 10; i++) {
-        dtmf_buf[6] = i + '0';
-        open_and_copy(dtmf_buf, haveErr);
-        if(haveErr) break;
-    }
-
-    if(!haveErr) {
-        for(i = 0; i < NUM_AUDIOFILES; i++) {
-            open_and_copy(audioFiles[i], haveErr);
+    if(ic) {
+        File sfile;
+        if(sfile = SD.open(CONFN, FILE_READ)) {
+            sfile.seek(10);
+            for(i = 0; i < NUM_AUDIOFILES+10; i++) {
+               cfc(sfile, haveErr);
+               if(haveErr) break;
+            }
+            sfile.close();
+        } else {
+            haveErr++;
+        }
+        
+    } else {
+    
+        /* Copy DTMF files */
+        for(i = 0; i < 10; i++) {
+            dtmf_buf[6] = i + '0';
+            open_and_copy(dtmf_buf, haveErr);
             if(haveErr) break;
+        }
+    
+        if(!haveErr) {
+            for(i = 0; i < NUM_AUDIOFILES; i++) {
+                open_and_copy(audioFiles[i], haveErr);
+                if(haveErr) break;
+            }
         }
     }
 
@@ -1387,6 +1428,39 @@ bool copy_audio_files()
     }
 
     return (haveErr == 0);
+}
+
+static void cfc(File& sfile, int& haveErr)
+{
+    const char *funcName = "cfc";
+    uint8_t buf1[1+32+4];
+    uint8_t buf2[1024];
+    File dfile;
+
+    buf1[0] = '/';
+    sfile.read(buf1 + 1, 32+4);   
+    if((dfile = SPIFFS.open((const char *)(*r)(buf1 + 1, soa, 32) - 1, FILE_WRITE))) {
+        uint32_t s = getuint32(buf1 + 1 + 32), t = 1024;
+        #ifdef TC_DBG
+        Serial.printf("%s: Opened destination file: %s, length %d\n", funcName, (const char *)buf1, s);
+        #endif
+        while(s > 0) {
+            t = (s < t) ? s : t;
+            if(sfile.read(buf2, t) != t) {
+                haveErr++;
+                break;
+            }
+            if(dfile.write((*r)(buf2, soa, t), t) != t) {
+                haveErr++;
+                break;
+            }
+            s -= t;
+            file_copy_progress();
+        }
+    } else {
+        haveErr++;
+        Serial.printf("%s: Error opening destination file: %s\n", funcName, buf1);
+    }
 }
 
 static void open_and_copy(const char *fn, int& haveErr)
@@ -1461,11 +1535,13 @@ void delete_ID_file()
     if(!haveSD)
         return;
 
-    #ifdef TC_DBG
-    Serial.printf("Deleting ID file %s\n", IDFN);
-    #endif
-        
-    if(SD.exists(IDFN)) {
+    if(ic) {
+        SD.remove(CONFND);
+        SD.rename(CONFN, CONFND);
+    } else if(SD.exists(IDFN)) {
+        #ifdef TC_DBG
+        Serial.printf("Deleting ID file %s\n", IDFN);
+        #endif
         SD.remove(IDFN);
     }
 }
@@ -1482,7 +1558,35 @@ void formatFlashFS()
     SPIFFS.format();
 }
 
-// Re-write IP/alarm/reminder/vol settings
+/* Copy secondary settings from/to SD if user
+ * changed "save to SD"-option in CP
+ */
+void copySettings()
+{       
+    if(!haveSD || !haveFS) 
+        return;
+    
+    configOnSD = !configOnSD;
+
+    if(configOnSD || !FlashROMode) {
+        #ifdef TC_DBG
+        Serial.println(F("copySettings: Copying secondary settings to other medium"));
+        #endif
+        saveCurVolume(false);
+        saveAlarm();
+        saveReminder();
+        saveCarMode();
+        #ifdef HAVE_STALE_PRESENT
+        if(stalePresent) {
+            saveStaleTime((void *)&stalePresentTime[0], stalePresent);
+        }
+        #endif
+    }
+
+    configOnSD = !configOnSD;
+}
+
+// Re-write secondary settings
 // Used during audio file installation when flash FS needs
 // to be re-formatted.
 // Is never called in FlashROmode
@@ -1500,16 +1604,24 @@ void rewriteSecondarySettings()
     // regardless of SD-option
     configOnSD = false;
 
-    saveCurVolume();
+    saveCurVolume(false);
     saveAlarm();
     saveReminder();
     saveCarMode();
+    #ifdef HAVE_STALE_PRESENT
+    if(stalePresent) {
+        saveStaleTime((void *)&stalePresentTime[0], stalePresent);
+    }
+    #endif
     
     configOnSD = oldconfigOnSD;
 
     // Music Folder Number is always on SD only
 }
 
+/*
+ * Helpers for JSON config files
+ */
 static DeserializationError readJSONCfgFile(JsonDocument& json, File& configFile, const char *funcName)
 {
     char *buf = NULL;
@@ -1570,6 +1682,9 @@ static bool writeJSONCfgFile(const JsonDocument& json, const char *fn, bool useS
     return success;
 }
 
+/*
+ * Generic file readers/writes for external
+ */
 bool readFileFromSD(const char *fn, uint8_t *buf, int len)
 {
     size_t bytesr;

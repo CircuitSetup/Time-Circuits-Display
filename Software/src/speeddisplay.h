@@ -1,16 +1,20 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * speedDisplay Class: Speedo Display
  *
  * This is designed for CircuitSetup's Speedo display and other 
  * HT16K33-based displays, like the "Grove - 0.54" Dual/Quad 
- * Alphanumeric Display" or some displays with the Adafruit
- * i2c backpack (878, 1911, 1270; product numbers vary with color).
+ * Alphanumeric Display" or some displays with an Adafruit i2c
+ * backpack:
+ * ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604
+ * ADA-1270/1271;1269
+ * ADA-1911/1910;1912/2157/2158/2160
+ * 
  * The i2c slave address must be 0x70.
  * -------------------------------------------------------------------
  * License: MIT
@@ -40,8 +44,8 @@
 
 // The supported display types:
 // The speedo is a 2-digit 7-segment display, with the bottom/right dot lit
-// in the movies. I have not found a readily made one that fits exactly.
-// CircuitSetup have yet to design one, all other supported ones are either
+// in the movies.
+// CircuitSetup's Speedo is perfect, all other supported ones are either
 // 4-digit, and/or use 14-segment tubes, and/or lack the dot.
 // For 4-digit displays, there are two entries in this list, one to display
 // the speed right-aligned, one for left-aligned.

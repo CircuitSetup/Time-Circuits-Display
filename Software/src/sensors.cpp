@@ -1,25 +1,27 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * Sensor Class: Temperature/humidty and Light Sensor handling
  *
  * This is designed for 
- * - MCP9808, TMP117, BMx280, SHT4x, SI7012, AHT20/AM2315C, HTU31D 
- *   temperature/humidity sensors,
- * - BH1750, TSL2561, LTR303/329 and VEML7700/VEML6030 light sensors.
+ * - MCP9808, TMP117, BMx280, SHT4x-Ax, SI7012, AHT20/AM2315C, HTU31D, 
+ *   MS8607 temperature/humidity sensors,
+ * - BH1750, TSL2561, TSL2591, LTR303/329 and VEML7700/VEML6030 light 
+ *   sensors.
  *                             
  * The i2c slave addresses need to be:
  * MCP9808:       0x18                [temperature only]
  * TMP117:        0x49 [non-default]  [temperature only]
  * BMx280:        0x77                ['P' t only, 'E' t+h]
- * SHT40:         0x44                [temperature, humidity]
+ * SHT4x-Axxx:    0x44                [temperature, humidity]
  * SI7021:        0x40                [temperature, humidity]
  * AHT20/AM2315C: 0x38                [temperature, humidity]
  * HTU31D:        0x41 [non-default]  [temperature, humidity]
+ * MS8607:        0x76+0x40           [temperature, humidity]
  * 
  * TSL2561:       0x29
  * TSL2591:       0x29
@@ -62,7 +64,7 @@
 #include <Wire.h>
 #include "sensors.h"
 
-static void defaultDelay(unsigned int mydelay)
+static void defaultDelay(unsigned long mydelay)
 {
     delay(mydelay);
 }
@@ -270,6 +272,10 @@ uint8_t tcSensor::crc8(uint8_t initVal, uint8_t poly, uint8_t len, uint8_t *buf)
 #define HTU31_CRC_INIT    0x00
 #define HTU31_CRC_POLY    0x31
 
+#define MS8607_ADDR_T     0x76
+#define MS8607_ADDR_RH    0x40
+#define MS8607_DUMMY      0x100
+
 // Store i2c address
 tempSensor::tempSensor(int numTypes, uint8_t addrArr[])
 {
@@ -281,7 +287,7 @@ tempSensor::tempSensor(int numTypes, uint8_t addrArr[])
 }
 
 // Start the display
-bool tempSensor::begin(unsigned long powerupTime)
+bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long))
 {
     bool foundSt = false;
     uint8_t temp, timeOut = 20;
@@ -291,6 +297,7 @@ bool tempSensor::begin(unsigned long powerupTime)
     unsigned long millisNow = millis();
     
     _customDelayFunc = defaultDelay;
+    _st = -1;
 
     // Give the sensor some time to boot
     if(millisNow - powerupTime < 50) {
@@ -300,24 +307,25 @@ bool tempSensor::begin(unsigned long powerupTime)
     for(int i = 0; i < _numTypes * 2; i += 2) {
 
         _address = _addrArr[i];
+
+        Wire.beginTransmission(_address);
+        if(!Wire.endTransmission(true)) {
         
-        switch(_addrArr[i+1]) {
-        case MCP9808:
-            if( (read16(MCP9808_REG_MANUF_ID)  == 0x0054) && 
-                (read16(MCP9808_REG_DEVICE_ID) == 0x0400) ) {
-                foundSt = true;
-            }
-            break;
-        case BMx280:
-            temp = read8(BMx280_REG_ID);
-            if(temp == 0x60 || temp == 0x58) {
-                foundSt = true;
-                if(temp == 0x60) _haveHum = true;
-            }
-            break;
-        case SHT40:
-            Wire.beginTransmission(_address);
-            if(!Wire.endTransmission(true)) {
+            switch(_addrArr[i+1]) {
+            case MCP9808:
+                if( (read16(MCP9808_REG_MANUF_ID)  == 0x0054) && 
+                    (read16(MCP9808_REG_DEVICE_ID) == 0x0400) ) {
+                    foundSt = true;
+                }
+                break;
+            case BMx280:
+                temp = read8(BMx280_REG_ID);
+                if(temp == 0x60 || temp == 0x58) {
+                    foundSt = true;
+                    if(temp == 0x60) _haveHum = true;
+                }
+                break;
+            case SHT40:
                 // Do a test-measurement for id
                 write8(SHT40_DUMMY, SHT40_CMD_RTEMPL);
                 (*_customDelayFunc)(5);
@@ -327,42 +335,42 @@ bool tempSensor::begin(unsigned long powerupTime)
                         foundSt = true;
                     }
                 }
-            }
-            break;
-        case SI7021:
-            Wire.beginTransmission(_address);
-            if(!Wire.endTransmission(true)) {
+                break;
+            case MS8607:
+                Wire.beginTransmission(MS8607_ADDR_RH);
+                if(!Wire.endTransmission(true)) {
+                    foundSt = true;
+                }
+                break;
+            case SI7021:
                 // Check power-up value of user1 register for id
                 write8(SI7021_DUMMY, SI7021_RESET);
                 (*_customDelayFunc)(20);
                 if(read8(SI7021_REG_U1R) == 0x3a) {
                     foundSt = true;
                 }
-            }
-            break;
-        case TMP117:
-            if((read16(TMP117_REG_DEV_ID) & 0xfff) == 0x117) {
+                break;
+            case TMP117:
+                if((read16(TMP117_REG_DEV_ID) & 0xfff) == 0x117) {
+                    foundSt = true;
+                }
+                break;
+            case AHT20:
+            case HTU31:
                 foundSt = true;
+                break;
             }
-            break;
-        case AHT20:
-        case HTU31:
-            Wire.beginTransmission(_address);
-            if(!Wire.endTransmission(true)) {
-                foundSt = true;
-            }
-            break;
-        }
         
-        if(foundSt) {
-            _st = _addrArr[i+1];
-
-            #ifdef TC_DBG
-            const char *tpArr[7] = { "MCP9808", "BMx280", "SHT4x", "SI7021", "TMP117", "AHT20/AM2315C", "HTU31D" };
-            Serial.printf("Temperature sensor: Detected %s\n", tpArr[_st]);
-            #endif
-
-            break;
+            if(foundSt) {
+                _st = _addrArr[i+1];
+    
+                #ifdef TC_DBG
+                const char *tpArr[8] = { "MCP9808", "BMx280", "SHT4x", "SI7021", "TMP117", "AHT20/AM2315C", "HTU31D", "MS8607" };
+                Serial.printf("Temperature sensor: Detected %s\n", tpArr[_st]);
+                #endif
+    
+                break;
+            }
         }
     }
 
@@ -487,18 +495,38 @@ bool tempSensor::begin(unsigned long powerupTime)
         _delayNeeded = 20;
         break;
 
+    case MS8607:
+        // Reset
+        _address = MS8607_ADDR_T;
+        write8(MS8607_DUMMY, 0x1e);
+        _address = MS8607_ADDR_RH;
+        write8(MS8607_DUMMY, 0xfe);
+        delay(15);
+        // Read t prom data
+        _address = MS8607_ADDR_T;
+        _MS8607_C5 = (int32_t)((uint16_t)read16(0xaa) << 8);
+        _MS8607_FA = (float)((uint16_t)read16(0xac)) / 8388608.0F;
+        // Trigger conversion t
+        write8(MS8607_DUMMY, 0x54); // OSR 1024  (0x50=256..0x52..0x54..0x5a=8192)
+        // Set rH user register
+        _address = MS8607_ADDR_RH;
+        temp = (read8(0xe7) & ~0x81) | 0x80;
+        write8(0xe6, temp);   // rH user register: 0x81 OSR 256, 0x80 1024, 0x01 2048, 0x00 4096
+        // Trigger conversion rH
+        write8(MS8607_DUMMY, 0xf5);
+        _haveHum = true;
+        _delayNeeded = 20;
+        break;
+        
     default:
         return false;
     }
 
     _tempReadNow = millis();
 
-    return true;
-}
-
-void tempSensor::setCustomDelayFunc(void (*myDelay)(unsigned int))
-{
     _customDelayFunc = myDelay;
+
+    return true;
 }
 
 // Read temperature
@@ -507,7 +535,6 @@ float tempSensor::readTemp(bool celsius)
     float temp = NAN;
     uint16_t t = 0;
     
-
     if(_delayNeeded > 0) {
         unsigned long elapsed = millis() - _tempReadNow;
         if(elapsed < _delayNeeded) (*_customDelayFunc)(_delayNeeded - elapsed);
@@ -586,8 +613,7 @@ float tempSensor::readTemp(bool celsius)
             uint8_t buf[7];
             for(uint8_t i = 0; i < 7; i++) buf[i] = Wire.read();
             if(crc8(AHT20_CRC_INIT, AHT20_CRC_POLY, 6, buf) == buf[6]) {
-                _hum = ((uint32_t)((buf[1] << 12) | (buf[2] << 4) | (buf[3] >> 4))) * 100 / 1048576;
-                if(_hum < 0) _hum = 0;
+                _hum = ((uint32_t)((buf[1] << 12) | (buf[2] << 4) | (buf[3] >> 4))) * 100 >> 20; // / 1048576;
                 temp = ((float)((uint32_t)(((buf[3] & 0x0f) << 16) | (buf[4] << 8) | buf[5]))) * 200.0 / 1048576.0 - 50.0;
             }
         }
@@ -610,6 +636,33 @@ float tempSensor::readTemp(bool celsius)
             }
         }
         write8(HTU31_DUMMY, HTU31_CONV);  // Trigger new conversion
+        break;
+
+    case MS8607:
+        _address = MS8607_ADDR_T;
+        write8(MS8607_DUMMY, 0x00);
+        if(Wire.requestFrom(_address, (uint8_t)3) == 3) {
+            int32_t dT = 0;
+            for(uint8_t i = 0; i < 3; i++) { dT<<=8; dT |= Wire.read(); }
+            dT -= _MS8607_C5;
+            temp = (2000.0F + ((float)dT * _MS8607_FA)) / 100.0F;
+        }
+        // Trigger new conversion t
+        write8(MS8607_DUMMY, 0x54);
+        _address = MS8607_ADDR_RH;
+        if(Wire.requestFrom(_address, (uint8_t)3) == 3) {
+            t = Wire.read() << 8; 
+            t |= Wire.read();
+            t &= ~0x03;
+            Wire.read();
+            _hum = (int8_t)(((((float)t * (12500.0 / 65536.0))) - 600.0F) / 100.0F);
+            //if(temp > 0.0F && temp <= 85.0F) {
+            //    _hum += ((int8_t)((float)(20.0F - temp) * -0.18F));   // rh compensated; not worth the computing time
+            //}
+            if(_hum < 0) _hum = 0;
+        }
+        // Trigger new conversion rH
+        write8(MS8607_DUMMY, 0xf5);
         break;
     }
 
@@ -726,7 +779,7 @@ float tempSensor::BMx280_CalcTemp(uint32_t ival, uint32_t hval)
 #define TSL2591_IT_600  0x05
 
 #define TLS9_USE_GAIN   TSL2591_GAIN_L  // to be adjusted (TSL2591_GAIN_x)
-#define TLS9_USE_IT     TSL2591_IT_100  // to be adjusted (TSL2591_IT_xxx)
+#define TLS9_USE_IT     TSL2591_IT_200  // to be adjusted (TSL2591_IT_xxx)
 
 static const float TLS2591GainFacts[4] = {
       1.0, 25.0, 400.0, 9500.0
@@ -822,7 +875,7 @@ lightSensor::lightSensor(int numTypes, uint8_t addrArr[])
     }
 }
 
-bool lightSensor::begin(bool skipLast, unsigned long powerupTime)
+bool lightSensor::begin(bool skipLast, unsigned long powerupTime, void (*myDelay)(unsigned long))
 {
     bool foundSt = false;
     unsigned long millisNow = millis();
@@ -930,12 +983,9 @@ bool lightSensor::begin(bool skipLast, unsigned long powerupTime)
 
     _lastAccess = millis();
 
-    return true;
-}
-
-void lightSensor::setCustomDelayFunc(void (*myDelay)(unsigned int))
-{
     _customDelayFunc = myDelay;
+
+    return true;
 }
 
 int32_t lightSensor::readLux()
@@ -954,17 +1004,16 @@ void lightSensor::loop()
         if(elapsed < 500)
             return;
 
-        //temp  = read16(TSL2561_ADC0, true);
-        //temp1 = read16(TSL2561_ADC1, true);
         read16x2(TSL2561_ADC0, temp, temp2);
         temp1 = temp2;
 
         if(temp1 == 0) {
             _lux = 0;
-        } else if( ((temp1 << 1) <= temp) && (temp <= 4900)) {
+        } else if( /*((temp1 << 1) <= temp) &&*/ (temp <= 4900)) {
+            // ratio check above wrong; incandescent light has ratio >0.7
             _lux = TSL2561CalcLux(TSL_USE_GAIN, TSL_USE_IT, temp, temp1);
         } else {
-            // IR-overload, human eye light level not determinable
+            // overload, human eye light level not determinable
             _lux = -1;
         }
         break;
@@ -973,14 +1022,12 @@ void lightSensor::loop()
         if(elapsed < 700)
             return;
 
-        //temp  = read16(TSL2591_ALS0, true);
-        //temp1 = read16(TSL2591_ALS1, true);
         read16x2(TSL2591_ALS0, temp, temp2);
 
         if(temp == 0xffff || temp2 == 0xffff) {
             _lux = -1;
-        //} else if(temp == 0) {
-        //    _lux = 0;
+        } else if(temp == 0) {
+            _lux = 0;
         } else {
             _lux = TSL2591CalcLux(TLS9_USE_GAIN, TLS9_USE_IT, temp, temp2);
         } 
@@ -1141,6 +1188,8 @@ int32_t lightSensor::LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, ui
 // Reference implementation
 // taken from TLS2560/1 data sheet (April 2007, p22+)
 
+#define LSENS_DBG
+
 #define TSL2561_LUX_SCALE     14   // scale by 2^14
 #define TSL2561_RATIO_SCALE    9   // scale ratio by 2^9
 #define TSL2561_CH_SCALE      10   // scale channel values by 2^10
@@ -1225,10 +1274,15 @@ uint32_t lightSensor::TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, 
     
     temp += (1 << (TSL2561_LUX_SCALE - 1));
 
+    #ifdef LSENS_DBG
+    float ratiot = (float)ch1 / (float)ch0;
+    Serial.printf("LSens: %d %d ratio %.2f   lux %d\n", ch0, ch1, ratiot, temp >> TSL2561_LUX_SCALE);
+    #endif
+
     return (temp >> TSL2561_LUX_SCALE);
 }
 
-// TSL2561: Calculate Lux from ch0 and ch1 data
+// TSL2591: Calculate Lux from ch0 and ch1 data
 // Various sources
 #define TSL2591_MAX_COUNT_100MS 36863
 #define TSL2591_MAX_COUNT       65535
@@ -1238,53 +1292,47 @@ uint32_t lightSensor::TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, 
 #define TSL2591_LUX_COEFC   0.59F
 #define TSL2591_LUX_COEFD   0.86F
 
-#define TLS2691_USE_LEGACY           // Use TAOS/AMS generic (old) lux calculation (written for 2671)
-#define LSENS_DBG
+#define TLS2691_USE_LEGACY           // Use TAOS/AMS generic lux calculation (written for 2671)
 
-int32_t lightSensor::TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t temp, uint32_t temp1)
+int32_t lightSensor::TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32_t ch1)
 {
-    if(iTime == TSL2591_IT_100) {
-        if(temp > TSL2591_MAX_COUNT_100MS || temp1 > TSL2591_MAX_COUNT_100MS) {
-            #ifdef LSENS_DBG
-            Serial.printf("LSens: Max Count alert: 0x%x 0x%x\n", temp, temp1);
-            #endif
+    #if (TLS9_USE_IT == TSL2591_IT_100)
+        if(ch0 > TSL2591_MAX_COUNT_100MS || ch1 > TSL2591_MAX_COUNT_100MS) {
             return -1;
         }
-    }
+    #endif
 
-    if(temp == 0) {
-        #ifdef LSENS_DBG
-        Serial.printf("LSens: temp is zero (temp1 %x)\n", temp1);
-        #endif
-        return 0;
-    }
+    // Check done above
+    //if(ch0 == 0) return 0;
 
     float tme = (iTime * 100.0F) + 100.0F;
     float gain = TLS2591GainFacts[iGain >> 4];    
     float cpl = (tme * gain) / TSL2591_LUX_DGF;
 
     if(isnan(cpl)) {
-        #ifdef LSENS_DBG
-        Serial.println("LSens: cpl is NaN");
-        #endif
         return -1;
     }
     
-    float ch0 = (float)temp, ch1 = (float)temp1;
+    float ch0f = (float)ch0, ch1f = (float)ch1;
 
-    #ifdef TLS2691_USE_LEGACY
-    float lux1 = (ch0 - (TSL2591_LUX_COEFB * ch1)) / cpl;
-    float lux2 = ((TSL2591_LUX_COEFC * ch0) - (TSL2591_LUX_COEFD * ch1)) / cpl;
+    #ifdef TLS2691_USE_LEGACY   // works fine for our purposes
+    float lux1 = (ch0f - (TSL2591_LUX_COEFB * ch1f)) / cpl;
+    float lux2 = ((TSL2591_LUX_COEFC * ch0f) - (TSL2591_LUX_COEFD * ch1f)) / cpl;
     #else
     if(temp == 0) return 0;
-    float lux1 = ((ch0 - ch1)) * (1.0F - (ch1 / ch0)) / cpl;
+    float lux1 = ((ch0f - ch1f)) * (1.0F - (ch1f / ch0f)) / cpl;
     float lux2 = 0.0;
     #endif
 
     #ifdef LSENS_DBG
-    Serial.printf("LSens: 0x%x 0x%x lux1 %.2f lux2 %f.2\n", temp, temp1, lux1, lux2);
+    float ratio = ch1f / ch0f;
+    Serial.printf("LSens: %d %d ratio %.2f    lux1 %.2f lux2 %.2f\n", ch0, ch1, ratio, lux1, lux2);
     #endif
 
+    // One of the cases where lux is negative is a bad IR vs 
+    // white light ratio.
+    if(lux1 < 0.0F || lux2 < 0.0F) return -1;
+    
     return (int32_t)max(lux1, lux2);
 }
 

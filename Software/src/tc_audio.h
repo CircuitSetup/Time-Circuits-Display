@@ -2,9 +2,9 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * Sound handling
  *
@@ -34,40 +34,6 @@
 #ifndef _TC_AUDIO_H
 #define _TC_AUDIO_H
 
-extern bool audioInitDone;
-extern bool audioMute;
-
-extern bool muteBeep;
-
-extern uint8_t curVolume;
-
-extern bool haveMusic;
-extern bool mpActive;
-extern bool haveId3;
-extern char id3[];
-
-void audio_setup();
-void play_keypad_sound(char key);
-void play_hour_sound(int hour);
-void play_beep();
-void audio_loop();
-void play_file(const char *audio_file, uint16_t flags, float volumeFactor = 1.0);
-bool check_file_SD(const char *audio_file);
-bool checkAudioDone();
-bool checkMP3Done();
-void stopAudio();
-void decodeID3(char *artist, char *track);
-
-void mp_init(bool isSetup = false);
-void mp_play(bool forcePlay = true);
-bool mp_stop();
-void mp_next(bool forcePlay = false);
-void mp_prev(bool forcePlay = false);
-int  mp_gotonum(int num, bool force = false);
-void mp_makeShuffle(bool enable);
-int  mp_checkForFolder(int num);
-int  mp_get_currently_playing();
-
 // By default, use the volume knob
 #define DEFAULT_VOLUME 255
 
@@ -77,5 +43,41 @@ int  mp_get_currently_playing();
 #define PA_DYNVOL  0x0008
 #define PA_NOID3TS 0x0010
 #define PA_LOOPNOW 0x0020
+
+void  audio_setup();
+void  audio_loop();
+
+void  play_file(const char *audio_file, uint16_t flags, float volumeFactor = 1.0);
+void  play_keypad_sound(char key);
+void  play_hour_sound(int hour);
+void  play_beep();
+
+bool  check_file_SD(const char *audio_file);
+int   getSWVolFromHWVol();
+bool  checkAudioDone();
+bool  checkMP3Done();
+void  stopAudio();
+void  decodeID3(char *artist, char *track);
+
+void  mp_init(bool isSetup = false);
+void  mp_play(bool forcePlay = true);
+bool  mp_stop();
+void  mp_next(bool forcePlay = false);
+void  mp_prev(bool forcePlay = false);
+int   mp_gotonum(int num, bool force = false);
+void  mp_makeShuffle(bool enable);
+int   mp_checkForFolder(int num);
+int   mp_get_currently_playing();
+
+extern bool audioInitDone;
+extern bool audioMute;
+extern bool muteBeep;
+
+extern bool haveMusic;
+extern bool mpActive;
+extern bool haveId3;
+extern char id3[];
+
+extern int  curVolume;
 
 #endif

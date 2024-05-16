@@ -1,16 +1,17 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * Sensor Class: Temperature/humidity and Light Sensor handling
  *
  * This is designed for 
- * - MCP9808, TMP117, BMx280, SHT4x, SI7012, AHT20/AM2315C, HTU31D 
- *   temperature/humidity sensors,
- * - BH1750, TSL2561, LTR303/329 and VEML7700/VEML6030 light sensors.
+ * - MCP9808, TMP117, BMx280, SHT4x-Ax, SI7012, AHT20/AM2315C, HTU31D, 
+ *   MS8607 temperature/humidity sensors,
+ * - BH1750, TSL2561, TSL2591, LTR303/329 and VEML7700/VEML6030 light 
+ *   sensors.
  * -------------------------------------------------------------------
  * License: MIT
  * 
@@ -40,12 +41,12 @@
 #if defined(TC_HAVETEMP) || defined(TC_HAVELIGHT)
 
 class tcSensor {
-  
+
     protected:
 
         void     prepareRead(uint16_t regno);
         uint16_t read16(uint16_t regno, bool LSBfirst = false);
-        void read16x2(uint16_t regno, uint16_t& t1, uint16_t& t2);
+        void     read16x2(uint16_t regno, uint16_t& t1, uint16_t& t2);
         uint8_t  read8(uint16_t regno);
         void     write16(uint16_t regno, uint16_t value, bool LSBfirst = false);
         void     write8(uint16_t regno, uint8_t value);
@@ -53,6 +54,9 @@ class tcSensor {
         uint8_t  crc8(uint8_t initVal, uint8_t poly, uint8_t len, uint8_t *buf);
 
         uint8_t _address;
+
+        // Ptr to custom delay function
+        void (*_customDelayFunc)(unsigned long) = NULL;
 };
 
 #endif
@@ -62,11 +66,12 @@ class tcSensor {
 enum {
     MCP9808 = 0,      // 0x18 (unsupported: 0x19-0x1f)
     BMx280,           // 0x77 (unsupported: 0x76)
-    SHT40,            // 0x44 (unsupported: 0x45)
+    SHT40,            // 0x44 (unsupported: SHT4x-Bxxx with address 0x45)
     SI7021,           // 0x40
     TMP117,           // 0x49 [non-default] (unsupported: 0x48)
     AHT20,            // 0x38
-    HTU31             // 0x41 [non-default] (unsupported: 0x40)
+    HTU31,            // 0x41 [non-default] (unsupported: 0x40)
+    MS8607            // 0x76+0x40
 };
 
 class tempSensor : tcSensor {
@@ -74,10 +79,7 @@ class tempSensor : tcSensor {
     public:
 
         tempSensor(int numTypes, uint8_t addrArr[]);
-        bool begin(unsigned long powerupTime);
-
-        // Setter for custom delay function
-        void setCustomDelayFunc(void (*myDelay)(unsigned int));
+        bool begin(unsigned long powerupTime, void (*myDelay)(unsigned long));
 
         float readTemp(bool celsius = true);
         float readLastTemp() { return _lastTemp; };
@@ -107,15 +109,18 @@ class tempSensor : tcSensor {
         int32_t  _BMx280_CD_H2;
         uint32_t _BMx280_CD_H3;
         int32_t  _BMx280_CD_H4;
-        int32_t  _BMx280_CD_H5;
-        int32_t  _BMx280_CD_H6;
+        union {
+            int32_t  _BMx280_CD_H5;
+            int32_t  _MS8607_C5;
+        };
+        union {
+            int32_t  _BMx280_CD_H6;
+            float    _MS8607_FA;
+        };
 
         unsigned long _tempReadNow = 0;
 
         float BMx280_CalcTemp(uint32_t ival, uint32_t hval);
-
-        // Ptr to custom delay function
-        void (*_customDelayFunc)(unsigned int) = NULL;
 };
 #endif
 
@@ -134,10 +139,7 @@ class lightSensor : tcSensor {
     public:
 
         lightSensor(int numTypes, uint8_t addrArr[]);
-        bool begin(bool skipLast, unsigned long powerupTime);
-
-        // Setter for custom delay function
-        void setCustomDelayFunc(void (*myDelay)(unsigned int));
+        bool begin(bool skipLast, unsigned long powerupTime, void (*myDelay)(unsigned long));
 
         int32_t readLux();
         
@@ -151,7 +153,7 @@ class lightSensor : tcSensor {
         int32_t  LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
         uint32_t TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
         int32_t  TSL2591CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
-
+        
         int     _numTypes = 0;
         uint8_t _addrArr[8*2];    // up to 8 sensor types fit here
         int8_t  _st = -1;
@@ -165,9 +167,6 @@ class lightSensor : tcSensor {
         int32_t _lux = -1;
 
         uint16_t _con0 = 0;
-
-        // Ptr to custom delay function
-        void (*_customDelayFunc)(unsigned int) = NULL;
 };
 
 #endif

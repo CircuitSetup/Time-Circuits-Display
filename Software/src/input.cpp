@@ -1,11 +1,21 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * Keypad_I2C Class, TCButton Class: I2C-Keypad and Button handling
+ * 
+ * TCRotEnc: Rotary Encoder handling:
+ * Supports Adafruit 4991, DuPPA I2CEncoder 2.1, DFRobot Gravity 360.
+ * For Speed, the encoders must be set to their default i2c address
+ * (DuPPA I2CEncoder 2.1 must be set to i2c address 0x01 (A0 closed)).
+ * For Volume, the encoders must be configured as follows:
+ * - Ada4991: A0 closed (i2c address 0x37)
+ * - DFRobot Gravity 360: SW1 off, SW2 on (i2c address 0x55)
+ * - DuPPA I2CEncoder 2.1: A0 and A1 closed (i2c address 0x03)
+ * 
  *
  * Keypad part inspired by "Keypad" library by M. Stanley & A. Brevig
  * Fractions of this code are customized, minimized derivates of parts 
@@ -76,7 +86,7 @@
 #define MAX_ROWS  4
 #define MAX_COLS  3
 
-static void defaultDelay(unsigned int mydelay)
+static void defaultDelay(unsigned long mydelay)
 {
     delay(mydelay);
 }
@@ -103,8 +113,8 @@ Keypad_I2C::Keypad_I2C(char *userKeymap, const uint8_t *row, const uint8_t *col,
     _i2caddr = address;
     _wire = awire;
 
-    setScanInterval(10);
-    setHoldTime(500);
+    _scanInterval = 10;
+    _holdTime = 500;
 
     _keypadEventListener = NULL;
 
@@ -117,8 +127,11 @@ Keypad_I2C::Keypad_I2C(char *userKeymap, const uint8_t *row, const uint8_t *col,
 }
 
 // Initialize I2C
-void Keypad_I2C::begin()
+void Keypad_I2C::begin(unsigned int scanInterval, unsigned int holdTime, void (*myDelay)(unsigned long))
 {
+    _scanInterval = scanInterval;
+    _holdTime = holdTime;
+    
     // Set pins to power-up state
     port_write(0xff);
 
@@ -131,16 +144,8 @@ void Keypad_I2C::begin()
     for(int i = 0; i < _rows; i++) {
         _rowMask |= (1 << _rowPins[i]);
     }
-}
 
-void Keypad_I2C::setScanInterval(unsigned int interval)
-{
-    _scanInterval = (interval < 1) ? 1 : interval;
-}
-
-void Keypad_I2C::setHoldTime(unsigned int hold)
-{
-    _holdTime = hold;
+    _customDelayFunc = myDelay;
 }
 
 void Keypad_I2C::addEventListener(void (*listener)(char, KeyState))
@@ -148,16 +153,10 @@ void Keypad_I2C::addEventListener(void (*listener)(char, KeyState))
     _keypadEventListener = listener;
 }
 
-void Keypad_I2C::setCustomDelayFunc(void (*myDelay)(unsigned int))
-{
-    _customDelayFunc = myDelay;
-}
-
 // Scan keypad and update key state
 bool Keypad_I2C::scanKeypad()
 {
     bool keyChanged = false;
-    unsigned long now = millis();
 
     if((millis() - _scanTime) > _scanInterval) {
         keyChanged = scanKeys();
@@ -329,24 +328,14 @@ TCButton::TCButton(const int pin, const boolean activeLow, const bool pullupActi
 }
 
 
-// Number of millisec that have to pass by before a click is assumed stable.
-void TCButton::setDebounceTicks(const int ticks)
+// debounce: Number of millisec that have to pass by before a click is assumed stable
+// press:    Number of millisec that have to pass by before a short press is detected
+// lPress:   Number of millisec that have to pass by before a long press is detected
+void TCButton::setTicks(const int debounceTs, const int pressTs, const int lPressTs)
 {
-    _debounceTicks = ticks;
-}
-
-
-// Number of millisec that have to pass by before a short press is detected.
-void TCButton::setPressTicks(const int ticks)
-{
-    _pressTicks = ticks;
-}
-
-
-// Number of millisec that have to pass by before a long press is detected.
-void TCButton::setLongPressTicks(const int ticks)
-{
-    _longPressTicks = ticks;
+    _debounceTicks = debounceTs;
+    _pressTicks = pressTs;
+    _longPressTicks = lPressTs;
 }
 
 // Register function for short press event
@@ -443,15 +432,98 @@ void TCButton::transitionTo(ButtonState nextState)
     _state = nextState;
 }
 
+
 #ifdef TC_HAVE_RE
 
 /*
  * TCRotEnc class
  */
 
+// General
+
+#define HWUPD_DELAY 100   // ms between hw polls for speed
+#define FUPD_DELAY  10    // ms between fakeSpeed updates
+
+#define OFF_SLOTS   5
+
+#define HWUPD_DELAY_VOL 150 // ms between hw polls for volume
+
+// Ada4991
+
+#define SEESAW_STATUS_BASE  0x00
+#define SEESAW_ENCODER_BASE 0x11
+
+#define SEESAW_STATUS_HW_ID   0x01
+#define SEESAW_STATUS_VERSION 0x02
+#define SEESAW_STATUS_SWRST   0x7F
+
+#define SEESAW_ENCODER_STATUS   0x00
+#define SEESAW_ENCODER_INTENSET 0x10
+#define SEESAW_ENCODER_INTENCLR 0x20
+#define SEESAW_ENCODER_POSITION 0x30
+#define SEESAW_ENCODER_DELTA    0x40
+
+#define SEESAW_HW_ID_CODE_SAMD09   0x55
+#define SEESAW_HW_ID_CODE_TINY806  0x84
+#define SEESAW_HW_ID_CODE_TINY807  0x85
+#define SEESAW_HW_ID_CODE_TINY816  0x86
+#define SEESAW_HW_ID_CODE_TINY817  0x87
+#define SEESAW_HW_ID_CODE_TINY1616 0x88
+#define SEESAW_HW_ID_CODE_TINY1617 0x89
+
+// Duppa V2.1
+
+#define DUV2_BASE     0x100
+#define DUV2_CONF     0x00
+#define DUV2_CONF2    0x30
+#define DUV2_CVALB4   0x08
+#define DUV2_CMAXB4   0x0c
+#define DUV2_CMINB4   0x10
+#define DUV2_ISTEPB4  0x14
+#define DUV2_IDCODE   0x70
+
+enum DUV2_CONF_PARAM {
+    DU2_FLOAT_DATA   = 0x01,
+    DU2_INT_DATA     = 0x00,
+    DU2_WRAP_ENABLE  = 0x02,
+    DU2_WRAP_DISABLE = 0x00,
+    DU2_DIRE_LEFT    = 0x04,
+    DU2_DIRE_RIGHT   = 0x00,
+    DU2_IPUP_DISABLE = 0x08,
+    DU2_IPUP_ENABLE  = 0x00,
+    DU2_RMOD_X2      = 0x10,
+    DU2_RMOD_X1      = 0x00,
+    DU2_RGB_ENCODER  = 0x20,
+    DU2_STD_ENCODER  = 0x00,
+    DU2_EEPROM_BANK1 = 0x40,
+    DU2_EEPROM_BANK2 = 0x00,
+    DU2_RESET        = 0x80
+};
+enum DUV2_CONF2_PARAM {
+    DU2_CLK_STRECH_ENABLE  = 0x01,
+    DU2_CLK_STRECH_DISABLE = 0x00,
+    DU2_REL_MODE_ENABLE    = 0x02,
+    DU2_REL_MODE_DISABLE   = 0x00,
+};
+
+// DFRobot Gravity 360
+
+#define DFR_BASE      0x100
+#define DFR_PID_MSB   0x00
+#define DFR_VID_MSB   0x02
+#define DFR_COUNT_MSB 0x08
+#define DFR_GAIN_REG  0x0b
+
+#define DFR_PID_U     0x01
+#define DFR_PID_L     0xf6
+
+#define DFR_GAIN_SPD  (1023 / (88 + OFF_SLOTS))
+#define DFR_GAIN_VOL  (1023 / 20)
+
+
 TCRotEnc::TCRotEnc(int numTypes, uint8_t addrArr[], TwoWire *awire)
 {
-    _numTypes = min(4, numTypes);
+    _numTypes = min(6, numTypes);
 
     for(int i = 0; i < _numTypes * 2; i++) {
         _addrArr[i] = addrArr[i];
@@ -460,68 +532,126 @@ TCRotEnc::TCRotEnc(int numTypes, uint8_t addrArr[], TwoWire *awire)
     _wire = awire;
 }
 
-bool TCRotEnc::begin()
+bool TCRotEnc::begin(bool forSpeed)
 {
     bool foundSt = false;
-    uint8_t buf[4];
+    union {
+        uint8_t buf[4];
+        int32_t ibuf;
+    };
+
+    _type = forSpeed ? 0 : 1;
 
     for(int i = 0; i < _numTypes * 2; i += 2) {
 
         _i2caddr = _addrArr[i];
 
-        switch(_addrArr[i+1]) {
-        case TC_RE_TYPE_ADA4991:
-            _wire->beginTransmission(_i2caddr);
-            if(!_wire->endTransmission(true))
-                foundSt = true;
-            break;
-        }
+        _wire->beginTransmission(_i2caddr);
+        if(!_wire->endTransmission(true)) {
 
-        if(foundSt) {
-            _st = _addrArr[i+1];
+            switch(_addrArr[i+1]) {
+            case TC_RE_TYPE_ADA4991:
+                if(read(SEESAW_STATUS_BASE, SEESAW_STATUS_HW_ID, buf, 1) == 1) {
+                    switch(buf[0]) {
+                    case SEESAW_HW_ID_CODE_SAMD09:
+                    case SEESAW_HW_ID_CODE_TINY806:
+                    case SEESAW_HW_ID_CODE_TINY807:
+                    case SEESAW_HW_ID_CODE_TINY816:
+                    case SEESAW_HW_ID_CODE_TINY817:
+                    case SEESAW_HW_ID_CODE_TINY1616:
+                    case SEESAW_HW_ID_CODE_TINY1617:
+                        //_hwtype = buf[0];
+                        // Check for board type
+                        read(SEESAW_STATUS_BASE, SEESAW_STATUS_VERSION, buf, 4);   
+                        if((((uint16_t)buf[0] << 8) | buf[1]) == 4991) {
+                            foundSt = true;
+                        }
+                    }
+                }
+                break;
 
-            #ifdef TC_DBG
-            const char *tpArr[4] = { "ADA4991", "unknown", "unknown", "unknown" };
-            Serial.printf("Rotary encoder: Detected %s\n", tpArr[_st]);
-            #endif
+            case TC_RE_TYPE_DUPPAV2:
+                read(DUV2_BASE, DUV2_IDCODE, buf, 1);
+                if(buf[0] == 0x53) {
+                    foundSt = true;
+                }
+                break;
 
-            break;
+            case TC_RE_TYPE_DFRGR360:
+                read(DFR_BASE, DFR_PID_MSB, buf, 2);
+                if(((buf[0] & 0x3f) == DFR_PID_U) &&
+                    (buf[1]         == DFR_PID_L)) {
+                    foundSt = true;
+                }
+                break;
+
+            case TC_RE_TYPE_CS:
+                // TODO
+                break;
+            }
+
+            if(foundSt) {
+                _st = _addrArr[i+1];
+    
+                #ifdef TC_DBG
+                const char *tpArr[6] = { "ADA4991", "DuPPa V2.1", "DFRobot Gravity 360", "CircuitSetup", "", "" };
+                const char *purpose[2] = { "Speed", "Volume" };
+                Serial.printf("Rotary encoder: Detected %s, used for %s\n", tpArr[_st], purpose[_type]);
+                #endif
+    
+                break;
+            }
         }
     }
 
     switch(_st) {
       
     case TC_RE_TYPE_ADA4991:
-        reset();
+        // Reset
+        buf[0] = 0xff;
+        write(SEESAW_STATUS_BASE, SEESAW_STATUS_SWRST, &buf[0], 1);
         delay(10);
-    
-        if(read(SEESAW_STATUS_BASE, SEESAW_STATUS_HW_ID, buf, 1) != 1) {
-            return false;
-        }
-    
-        switch(buf[0]) {
-        case SEESAW_HW_ID_CODE_SAMD09:
-        case SEESAW_HW_ID_CODE_TINY806:
-        case SEESAW_HW_ID_CODE_TINY807:
-        case SEESAW_HW_ID_CODE_TINY816:
-        case SEESAW_HW_ID_CODE_TINY817:
-        case SEESAW_HW_ID_CODE_TINY1616:
-        case SEESAW_HW_ID_CODE_TINY1617:
-            _hwtype = buf[0];
-            break;
-        default:
-            return false;
-        }
-    
-        // Check for board type
-        read(SEESAW_STATUS_BASE, SEESAW_STATUS_VERSION, buf, 4);   
-        if( (((uint32_t)buf[0] <<  8) | 
-              (uint32_t)buf[1]) != 4991) {
-            return false;
-        }
-
+        // Default values suitable
         break;
 
+    case TC_RE_TYPE_DUPPAV2:
+        // Reset
+        buf[0] = DU2_RESET;
+        write(DUV2_BASE, DUV2_CONF, &buf[0], 1);
+        delay(10);
+        // Init
+        buf[0] = DU2_INT_DATA     | 
+                 DU2_WRAP_DISABLE |
+                 DU2_DIRE_RIGHT   |
+                 DU2_RMOD_X1      |
+                 DU2_STD_ENCODER  |
+                 DU2_IPUP_DISABLE;
+        buf[1] = DU2_CLK_STRECH_DISABLE |
+                 DU2_REL_MODE_DISABLE;
+        write(DUV2_BASE, DUV2_CONF, &buf[0], 1);
+        write(DUV2_BASE, DUV2_CONF2, &buf[1], 1);
+        // Reset counter to 0
+        ibuf = 0;
+        write(DUV2_BASE, DUV2_CVALB4, &buf[0], 4);
+        // Step width 1
+        buf[3] = 1;
+        write(DUV2_BASE, DUV2_ISTEPB4, &buf[0], 4);
+        // Set Min/Max
+        buf[0] = 0x80; buf[3] = 0x00; // [1], [2] still zero from above
+        write(DUV2_BASE, DUV2_CMINB4, &buf[0], 4);
+        buf[0] = 0x7f; buf[1] = buf[2] = buf[3] = 0xff;
+        write(DUV2_BASE, DUV2_CMAXB4, &buf[0], 4);
+        break;
+
+    case TC_RE_TYPE_DFRGR360:
+        dfrgain = (!_type) ? DFR_GAIN_SPD : DFR_GAIN_VOL;
+        buf[0] = dfrgain;
+        write(DFR_BASE, DFR_GAIN_REG, &buf[0], 1);
+        dfroffslots = (!_type) ? OFF_SLOTS : 0;
+        break;
+
+    case TC_RE_TYPE_CS:
+        // TODO
     default:
         return false;
     }
@@ -531,20 +661,27 @@ bool TCRotEnc::begin()
     return true;
 }
 
-void TCRotEnc::zeroPos()
+// Init dec into "zero" position (vol and speed)
+void TCRotEnc::zeroPos(int offs)
 {
+    zeroEnc(offs);
     rotEncPos = getEncPos();
     fakeSpeed = targetSpeed = 0;
 }
 
-#define HWUPD_DELAY 100   // ms between hw polls
-#define FUPD_DELAY  20    // ms between fakeSpeed updates
-
-#define OFF_SLOTS   5
+// Init dec into "disabled" position (speed only)
+void TCRotEnc::disabledPos()
+{
+    zeroEnc(-OFF_SLOTS);
+    rotEncPos = getEncPos();
+    targetSpeed = -OFF_SLOTS;
+    fakeSpeed = -1;
+}
 
 int16_t TCRotEnc::updateFakeSpeed(bool force)
 {
     bool timeout = (millis() - lastUpd > HWUPD_DELAY);
+    int32_t updRotPos;
     
     if(force || timeout || (fakeSpeed != targetSpeed)) {
 
@@ -552,19 +689,28 @@ int16_t TCRotEnc::updateFakeSpeed(bool force)
             lastUpd = millis();
             
             int32_t t = rotEncPos;
-            rotEncPos = getEncPos();
+            rotEncPos = updRotPos = getEncPos();
 
             //Serial.printf("Rot pos %x\n", rotEncPos);
 
-            // If turned in + direction, don't start from 
-            // <0, but 0: If we're at -3 (which is displayed
-            // as 0), and user turns +, we don't want -2, but 1.
-            if(t - rotEncPos > 0) {
-                if(targetSpeed < 0) targetSpeed = 0;
+            // If turned in + direction, don't start from <0, but 0: 
+            // If we're at -3 (which is displayed as 0), and user 
+            // turns +, we don't want -2, but 1.
+            // If speed was off (or showing temperature), start 
+            // with 0.
+            if(rotEncPos > t && targetSpeed < 0) {
+                int16_t resetTo = (targetSpeed == -OFF_SLOTS) ? 0 : 1;
+                targetSpeed = resetTo;
+                if(zeroEnc(resetTo)) {
+                    updRotPos = resetTo;
+                }
+            } else {
+                targetSpeed += (rotEncPos - t);
             }
-            targetSpeed += (t - rotEncPos);
             if(targetSpeed < -OFF_SLOTS) targetSpeed = -OFF_SLOTS;
             else if(targetSpeed > 88)    targetSpeed = 88;
+
+            rotEncPos = updRotPos;
         }
         
         if(fakeSpeed != targetSpeed) {
@@ -584,6 +730,32 @@ int16_t TCRotEnc::updateFakeSpeed(bool force)
     return -1;
 }
 
+bool TCRotEnc::IsOff()
+{
+    return (fakeSpeed < -(OFF_SLOTS - 1));
+}
+
+int TCRotEnc::updateVolume(int curVol, bool force)
+{
+    if(curVol == 255)
+        return curVol;
+    
+    if(force || (millis() - lastUpd > HWUPD_DELAY_VOL)) {
+
+        lastUpd = millis();
+        
+        int32_t t = rotEncPos;
+        rotEncPos = getEncPos();
+
+        curVol += (rotEncPos - t);
+
+        if(curVol < 0)        curVol = 0;
+        else if(curVol > 19)  curVol = 19;
+    }
+    
+    return curVol;
+}
+
 int32_t TCRotEnc::getEncPos()
 {
     uint8_t buf[4];
@@ -592,30 +764,61 @@ int32_t TCRotEnc::getEncPos()
       
     case TC_RE_TYPE_ADA4991:
         read(SEESAW_ENCODER_BASE, SEESAW_ENCODER_POSITION, buf, 4);
+        // Ada4991 reports neg numbers when turned cw, so 
+        // negate value
+        return -(int32_t)(
+                    ((uint32_t)buf[0] << 24) | 
+                    ((uint32_t)buf[1] << 16) |
+                    ((uint32_t)buf[2] <<  8) | 
+                     (uint32_t)buf[3]
+                );
+    case TC_RE_TYPE_DUPPAV2:
+        read(DUV2_BASE, DUV2_CVALB4, buf, 4);
         return (int32_t)(
                     ((uint32_t)buf[0] << 24) | 
                     ((uint32_t)buf[1] << 16) |
                     ((uint32_t)buf[2] <<  8) | 
                      (uint32_t)buf[3]
                 );
+    case TC_RE_TYPE_DFRGR360:
+        read(DFR_BASE, DFR_COUNT_MSB, buf, 2);
+        return (int32_t)(((buf[0] << 8) | buf[1]) / dfrgain) - dfroffslots;
+        
+    case TC_RE_TYPE_CS:
+        break;
     }
 
     return 0;
 }
 
-void TCRotEnc::reset()
+bool TCRotEnc::zeroEnc(int offs)
 {
-    uint8_t buf = 0xff;
+    uint8_t buf[4] = { 0 };
+    uint16_t temp;
+
+    // Sets encoder value to "0"-pos+offs. 
+    // We don't do this for encoders with a 32bit 
+    // range, since turning it that far probably 
+    // exceeds the encoder's life span anyway.
     
-    write(SEESAW_STATUS_BASE, SEESAW_STATUS_SWRST, &buf, 1);
+    switch(_st) {
+    case TC_RE_TYPE_DFRGR360:   
+        temp = (dfroffslots + offs) * dfrgain;
+        buf[0] = temp >> 8;
+        buf[1] = temp & 0xff;
+        write(DFR_BASE, DFR_COUNT_MSB, &buf[0], 2);
+        return true;        
+    }
+    
+    return false;
 }
 
-int TCRotEnc::read(uint8_t base, uint8_t reg, uint8_t *buf, uint8_t num)
+int TCRotEnc::read(uint16_t base, uint8_t reg, uint8_t *buf, uint8_t num)
 {
     int i2clen;
     
     _wire->beginTransmission(_i2caddr);
-    _wire->write(base);
+    if(base <= 0xff) _wire->write((uint8_t)base);
     _wire->write(reg);
     _wire->endTransmission(true);
     delay(1);
@@ -626,10 +829,10 @@ int TCRotEnc::read(uint8_t base, uint8_t reg, uint8_t *buf, uint8_t num)
     return i2clen;
 }
 
-void TCRotEnc::write(uint8_t base, uint8_t reg, uint8_t *buf, uint8_t num)
+void TCRotEnc::write(uint16_t base, uint8_t reg, uint8_t *buf, uint8_t num)
 {
     _wire->beginTransmission(_i2caddr);
-    _wire->write(base);
+    if(base <= 0xff) _wire->write((uint8_t)base);
     _wire->write(reg);
     for(int i = 0; i < num; i++) {
         _wire->write(buf[i]);

@@ -2,9 +2,9 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2024 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * Sound handling
  *
@@ -53,12 +53,11 @@
 
 #include "src/ESP8266Audio/AudioOutputI2S.h"
 
-#include "tc_settings.h"
-#include "tc_keypad.h"
 #include "tc_time.h"
-#include "tc_wifi.h"
-
+#include "tc_settings.h"
 #include "tc_audio.h"
+#include "tc_keypad.h"
+#include "tc_wifi.h"
 
 static AudioGeneratorMP3 *mp3;
 static AudioGeneratorWAV *beep;
@@ -74,9 +73,9 @@ static AudioFileSourcePROGMEM *myPM;
 static AudioOutputI2S *out;
 
 bool audioInitDone = false;
-bool audioMute = false;
+bool audioMute     = false;
 
-bool muteBeep = true;
+bool muteBeep      = true;
 
 bool haveMusic = false;
 bool mpActive = false;
@@ -97,40 +96,33 @@ static const float volTable[20] = {
     0.35, 0.40, 0.50, 0.60,
     0.70, 0.80, 0.90, 1.00
 };
-
-uint8_t curVolume = DEFAULT_VOLUME;
-
-static float curVolFact = 1.0;
-static bool  curChkNM   = true;
-static bool  dynVol     = true;
-
-static int sampleCnt = 0;
-
-#define VOL_SMOOTH_SIZE 4
-static int rawVol[VOL_SMOOTH_SIZE];
-static int rawVolIdx = 0;
-static int anaReadCount = 0;
-static long prev_avg, prev_raw, prev_raw2;
-
 // Resolution for pot, 9-12 allowed
 #define POT_RESOLUTION 9
+int           curVolume = DEFAULT_VOLUME;
+#define VOL_SMOOTH_SIZE 4
+static int    rawVol[VOL_SMOOTH_SIZE];
+static int    rawVolIdx = 0;
+static int    anaReadCount = 0;
+static long   prev_avg, prev_raw, prev_raw2;
 
-bool headLineShown = false;
-bool blinker = true;
+static float  curVolFact = 1.0;
+static bool   curChkNM   = true;
+static bool   dynVol     = true;
+static int    sampleCnt = 0;
+
+static const char *tcdrdone = "/TCD_DONE.TXT";
+bool          headLineShown = false;
+bool          blinker       = true;
 unsigned long renNow1, renNow2;
-const char *tcdrdone = "/TCD_DONE.TXT";
 
-static int  mp_findMaxNum();
-static void mp_nextprev(bool forcePlay, bool next);
-static bool mp_play_int(bool force);
-static void mp_buildFileName(char *fnbuf, int num);
-static bool mp_renameFilesInDir(bool isSetup);
-static void mpren_quickSort(char **a, int s, int e);
+static float  getVolume();
 
-static int skipID3(char *buf);
-
-static float getRawVolume();
-static float getVolume();
+static int    mp_findMaxNum();
+static void   mp_nextprev(bool forcePlay, bool next);
+static bool   mp_play_int(bool force);
+static void   mp_buildFileName(char *fnbuf, int num);
+static bool   mp_renameFilesInDir(bool isSetup);
+static void   mpren_quickSort(char **a, int s, int e);
 
 #include "tc_beep.h"
 
@@ -178,7 +170,502 @@ void audio_setup()
 }
 
 /*
- * Music Player
+ * audio_loop()
+ *
+ */
+void audio_loop()
+{   
+    float vol;
+    
+    if(beep->isRunning()) {
+        if(!beep->loop()) {
+            beep->stop();
+        }
+    } else if(mp3->isRunning()) {
+        if(!mp3->loop()) {
+            mp3->stop();
+            if(mpActive) {
+                mp_next(true);
+            }
+        } else {
+            sampleCnt++;
+            if(sampleCnt > 1) {
+                vol = getVolume();
+                if(dynVol) out->SetGain(vol);
+                sampleCnt = 0;
+            }
+        }
+    } else if(mpActive) {
+        pwrNeedFullNow();
+        mp_next(true);
+    }
+}
+
+static int skipID3(char *buf)
+{
+    if(buf[0] == 'I' && buf[1] == 'D' && buf[2] == '3' && 
+       buf[3] >= 0x02 && buf[3] <= 0x04 && buf[4] == 0 &&
+       (!(buf[5] & 0x80))) {
+        int32_t pos = ((buf[6] << (24-3)) |
+                       (buf[7] << (16-2)) |
+                       (buf[8] << (8-1))  |
+                       (buf[9])) + 10;
+        #ifdef TC_DBG
+        Serial.printf("Skipping ID3 tags, seeking to %d (0x%x)\n", pos, pos);
+        #endif
+        return pos;
+    }
+    return 0;
+}
+
+void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
+{
+    char buf[10];
+    int pos;
+    
+    if(audioMute) return;
+
+    if(flags & PA_INTRMUS) {
+        mpActive = false;
+    } else {
+        if(mpActive) return;
+    }
+
+    pwrNeedFullNow();
+
+    #ifdef TC_DBG
+    Serial.printf("Audio: Playing %s\n", audio_file);
+    #endif
+
+    // If something is currently on, kill it
+    if(mp3->isRunning()) {
+        mp3->stop();
+    } 
+    if(beep->isRunning()) {
+        beep->stop();
+    }
+
+    curVolFact = volumeFactor;
+    curChkNM   = (flags & PA_CHECKNM) ? true : false;
+    dynVol     = (flags & PA_DYNVOL) ? true : false;
+
+    // Reset vol smoothing
+    // (user might have turned the pot while no sound was played)
+    rawVolIdx = 0;
+    anaReadCount = 0;
+
+    out->SetGain(getVolume());
+
+    if(haveSD && ((flags & PA_ALLOWSD) || FlashROMode) && mySD0->open(audio_file)) {
+
+        if(!(flags & PA_NOID3TS)) {
+            id3[0] = 0;
+            mySD0->read((void *)id3, 10);
+            if((pos = skipID3(id3))) {
+                Id3Size = pos <= MAXID3LEN ? pos : MAXID3LEN;
+                mySD0->read((void *)((char *)id3 + 10), Id3Size - 10);
+                haveId3 = true;
+            } else {
+                haveId3 = false;
+            }
+            mySD0->seek(pos, SEEK_SET);
+        }
+        mp3->begin(mySD0, out);   
+                 
+        #ifdef TC_DBG
+        Serial.println(F("Playing from SD"));
+        #endif
+    }
+    #ifdef USE_SPIFFS
+      else if(haveFS && SPIFFS.exists(audio_file) && myFS0->open(audio_file))
+    #else    
+      else if(haveFS && myFS0->open(audio_file))
+    #endif
+    {
+        if(!(flags & PA_NOID3TS)) {
+            buf[0] = 0;
+            myFS0->read((void *)buf, 10);
+            myFS0->seek(skipID3(buf), SEEK_SET);
+        }
+        mp3->begin(myFS0, out);
+                  
+        #ifdef TC_DBG
+        Serial.println(F("Playing from flash FS"));
+        #endif
+        
+    } else {
+      
+        #ifdef TC_DBG
+        Serial.println(F("Audio file not found"));
+        #endif
+        
+    }
+
+    if(flags & PA_LOOPNOW) {
+        audio_loop();
+    }
+}
+
+/*
+ * Play specific sounds
+ * 
+ */
+void play_keypad_sound(char key)
+{
+    char buf[16] = "/Dtmf-0.mp3\0";
+
+    if(key) {
+        buf[6] = key;
+        play_file(buf, PA_CHECKNM|PA_NOID3TS|PA_LOOPNOW, 0.6);
+    }
+}
+
+void play_hour_sound(int hour)
+{
+    char buf[16];
+    const char *hsnd = "/hour.mp3";
+
+    if(!haveSD || mpActive) return;
+    // Not even called in night mode
+    
+    sprintf(buf, "/hour-%02d.mp3", hour);
+    if(SD.exists(buf)) {
+        play_file(buf, PA_ALLOWSD);
+        return;
+    }
+
+    // Check for file so we do not interrupt anything
+    // if the file does not exist
+    if(SD.exists(hsnd)) {
+        play_file(hsnd, PA_ALLOWSD);
+    }
+}
+
+void play_beep()
+{
+    if(!FPBUnitIsOn     || 
+       mp3->isRunning() || 
+       muteBeep         || 
+       mpActive         || 
+       audioMute        || 
+       presentTime.getNightMode()) {
+        return;
+    }
+
+    pwrNeedFullNow();
+
+    if(beep->isRunning()) {
+        beep->stop();
+    }
+
+    curVolFact = 0.3;
+    curChkNM   = true;
+    // Reset vol smoothing
+    // (user might have turned the pot while no sound was played)
+    rawVolIdx = 0;
+    anaReadCount = 0;
+    out->SetGain(getVolume());
+
+    myPM->open(data_beep_wav, data_beep_wav_len);
+    beep->begin(myPM, out);
+}
+
+// Returns value for volume based on the position of the pot
+// Since the values vary we do some noise reduction
+static float getRawVolume()
+{
+    float vol_val;
+    long avg = 0, avg1 = 0, avg2 = 0;
+    long raw;
+
+    raw = analogRead(VOLUME_PIN);
+
+    if(anaReadCount > 1) {
+      
+        rawVol[rawVolIdx] = raw;
+
+        if(anaReadCount < VOL_SMOOTH_SIZE) {
+        
+            avg = 0;
+            for(int i = rawVolIdx; i > rawVolIdx - anaReadCount; i--) {
+                avg += rawVol[i & (VOL_SMOOTH_SIZE-1)];
+            }
+            avg /= anaReadCount;
+            anaReadCount++;
+
+        } else {
+
+            for(int i = rawVolIdx; i > rawVolIdx - anaReadCount; i--) {
+                if(i & 1) { 
+                    avg1 += rawVol[i & (VOL_SMOOTH_SIZE-1)];
+                } else {
+                    avg2 += rawVol[i & (VOL_SMOOTH_SIZE-1)];
+                }
+            }
+            avg1 = roundf((float)avg1 / (float)(VOL_SMOOTH_SIZE/2));
+            avg2 = roundf((float)avg2 / (float)(VOL_SMOOTH_SIZE/2));
+            avg = (abs(avg1-prev_avg) < abs(avg2-prev_avg)) ? avg1 : avg2;
+
+            /*
+            Serial.printf("%d %d %d %d\n", raw, avg1, avg2, avg);
+            */
+            
+            prev_avg = avg;
+        }
+        
+    } else {
+      
+        anaReadCount++;
+        rawVol[rawVolIdx] = avg = prev_avg = prev_raw = prev_raw2 = raw;
+        
+    }
+
+    rawVolIdx++;
+    rawVolIdx &= (VOL_SMOOTH_SIZE-1);
+
+    vol_val = (float)avg / (float)((1<<POT_RESOLUTION)-1);
+
+    if((raw + prev_raw + prev_raw2 > 0) && vol_val < 0.01) vol_val = 0.01;
+
+    prev_raw2 = prev_raw;
+    prev_raw = raw;
+
+    //Serial.println(vol_val);
+
+    return vol_val;
+}
+
+static float getVolume()
+{
+    float vol_val;
+
+    if(curVolume == 255) {
+        vol_val = getRawVolume();
+    } else {
+        vol_val = volTable[curVolume];
+    }
+
+    // If user muted, return 0
+    if(vol_val == 0.0) return vol_val;
+
+    vol_val *= curVolFact;
+    
+    // Do not totally mute
+    // 0.02 is the lowest audible gain
+    if(vol_val < 0.02) vol_val = 0.02;
+
+    // Reduce volume in night mode, if requested
+    if(curChkNM && presentTime.getNightMode()) {
+        vol_val *= 0.3;
+        // Do not totally mute
+        if(vol_val < 0.02) vol_val = 0.02;
+    }
+
+    return vol_val;
+}
+
+/*
+ * Helpers
+ */
+bool check_file_SD(const char *audio_file)
+{
+    return (haveSD && SD.exists(audio_file));
+}
+
+int getSWVolFromHWVol()
+{
+    float curHWvol = getRawVolume();
+    int i;
+    
+    for(i = 0; i < 20-1; i++) {
+        if(curHWvol <= volTable[i])
+            break;
+    }
+
+    return i;
+}
+
+bool checkAudioDone()
+{
+    if( mp3->isRunning() || beep->isRunning() ) return false;
+    return true;
+}
+
+bool checkMP3Done()
+{
+    if(mp3->isRunning()) return false;
+    return true;
+}
+
+void stopAudio()
+{
+    if(mp3->isRunning()) {
+        mp3->stop();
+    } else if(beep->isRunning()) {
+        beep->stop();
+    }
+}
+
+/*
+ * ID3 handling
+ */
+
+static void copyId3String(char *src, char *dst, int tagSz, int maxChrs)
+{
+   uint16_t chr;
+   char c;
+   char *send = src + tagSz;
+   char *tend = dst + maxChrs;
+   char enc = *src++;
+
+   dst[0] = 0;
+
+   if(enc == 1) {
+      uint16_t be = *src++ << 8;
+      be |= *src++;
+      if(be == 0xfeff) enc = 2;
+      else if(be != 0xfffe) src -= 2;
+   }
+
+   switch(enc) {
+   case 0:        // ISO-8859-1
+      while(dst < tend && src < send) {
+          if(!*src) return;
+          c = *src++;
+          if(c >= ' ' && c <= 126)  {
+              if(c >= 'a' && c <= 'z') c &= ~0x20;
+              *dst++ = c;
+              *dst = 0;
+          }
+      }
+      break;
+   case 1:        // UTF-16LE
+   case 2:        // UTF-16BE
+      while(dst < tend && src < send) {
+          if(enc == 1) { chr = *src++; chr |= (*src++ << 8); }
+          else         { chr = *src++ << 8; chr |= *src++;   }
+          if(!chr) return;
+          if(chr >= 0xd800 && chr <= 0xdbff) {
+              src += 2;
+          } else if(chr >= ' ' && chr <= 126) {
+              if(chr >= 'a' && chr <= 'z') chr &= ~0x20;
+              *dst++ = chr & 0xff;
+              *dst = 0;
+          }
+      }
+      break;
+   case 3:        // UTF-8
+      filterOutUTF8(src, dst, tagSz, maxChrs);
+      break;
+   }
+}
+
+void decodeID3(char *artist, char *track)
+{
+    uint8_t rev = id3[3];
+    char *ptr  = id3 + 10;
+    char *eptr = id3 + Id3Size;
+    int  stopLoop = 0;
+    uint8_t tag0, tag1, tag2, tag3;
+    uint8_t badFlags = 0;
+    unsigned long tagSz, offSet;
+    char tFlags[2] = { 0, 0 };
+
+    *artist = *track = 0;
+    
+    if(!haveId3) return;
+
+    // Unsynchronizing not supported
+    if(id3[5] & 0x80) return;
+    
+    // Skip extended header
+    if(rev >= 3 && id3[5] & 0x40) {
+        if(Id3Size < 16) return;
+        if(rev == 3) {
+            ptr += 4;
+            ptr += ((id3[10] << 24) |
+                    (id3[11] << 16) |
+                    (id3[12] <<  8) |
+                    (id3[13]));
+        } else {
+            ptr += ((id3[10] << (24-3)) |
+                    (id3[11] << (16-2)) |
+                    (id3[12] << (8-1))  |
+                    (id3[13]));
+        }
+        if(ptr >= eptr) return;
+    }
+
+    while((stopLoop != 3) && ptr < (eptr - 4)) {
+        tag0 = *ptr++;
+        tag1 = *ptr++;
+        tag2 = *ptr++;
+        tag3 = (rev == 2) ? 0 : *ptr++;
+    
+        // Quit when we are in padding
+        if(!(tag0 | tag1 | tag2 | tag3)) return;
+        
+        if(rev == 2) {
+
+            if(ptr > eptr - 3) return;
+
+            tagSz = ((ptr[0] << 16) |
+                     (ptr[1] <<  8) |
+                     (ptr[2]));
+
+            ptr += 3;
+          
+        } else {
+            
+            if(ptr > eptr - 6) return;
+
+            if(rev == 3) {
+                tagSz = ((ptr[0] << 24) |
+                         (ptr[1] << 16) |
+                         (ptr[2] <<  8) |
+                         (ptr[3]));
+                badFlags = 0x80 + 0x40;         // Compression/Encryption
+            } else {
+                tagSz = ((ptr[0] << (24-3)) |
+                         (ptr[1] << (16-2)) |
+                         (ptr[2] << (8-1))  |
+                         (ptr[3]));
+                badFlags = 0x08 + 0x04 + 0x02;  // Compression/Encryption/Unsync
+            }
+            
+            tFlags[0] = ptr[4];
+            tFlags[1] = ptr[5];
+
+            ptr += 6;
+
+        }
+
+        if(ptr + tagSz > eptr) return;
+
+        // Compression & unsynchronization not supported
+        if(!(tFlags[1] & badFlags) && (tag0 == 'T')) {
+            // Check for data length indicator despite no other flags
+            // Should not happen; we ignore it if it is there
+            offSet =  (rev == 4 && tFlags[1] & 0x01) ? 4 : 0;
+            if((rev == 2 && tag1 == 'T' && tag2 == '2') ||
+               (rev != 2 && tag1 == 'I' && tag2 == 'T' && tag3 == '2')) {
+                // Copy song title
+                copyId3String(ptr+offSet, track, tagSz-offSet, 15);
+                stopLoop |= 1;
+            } else if((rev == 2 && tag1 == 'P' && tag2 == '1') ||
+                      (rev != 2 && tag1 == 'P' && tag2 == 'E' && tag3 == '1')) {
+                // Copy artist
+                copyId3String(ptr+offSet, artist, tagSz-offSet, 15);
+                stopLoop |= 2;
+            }
+        }
+
+        ptr += tagSz;
+    }
+}
+
+/*
+ * The Music Player
  */
  
 void mp_init(bool isSetup) 
@@ -499,7 +986,7 @@ static void mpren_looper(bool isSetup, bool checking)
         wifi_loop();
         if(!isSetup) {
             ntp_loop();
-            #ifdef TC_HAVEGPS
+            #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE)
             gps_loop();
             #endif
             // audio_loop not required, never
@@ -841,485 +1328,5 @@ static void mpren_quickSort(char **a, int s, int e)
         int p = mpren_partition(a, s, e);
         mpren_quickSort(a, s, p - 1);
         mpren_quickSort(a, p + 1, e);
-    }
-}
-
-/*
- * Play specific sounds
- * 
- */
- 
-void play_keypad_sound(char key)
-{
-    char buf[16] = "/Dtmf-0.mp3\0";
-
-    if(key) {
-        buf[6] = key;
-        play_file(buf, PA_CHECKNM|PA_NOID3TS|PA_LOOPNOW, 0.6);
-    }
-}
-
-void play_hour_sound(int hour)
-{
-    char buf[16];
-    const char *hsnd = "/hour.mp3";
-
-    if(!haveSD || mpActive) return;
-    // Not even called in night mode
-    
-    sprintf(buf, "/hour-%02d.mp3", hour);
-    if(SD.exists(buf)) {
-        play_file(buf, PA_ALLOWSD);
-        return;
-    }
-
-    // Check for file so we do not interrupt anything
-    // if the file does not exist
-    if(SD.exists(hsnd)) {
-        play_file(hsnd, PA_ALLOWSD);
-    }
-}
-
-void play_beep()
-{
-    if(!FPBUnitIsOn     || 
-       mp3->isRunning() || 
-       muteBeep         || 
-       mpActive         || 
-       audioMute        || 
-       presentTime.getNightMode()) {
-        return;
-    }
-
-    pwrNeedFullNow();
-
-    if(beep->isRunning()) {
-        beep->stop();
-    }
-
-    curVolFact = 0.3;
-    curChkNM   = true;
-    // Reset vol smoothing
-    // (user might have turned the pot while no sound was played)
-    rawVolIdx = 0;
-    anaReadCount = 0;
-    out->SetGain(getVolume());
-
-    myPM->open(data_beep_wav, data_beep_wav_len);
-    beep->begin(myPM, out);
-}
-
-/*
- * audio_loop()
- *
- */
-void audio_loop()
-{   
-    float vol;
-    
-    if(beep->isRunning()) {
-        if(!beep->loop()) {
-            beep->stop();
-        }
-    } else if(mp3->isRunning()) {
-        if(!mp3->loop()) {
-            mp3->stop();
-            if(mpActive) {
-                mp_next(true);
-            }
-        } else {
-            sampleCnt++;
-            if(sampleCnt > 1) {
-                vol = getVolume();
-                if(dynVol) out->SetGain(vol);
-                sampleCnt = 0;
-            }
-        }
-    } else if(mpActive) {
-        pwrNeedFullNow();
-        mp_next(true);
-    }
-}
-
-static int skipID3(char *buf)
-{
-    if(buf[0] == 'I' && buf[1] == 'D' && buf[2] == '3' && 
-       buf[3] >= 0x02 && buf[3] <= 0x04 && buf[4] == 0 &&
-       (!(buf[5] & 0x80))) {
-        int32_t pos = ((buf[6] << (24-3)) |
-                       (buf[7] << (16-2)) |
-                       (buf[8] << (8-1))  |
-                       (buf[9])) + 10;
-        #ifdef TC_DBG
-        Serial.printf("Skipping ID3 tags, seeking to %d (0x%x)\n", pos, pos);
-        #endif
-        return pos;
-    }
-    return 0;
-}
-
-void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
-{
-    char buf[10];
-    int pos;
-    
-    if(audioMute) return;
-
-    if(flags & PA_INTRMUS) {
-        mpActive = false;
-    } else {
-        if(mpActive) return;
-    }
-
-    pwrNeedFullNow();
-
-    #ifdef TC_DBG
-    Serial.printf("Audio: Playing %s\n", audio_file);
-    #endif
-
-    // If something is currently on, kill it
-    if(mp3->isRunning()) {
-        mp3->stop();
-    } 
-    if(beep->isRunning()) {
-        beep->stop();
-    }
-
-    curVolFact = volumeFactor;
-    curChkNM   = (flags & PA_CHECKNM) ? true : false;
-    dynVol     = (flags & PA_DYNVOL) ? true : false;
-
-    // Reset vol smoothing
-    // (user might have turned the pot while no sound was played)
-    rawVolIdx = 0;
-    anaReadCount = 0;
-
-    out->SetGain(getVolume());
-
-    if(haveSD && ((flags & PA_ALLOWSD) || FlashROMode) && mySD0->open(audio_file)) {
-
-        if(!(flags & PA_NOID3TS)) {
-            id3[0] = 0;
-            mySD0->read((void *)id3, 10);
-            if((pos = skipID3(id3))) {
-                Id3Size = pos <= MAXID3LEN ? pos : MAXID3LEN;
-                mySD0->read((void *)((char *)id3 + 10), Id3Size - 10);
-                haveId3 = true;
-            } else {
-                haveId3 = false;
-            }
-            mySD0->seek(pos, SEEK_SET);
-        }
-        mp3->begin(mySD0, out);   
-                 
-        #ifdef TC_DBG
-        Serial.println(F("Playing from SD"));
-        #endif
-    }
-    #ifdef USE_SPIFFS
-      else if(haveFS && SPIFFS.exists(audio_file) && myFS0->open(audio_file))
-    #else    
-      else if(haveFS && myFS0->open(audio_file))
-    #endif
-    {
-        if(!(flags & PA_NOID3TS)) {
-            buf[0] = 0;
-            myFS0->read((void *)buf, 10);
-            myFS0->seek(skipID3(buf), SEEK_SET);
-        }
-        mp3->begin(myFS0, out);
-                  
-        #ifdef TC_DBG
-        Serial.println(F("Playing from flash FS"));
-        #endif
-        
-    } else {
-      
-        #ifdef TC_DBG
-        Serial.println(F("Audio file not found"));
-        #endif
-        
-    }
-
-    if(flags & PA_LOOPNOW) {
-        audio_loop();
-    }
-}
-
-bool check_file_SD(const char *audio_file)
-{
-    return (haveSD && SD.exists(audio_file));
-}
-
-// Returns value for volume based on the position of the pot
-// Since the values vary we do some noise reduction
-static float getRawVolume()
-{
-    float vol_val;
-    long avg = 0, avg1 = 0, avg2 = 0;
-    long raw;
-
-    raw = analogRead(VOLUME_PIN);
-
-    if(anaReadCount > 1) {
-      
-        rawVol[rawVolIdx] = raw;
-
-        if(anaReadCount < VOL_SMOOTH_SIZE) {
-        
-            avg = 0;
-            for(int i = rawVolIdx; i > rawVolIdx - anaReadCount; i--) {
-                avg += rawVol[i & (VOL_SMOOTH_SIZE-1)];
-            }
-            avg /= anaReadCount;
-            anaReadCount++;
-
-        } else {
-
-            for(int i = rawVolIdx; i > rawVolIdx - anaReadCount; i--) {
-                if(i & 1) { 
-                    avg1 += rawVol[i & (VOL_SMOOTH_SIZE-1)];
-                } else {
-                    avg2 += rawVol[i & (VOL_SMOOTH_SIZE-1)];
-                }
-            }
-            avg1 = round((float)avg1 / (float)(VOL_SMOOTH_SIZE/2));
-            avg2 = round((float)avg2 / (float)(VOL_SMOOTH_SIZE/2));
-            avg = (abs(avg1-prev_avg) < abs(avg2-prev_avg)) ? avg1 : avg2;
-
-            /*
-            Serial.printf("%d %d %d %d\n", raw, avg1, avg2, avg);
-            */
-            
-            prev_avg = avg;
-        }
-        
-    } else {
-      
-        anaReadCount++;
-        rawVol[rawVolIdx] = avg = prev_avg = prev_raw = prev_raw2 = raw;
-        
-    }
-
-    rawVolIdx++;
-    rawVolIdx &= (VOL_SMOOTH_SIZE-1);
-
-    vol_val = (float)avg / (float)((1<<POT_RESOLUTION)-1);
-
-    if((raw + prev_raw + prev_raw2 > 0) && vol_val < 0.01) vol_val = 0.01;
-
-    prev_raw2 = prev_raw;
-    prev_raw = raw;
-
-    //Serial.println(vol_val);
-
-    return vol_val;
-}
-
-static float getVolume()
-{
-    float vol_val;
-
-    if(curVolume == 255) {
-        vol_val = getRawVolume();
-    } else {
-        vol_val = volTable[curVolume];
-    }
-
-    // If user muted, return 0
-    if(vol_val == 0.0) return vol_val;
-
-    vol_val *= curVolFact;
-    
-    // Do not totally mute
-    // 0.02 is the lowest audible gain
-    if(vol_val < 0.02) vol_val = 0.02;
-
-    // Reduce volume in night mode, if requested
-    if(curChkNM && presentTime.getNightMode()) {
-        vol_val *= 0.3;
-        // Do not totally mute
-        if(vol_val < 0.02) vol_val = 0.02;
-    }
-
-    return vol_val;
-}
-
-bool checkAudioDone()
-{
-    if( mp3->isRunning() || beep->isRunning() ) return false;
-    return true;
-}
-
-bool checkMP3Done()
-{
-    if(mp3->isRunning()) return false;
-    return true;
-}
-
-void stopAudio()
-{
-    if(mp3->isRunning()) {
-        mp3->stop();
-    } else if(beep->isRunning()) {
-        beep->stop();
-    }
-}
-
-/*
- * ID3 handling
- */
-
-static void copyId3String(char *src, char *dst, int tagSz, int maxChrs)
-{
-   uint16_t chr;
-   char c;
-   char *send = src + tagSz;
-   char *tend = dst + maxChrs;
-   char enc = *src++;
-
-   dst[0] = 0;
-
-   if(enc == 1) {
-      uint16_t be = *src++ << 8;
-      be |= *src++;
-      if(be == 0xfeff) enc = 2;
-      else if(be != 0xfffe) src -= 2;
-   }
-
-   switch(enc) {
-   case 0:        // ISO-8859-1
-      while(dst < tend && src < send) {
-          if(!*src) return;
-          c = *src++;
-          if(c >= ' ' && c <= 126)  {
-              if(c >= 'a' && c <= 'z') c &= ~0x20;
-              *dst++ = c;
-              *dst = 0;
-          }
-      }
-      break;
-   case 1:        // UTF-16LE
-   case 2:        // UTF-16BE
-      while(dst < tend && src < send) {
-          if(enc == 1) { chr = *src++; chr |= (*src++ << 8); }
-          else         { chr = *src++ << 8; chr |= *src++;   }
-          if(!chr) return;
-          if(chr >= 0xd800 && chr <= 0xdbff) {
-              src += 2;
-          } else if(chr >= ' ' && chr <= 126) {
-              if(chr >= 'a' && chr <= 'z') chr &= ~0x20;
-              *dst++ = chr & 0xff;
-              *dst = 0;
-          }
-      }
-      break;
-   case 3:        // UTF-8
-      filterOutUTF8(src, dst, tagSz, maxChrs);
-      break;
-   }
-}
-
-void decodeID3(char *artist, char *track)
-{
-    uint8_t rev = id3[3];
-    char *ptr  = id3 + 10;
-    char *eptr = id3 + Id3Size;
-    int  stopLoop = 0;
-    uint8_t tag0, tag1, tag2, tag3;
-    uint8_t badFlags = 0;
-    unsigned long tagSz, offSet;
-    char tFlags[2] = { 0, 0 };
-
-    *artist = *track = 0;
-    
-    if(!haveId3) return;
-
-    // Unsynchronizing not supported
-    if(id3[5] & 0x80) return;
-    
-    // Skip extended header
-    if(rev >= 3 && id3[5] & 0x40) {
-        if(Id3Size < 16) return;
-        if(rev == 3) {
-            ptr += 4;
-            ptr += ((id3[10] << 24) |
-                    (id3[11] << 16) |
-                    (id3[12] <<  8) |
-                    (id3[13]));
-        } else {
-            ptr += ((id3[10] << (24-3)) |
-                    (id3[11] << (16-2)) |
-                    (id3[12] << (8-1))  |
-                    (id3[13]));
-        }
-        if(ptr >= eptr) return;
-    }
-
-    while((stopLoop != 3) && ptr < (eptr - 4)) {
-        tag0 = *ptr++;
-        tag1 = *ptr++;
-        tag2 = *ptr++;
-        tag3 = (rev == 2) ? 0 : *ptr++;
-    
-        // Quit when we are in padding
-        if(!(tag0 | tag1 | tag2 | tag3)) return;
-        
-        if(rev == 2) {
-
-            if(ptr > eptr - 3) return;
-
-            tagSz = ((ptr[0] << 16) |
-                     (ptr[1] <<  8) |
-                     (ptr[2]));
-
-            ptr += 3;
-          
-        } else {
-            
-            if(ptr > eptr - 6) return;
-
-            if(rev == 3) {
-                tagSz = ((ptr[0] << 24) |
-                         (ptr[1] << 16) |
-                         (ptr[2] <<  8) |
-                         (ptr[3]));
-                badFlags = 0x80 + 0x40;         // Compression/Encryption
-            } else {
-                tagSz = ((ptr[0] << (24-3)) |
-                         (ptr[1] << (16-2)) |
-                         (ptr[2] << (8-1))  |
-                         (ptr[3]));
-                badFlags = 0x08 + 0x04 + 0x02;  // Compression/Encryption/Unsync
-            }
-            
-            tFlags[0] = ptr[4];
-            tFlags[1] = ptr[5];
-
-            ptr += 6;
-
-        }
-
-        if(ptr + tagSz > eptr) return;
-
-        // Compression & unsynchronization not supported
-        if(!(tFlags[1] & badFlags) && (tag0 == 'T')) {
-            // Check for data length indicator despite no other flags
-            // Should not happen; we ignore it if it is there
-            offSet =  (rev == 4 && tFlags[1] & 0x01) ? 4 : 0;
-            if((rev == 2 && tag1 == 'T' && tag2 == '2') ||
-               (rev != 2 && tag1 == 'I' && tag2 == 'T' && tag3 == '2')) {
-                // Copy song title
-                copyId3String(ptr+offSet, track, tagSz-offSet, 15);
-                stopLoop |= 1;
-            } else if((rev == 2 && tag1 == 'P' && tag2 == '1') ||
-                      (rev != 2 && tag1 == 'P' && tag2 == 'E' && tag3 == '1')) {
-                // Copy artist
-                copyId3String(ptr+offSet, artist, tagSz-offSet, 15);
-                stopLoop |= 2;
-            }
-        }
-
-        ptr += tagSz;
     }
 }
