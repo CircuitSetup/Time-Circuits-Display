@@ -150,9 +150,13 @@ void      send_wakeup_msg();
 void      bttfnSendFluxCmd(uint32_t payload);
 void      bttfnSendSIDCmd(uint32_t payload);
 void      bttfnSendPCGCmd(uint32_t payload);
+void      bttfnSendVSRCmd(uint32_t payload);
 void      bttfnSendAUXCmd(uint32_t payload);
 
 void      resetPresentTime();
+
+bool      currentlyOnTimeTravel();
+void      updatePresentTime(DateTime& dtu, DateTime& dtl);
 
 void      pauseAuto();
 bool      checkIfAutoPaused();
@@ -198,12 +202,11 @@ void      gps_loop(bool withRotEnc = true);
 #endif
 
 void      mydelay(unsigned long mydel);
+void      waitAudioDone();
 
 uint8_t   dayOfWeek(int d, int m, int y);
 int       daysInMonth(int month, int year);
 bool      isLeapYear(int year);
-uint64_t  dateToMins(int year, int month, int day, int hour, int minute);
-void      minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
 uint32_t  getHrs1KYrs(int index);
 #ifdef TC_JULIAN_CAL
 void      correctNonExistingDate(int year, int month, int& day);
@@ -212,8 +215,9 @@ uint8_t*  e(uint8_t *, uint32_t, int);
 void      correctYr4RTC(uint16_t& year, int16_t& offs);
 int       mins2Date(int year, int month, int day, int hour, int mins);
 bool      parseTZ(int index, int currYear, bool doparseDST = true);
-int       getTzDiff();
 int       timeIsDST(int index, int year, int month, int day, int hour, int mins, int& currTimeMins);
+void      UTCtoLocal(DateTime &dtu, DateTime& dtl, int index);
+void      LocalToUTC(int& ny, int& nm, int& nd, int& nh, int& nmm, int index);
 
 void      ntp_loop();
 void      ntp_short_loop();

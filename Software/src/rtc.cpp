@@ -7,8 +7,6 @@
  * 
  * RTC Class (DS3231/PCF2129 RTC handling) and DateTime Class
  * 
- * DateTime mirrors the features of RTC; it only works for dates
- * from 1/1/2000 to 31/12/2099. Inspired by Adafruit's RTCLib.
  * -------------------------------------------------------------------
  * License: MIT
  *
@@ -59,31 +57,9 @@
  * 
  * Rudimentary general-purpose date/time class, used as a 
  * vehicle to pass date/time between functions.
- * 
- * Supports dates in the range from 1 Jan 2000 to 31 Dec 2099.
  ****************************************************************/
 
-/*
- *  Copy constructor
- */
-DateTime::DateTime(const DateTime& copy)
-    : yOff(copy.yOff), 
-      m(copy.m), 
-      d(copy.d), 
-      hh(copy.hh), 
-      mm(copy.mm),
-      ss(copy.ss) {}
-
-/*
- * Return weekday (0=Sun)
- */
-uint8_t DateTime::dayOfTheWeek() const 
-{
-    const int t[] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
-    int y = yOff + 2000;
-    if(m < 3) y -= 1;
-    return (y + y/4 - y/100 + y/400 + t[m-1] + d) % 7;
-}
+// Nada, nix... all in rtc.h
 
 
 /****************************************************************
@@ -133,25 +109,6 @@ bool tcRTC::begin(unsigned long powerupTime)
     }
 
     return false;
-}
-
-/*
- * Set the date/time from DateTime object
- * 
- * - Only years 2000-2099
- * - doW is calculated from object
- *
- * (year: 2000-2099; dayOfWeek: 0=Sun..6=Sat)
- */
-void tcRTC::adjust(const DateTime& dt)
-{
-    adjust(dt.second(),
-           dt.minute(),
-           dt.hour(),
-           dt.dayOfTheWeek(),
-           dt.day(),
-           dt.month(),
-           dt.year() - 2000U);
 }
 
 /*

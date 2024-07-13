@@ -7,8 +7,6 @@
  * 
  * RTC Class (DS3231/PCF2129 RTC handling) and DateTime Class
  * 
- * DateTime mirrors the features of RTC; it only works for dates
- * from 1/1/2000 to 31/12/2099. Inspired by Adafruit's RTCLib.
  * -------------------------------------------------------------------
  * License: MIT
  *
@@ -40,56 +38,60 @@
  * 
  * Rudimentary general-purpose date/time class, used as a 
  * vehicle to pass date/time between functions.
- * 
- * Supports dates in the range from 1 Jan 2000 to 31 Dec 2099.
  ****************************************************************/
 
 class DateTime {
 
     public:
 
-        DateTime() { yOff = 0; m = 1; d = 1; hh = 0; mm = 0; ss = 0; }
+        DateTime() 
+                    { 
+                        _y = 2000; _m = 1; _d = 1; 
+                        _hh = 0; _mm = 0; _ss = 0; 
+                        _minsValid = false; 
+                    }
         
         DateTime(uint16_t year, uint8_t month, uint8_t day, 
                  uint8_t hour = 0, uint8_t min = 0, uint8_t sec = 0)
-                {
-                    if(year >= 2000U) year -= 2000U;
-                    yOff = year; m  = month; d  = day;
-                    hh   = hour; mm = min;   ss = sec;
-                }
-                 
-        DateTime(const DateTime& copy);
+                    {
+                        _y  = year;  _m  = month; _d  = day;
+                        _hh = hour;  _mm = min;   _ss = sec;
+                        _minsValid = false;
+                    }
 
-        uint16_t year()   const { return 2000U + yOff; }
-        uint8_t  month()  const { return m; }
-        uint8_t  day()    const { return d; }
-        uint8_t  hour()   const { return hh; }
-        uint8_t  minute() const { return mm; }
-        uint8_t  second() const { return ss; }
-
-        uint8_t  dayOfTheWeek() const;
+        uint16_t year()   const { return _y; }
+        uint8_t  month()  const { return _m; }
+        uint8_t  day()    const { return _d; }
+        uint8_t  hour()   const { return _hh; }
+        uint8_t  minute() const { return _mm; }
+        uint8_t  second() const { return _ss; }
 
         void     set(uint16_t yyy, uint8_t mon, uint8_t ddd, 
                      uint8_t hhh = 0, uint8_t mmm = 0, uint8_t sss = 0) 
                     {
-                        if(yyy >= 2000U) yyy -= 2000U;
-                        yOff = yyy; m  = mon; d  = ddd; 
-                        hh   = hhh; mm = mmm; ss = sss;
+                        _y  = yyy; _m  = mon; _d  = ddd; 
+                        _hh = hhh; _mm = mmm; _ss = sss;
+                        _minsValid = false;
                     }
         void     setYear(uint16_t yyy) 
                     {
-                        if(yyy >= 2000U) yyy -= 2000U;
-                        yOff = yyy; 
+                        _y = yyy;
+                        _minsValid = false;
                     }
+
+        uint16_t hwRTCYear = 0;
+        
+        bool     _minsValid = false;
+        uint64_t _mins = 0;
 
     private:
 
-        uint8_t yOff; // Year offset from 2000
-        uint8_t m;    // Month 1-12
-        uint8_t d;    // Day 1-31
-        uint8_t hh;   // Hours 0-23
-        uint8_t mm;   // Minutes 0-59
-        uint8_t ss;   // Seconds 0-59
+        uint16_t _y;    // Year 0-9999
+        uint8_t  _m;    // Month 1-12
+        uint8_t  _d;    // Day 1-31
+        uint8_t  _hh;   // Hours 0-23
+        uint8_t  _mm;   // Minutes 0-59
+        uint8_t  _ss;   // Seconds 0-59
 };
 
 
@@ -110,7 +112,6 @@ class tcRTC
 
         bool begin(unsigned long powerupTime);
 
-        void adjust(const DateTime& dt);
         void adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year);
 
         void now(DateTime& dt);

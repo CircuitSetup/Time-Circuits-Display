@@ -56,7 +56,7 @@
 static int DBGloopCnt = 0;
 #endif
 
-static struct GPSsetupStruct {
+static const struct GPSsetupStruct {
     uint8_t rmc;
     uint8_t vtg;
     uint8_t zda;
@@ -64,11 +64,11 @@ static struct GPSsetupStruct {
 } GPSSetup[7] = {
     {  1, 0,  1, "5000*1B" }, // Time only: 5000ms, RMC & ZDA every 5th second
     {  1, 0,  5, "1000*1F" }, // BTTFN-clients, no speedo, slow: 1000ms, RMC 1x/sec, ZDA every 5th second
-    {  1, 0, 20, "500*2B" },  // BTTFN-clients, no speedo, fast:  500ms, RMC 2x/sec, ZDA every 10th second
+    {  1, 0, 20,  "500*2B" }, // BTTFN-clients, no speedo, fast:  500ms, RMC 2x/sec, ZDA every 10th second
     {  1, 0,  5, "1000*1F" }, // W/speedo, 1000ms: RMC 1x per sec, ZDA every 5th second
-    {  1, 0, 20, "500*2B" },  // W/speedo, 500ms:  RMC 2x per sec, ZDA every 10th second
-    { 25, 1, 40, "250*29" },  // W/speedo, 250ms:  VTG 4x per sec, RMC every approx 6th sec, ZDA every 10th second
-    { 31, 1, 50, "200*2C" }   // W/speedo, 200ms:  VTG 5x per sec, RMC every approx 6th sec, ZDA every 10th second
+    {  1, 0, 20,  "500*2B" }, // W/speedo, 500ms:  RMC 2x per sec, ZDA every 10th second
+    { 25, 1, 40,  "250*29" }, // W/speedo, 250ms:  VTG 4x per sec, RMC every approx 6th sec, ZDA every 10th second
+    { 31, 1, 50,  "200*2C" }  // W/speedo, 200ms:  VTG 5x per sec, RMC every approx 6th sec, ZDA every 10th second
 };
 
 /*
@@ -136,6 +136,7 @@ static void copy6chars(char *a, char *b)
     *a++ = *b++;
     *a = *b;
 }
+
 static void calcNMEAcheckSum(char *cmdbuf)
 {
     int checksum = 0;
@@ -163,8 +164,6 @@ bool tcGPS::begin(unsigned long powerupTime, int quickUpdates, int speedRate, vo
 {
     uint8_t testBuf;
     int i2clen;
-    //int rmc, vtg;
-    //char *cmd1, *cmd2;
     char cmdbuf[64], temp[8];
     int idx;
     
@@ -233,8 +232,13 @@ bool tcGPS::begin(unsigned long powerupTime, int quickUpdates, int speedRate, vo
     //sendCommand(NULL, "$PMTK353,1,0,0,0,0*2A");   // GPS
 
     // Send "hot start" to clear i2c buffer 
-    sendCommand(NULL, "$PMTK101*32");
-    delay(800);
+    //sendCommand(NULL, "$PMTK101*32");
+    //delay(800);
+    // No, might lose fix in the process; empty
+    // buffer by reading it
+    for(int i = 0; i <= _lenLimit; i++) {
+        readAndParse(false);
+    }
 
     _customDelayFunc = myDelay;
 
@@ -623,7 +627,7 @@ bool tcGPS::checkNMEA(char *nmea)
     if(ast - nmea < 16)
         return false;
 
-    if(mystrcmp3(nmea+3, "RMC") && mystrcmp3(nmea+3, "ZDA") && mystrcmp3(nmea+3, "VTG"))
+    if(mystrcmp3(nmea+3, "VTG") && mystrcmp3(nmea+3, "RMC") && mystrcmp3(nmea+3, "ZDA"))
         return false;
 
     // check checksum

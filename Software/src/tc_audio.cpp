@@ -60,7 +60,7 @@
 #include "tc_wifi.h"
 
 static AudioGeneratorMP3 *mp3;
-static AudioGeneratorWAV *beep;
+static AudioGeneratorWAV *wav;
 
 #ifdef USE_SPIFFS
 static AudioFileSourceSPIFFS *myFS0;
@@ -76,9 +76,10 @@ bool audioInitDone = false;
 bool audioMute     = false;
 
 bool muteBeep      = true;
+static bool beepRunning = false;
 
-bool haveMusic = false;
-bool mpActive = false;
+bool            haveMusic = false;
+bool            mpActive = false;
 static uint16_t maxMusic = 0;
 static uint16_t *playList = NULL;
 static int      mpCurrIdx = 0;
@@ -96,6 +97,7 @@ static const float volTable[20] = {
     0.35, 0.40, 0.50, 0.60,
     0.70, 0.80, 0.90, 1.00
 };
+int           volumePin = VOLUME_PIN;
 // Resolution for pot, 9-12 allowed
 #define POT_RESOLUTION 9
 int           curVolume = DEFAULT_VOLUME;
@@ -108,14 +110,24 @@ static long   prev_avg, prev_raw, prev_raw2;
 static float  curVolFact = 1.0;
 static bool   curChkNM   = true;
 static bool   dynVol     = true;
-static int    sampleCnt = 0;
+static int    sampleCnt  = 0;
+
+bool          haveLineOut = false;
+bool          useLineOut  = false;
+static bool   playLineOut = false;
 
 static const char *tcdrdone = "/TCD_DONE.TXT";
 bool          headLineShown = false;
 bool          blinker       = true;
 unsigned long renNow1, renNow2;
 
+static char       dtmfBuf[] = "/Dtmf-0.wav\0";    // Not const
+static const char *hsnd     = "/hour.mp3";
+
 static float  getVolume();
+#ifdef TC_HAVELINEOUT
+static void   setLineOut(bool doLineOut);
+#endif
 
 static int    mp_findMaxNum();
 static void   mp_nextprev(bool forcePlay, bool next);
@@ -135,6 +147,16 @@ void audio_setup()
     audioLogger = &Serial;
     #endif
 
+    // Init line-out
+    if(haveLineOut) {
+        // Switch to internal speaker
+        pinMode(SWITCH_LINEOUT_PIN, OUTPUT);
+        digitalWrite(SWITCH_LINEOUT_PIN, LOW);
+        // Init mute for line-out
+        pinMode(MUTE_LINEOUT_PIN, OUTPUT);
+        digitalWrite(MUTE_LINEOUT_PIN, HIGH);
+    }
+
     // Set resolution for volume pot
     analogReadResolution(POT_RESOLUTION);
     analogSetWidth(POT_RESOLUTION);
@@ -143,8 +165,8 @@ void audio_setup()
     out->SetOutputModeMono(true);
     out->SetPinout(I2S_BCLK_PIN, I2S_LRCLK_PIN, I2S_DIN_PIN);
 
-    mp3  = new AudioGeneratorMP3();
-    beep = new AudioGeneratorWAV();
+    mp3 = new AudioGeneratorMP3();
+    wav = new AudioGeneratorWAV();
 
     #ifdef USE_SPIFFS
     myFS0 = new AudioFileSourceSPIFFS();
@@ -163,6 +185,12 @@ void audio_setup()
     loadMusFoldNum();
     mpShuffle = (settings.shuffle[0] != '0');
 
+    #ifdef TC_HAVELINEOUT
+    if(haveLineOut) {
+        loadLineOut();
+    }
+    #endif
+
     // MusicPlayer init
     mp_init(true);
 
@@ -177,9 +205,10 @@ void audio_loop()
 {   
     float vol;
     
-    if(beep->isRunning()) {
-        if(!beep->loop()) {
-            beep->stop();
+    if(wav->isRunning()) {
+        if(!wav->loop()) {
+            wav->stop();
+            beepRunning = false;
         }
     } else if(mp3->isRunning()) {
         if(!mp3->loop()) {
@@ -241,13 +270,22 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
     if(mp3->isRunning()) {
         mp3->stop();
     } 
-    if(beep->isRunning()) {
-        beep->stop();
+    if(wav->isRunning()) {
+        wav->stop();
     }
+    beepRunning = false;
 
-    curVolFact = volumeFactor;
+    #ifdef TC_HAVELINEOUT
+    playLineOut = (useLineOut && (flags & PA_LINEOUT)) ? true : false;
+    setLineOut(playLineOut);
+    #else
+    playLineOut = false;
+    #endif
+    
     curChkNM   = (flags & PA_CHECKNM) ? true : false;
     dynVol     = (flags & PA_DYNVOL) ? true : false;
+
+    curVolFact = volumeFactor;
 
     // Reset vol smoothing
     // (user might have turned the pot while no sound was played)
@@ -270,7 +308,7 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
             }
             mySD0->seek(pos, SEEK_SET);
         }
-        mp3->begin(mySD0, out);   
+        mp3->begin(mySD0, out);
                  
         #ifdef TC_DBG
         Serial.println(F("Playing from SD"));
@@ -282,13 +320,17 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
       else if(haveFS && myFS0->open(audio_file))
     #endif
     {
-        if(!(flags & PA_NOID3TS)) {
-            buf[0] = 0;
-            myFS0->read((void *)buf, 10);
-            myFS0->seek(skipID3(buf), SEEK_SET);
+        if(!(flags & PA_ISWAV)) {
+            if(!(flags & PA_NOID3TS)) {
+                buf[0] = 0;
+                myFS0->read((void *)buf, 10);
+                myFS0->seek(skipID3(buf), SEEK_SET);
+            }
+            mp3->begin(myFS0, out);
+        } else {
+            wav->begin(myFS0, out);
         }
-        mp3->begin(myFS0, out);
-                  
+
         #ifdef TC_DBG
         Serial.println(F("Playing from flash FS"));
         #endif
@@ -300,10 +342,6 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
         #endif
         
     }
-
-    if(flags & PA_LOOPNOW) {
-        audio_loop();
-    }
 }
 
 /*
@@ -312,51 +350,52 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
  */
 void play_keypad_sound(char key)
 {
-    char buf[16] = "/Dtmf-0.mp3\0";
-
-    if(key) {
-        buf[6] = key;
-        play_file(buf, PA_CHECKNM|PA_NOID3TS|PA_LOOPNOW, 0.6);
-    }
+    dtmfBuf[6] = key;
+    play_file(dtmfBuf, PA_ISWAV|PA_INTSPKR|PA_CHECKNM, 0.6);
 }
 
 void play_hour_sound(int hour)
 {
-    char buf[16];
-    const char *hsnd = "/hour.mp3";
+    char buf[32];
 
     if(!haveSD || mpActive) return;
     // Not even called in night mode
     
     sprintf(buf, "/hour-%02d.mp3", hour);
     if(SD.exists(buf)) {
-        play_file(buf, PA_ALLOWSD);
+        play_file(buf, PA_INTSPKR|PA_ALLOWSD);
         return;
     }
 
     // Check for file so we do not interrupt anything
     // if the file does not exist
     if(SD.exists(hsnd)) {
-        play_file(hsnd, PA_ALLOWSD);
+        play_file(hsnd, PA_INTSPKR|PA_ALLOWSD);
     }
 }
 
 void play_beep()
 {
     if(!FPBUnitIsOn     || 
-       mp3->isRunning() || 
        muteBeep         || 
        mpActive         || 
-       audioMute        || 
-       presentTime.getNightMode()) {
+       mp3->isRunning() || 
+       (wav->isRunning() && !beepRunning) || 
+       presentTime.getNightMode() ||
+       audioMute) {
         return;
     }
 
     pwrNeedFullNow();
 
-    if(beep->isRunning()) {
-        beep->stop();
+    if(wav->isRunning()) {
+        wav->stop();
     }
+
+    #ifdef TC_HAVELINEOUT
+    setLineOut(false);
+    #endif
+    playLineOut = false;
 
     curVolFact = 0.3;
     curChkNM   = true;
@@ -367,7 +406,8 @@ void play_beep()
     out->SetGain(getVolume());
 
     myPM->open(data_beep_wav, data_beep_wav_len);
-    beep->begin(myPM, out);
+    wav->begin(myPM, out);
+    beepRunning = true;
 }
 
 // Returns value for volume based on the position of the pot
@@ -378,7 +418,7 @@ static float getRawVolume()
     long avg = 0, avg1 = 0, avg2 = 0;
     long raw;
 
-    raw = analogRead(VOLUME_PIN);
+    raw = analogRead(volumePin);
 
     if(anaReadCount > 1) {
       
@@ -437,32 +477,50 @@ static float getRawVolume()
 
 static float getVolume()
 {
-    float vol_val;
+    float vol_val = 1.0;
 
-    if(curVolume == 255) {
-        vol_val = getRawVolume();
-    } else {
-        vol_val = volTable[curVolume];
+    if(!playLineOut) {
+        if(curVolume == 255) {
+            vol_val = getRawVolume();
+        } else {
+            vol_val = volTable[curVolume];
+        }
+
+        // If user muted, return 0
+        if(vol_val == 0.0) return vol_val;
     }
 
-    // If user muted, return 0
-    if(vol_val == 0.0) return vol_val;
-
     vol_val *= curVolFact;
-    
-    // Do not totally mute
-    // 0.02 is the lowest audible gain
-    if(vol_val < 0.02) vol_val = 0.02;
 
     // Reduce volume in night mode, if requested
     if(curChkNM && presentTime.getNightMode()) {
         vol_val *= 0.3;
-        // Do not totally mute
-        if(vol_val < 0.02) vol_val = 0.02;
     }
+
+    // Do not totally mute
+    // 0.02 is the lowest audible gain
+    if(vol_val < 0.02) vol_val = 0.02;
 
     return vol_val;
 }
+
+#ifdef TC_HAVELINEOUT
+static void setLineOut(bool doLineOut)
+{
+    if(useLineOut) {       
+        //digitalWrite(MUTE_LINEOUT_PIN, doLineOut ? HIGH : LOW);
+        if(doLineOut) {
+            out->SetOutputModeMono(false);
+            // Switch off MAX98357, switch on PCM510x
+            digitalWrite(SWITCH_LINEOUT_PIN, HIGH);
+        } else {
+            out->SetOutputModeMono(true);
+            // Switch on MAX98357, switch off PCM510x
+            digitalWrite(SWITCH_LINEOUT_PIN, LOW);
+        }
+    }
+}
+#endif
 
 /*
  * Helpers
@@ -487,13 +545,13 @@ int getSWVolFromHWVol()
 
 bool checkAudioDone()
 {
-    if( mp3->isRunning() || beep->isRunning() ) return false;
+    if(mp3->isRunning() || wav->isRunning()) return false;
     return true;
 }
 
 bool checkMP3Done()
 {
-    if(mp3->isRunning()) return false;
+    if(mp3->isRunning() || (wav->isRunning() && !beepRunning)) return false;
     return true;
 }
 
@@ -501,8 +559,8 @@ void stopAudio()
 {
     if(mp3->isRunning()) {
         mp3->stop();
-    } else if(beep->isRunning()) {
-        beep->stop();
+    } else if(wav->isRunning()) {
+        wav->stop();
     }
 }
 
@@ -872,7 +930,7 @@ static bool mp_play_int(bool force)
 
     mp_buildFileName(fnbuf, playList[mpCurrIdx]);
     if(SD.exists(fnbuf)) {
-        if(force) play_file(fnbuf, PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
+        if(force) play_file(fnbuf, PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
         currPlaying = playList[mpCurrIdx];
         return true;
     }

@@ -49,6 +49,7 @@ void keypad_setup();
 bool scanKeypad();
 
 void resetKeypadState();
+void discardKeypadInput();
 
 void keypad_loop();
 
@@ -63,7 +64,7 @@ void startBeepTimer();
 
 void nightModeOn();
 void nightModeOff();
-bool toggleNightMode();
+int  toggleNightMode();
 
 void leds_on();
 void leds_off();

@@ -25,11 +25,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION "V3.0"          // 13 chars max
+#define TC_VERSION "V3.0.99"          // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "JAN222024"  // 13 chars max
+#define TC_VERSION_EXTRA "JUN052024"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "01222024"   // 12 chars max
+#define TC_VERSION_EXTRA "06052024"   // 12 chars max
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -45,9 +45,6 @@
 #define TC_MDNS
 // Uncomment this if WiFiManager has mDNS enabled
 //#define TC_WM_HAS_MDNS 
-
-// Uncomment when using WiFiManager 2.0.17 or later
-//#define WIFIMANAGER_2_0_17      
 
 /*************************************************************************
  ***                 Configuration for peripherals                     ***
@@ -136,11 +133,23 @@
 // 999 toggles between EM and normal operation
 //#define HAVE_STALE_PRESENT
 
+// Uncomment to allow "persistent time travels" only if an SD card is
+// present and option "Save secondary setting to SD" is checked. 
+// Saving clock data to ESP32 Flash memory can cause delays of up to 
+// a whopping 1200ms, and thereby audio playback and other issues, 
+// doing severe harm to user experience (and causes flash wear...)
+#define PERSISTENT_SD_ONLY
+
 // --- end of config options
 
 /*************************************************************************
  ***                           Miscellaneous                           ***
  *************************************************************************/
+
+// If this is uncommented, support for line-out audio (CB 1.4) is included.
+// If enabled (350/351 on keypad), Time travel sounds as well as music from 
+// the Music Player will be played over line-out, and not the built-in speaker.
+//#define TC_HAVELINEOUT
 
 // If this is commented, the TCD uses the Gregorian calendar all the way,
 // ie since year 1. If this is uncommented, the Julian calendar is used
@@ -158,7 +167,7 @@
 
 // Uncomment for alternate "animation" when entering a destination time
 // (Does not affect other situations where animation is shown, like time
-// cycling, or when RC mode is active)
+// cycling, or when RC mode is active). Mutually exclusive to a-car mode.
 //#define BTTF3_ANIM
 
 // Uncomment if AM and PM should be reversed (like in BTTF2/3-version of TCD)
@@ -186,6 +195,9 @@
 #ifndef TC_HAVESPEEDO
 #undef SP_ALWAYS_ON
 #endif
+#ifdef IS_ACAR_DISPLAY
+#undef BTTF3_ANIM
+#endif
 
 /*************************************************************************
  ***                  esp32-arduino version detection                  ***
@@ -204,24 +216,29 @@
  ***                             GPIO pins                             ***
  *************************************************************************/
 
-#define STATUS_LED_PIN     2      // Status LED (on ESP)
-#define SECONDS_IN_PIN    15      // SQW Monitor 1Hz from the DS3231
-#define ENTER_BUTTON_PIN  16      // enter key
-#define WHITE_LED_PIN     17      // white led
-#define LEDS_PIN          12      // Red/amber/green LEDs (TCD-Control V1.3+)
+#define STATUS_LED_PIN      2      // Status LED (on ESP) (TCD CB <V1.4)
+#define SECONDS_IN_PIN     15      // SQW Monitor 1Hz from the DS3231
+#define ENTER_BUTTON_PIN   16      // enter key
+#define WHITE_LED_PIN      17      // white led
+#define LEDS_PIN           12      // Red/amber/green LEDs (TCD CB >=V1.3)
 
 // I2S audio pins
-#define I2S_BCLK_PIN      26
-#define I2S_LRCLK_PIN     25
-#define I2S_DIN_PIN       33
+#define I2S_BCLK_PIN       26
+#define I2S_LRCLK_PIN      25
+#define I2S_DIN_PIN        33
 
 // SD Card pins
-#define SD_CS_PIN          5
-#define SPI_MOSI_PIN      23
-#define SPI_MISO_PIN      19
-#define SPI_SCK_PIN       18
+#define SD_CS_PIN           5
+#define SPI_MOSI_PIN       23
+#define SPI_MISO_PIN       19
+#define SPI_SCK_PIN        18
 
-#define VOLUME_PIN        32      // analog input pin
+#define VOLUME_PIN         32      // analog input pin (TCD CB <V1.4.5)
+#define VOLUME_PIN_NEW     34      // analog input pin (TCD CB >=V1.4.5 preliminary)
+
+#define MUTE_LINEOUT_PIN    2      // TCD CB >=1.4.5 (preliminary)
+#define SWITCH_LINEOUT_PIN 32      // TCD CB >=1.4.5 (preliminary)
+#define MLO_MIRROR         35      // TCD CB >=1.4.5 (preliminary)
 
 #define FAKE_POWER_BUTTON_PIN       13  // Fake "power" switch
 #define EXTERNAL_TIMETRAVEL_IN_PIN  27  // Externally triggered TT (input)

@@ -146,19 +146,19 @@ class speedDisplay {
         int     _oldnm = -1;
 
         uint8_t  _dispType;
-        bool     _is7seg;         //      7- or 14-segment-display?
-        uint8_t  _speed_pos10;    //      Speed's 10s position in 16bit buffer
-        uint8_t  _speed_pos01;    //      Speed's 1s position in 16bit buffer
-        uint8_t  _dig10_shift;    //      Shift 10s to align in buffer
-        uint8_t  _dig01_shift;    //      Shift 1s to align in buffer
-        uint8_t  _dot_pos01;      //      1s dot position in 16bit buffer
-        uint8_t  _dot01_shift;    //      1s dot shift to align in buffer
-        uint8_t  _colon_pos;      //      Pos of colon in 16bit buffer (255 = no colon)
-        uint16_t _colon_bm;       //      bitmask for colon
-        uint8_t  _num_digs;       //      total number of digits/letters (max 4)
-        uint8_t  _buf_packed;     //      2 digits in one buffer pos? (0=no, 1=yes)
-        uint8_t *_bufPosArr;      //      Array of buffer positions for digits left->right
-        uint8_t *_bufShftArr;     //      Array of shift values for each digit
+        bool     _is7seg;           //      7- or 14-segment-display?
+        uint8_t  _speed_pos10;      //      Speed's 10s position in 16bit buffer
+        uint8_t  _speed_pos01;      //      Speed's 1s position in 16bit buffer
+        uint8_t  _dig10_shift;      //      Shift 10s to align in buffer
+        uint8_t  _dig01_shift;      //      Shift 1s to align in buffer
+        uint8_t  _dot_pos01;        //      1s dot position in 16bit buffer
+        uint8_t  _dot01_shift;      //      1s dot shift to align in buffer
+        uint8_t  _colon_pos;        //      Pos of colon in 16bit buffer (255 = no colon)
+        uint16_t _colon_bm;         //      bitmask for colon
+        uint8_t  _num_digs;         //      total number of digits/letters (max 4)
+        uint8_t  _buf_packed;       //      2 digits in one buffer pos? (0=no, 1=yes)
+        const uint8_t *_bufPosArr;  //      Array of buffer positions for digits left->right
+        const uint8_t *_bufShftArr; //      Array of shift values for each digit
 
         const uint16_t *_fontXSeg;
 

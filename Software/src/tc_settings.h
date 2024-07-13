@@ -6,7 +6,7 @@
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
- * Settings handling
+ * Settings & file handling
  *
  * -------------------------------------------------------------------
  * License: MIT
@@ -38,21 +38,19 @@ extern bool haveFS;
 extern bool haveSD;
 extern bool FlashROMode;
 
+extern bool haveAudioFiles;
+
 extern uint8_t musFolderNum;
 
 #define MS(s) XMS(s)
 #define XMS(s) #s
 
-// Default settings - change settings in the web interface 192.168.4.1
-// For list of time zones, see 
-// https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
-
-#define DEF_TIMES_PERS      0     // 0-1;  Default: 0 = TimeTravel not persistent
-#define DEF_ALARM_RTC       1     // 0-1;  Default: 1 = Alarm is RTC-based (otherwise 0 = presentTime-based)
+// Default settings
 #define DEF_PLAY_INTRO      1     // 0-1;  Default: 1 = Play intro
 #define DEF_MODE24          0     // 0-1;  Default: 0 = 12-hour-mode
 #define DEF_BEEP            0     // 0-1:  Default: 0 = annoying beep(tm) off
 #define DEF_AUTOROTTIMES    1     // 0-5;  Default: Auto-rotate every 5th minute
+#define DEF_ALARM_RTC       1     // 0-1;  Default: 1 = Alarm is RTC-based (otherwise 0 = presentTime-based)
 #define DEF_HOSTNAME        "timecircuits"
 #define DEF_WIFI_RETRY      3     // 1-10; Default: 3 retries
 #define DEF_WIFI_TIMEOUT    7     // 7-25; Default: 7 seconds
@@ -60,7 +58,7 @@ extern uint8_t musFolderNum;
 #define DEF_WIFI_APOFFDELAY 0     // 0/10-99; Default 0 = Never power down WiFi in AP-mode
 #define DEF_WIFI_PRETRY     1     // Default: Nightly, periodic WiFi reconnection attempts for time sync
 #define DEF_NTP_SERVER      "pool.ntp.org"
-#define DEF_TIMEZONE        "UTC0"// Default: UTC; Posix format
+#define DEF_TIMEZONE        ""    // Default: UTC; Posix format
 #define DEF_BRIGHT_DEST     10    // 1-15; Default: medium brightness
 #define DEF_BRIGHT_PRES     10
 #define DEF_BRIGHT_DEPA     10
@@ -88,18 +86,19 @@ extern uint8_t musFolderNum;
 #define DEF_USE_ETTO        0     // Default: 0: No external props
 #define DEF_NO_ETTO_LEAD    0     // Default: 0: ETTO with ETTO_LEAD lead time; 1 without
 #define DEF_QUICK_GPS       0     // Default: Slow GPS updates (unless speed is being displayed)
-#define DEF_PLAY_TT_SND     1     // Default 1: Play time travel sounds (0: Do not; for use with external equipment)
+#define DEF_PLAY_TT_SND     1     // Default: 1: Play time travel sounds (0: Do not; for use with external equipment)
+#define DEF_USE_LINEOUT     0     // Default: 0: Play all sound through built-in speaker; 1 Use Line out for music & time travel sound 
 #define DEF_SHUFFLE         0     // Music Player: Do not shuffle by default
 #define DEF_CFG_ON_SD       1     // Default: Save secondary settings on SD
+#define DEF_TIMES_PERS      0     // 0-1;  Default: 0 = TimeTravel not persistent
 #define DEF_SD_FREQ         0     // SD/SPI frequency: Default 16MHz
 
 struct Settings {
-    char timesPers[4]       = MS(DEF_TIMES_PERS);
-    char alarmRTC[4]        = MS(DEF_ALARM_RTC);
     char playIntro[4]       = MS(DEF_PLAY_INTRO);
     char mode24[4]          = MS(DEF_MODE24);
     char beep[4]            = MS(DEF_BEEP);
-    char autoRotateTimes[4] = MS(DEF_AUTOROTTIMES);   
+    char autoRotateTimes[4] = MS(DEF_AUTOROTTIMES);
+    char alarmRTC[4]        = MS(DEF_ALARM_RTC);
     char hostName[32]       = DEF_HOSTNAME;
     char systemID[8]        = "";
     char appw[10]           = "";
@@ -160,8 +159,10 @@ struct Settings {
     char quickGPS[4]        = MS(DEF_QUICK_GPS);
 #endif
     char playTTsnds[4]      = MS(DEF_PLAY_TT_SND);
+
     char shuffle[4]         = MS(DEF_SHUFFLE);
     char CfgOnSD[4]         = MS(DEF_CFG_ON_SD);
+    char timesPers[4]       = MS(DEF_TIMES_PERS);
     char sdFreq[4]          = MS(DEF_SD_FREQ);
 #ifdef TC_HAVEMQTT  
     char useMQTT[4]         = "0";
@@ -192,6 +193,10 @@ void unmount_fs();
 void write_settings();
 bool checkConfigExists();
 
+void saveBrightness(bool useCache = true);
+
+void saveAutoInterval(bool useCache = true);
+
 bool loadAlarm();
 void saveAlarm();
 
@@ -211,18 +216,23 @@ void loadStaleTime(void *target, bool& currentOn);
 void saveStaleTime(void *source, bool currentOn);
 #endif
 
-void copySettings();
+#ifdef TC_HAVELINEOUT
+void loadLineOut();
+void saveLineOut();
+#endif
 
 bool loadIpSettings();
 void writeIpSettings();
 void deleteIpSettings();
 
+void copySettings();
+
+bool check_if_default_audio_present();
 void doCopyAudioFiles();
-bool copy_audio_files();
+bool copy_audio_files(bool& delIDfile);
 
 bool check_allow_CPA();
 void delete_ID_file();
-bool audio_files_present();
 
 void waitForEnterRelease();
 
@@ -234,5 +244,11 @@ bool readFileFromSD(const char *fn, uint8_t *buf, int len);
 bool writeFileToSD(const char *fn, uint8_t *buf, int len);
 bool readFileFromFS(const char *fn, uint8_t *buf, int len);
 bool writeFileToFS(const char *fn, uint8_t *buf, int len);
+
+#include <FS.h>
+bool   openACFile(File& file);
+size_t writeACFile(File& file, uint8_t *buf, size_t len);
+void   closeACFile(File& file);
+void   removeACFile();
 
 #endif

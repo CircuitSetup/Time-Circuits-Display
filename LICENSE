@@ -2,7 +2,7 @@ For parts unter MIT license:
 
 MIT License
 
-Copyright (c) 2022-2023 Thomas Winischhofer
+Copyright (c) 2022-2024 Thomas Winischhofer
 
 Home Assistant MQTT protocol code:
 Copyright (c) 2008-2020 Nicholas O'Leary
@@ -27,7 +27,7 @@ SOFTWARE.
 
 For parts under BSD:
 
-Copyright (c) 2022-2023 Thomas Winischhofer
+Copyright (c) 2022-2024 Thomas Winischhofer
 
 Software License Agreement (BSD License)
 Redistribution and use in source and binary forms, with or without 

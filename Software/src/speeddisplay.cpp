@@ -280,7 +280,7 @@ static const uint16_t font144segGrove[38] = {
     S14GR4_ML|S14GR4_MR
 };
 
-static struct dispConf {
+static const struct dispConf {
     bool     is7seg;         //   7- or 14-segment-display?
     uint8_t  speed_pos10;    //   Speed's 10s position in 16bit buffer
     uint8_t  speed_pos01;    //   Speed's 1s position in 16bit buffer
@@ -566,19 +566,20 @@ void speedDisplay::setText(const char *text)
 // (including current dot01 setting; colon is cleared and ignored)
 void speedDisplay::setSpeed(int8_t speedNum)
 {
+    uint16_t b1, b2;
+    
     clearBuf();
 
     _speed = speedNum;
 
     if(speedNum < 0) {
-        _displayBuffer[_speed_pos10] |= (*(_fontXSeg + 37) << _dig10_shift);
-        _displayBuffer[_speed_pos01] |= (*(_fontXSeg + 37) << _dig01_shift);
+        b1 = b2 = *(_fontXSeg + 37);
     } else if(speedNum > 99) {
-        _displayBuffer[_speed_pos10] |= (*(_fontXSeg + ('H' - 'A' + 10)) << _dig10_shift);
-        _displayBuffer[_speed_pos01] |= (*(_fontXSeg + ('I' - 'A' + 10)) << _dig01_shift);
+        b1 = *(_fontXSeg + ('H' - 'A' + 10));
+        b2 = *(_fontXSeg + ('I' - 'A' + 10));
     } else {
-        _displayBuffer[_speed_pos10] |= (*(_fontXSeg + (speedNum / 10)) << _dig10_shift);
-        _displayBuffer[_speed_pos01] |= (*(_fontXSeg + (speedNum % 10)) << _dig01_shift);
+        b1 = *(_fontXSeg + (speedNum / 10));
+        b2 = *(_fontXSeg + (speedNum % 10));
         #ifdef SP_CS_0ON
         if(_dispType == SP_CIRCSETUP) {
             // Hack to display "0" after dot
@@ -586,6 +587,9 @@ void speedDisplay::setSpeed(int8_t speedNum)
         }
         #endif
     }
+
+    _displayBuffer[_speed_pos10] |= (b1 << _dig10_shift);
+    _displayBuffer[_speed_pos01] |= (b2 << _dig01_shift);
     
     if(_dot01) _displayBuffer[_dot_pos01] |= (*(_fontXSeg + 36) << _dot01_shift);
 }
@@ -600,9 +604,9 @@ void speedDisplay::setTemperature(float temp)
 
     switch(_num_digs) {
     case 2:
-        if(isnan(temp)) setText(myNan);
+        if(isnan(temp))        setText(myNan);
         else if(temp <= -10.0) setText("Lo");
-        else if(t >= 100.0) setText("Hi");
+        else if(temp >= 100.0) setText("Hi");
         else if(temp >= 10.0 || temp < 0.0) {
             t = (int)roundf(temp);
             sprintf(buf, "%d", t);
@@ -613,9 +617,9 @@ void speedDisplay::setTemperature(float temp)
         }
         break;
     case 3:
-        if(isnan(temp)) setText(myNan);
+        if(isnan(temp))         setText(myNan);
         else if(temp <= -100.0) setText("Low");
-        else if(t >= 1000.0) setText("Hi");
+        else if(temp >= 1000.0) setText("Hi");
         else if(temp >= 100.0 || temp <= -10.0) {
             t = (int)roundf(temp);
             sprintf(buf, "%d", t);

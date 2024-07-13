@@ -138,7 +138,7 @@ static unsigned long lastKeyPressed = 0;
 #define DATELEN_ALL   12   // mmddyyyyHHMM  dt: month, day, year, hour, min
 #define DATELEN_REM   10   // 77mmddHHMM    set reminder
 #define DATELEN_DATE   8   // mmddyyyy      dt: month, day, year
-#define DATELEN_ECMD   7   // xyyyyyy       6-digit command for FC, SID, PG
+#define DATELEN_ECMD   7   // xyyyyyy       6-digit command for FC, SID, PG, VSR, AUX
 #define DATELEN_QALM   6   // 11HHMM/888xxx 11, hour, min (alarm-set shortcut); 888xxx (mp)
 #define DATELEN_INT    5   // xxxxx         reset
 #define DATELEN_TIME   4   // HHMM          dt: hour, minute
@@ -157,11 +157,11 @@ char        timeBuffer[8];
 
 static int dateIndex = 0;
 static int timeIndex = 0;
-static int yearIndex = 0;
 
 bool menuActive = false;
 
 static bool doKey = false;
+static char keySnd[] = "/key3.mp3";   // not const
 
 static unsigned long enterDelay = 0;
 
@@ -182,8 +182,7 @@ static TCButton ettKey = TCButton(EXTERNAL_TIMETRAVEL_IN_PIN,
 
 static void keypadEvent(char key, KeyState kstate);
 static void recordKey(char key);
-static void recordSetTimeKey(char key);
-static void recordSetYearKey(char key);
+static void recordSetTimeKey(char key, bool isYear);
 
 static void enterKeyPressed();
 static void enterKeyHeld();
@@ -255,6 +254,7 @@ static void keypadEvent(char key, KeyState kstate)
 {
     bool mpWasActive = false;
     bool playBad = false;
+    int i;
     
     if(!FPBUnitIsOn || startup || timeTravelP0 || timeTravelP1 || timeTravelRE)
         return;
@@ -280,48 +280,39 @@ static void keypadEvent(char key, KeyState kstate)
             break;
         case '9':    // "9" held down -> return from time travel
             doKey = false;
-            resetPresentTime();
+            if(currentlyOnTimeTravel()) {
+                resetPresentTime();
+            } else {
+                playBad = true;
+            }
             break;
         case '1':    // "1" held down -> toggle alarm on/off
             doKey = false;
-            switch(toggleAlarm()) {
-            case -1:
+            if((i = toggleAlarm()) >= 0) {
+                play_file(i ? "/alarmon.mp3" : "/alarmoff.mp3", PA_INTSPKR|PA_CHECKNM|PA_ALLOWSD|PA_DYNVOL);
+            } else {
                 playBad = true;
-                break;
-            case 0:
-                play_file("/alarmoff.mp3", PA_CHECKNM|PA_ALLOWSD|PA_DYNVOL);
-                break;
-            case 1:
-                play_file("/alarmon.mp3", PA_CHECKNM|PA_ALLOWSD|PA_DYNVOL);
-                break;
             }
             break;
         case '4':    // "4" held down -> toggle night-mode on/off
             doKey = false;
-            if(toggleNightMode()) {
-                manualNightMode = 1;
-                play_file("/nmon.mp3", PA_ALLOWSD|PA_DYNVOL);
-            } else {
-                manualNightMode = 0;
-                play_file("/nmoff.mp3", PA_ALLOWSD|PA_DYNVOL);
-            }
+            manualNightMode = toggleNightMode();
+            play_file(manualNightMode ? "/nmon.mp3" : "/nmoff.mp3", PA_INTSPKR|PA_ALLOWSD|PA_DYNVOL);
             manualNMNow = millis();
             break;
         case '3':    // "3" held down -> play audio file "key3.mp3"
-            doKey = false;
-            play_file("/key3.mp3", PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
-            break;
         case '6':    // "6" held down -> play audio file "key6.mp3"
             doKey = false;
-            play_file("/key6.mp3", PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
+            keySnd[4] = key;
+            play_file(keySnd, PA_INTSPKR|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
             break;
         case '7':    // "7" held down -> re-enable/re-connect WiFi
             doKey = false;
             if(!wifiOnWillBlock()) {
-                play_file("/ping.mp3", PA_CHECKNM|PA_ALLOWSD);
+                play_file("/ping.mp3", PA_INTSPKR|PA_CHECKNM|PA_ALLOWSD);
             } else {
                 if(haveMusic) mpWasActive = mp_stop();
-                play_file("/ping.mp3", PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD);
+                play_file("/ping.mp3", PA_INTSPKR|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD);
                 waitAudioDone();
             }
             // Enable WiFi / even if in AP mode / with CP
@@ -354,18 +345,14 @@ static void keypadEvent(char key, KeyState kstate)
             break;
         }
         if(playBad) {
-            play_file("/baddate.mp3", PA_CHECKNM|PA_ALLOWSD);
+            play_file("/baddate.mp3", PA_INTSPKR|PA_CHECKNM|PA_ALLOWSD);
         }
         break;
         
     case TCKS_RELEASED:
         if(doKey) {
             if(keypadInMenu) {
-                if(isYearUpdate) {
-                    recordSetYearKey(key);
-                } else {
-                    recordSetTimeKey(key);
-                }
+                recordSetTimeKey(key, isYearUpdate);
             } else {
                 recordKey(key);
             }
@@ -377,6 +364,12 @@ static void keypadEvent(char key, KeyState kstate)
 void resetKeypadState()
 {
     doKey = false;
+}
+
+void discardKeypadInput()
+{
+    dateBuffer[0] = '\0';
+    dateIndex = 0;
 }
 
 static void enterKeyPressed()
@@ -415,23 +408,16 @@ static void recordKey(char key)
     lastKeyPressed = millis();
 }
 
-static void recordSetTimeKey(char key)
+static void recordSetTimeKey(char key, bool isYear)
 {
     timeBuffer[timeIndex++] = key;
     timeBuffer[timeIndex] = '\0';
-    timeIndex &= 0x1;
-}
-
-static void recordSetYearKey(char key)
-{
-    timeBuffer[yearIndex++] = key;
-    timeBuffer[yearIndex] = '\0';
-    yearIndex &= 0x3;
+    timeIndex &= (isYear ? 0x03 : 0x1);
 }
 
 void resetTimebufIndices()
 {
-    timeIndex = yearIndex = 0;
+    timeIndex = 0;
     // Do NOT clear the timeBuffer, might be pre-set
 }
 
@@ -463,8 +449,7 @@ void keypad_loop()
 
     // Discard keypad input after 2 minutes of inactivity
     if(millis() - lastKeyPressed >= 2*60*1000) {
-        dateBuffer[0] = '\0';
-        dateIndex = 0;
+        discardKeypadInput();
     }
 
     // Bail out if sequence played or device is fake-"off"
@@ -514,7 +499,7 @@ void keypad_loop()
         cancelEnterAnim();
         cancelETTAnim();
 
-        timeIndex = yearIndex = 0;
+        timeIndex = 0;
         timeBuffer[0] = '\0';
 
         menuActive = true;
@@ -650,7 +635,7 @@ void keypad_loop()
             } else if(code == 33) {
               
                 dt_showTextDirect(
-                    weekDays[dayOfWeek(presentTime.getDay(), presentTime.getMonth(), presentTime.getDisplayYear())], 
+                    weekDays[dayOfWeek(presentTime.getDay(), presentTime.getMonth(), presentTime.getYear())], 
                     CDT_CLEAR
                 );
                 specDisp = 10;
@@ -760,6 +745,21 @@ void keypad_loop()
                         invalidEntry = true;
                     }
                     break;
+                #ifdef TC_HAVELINEOUT
+                case 350:
+                case 351:
+                    if(haveLineOut) {
+                        rcModeState = useLineOut;
+                        useLineOut = (code == 351);
+                        if(rcModeState != useLineOut) {
+                            saveLineOut();
+                        }
+                        validEntry = true;
+                    } else {
+                        invalidEntry = true;
+                    }
+                    break;
+                #endif
                 case 440:
                     #ifdef IS_ACAR_DISPLAY
                     sprintf(atxt, "%s OFF", tmr);
@@ -786,41 +786,32 @@ void keypad_loop()
                         
                     } else {
                       
-                        // This does not take DST into account if the next reminder
-                        // is due in the following year. Calculation is off by tzDiff
-                        // (one hour) if DST borders are crossed for an odd number of
-                        // times.
-                        DateTime dt;
-                        myrtcnow(dt);
-                        int  yr = dt.year() - presentTime.getYearOffset();
-                        bool sameYear = true;
-                        int  locDST = 0;
-                        uint32_t locMins = mins2Date(yr, dt.month(), dt.day(), dt.hour(), dt.minute());
-                        uint32_t tgtMins = mins2Date(yr, remMonth ? remMonth : dt.month(), remDay, remHour, remMin);
+                        DateTime dtu, dtl;
+                        myrtcnow(dtu);
+                        UTCtoLocal(dtu, dtl, 0);
+                        int  ry = dtl.year(), rm = remMonth ? remMonth : dtl.month(), rd = remDay, rh = remHour, rmm = remMin;
+                        LocalToUTC(ry, rm, rd, rh, rmm, 0);
+                        
+                        uint32_t locMins = mins2Date(dtu.year(), dtu.month(), dtu.day(), dtu.hour(), dtu.minute());
+                        uint32_t tgtMins = mins2Date(ry, rm, rd, rh, rmm);
+                        
                         if(tgtMins < locMins) {
                             if(remMonth) {
-                                tgtMins = mins2Date(yr + 1, remMonth, remDay, remHour, remMin);
+                                tgtMins = mins2Date(ry + 1, rm, rd, rh, rmm);
                                 tgtMins += (365*24*60);
-                                if(isLeapYear(yr)) tgtMins += 24*60;
-                                sameYear = false;
+                                if(isLeapYear(ry)) tgtMins += 24*60;
                             } else {
-                                if(dt.month() == 12) {
-                                    tgtMins = mins2Date(yr + 1, 1, remDay, remHour, remMin);
+                                if(dtu.month() == 12) {
+                                    tgtMins = mins2Date(ry + 1, 1, rd, rh, rmm);
                                     tgtMins += (365*24*60);
-                                    if(isLeapYear(yr)) tgtMins += 24*60;
-                                    sameYear = false;
+                                    if(isLeapYear(ry)) tgtMins += 24*60;
                                 } else {
-                                    tgtMins = mins2Date(yr, dt.month() + 1, remDay, remHour, remMin);
+                                    tgtMins = mins2Date(ry, rm + 1, rd, rh, rmm);
                                 }
                             }
                         }
                         tgtMins -= locMins;
-                        if(sameYear && couldDST[0] && ((locDST = presentTime.getDST()) >= 0)) {
-                            int curMins;
-                            int tgtDST = timeIsDST(0, yr, remMonth ? remMonth : dt.month() + 1, remDay, remHour, remMin, curMins);
-                            if(!locDST && tgtDST)      tgtMins += getTzDiff();
-                            else if(locDST && !tgtDST) tgtMins -= getTzDiff();
-                        }
+                        
                         uint16_t days = tgtMins / (24*60);
                         uint16_t hours = (tgtMins % (24*60)) / 60;
                         uint16_t minutes = tgtMins - (days*24*60) - (hours*60);
@@ -867,6 +858,22 @@ void keypad_loop()
                         esp_restart();
                     }
                     validEntry = true;
+                    break;
+                case 998:
+                    if(timetravelPersistent) {
+                        invalidEntry = true;
+                    } else {
+                        departedTime.off();
+                        needDepTime = true;
+                        if(autoTimeIntervals[autoInterval]) {
+                            pauseAuto();
+                        }
+                        enableRcMode(false);
+                        enableWcMode(false);
+                        destinationTime.load();
+                        departedTime.load();
+                        validEntry = true;
+                    }
                     break;
                 #ifdef HAVE_STALE_PRESENT
                 case 999:
@@ -1011,6 +1018,7 @@ void keypad_loop()
 
         } else if((strLen == DATELEN_TIME || strLen == DATELEN_ECMD) && 
                         (dateBuffer[0] == '3' ||
+                         dateBuffer[0] == '5' ||
                          dateBuffer[0] == '6' ||
                          dateBuffer[0] == '8' ||
                          dateBuffer[0] == '9')) {
@@ -1024,11 +1032,14 @@ void keypad_loop()
             case '3':
                 bttfnSendFluxCmd(cmd);
                 break;
+            case '5':
+                bttfnSendAUXCmd(cmd);
+                break;
             case '6':
                 bttfnSendSIDCmd(cmd);
                 break;
             case '8':
-                bttfnSendAUXCmd(cmd);
+                bttfnSendVSRCmd(cmd);
                 break;
             default:
                 bttfnSendPCGCmd(cmd);
@@ -1201,15 +1212,15 @@ void keypad_loop()
                 validEntry = true;
                 break;
             case 2:
-                play_file("/ee2.mp3", PA_CHECKNM|PA_INTRMUS);
+                play_file("/ee2.mp3", PA_INTSPKR|PA_CHECKNM|PA_INTRMUS);
                 enterDelay = EE2_DELAY;
                 break;
             case 3:
-                play_file("/ee3.mp3", PA_CHECKNM|PA_INTRMUS);
+                play_file("/ee3.mp3", PA_INTSPKR|PA_CHECKNM|PA_INTRMUS);
                 enterDelay = EE3_DELAY;
                 break;
             case 4:
-                play_file("/ee4.mp3", PA_CHECKNM|PA_INTRMUS);
+                play_file("/ee4.mp3", PA_INTSPKR|PA_CHECKNM|PA_INTRMUS);
                 enterDelay = EE4_DELAY;
                 break;
             default:
@@ -1223,8 +1234,8 @@ void keypad_loop()
             if(_setHour >= 0) destinationTime.setHour(_setHour);
             if(_setMin >= 0)  destinationTime.setMinute(_setMin);
 
-            // We only save the new time to NVM if user wants persistence.
-            // Might not be preferred; first, this messes with the user's custom
+            // We only save the new time if user wants persistence.
+            // Might not be preferred; this messes with the user's custom
             // times. Secondly, it wears the flash memory.
             if(timetravelPersistent) {
                 destinationTime.save();
@@ -1279,10 +1290,10 @@ void keypad_loop()
         }
 
         if(validEntry) {
-            play_file("/enter.mp3", PA_CHECKNM|enterInterruptsMusic|PA_ALLOWSD);
+            play_file("/enter.mp3", PA_INTSPKR|PA_CHECKNM|enterInterruptsMusic|PA_ALLOWSD);
             enterDelay = ENTER_DELAY;
         } else if(invalidEntry) {
-            play_file("/baddate.mp3", PA_CHECKNM|enterInterruptsMusic|PA_ALLOWSD);
+            play_file("/baddate.mp3", PA_INTSPKR|PA_CHECKNM|enterInterruptsMusic|PA_ALLOWSD);
             enterDelay = BADDATE_DELAY;
             if(!enterInterruptsMusic && mpActive) {
                 dt_showTextDirect("ERROR", CDT_CLEAR);
@@ -1324,7 +1335,7 @@ void keypad_loop()
             timeNow = millis();
             enterWasPressed = true;
             enterDelay = EE1_DELAY3;
-            play_file("/ee1.mp3", PA_CHECKNM|PA_INTRMUS);
+            play_file("/ee1.mp3", PA_INTSPKR|PA_CHECKNM|PA_INTRMUS);
             break;
         case 21:
         case 22:
@@ -1483,9 +1494,9 @@ bool keypadIsIdle()
 static void setupWCMode()
 {
     if(isWcMode()) {
-        DateTime dt;
-        myrtcnow(dt);
-        setDatesTimesWC(dt);
+        DateTime dtu;
+        myrtcnow(dtu);
+        setDatesTimesWC(dtu);
     } else if(autoTimeIntervals[autoInterval] == 0 || (timetravelPersistent && checkIfAutoPaused())) {
         // Restore NVM time if either time cycling is off, or
         // if paused; latter only if we have the last
@@ -1637,14 +1648,14 @@ void nightModeOff()
     leds_on();
 }
 
-bool toggleNightMode()
+int toggleNightMode()
 {
     if(destinationTime.getNightMode()) {
         nightModeOff();
-        return false;
+        return 0;
     }
     nightModeOn();
-    return true;
+    return 1;
 }
 
 /*

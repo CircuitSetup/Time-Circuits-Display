@@ -102,33 +102,31 @@ class clockDisplay {
         void showAlt();
         void setAltText(const char *text);
 
-        void setDateTime(DateTime& dt);          // Set object date & time using a DateTime ignoring timeDiff
-        void setDateTimeDiff(DateTime& dt);      // Set object date & time using a DateTime plus/minus timeDiff
-        void setFromStruct(const dateStruct *s); // Set object date & time from struct; never use this with RTC
+        void setDateTime(DateTime& dt);          // Set object date & time using a DateTime
+        void setFromStruct(const dateStruct *s); // Set object date & time from struct
         void setFromParms(int year, int month, int day, int hour, int minute);
 
-        void getToParms(int& year, int& yo, int& month, int& day, int& hour, int& minute);
+        void getToParms(int& year, int& month, int& day, int& hour, int& minute);
 
         void setMonth(int monthNum);
         void setDay(int dayNum);
-        void setYearOffset(int16_t yearOffs);
         void setYear(uint16_t yearNum);
         void setHour(uint16_t hourNum);
         void setMinute(int minNum);
-        void setDST(int8_t isDST);
 
         void setColon(bool col);
 
+        void setYearOffset(int16_t yearOffs);
+
         uint8_t  getMonth();
         uint8_t  getDay();
-        int16_t  getYearOffset();
         uint16_t getYear();
-        uint16_t getDisplayYear();
         uint8_t  getHour();
         uint8_t  getMinute();
-        int8_t   getDST();
 
         const char* getMonthString(uint8_t month);
+
+        int16_t  getYearOffset();
 
         void showMonthDirect(int monthNum, uint16_t dflags = 0);
         void showDayDirect(int dayNum, uint16_t dflags = 0);
@@ -145,19 +143,19 @@ class clockDisplay {
         void showHumDirect(int hum, bool animate = false);
         #endif
 
-        bool    save();
-        bool    saveYOffs();
         bool    load();
-        int16_t loadYOffs();
-        int8_t  loadDST();
+        void    savePending();
+        bool    saveFlush();
+        bool    save(bool force = false);
+        bool    _configOnSD = false;
 
-        bool    saveLastYear(uint16_t theYear);
-        int16_t loadLastYear();
+        bool    saveClockStateData(uint16_t curYear);
+        int16_t loadClockStateData(int16_t& yoffs);
 
     private:
 
         bool     saveNVMData(uint8_t *savBuf, bool noReadChk = false);
-        bool     loadNVMData(uint8_t *loadBuf);
+        bool     loadNVMData(uint8_t *loadBuf, bool& flashAccess);
 
         uint8_t  getLED7NumChar(uint8_t value);
         uint8_t  getLED7AlphaChar(uint8_t value);
@@ -194,28 +192,30 @@ class clockDisplay {
         uint16_t _year = 2021;          // keep track of these
         int16_t  _yearoffset = 0;       // Offset for faking years < 2000, > 2098
 
-        int16_t  _lastWrittenLY = -333; // Not to be confused with possible results from loadLastYear
-
-        int8_t  _isDST = 0;             // DST active? -1:dunno 0:no 1:yes
+        int16_t  _lastWrittenLY = -333; // Not to be confused with possible results from loadClockStateData
+        int16_t  _lastWrittenYO = -11111;
+        bool     _lastWrittenRead = false;
 
         uint8_t _month = 1;
         uint8_t _day = 1;
         uint8_t _hour = 0;
         uint8_t _minute = 0;
-        bool _colon = false;          // should colon be on?
-        bool _rtc = false;            // will this be displaying real time
-        uint8_t _brightness = 15;     // current display brightness
-        uint8_t _origBrightness = 15; // value from settings
-        bool _mode24 = false;         // true = 24 hour mode, false = 12 hour mode
-        bool _nightmode = false;      // true = dest/dept times off
-        bool _NmOff = false;          // true = off during night mode, false = dimmed
-        int _oldnm = -1;
-        bool _corr6 = false;
-        bool _yearDot = false;
-        bool _withColon = false;
+        bool    _colon = false;         // should colon be on?
+        bool    _rtc = false;           // will this be displaying real time
+        uint8_t _brightness = 15;       // current display brightness
+        uint8_t _origBrightness = 15;   // value from settings
+        bool    _mode24 = false;        // true = 24 hour mode, false = 12 hour mode
+        bool    _nightmode = false;     // true = dest/dept times off
+        bool    _NmOff = false;         // true = off during night mode, false = dimmed
+        int     _oldnm = -1;
+        bool    _corr6 = false;
+        bool    _yearDot = false;
+        bool    _withColon = false;
 
-        int8_t _Cache = -1;
-        char   _CacheData[10];
+        int8_t  _Cache = -1;
+        char    _CacheData[10];
+
+        int     _savePending = 0;
 };
 
 #endif

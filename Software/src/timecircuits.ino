@@ -44,6 +44,102 @@
  */
 
 /*  Changelog
+ *  2024/06/05 (A10001986)
+ *    - Minor fixes for WiFiManager
+ *    * Switched to esp32-arduino 2.0.17 for pre-compiled binary.
+ *  2024/05/16 (A10001986)
+ *    - Re-do DTMF files (added silence to avoid cut-off)
+ *      (Another sound-pack update)
+ *  2024/05/15 (A10001986)
+ *    - Rework line-out setting (350/351 on keypad, instead of option in CP)
+ *  2024/05/14 (A10001986)
+ *    - Allow CP access if RTC not found
+ *    - Switched keypad sounds to wav for more immediate play-back
+ *  2024/05/12-13 (A10001986)
+ *    - Some preparations for TCD CB 1.4
+ *  2024/05/09 (A10001986)
+ *    - Pre-init ENTER button without pull up
+ *  2024/04/12 (A10001986)
+ *    - Add temperature unit bit for BTTFN status
+ *  2024/04/04 (A10001986)
+ *    - Re-phrase "shuffle" Config option
+ *  2024/03/27 (A10001986)
+ *    - Bug fix in temperature display
+ *  2024/03/26 (A10001986)
+ *    - BTTFN: Device type VSR (8xxx) added; AUX is now 5xxx.
+ *  2024/02/17 (A10001986)
+ *    - Minor changes to time travel display disruption in destination time display
+ *  2024/02/16 (A10001986)
+ *    - Save AutoInterval and brightness in separate config files, remove them from
+ *      main config. Both considered "secondary settings", therefore optionally 
+ *      saved on SD.
+ *  2024/02/14 (A10001986)
+ *    - Tweak acceleration sound logic; use with-lead-version of tt sound if time 
+ *      is too short for the accel sound, but long enough for the lead.
+ *  2024/02/13 (A10001986)
+ *    - New user-sound: If SD contains "ttaccel.mp3", this file will be played 
+ *      immediately upon initiating a time travel when a speedo is connected, during 
+ *      the acceleration phase, until the start of the actual time travel (at which 
+ *      point it is interrupted by the usual time travel sound). This sound can
+ *      "bridge" the silence while the speedo counts up.
+ *    - 998 restores destination and last time departed displays to user-stored values
+ *      (ie the ones programmed through the keypad menu, unless overwritten because
+ *      "Persistent Time Travels" were enabled at some point after programming those
+ *      times).
+ *      Command only valid if Persistent Time Travels are off. Pauses time-cycling for
+ *      30 mins. Meant as an extension to Exhibition mode for quickly displaying
+ *      pre-programmed times.
+ *  2024/02/08-12 (A10001986)
+ *    - Time: Time stored in the hardware RTC is now UTC (was local time previously). 
+ *      This simplifies handling and avoids ambiguities in connection with DST. 
+ *      After this update, displayed time will be off unless synced via NTP or GPS.
+ *    - User-set dates/times for Destination and Last Time Departed displays are now
+ *      considered "secondary settings" and saved to SD (if available and corresponding 
+ *      option is set).
+ *    - "Persistent Time Travels" now require the option "Save secondary settings to
+ *      SD" to be checked, and an SD card to be present. Time travel data is no longer 
+ *      saved to esp32 flash memory. Writing to esp32 flash can block for up to 1200ms 
+ *      per display, causing undesired disruptions and a bad user experience.
+ *    - lastYear and yearOffset are now saved together (in esp32 flash memory).
+ *      (presentTime's display specific data is now only the timeDifference.)
+ *    - GPS: Don't "hot restart" receiver in boot process any more
+ *    - CP: Add header to "Saved" page so user can return to main menu (wm.cpp)
+ *    - Time Cycling: Use displayed time, not actual time as interval boundaries
+ *      (except when in Exhibition mode)
+ *    - Do not "return from time travel" if not on a time travel.
+ *    - Exhibition mode: Leave timeDifference alone when time travelling in Exh.
+ *      mode. Previously, a time travel was performed for local time and Exh. mode
+ *      time simultaniously, which was confusing then disabling Exh. mode.
+ *    - Don't call old waitAudioDone[now: Menu] from outside of menu
+ *  2024/02/07 (A10001986)
+ *    - Config Portal: Propose most used time-zones as datalists for time zone
+ *      entry.
+ *    - Fix timedifference after year-rollover 9999->1 (bug introduced with Julian
+ *      calendar)
+ *  2024/02/06 (A10001986)
+ *    - Fix reading and parsing of JSON document
+ *    - Fixes for using ArduinoJSON 7; not used in bin yet, too immature IMHO.
+ *  2024/02/05 (A10001986)
+ *    - Tweaks for audio upload
+ *  2024/02/04 (A10001986)
+ *    - Include fork of WiFiManager (2.0.16rc2 with minor patches) in order to cut 
+ *      down bin size
+ *    - Audio data (TCDA.bin) can now be uploaded through Config Portal ("UPDATE" page). 
+ *      Requires an SD card present.
+ *  2024/02/03 (A10001986)
+ *    - Check for audio data present also in FlashROMode; better container
+ *      validity check; display hint in CP if current audio not installed
+ *  2024/01/31 (A10001986)
+ *    - Various minor code optimizations (audio, keypad, input, speedo)
+ *  2024/01/30 (A10001986)
+ *    - Keypad menu: Clear input buffer when quitting the menu (ie discard input
+ *      from before entering the menu); Update present time while cycling through 
+ *      menu; activate colon for menu items showing time
+ *  2024/01/26 (A10001986)
+ *    - Add sound-pack versioning; re-installation required with this FW update
+ *    - Reformat FlashFS only if audio file installation fails due to a write error
+ *    - Some minor bin-size-crunching
+ *    - Allow sound installation in Flash-RO-mode
  *  2024/01/22 (A10001986)
  *    - Save Exh-mode settings when reformatting Flash FS or when copying from
  *      or to SD

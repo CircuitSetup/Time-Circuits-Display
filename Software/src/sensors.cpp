@@ -1160,10 +1160,10 @@ void lightSensor::VEML7700OnOff(bool enable, bool doWait)
 
 int32_t lightSensor::LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1)
 {
-    float gains[]   = {   1.0,   2.0,   4.0,  8.0, 48.0, 96.0 };
-    int32_t maxLux[] = { 64000, 32000, 16000, 8000, 1300, 600 };
-    float its[]     = { 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0 };
-    //                   50   100  150  200  250  300  350  400
+    const float gains[]   = {   1.0,   2.0,   4.0,  8.0, 48.0, 96.0 };
+    const int32_t maxLux[] = { 64000, 32000, 16000, 8000, 1300, 600 };
+    const float its[]     = { 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0 };
+    //                        50   100  150  200  250  300  350  400
     int32_t lux = -1;
     float dch0 = (float)ch0;
     float dch1 = (float)ch1;

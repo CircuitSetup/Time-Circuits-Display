@@ -65,9 +65,6 @@ extern bool     gpsHaveFix();
 extern uint64_t timeDifference;
 extern bool     timeDiffUp;
 
-extern uint64_t dateToMins(int year, int month, int day, int hour, int minute);
-extern void     minsToDate(uint64_t total, int& year, int& month, int& day, int& hour, int& minute);
-
 extern int      daysInMonth(int month, int year);
 
 extern bool FlashROMode;
@@ -98,7 +95,11 @@ static const char *nullStr = "";
 static const char *fnEEPROM[3] = {
     "/tcddt", "/tcdpt", "/tcdlt"
 };
-static const char *fnLastYear = "/tcdly";
+static const char *fnSD[3] = {
+    "/tcddt.bin", "/tcdpt.bin", "/tcdlt.bin"
+};
+static const char *fnLastYear   = "/tcdly";
+static const char *fnLastYearSD = "/tcdly.bin";
 
 
 /*
@@ -173,17 +174,11 @@ void clockDisplay::lampTest(bool randomize)
     Wire.beginTransmission(_address);
     Wire.write(0x00);  // start address
 
-    if(randomize) {
-        uint32_t rnd = esp_random();
-        for(int i = 0; i < CD_BUF_SIZE; i++) {
-            Wire.write(((rand() % 0x7f) ^ rnd) & 0x7f);
-            Wire.write((((rand() % 0x7f) ^ (rnd >> 8))) & 0x77);
-        }
-    } else {
-        for(int i = 0; i < CD_BUF_SIZE; i++) {
-            Wire.write(0xaa);
-            Wire.write(0x55);
-        }
+    uint32_t rnd = esp_random();
+
+    for(int i = 0; i < CD_BUF_SIZE; i++) {
+        Wire.write(randomize ? ((rand() % 0x7f) ^ rnd) & 0x7f : 0xaa);
+        Wire.write(randomize ? (((rand() % 0x7f) ^ (rnd >> 8))) & 0x77 : 0x55);
     }
     
     Wire.endTransmission();
@@ -271,14 +266,13 @@ bool clockDisplay::isRTC()
     return _rtc;
 }
 
+
 // Setup date in buffer --------------------------------------------------------
 
 
-// Set the displayed time with supplied DateTime object, ignores timeDifference
+// Set the displayed time with supplied DateTime object
 void clockDisplay::setDateTime(DateTime& dt)
 {
-    // ATTN: DateTime does not work for years < 2000, > 2099!
-
     setYear(dt.year());
     setMonth(dt.month());
     setDay(dt.day());
@@ -286,39 +280,7 @@ void clockDisplay::setDateTime(DateTime& dt)
     setMinute(dt.minute());
 }
 
-// Set the displayed time with supplied DateTime object with timeDifference
-void clockDisplay::setDateTimeDiff(DateTime& dt)
-{
-    uint64_t rtcTime;
-    int year, month, day, hour, minute;
-
-    if(!timeDifference) {
-        setDateTime(dt);
-        return;
-    }
-
-    rtcTime = dateToMins(dt.year() - _yearoffset, dt.month(), dt.day(), dt.hour(), dt.minute());
-
-    if(timeDiffUp) {
-        rtcTime += timeDifference;
-        // Don't care about 9999-10000 roll-over
-        // So we display 0000 for 10000+
-        // So be it.
-    } else {
-        rtcTime -= timeDifference;
-    }
-
-    minsToDate(rtcTime, year, month, day, hour, minute);
-
-    setYear(year + _yearoffset);
-    setMonth(month);
-    setDay(day);
-    setHour(hour);
-    setMinute(minute);
-}
-
 // Set YEAR, MONTH, DAY, HOUR, MIN from structure
-// Never use for RTC!
 void clockDisplay::setFromStruct(const dateStruct *s)
 {    
     setYear(s->year);
@@ -337,15 +299,15 @@ void clockDisplay::setFromParms(int year, int month, int day, int hour, int minu
     setMinute(minute);
 }
 
-void clockDisplay::getToParms(int& year, int& yo, int& month, int& day, int& hour, int& minute)
+void clockDisplay::getToParms(int& year, int& month, int& day, int& hour, int& minute)
 {
     year = getYear();
-    yo = getYearOffset();
     month = getMonth();
     day = getDay();
     hour = getHour();
     minute = getMinute();
 }
+
 
 // Show data in display --------------------------------------------------------
 
@@ -481,7 +443,9 @@ void clockDisplay::setAltText(const char *text)
     }
 }
 
+
 // Set fields in buffer --------------------------------------------------------
+
 
 void clockDisplay::setMonth(int monthNum)
 {
@@ -503,7 +467,7 @@ void clockDisplay::setMonth(int monthNum)
 
 void clockDisplay::setDay(int dayNum)
 {
-    int maxDay = daysInMonth(_month, _year-_yearoffset);
+    int maxDay = daysInMonth(_month, _year);
 
     // It is essential that setDay is called AFTER year
     // and month have been set!
@@ -517,17 +481,6 @@ void clockDisplay::setDay(int dayNum)
     _displayBuffer[CD_DAY_POS] = makeNum(dayNum);
 }
 
-void clockDisplay::setYearOffset(int16_t yearOffs)
-{
-    _yearoffset = yearOffs;
-
-    #ifdef TC_DBG
-    if(isRTC()) {
-        Serial.printf("ClockDisplay: _yearoffset set to %d\n", yearOffs);
-    }
-    #endif
-}
-
 void clockDisplay::setYear(uint16_t yearNum)
 {
     uint16_t seg = 0;
@@ -536,13 +489,8 @@ void clockDisplay::setYear(uint16_t yearNum)
     if((_did == DISP_PRES) && gpsHaveFix())
         seg = 0x8000;
     #endif
-    
-    if((int16_t)yearNum - _yearoffset < 0) {    // ny0: < 1
-        yearNum = _yearoffset;                  // ny0: yo+1
-    }
 
     _year = yearNum;
-    yearNum -= _yearoffset;
 
     while(yearNum >= 10000)
         yearNum -= 10000;
@@ -555,7 +503,7 @@ void clockDisplay::setHour(uint16_t hourNum)
 {
     uint16_t seg = 0;
     
-    if(hourNum > 23) 
+    if(hourNum > 23)
         hourNum = 23;
 
     _hour = hourNum;
@@ -594,12 +542,16 @@ void clockDisplay::setColon(bool col)
     _colon = _nightmode ? true : col;
 }
 
-void clockDisplay::setDST(int8_t isDST)
+void clockDisplay::setYearOffset(int16_t yearOffs)
 {
-    if(isRTC()) {
-        _isDST = isDST;
+    if(_rtc) {
+        _yearoffset = yearOffs;
+        #ifdef TC_DBG
+        Serial.printf("ClockDisplay: _yearoffset set to %d\n", yearOffs);
+        #endif
     }
 }
+
 
 // Query data ------------------------------------------------------------------
 
@@ -614,19 +566,9 @@ uint8_t clockDisplay::getDay()
     return _day;
 }
 
-int16_t clockDisplay::getYearOffset()
-{
-    return _yearoffset;
-}
-
 uint16_t clockDisplay::getYear()
 {
     return _year;
-}
-
-uint16_t clockDisplay::getDisplayYear()
-{
-    return _year - _yearoffset;
 }
 
 uint8_t clockDisplay::getHour()
@@ -639,11 +581,6 @@ uint8_t clockDisplay::getMinute()
     return _minute;
 }
 
-int8_t clockDisplay::getDST()
-{
-    return _isDST;
-}
-
 const char * clockDisplay::getMonthString(uint8_t mon)
 {
     if(mon >= 1 && mon <= 12)
@@ -652,7 +589,14 @@ const char * clockDisplay::getMonthString(uint8_t mon)
         return nullStr;
 }
 
+int16_t clockDisplay::getYearOffset()
+{
+    return _yearoffset;
+}
+
+
 // Put data directly on display (bypass buffer) --------------------------------
+
 
 void clockDisplay::showMonthDirect(int monthNum, uint16_t dflags)
 {
@@ -886,125 +830,105 @@ void clockDisplay::showHumDirect(int hum, bool animate)
 #endif
 
 
-// Save & load data ------------------------------------------------------------
+// Load & save data ------------------------------------------------------------
 
 
-/*
- * Save date/time and other settings to NVM storage (Flash/SD)
- * Only non-RTC displays save their time.
- * "Persistent" time travel causes more wear than "Non-Persistent".
+/* 
+ * Load time state (lastYear, yearOffset) from NVM 
+ * !!! Does not *SET* values, just returns them !!!
  */
-bool clockDisplay::save()
+int16_t clockDisplay::loadClockStateData(int16_t& yoffs)
 {
-    uint8_t savBuf[10]; // Sic! Sum written to last byte by saveNVMData
+    uint8_t loadBuf[8] = { 0 };
 
-    if(!isRTC()) {
+    yoffs = 0;
 
-        // Non-RTC: Save time
-
-        savBuf[0] = _year & 0xff;
-        savBuf[1] = (_year >> 8) & 0xff;
-        savBuf[2] = _yearoffset & 0xff;
-        savBuf[3] = (_yearoffset >> 8) & 0xff;
-        savBuf[4] = _month;
-        savBuf[5] = _day;
-        savBuf[6] = _hour;
-        savBuf[7] = _minute;
-        savBuf[8] = 0;        // unused
-
-    } else {
-
-        // RTC: Save IsDST, yearoffs, timeDiff
-
-        savBuf[0] = _isDST + 1;
-        
-        savBuf[1] = _yearoffset & 0xff;
-        savBuf[2] = (_yearoffset >> 8) & 0xff;
-
-        savBuf[3] = (timeDifference >> 32) & 0xff;
-        savBuf[4] = (timeDifference >> 24) & 0xff;
-        savBuf[5] = (timeDifference >> 16) & 0xff;
-        savBuf[6] = (timeDifference >>  8) & 0xff;
-        savBuf[7] =  timeDifference        & 0xff;
-
-        savBuf[8] = timeDiffUp ? 1 : 0;
-
-    }
-
-    saveNVMData(savBuf);
-
-    return true;
-}
-
-// Save YOffs and isDST, and clear timeDifference in storage
-bool clockDisplay::saveYOffs()
-{
-    uint8_t savBuf[10];  // Sic! Sum written to last byte by saveNVMData
-    int i;
-
-    if(!isRTC())
-        return false;
-
-    // RTC: Save yearoffs; zero timeDifference
-
-    memset(savBuf, 0, 10);
-    
-    savBuf[0] = _isDST + 1;
-    
-    savBuf[1] = _yearoffset & 0xff;
-    savBuf[2] = (_yearoffset >> 8) & 0xff;
-
-    saveNVMData(savBuf);
-
-    return true;
-}
-
-// Save given Year as "lastYear" for previous time state at boot
-bool clockDisplay::saveLastYear(uint16_t theYear)
-{
-    uint8_t savBuf[4];
-
-    if(!isRTC())
-        return false;
-
-    // Check if value identical to last one written
-    if(_lastWrittenLY == theYear)
-        return true;
-
-    // If not, read to check if identical to stored
-    _lastWrittenLY = loadLastYear();
-    if(_lastWrittenLY == theYear)
-        return true;
-    
-    savBuf[0] = theYear & 0xff;
-    savBuf[1] = (theYear >> 8) & 0xff;    
-    savBuf[2] = savBuf[0] ^ 0xff;
-    savBuf[3] = savBuf[1] ^ 0xff;
+    if(!_rtc)
+        return -2;
 
     if(FlashROMode) {
-        writeFileToSD(fnLastYear, savBuf, 4);
+        readFileFromSD(fnLastYearSD, loadBuf, 8);
     } else {
-        writeFileToFS(fnLastYear, savBuf, 4);
+        readFileFromFS(fnLastYear, loadBuf, 8);
     }
 
-    _lastWrittenLY = theYear;
+    if( (loadBuf[0] == (loadBuf[2] ^ 0xff)) &&
+        (loadBuf[1] == (loadBuf[3] ^ 0xff)) ) {
+
+        if( (loadBuf[4] == (loadBuf[6] ^ 0x55)) &&
+            (loadBuf[5] == (loadBuf[7] ^ 0x55)) ) {
+            yoffs = (int16_t)((loadBuf[5] << 8) | loadBuf[4]);
+        }
+
+        _lastWrittenLY = (int16_t)((loadBuf[1] << 8) | loadBuf[0]);
+        _lastWrittenYO = yoffs;
+        _lastWrittenRead = true;
+        
+        return _lastWrittenLY;
+
+    }
+
+    return -1;
+}
+
+/*
+ * Save given Year as "lastYear" and current _yearOffset for 
+ * recovering previous time state at boot.
+ * Returns true if FS was accessed during operation
+ */
+bool clockDisplay::saveClockStateData(uint16_t curYear)
+{
+    uint8_t savBuf[8];
+
+    if(!_rtc)
+        return false;
+
+    // Check if values identical to last ones written
+    if((_lastWrittenLY == curYear) && (_lastWrittenYO == _yearoffset))
+        return false;
+
+    // If not, read to check if identical to stored
+    if(!_lastWrittenRead) {
+        _lastWrittenLY = loadClockStateData(_lastWrittenYO);
+        _lastWrittenRead = true;
+        if((_lastWrittenLY == curYear) && (_lastWrittenYO == _yearoffset))
+            return true;
+    }
+    
+    savBuf[0] = curYear & 0xff;
+    savBuf[1] = (curYear >> 8) & 0xff;    
+    savBuf[2] = savBuf[0] ^ 0xff;
+    savBuf[3] = savBuf[1] ^ 0xff;
+    savBuf[4] = ((uint16_t)_yearoffset) & 0xff;
+    savBuf[5] = (((uint16_t)_yearoffset) >> 8) & 0xff;
+    savBuf[6] = savBuf[4] ^ 0x55;
+    savBuf[7] = savBuf[5] ^ 0x55;
+
+    _lastWrittenLY = curYear;
+    _lastWrittenYO = _yearoffset;
+
+    if(FlashROMode) {
+        writeFileToSD(fnLastYearSD, savBuf, 8);
+    } else {
+        writeFileToFS(fnLastYear, savBuf, 8);
+    }
 
     return true;
 }
 
 /*
- * Load data from NVM storage
+ * Load display specific data from NVM storage
  *
  */
 bool clockDisplay::load()
 {
     uint8_t loadBuf[10];
+    bool flashAccess;
 
-    if(!isRTC()) {
+    if(!_rtc) {
 
-        if(loadNVMData(loadBuf)) {
+        if(loadNVMData(loadBuf, flashAccess)) {
 
-            setYearOffset((loadBuf[3] << 8) | loadBuf[2]);
             setYear((loadBuf[1] << 8) | loadBuf[0]);
             setMonth(loadBuf[4]);
             setDay(loadBuf[5]);
@@ -1017,13 +941,7 @@ bool clockDisplay::load()
 
     } else {
 
-        // RTC: IsDST, yearoffs & timeDiff is saved
-
-        if(loadNVMData(loadBuf)) {
-
-              _isDST = (int8_t)loadBuf[0] - 1;
-
-              setYearOffset((loadBuf[2] << 8) | loadBuf[1]);
+        if(loadNVMData(loadBuf, flashAccess)) {
 
               timeDifference = ((uint64_t)loadBuf[3] << 32) |  // Dumb casts for
                                ((uint64_t)loadBuf[4] << 24) |  // silencing compiler
@@ -1034,10 +952,6 @@ bool clockDisplay::load()
               timeDiffUp = loadBuf[8] ? true : false;
 
         } else {
-
-              _isDST = -1;
-
-              setYearOffset(0);
 
               timeDifference = 0;
 
@@ -1053,80 +967,76 @@ bool clockDisplay::load()
     return false;
 }
 
-// Only load yearOffset from NVM
-// !!! Does not *SET* yearOffs, just returns it !!!
-// Returns impossible values in case of error to make
-// comparisons fail orderly
-int16_t clockDisplay::loadYOffs()
+/*
+ * Delayed save
+ * Used in time_loop to queue save operations in order
+ * to avoid long blocks due to FS operations
+ */
+void clockDisplay::savePending()
 {
-    uint8_t loadBuf[10];
-
-    if(!isRTC())
-        return -11111;
-
-    if(loadNVMData(loadBuf)) {
-        return ((loadBuf[2] << 8) | loadBuf[1]);
-    }
-
-    return -11111;
+    _savePending = 1;
 }
 
-// Only load isDST from NVM
-// !!! Does not *SET* it, just returns it !!!
-// Returns <= -1 in case of error (which makes
-// comparisons fail orderly)
-int8_t clockDisplay::loadDST()
-{
-    uint8_t loadBuf[10];
-
-    if(!isRTC())
-        return -2;
-
-    if(loadNVMData(loadBuf)) {
-        return (int8_t)loadBuf[0] - 1;
-    }
-
-    return -1;
+// Returns true if FS was accessed
+bool clockDisplay::saveFlush()
+{    
+    return (_savePending == 1) ? save() : false;
 }
 
-// Load lastYear from NVM
-// !!! Does not *SET* it, just returns it !!!
-int16_t clockDisplay::loadLastYear()
+/*
+ * Save display specific data to NVM storage (Flash/SD)
+ * Returns true if FS was accessed during operation
+ */
+bool clockDisplay::save(bool force)
 {
-    uint8_t loadBuf[4] = { 0 };
+    uint8_t savBuf[10]; // Sic! Sum written to last byte by saveNVMData
 
-    if(!isRTC())
-        return -2;
+    _savePending = 0;
+    memset(savBuf, 0, 10);
 
-    if(FlashROMode) {
-        readFileFromSD(fnLastYear, loadBuf, 4);
+    if(!_rtc) {
+
+        // Non-RTC: Save time
+
+        savBuf[0] = _year & 0xff;
+        savBuf[1] = (_year >> 8) & 0xff;
+        savBuf[4] = _month;
+        savBuf[5] = _day;
+        savBuf[6] = _hour;
+        savBuf[7] = _minute;
+
     } else {
-        readFileFromFS(fnLastYear, loadBuf, 4);
+
+        // RTC: Save timeDiff
+
+        savBuf[3] = (timeDifference >> 32) & 0xff;
+        savBuf[4] = (timeDifference >> 24) & 0xff;
+        savBuf[5] = (timeDifference >> 16) & 0xff;
+        savBuf[6] = (timeDifference >>  8) & 0xff;
+        savBuf[7] =  timeDifference        & 0xff;
+
+        savBuf[8] = timeDiffUp ? 1 : 0;
+
     }
 
-    if( (loadBuf[0] == (loadBuf[2] ^ 0xff)) &&
-        (loadBuf[1] == (loadBuf[3] ^ 0xff)) ) {
-
-        return (int16_t)((loadBuf[1] << 8) | loadBuf[0]);
-
-    }
-
-    return -1;
+    return saveNVMData(savBuf, force);
 }
-
 
 // Private functions ###########################################################
 
+// Returns true if FS was accessed
+// Returns false if not (data identical to cached)
 bool clockDisplay::saveNVMData(uint8_t *savBuf, bool noReadChk)
 {
     uint16_t sum = 0;
     uint8_t loadBuf[10];
     bool skipSave = false;
+    bool flashAccess = false;
 
     // Read to check if values identical to currently stored (reduce wear)        
-    if(!noReadChk && loadNVMData(loadBuf)) {
+    if(!noReadChk && loadNVMData(loadBuf, flashAccess)) {
         skipSave = true;
-        for(uint8_t i = 0; i < 9; i++) {
+        for(int i = 0; i < 9; i++) {
             if(savBuf[i] != loadBuf[i]) {
                 skipSave = false;
                 break;
@@ -1135,17 +1045,21 @@ bool clockDisplay::saveNVMData(uint8_t *savBuf, bool noReadChk)
     }
 
     if(skipSave)
-        return true;
+        return flashAccess;
 
-    for(uint8_t i = 0; i < 9; i++) {
+    #ifdef TC_DBG
+    unsigned long now = millis();
+    #endif
+
+    for(int i = 0; i < 9; i++) {
         sum += (savBuf[i] ^ 0x55);
     }
     savBuf[9] = sum & 0xff;
 
-    if(FlashROMode) {
-        skipSave = writeFileToSD(fnEEPROM[_did], savBuf, 10);
+    if(_configOnSD) {
+        writeFileToSD(fnSD[_did], savBuf, 10);
     } else {
-        skipSave = writeFileToFS(fnEEPROM[_did], savBuf, 10);
+        writeFileToFS(fnEEPROM[_did], savBuf, 10);
     }
 
     // Copy to cache regardless of result of write; otherwise
@@ -1154,19 +1068,28 @@ bool clockDisplay::saveNVMData(uint8_t *savBuf, bool noReadChk)
     memcpy(_CacheData, savBuf, 10);
     _Cache = 2;
 
-    return skipSave;
+    #ifdef TC_DBG
+    Serial.printf("saveNVMdata took %ld\n", millis()-now);
+    #endif
+
+    return true;
 }
 
-bool clockDisplay::loadNVMData(uint8_t *loadBuf)
+// Returns true if loaded data is valid, otherwise false
+bool clockDisplay::loadNVMData(uint8_t *loadBuf, bool& flashAccess)
 {
     uint16_t sum = 0;
     bool dataOk = false;
+    #ifdef TC_DBG
+    unsigned long now = millis();
+    #endif
 
+    flashAccess = false;
     memset(loadBuf, 0, 10);
 
     if(_Cache == 2) {
         memcpy(loadBuf, _CacheData, 10);
-        for(uint8_t i = 0; i < 9; i++) {
+        for(int i = 0; i < 9; i++) {
            sum += (loadBuf[i] ^ 0x55);
         }
         dataOk = ((sum & 0xff) == loadBuf[9]);
@@ -1175,14 +1098,16 @@ bool clockDisplay::loadNVMData(uint8_t *loadBuf)
     if(!dataOk) {
 
         _Cache = -1;  // Invalidate; either empty or corrupt
+        flashAccess = true;
             
-        if(FlashROMode) {
-            readFileFromSD(fnEEPROM[_did], loadBuf, 10);
-        } else {
+        if(_configOnSD) {
+            dataOk = readFileFromSD(fnSD[_did], loadBuf, 10);
+        } 
+        if(!dataOk) {
             readFileFromFS(fnEEPROM[_did], loadBuf, 10);
         }
 
-        for(uint8_t i = 0; i < 9; i++) {
+        for(int i = 0; i < 9; i++) {
            sum += (loadBuf[i] ^ 0x55);
         }
         dataOk = ((sum & 0xff) == loadBuf[9]);
@@ -1192,8 +1117,16 @@ bool clockDisplay::loadNVMData(uint8_t *loadBuf)
         }
     }
 
+    #ifdef TC_DBG
+    Serial.printf("loadNVMdata took %ld\n", millis()-now);
+    #endif
+
     return dataOk;
 }
+
+/*
+ * Segment helpers
+ */
 
 // Returns bit pattern for provided value 0-9 or number provided as a char '0'-'9'
 // for display on 7 segment display
@@ -1213,7 +1146,7 @@ uint8_t clockDisplay::getLED7AlphaChar(uint8_t value)
     if(value < 32 || value >= 127 + 2)
         return 0;
     
-    if(_corr6 && value == '6')
+    if(value == '6' && _corr6)
         return numDigs[value - 32] | 0x01;
     
     return numDigs[value - 32];
@@ -1227,7 +1160,7 @@ uint16_t clockDisplay::getLEDAlphaChar(uint8_t value)
         return 0;
 
     // For text, use common "6" pattern to conform with 7-seg-part
-    if(_corr6 && value == '6')
+    if(value == '6' && _corr6)
         return alphaChars['6' - 32] | 0x0001;
 
     return alphaChars[value - 32];
@@ -1255,9 +1188,9 @@ uint16_t clockDisplay::makeNum(uint8_t num, uint16_t dflags)
 // (leave buffer intact, directly write to display)
 void clockDisplay::directCol(int col, int segments)
 {
-    if(_yearDot && (col == CD_YEAR_POS + 1)) {
+    if((col == CD_YEAR_POS + 1) && _yearDot) {
         segments |= 0x8000;
-    } else if(_withColon && (col == CD_YEAR_POS)) {
+    } else if((col == CD_YEAR_POS) && _withColon) {
         segments |= 0x8080;
     }
     Wire.beginTransmission(_address);
