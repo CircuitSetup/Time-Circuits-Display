@@ -1,4 +1,4 @@
-#PCB Revision History
+# PCB Revision History
 ## Control Board
 v1.4.5 (8/1/24)
 - Consolodated inputs/outputs into 8 pin screw connector
