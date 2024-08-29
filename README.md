@@ -2,103 +2,144 @@
 
 | ![TCD Front](https://user-images.githubusercontent.com/76924199/200327688-cfa7b1c2-abbd-464d-be6d-5d295e51056e.jpg) |
 |:--:|
-| *This very one is now in the Universal Studios [BTTF Escape Room](https://www.universalorlando.com/web/en/us/things-to-do/entertainment/universals-great-movie-escape) (Orlando)* |
+| *This very TCD is now used in the Universal Studios [BTTF Escape Room](https://www.universalorlando.com/web/en/us/things-to-do/entertainment/universals-great-movie-escape) (Orlando)* |
 
 The CircuitSetup Time Circuits Display has been meticulously reproduced to be as accurate as possible to the one seen in the DeLorean Time Machine in the Back to the Future movies. The LED displays are custom made to the correct size for CircuitSetup. This includes the month 14 segment/3 character displays being closer together, and both the 7 & 14 segment displays being 0.6" high by 0.35" wide.
 
-## Kits
+## TCD Kits
 [Time Circuits Display kits can be purchased here with or without 3d printed parts or aluminum enclosures.](https://circuitsetup.us/product/complete-time-circuits-display-kit/)
 
 [View the instructions for assembling your CircuitSetup.us TCD Kit](https://github.com/CircuitSetup/Time-Circuits-Display/wiki)
 
-### Kit Parts
-- 3x Segment displays in (Red, Green, Yellow)
-- ESP32 powered control board
-- TRW style number keypad (must be disassembled to use number keys, pcb and rubber backing)
-- Gels for displays (Red, Green, Yellow)
-- Mounting hardware (37x screws for display enclosure to outer enclosure, display PCB to enclosures, speaker mount, keypad mount, 4x small screws for keypad PCB to bezel mount)
-- Connection wiring (3x 4p JST-XH for display I2C, 1 7p JST-XH for keypad)
-- Square keypad LED lenses (2x white, 1x red/amber/green)
-- Small 4ohm 3W speaker
-- Display stickers
-- 3d printed enclosures and keypad housing OR Aluminum enclosures (optional)
+Features include
 
-## Features
-#### Complete Time Circuits functionality with movie sound effects
-- Enter any date via keypad
-- Time travel to the Destination Time with display effects
-- Return from time travel
-- Automatic rotation of times displayed in the movie (optional rotation intervals, or off)
-- Different modes to turn on/off the beep sound heard in the movie
-#### Present Time as a clock
-- On-board Real Time Clock (RTC)
-- Get accurate time from NTP (network time) when connected to a WiFi network
-- Support for time zones and automatic DST
-- Alarm function (sounds customizable with a SD card)
-- Timer function - easily set a countdown timer
-- Reminder function - play a sound on a specific time on a day of the month or year
-- Play a sound every hour (optional)
-#### Support for external power on/off & other prop control
-- Trigger an external time travel event on other props
-- Trigger a time travel event (on the TCD) from another prop
-- Direct support for a Speedometer with GPS (can get accurate time from GPS)
-- Fake power on & off - TCD will boot, setup WiFi, sync time with NTP, but not start/turn off displays until an active-low button is pressed (useful for turning on/off the displays with a TFC drive switch)
-#### Other features
-- Settings interface web portal
-- Keypad menu for adjusting various settings, viewing IP address, and WiFi status
-- Configurable WiFi connection timeouts and retries
-- Configurable low power mode (turns off WiFi & lowers MCU speed)
-- Music player via SD card
-- Custom audio files via SD card
-- Set a static IP
-- Optional power-up intro with sound
-- 24-hour clock mode for non-Americans
-- Night mode (displays off or dimmed) & ability to automatically turn on/off by Present Time
-- World clock mode to display time in different time zones
-- Room condition mode - Ability to hook up temperature/humidity, and light sensors
-- MQTT interface to display messages and accept commands via MQTT
-- Option to make time travels persistent over reboots (dates entered stay there instead of rotating)
-- Built-in installer for default audio files
-- OTA firmware updates
+- Clock-related:
+  - Time keeping for years 1-9999, &#127381; accurately based on Julian and Gregorian [calendars](#calendar-system)
+  - Support for time zones and automatic DST (Daylight Saving adjustment)
+  - Time synchronization through Internet ([NTP](https://en.wikipedia.org/wiki/Network_Time_Protocol)) or [GPS](#gps-receiver)
+  - [World Clock mode](#world-clock-mode): Show current time in different time zones in *destination time* and/or *last time departed* displays
+  - [Alarm function](#how-to-set-up-the-alarm): Daily alarms, with weekday selection
+  - [Count-down timer](#count-down-timer): Count down from up to 99 minutes
+  - [Yearly/monthly reminder](#yearlymonthly-reminder): Get a yearly or monthly acoustic reminder
+  - [Sound on the hour](#additional-custom-sounds)
+- Movie-related:
+  - Movie-accurate [Beep](#beep-on-the-second) sound every second (4 modes)
+  - Movie-accurate [time travel](#time-travel) function
+  - ["Return from Time Travel"](#time-travel): Return to real present time easily
+  - ["Decorative mode"](#time-cycling): Movie-accurate time travel times displayed in *destination time* and *last time departed* displays, and cycled in configurable interval
+  - [Exhibition mode](#exhibition-mode): Show a fixed time in *Present Time* display instead of a running clock. Helpful for filming or museums.
+- Network capabilities:
+  - Advanced network-accessible [Config Portal](#the-config-portal) for setup (http://timecircuits.local, hostname configurable)
+  - [Wireless communication](#bttf-network-bttfn) with compatible other props such as CircuitSetup's [Flux Capacitor](https://github.com/CircuitSetup/Flux-Capacitor) and [SID](https://github.com/CircuitSetup/SID), as well as the [Dash Gauges](github.com/CircuitSetup/Dash-Gauges) and [VSR](https://vsr.out-a-ti.me)
+  - [Home Assistant](#home-assistant--mqtt) (MQTT 3.1.1) support
+- [Night mode](#night-mode): Dim or switch off displays on schedule, manually or sensor-controlled.
+- [Music player](#the-music-player): Play mp3 files located on an SD card
+- &#127381; Audio output through [line-out](#audio-output) for time travel sounds and music (requires Control Board 1.4.5 or later), allows connecting your TCD to your (car) stereo for high-quality stereo-sound.
+- Support for [SD cards](#sd-card) up to 32GB
+- [Keypad-controlled menu](#the-keypad-menu) for adjusting various settings and viewing status through the three displays
+- Peripherals:
+  - Support for external [fake "power switch"](#fake-power-switch) (eg. a TFC drive switch)
+  - Support for time travel [triggered by external source](#external-time-travel-trigger), with selectable delay
+  - Support for external [Speedometer](#speedometer) (eg. CircuitSetup's [speedo](https://circuitsetup.us/product/delorean-time-machine-speedometer-pcb/?v=fa868488740a))
+  - Support for [GPS receiver](#gps-receiver), used as time source and for actual [speed](#gps-for-speed) to be displayed on speedo display
+  - Support for [rotary encoders](#rotary-encoder) for manual selection of speed to be displayed on Speedo display, &#127381; and/or audio volume
+  - Support for [temperature/humidity sensor](#room-condition-mode-temperaturehumidity-sensor) for [Room condition mode](#room-condition-mode-temperaturehumidity-sensor) [display temperature and humidity in *destination time* and *last time departed* displays] and for displaying temperature on speedo display while idle
+  - Support for triggering time travels on other props [connected by wire](#connecting-props-by-wire)
 
-## Short summary of first steps
+| [![Watch the video](https://img.youtube.com/vi/u9oTVXUIOXA/0.jpg)](https://youtu.be/u9oTVXUIOXA) |
+|:--:|
+| Click to watch the video |
 
-The first step is to establish access to the Config Portal in order to configure your TCD.
+## Firmware Installation
 
-As long as the device is unconfigured, as is the case with a brand new TCD, or later if it for some reason fails to connect to a configured WiFi network, it starts in "access point" mode, i.e. it creates a WiFi network of its own named "TCD-AP". This is called "Access point mode", or "AP-mode".
+If a previous version of the TCD firmware is installed on your device, you can update easily using the pre-compiled binary. Enter the [Config Portal](#the-config-portal), click on "Update" and select the latest pre-compiled binary file provided in [the release section](https://github.com/CircuitSetup/Time-Circuits-Display/releases).
+
+
+### Audio data installation
+
+The firmware comes with some audio data ("sound-pack") which needs to be installed separately. The audio data is not updated as often as the firmware itself. If you have previously installed the latest version of the sound-pack, you normally don't have to re-install the audio data when you update the firmware. Only if the TCD displays "PLEASE INSTALL AUDIO FILES" during boot, an update of the audio data is needed.
+
+>If your TCD previously ran a firmware from CircuitSetup (ie. pre-installed or downloaded from their github), installing of the audio data **from this repository** is required. You cannot use CircuitSetup's audio data with the firmware available here, or vice versa.
+
+The first step is to download "install/sound-pack-xxxxxxxx.zip" and extract it. It contains one file named "TCDA.bin".
+
+Then there are two alternative ways to proceed. Note that both methods *require an SD card*.
+
+1) Through the [Config Portal](#the-config-portal). Click on *Update*, select the "TCDA.bin" file in the bottom file selector and click on *Upload*. Note that an SD card must be in the slot during this operation.
+
+2) Via SD card:
+- Copy "TCDA.bin" to the root directory of of a FAT32 formatted SD card;
+- power down the TCD,
+- insert this SD card into the slot and 
+- power up the TCD; the audio data will be installed automatically.
+
+After installation, the SD card can be re-used for [other purposes](#sd-card).
+
+## Initial Configuration
+
+>The following instructions only need to be followed once, on fresh TCDs. They do not need to be repeated after a firmware update.
+
+The first step is to establish access to the TCD's configuration web site ("Config Portal") in order to configure your TCD:
 
 - Power up the TCD and wait until it shows a time (which is probably wrong).
 - Connect your computer or handheld device to the WiFi network "TCD-AP".
 - Navigate your browser to http://timecircuits.local or http://192.168.4.1 to enter the Config Portal.
- 
-If you want your TCD to connect to your WiFi network, click on "Configure WiFi". The bare minimum is to select an SSID (WiFi network name) and a WiFi password. 
 
-Note that the TCD requests an IP address via DHCP, unless you entered valid data in the fields for static IP addresses (IP, gateway, netmask, DNS). If the device is inaccessible as a result of incorrect static IPs, hold ENTER when powering it up until the white LED lits; static IP data will be deleted and the device will return to DHCP. 
+#### Connecting to a WiFi network
+
+As long as the device is unconfigured, it creates a WiFi network of its own named "TCD-AP". This is called "Access point mode", or "AP-mode". In this mode, other WiFi devices can connect to the TCD, but the TCD can't access the internet (and therefore not synchronize time).
+
+It is ok to leave the TCD in this mode, especially if it is mounted in a car or places with no WiFi networks available. In a typical home setup, however, you might want to connect the TCD to your WiFi network. To do so, click on "Configure WiFi". The bare minimum is to select an SSID (WiFi network name) and a WiFi password.
+
+>Note that the TCD requests an IP address via DHCP, unless you entered valid data in the fields for static IP addresses (IP, gateway, netmask, DNS). If the device is inaccessible as a result of incorrect static IPs, hold ENTER when powering it up until the white LED lights up; static IP data will be deleted and the device will return to DHCP.
 
 After saving the WiFi network settings, the TCD reboots and tries to connect to your configured WiFi network. If that fails, it will again start in access point mode.
 
-The next step is to set the TCD's time zone and actual time.
+Assuming the connection could be established, you now enter the Config Portal like this:
+- Connect your hand-held/computer to the same WiFi network to which the TCD is connected, and
+- navigate your browser to http://timecircuits.local (if that fails, please see [below](#if-tcd-is-connected-to-wifi-network) on how to connect to the Config Portal)
 
-- If your TCD is connected to a WiFi network with internet access, it will receive time information through NTP (network time protocol). If the TCD shows a wrong time initially, don't worry: This is due to a wrong time zone.
-- If the internet is inaccessible (such as is the case if the TCD is in access point mode), please set your local time through the [keypad menu](#how-to-set-the-real-time-clock-rtc) after setting up the time zone.
+#### Time zone and Time
 
-In both cases it is, again, important to set the TCD's time zone. This is done in the Config Portal, so read on.
+The next step is to set the TCD's time zone. If the time zone isn't properly configured, the TCD will show a wrong time, and DST (daylight saving) will not be switched on/off correctly.
 
-### The Config Portal
+Click on "SETUP" on the Config Portal's main page, and specify your [time zone](#-time-zone). Then click "SAVE"; the TCD will reboot.
 
-The Config Portal is accessible exclusively through WiFi. As outlined above, if the device is not connected to a WiFi network, it creates its own WiFi network (named "TCD-AP"), to which your WiFi-enabled hand held device or computer first needs to connect in order to access the Config Portal.
+Setting actual time:
+- If the TCD is connected to a WiFi network with internet access, it will receive time information through NTP (network time protocol). No user interaction is required.
+- If you keep your TCD in access point mode (in which case it cannot access the internet), please set your local time through the [keypad menu](#how-to-set-the-real-time-clock-rtc).
 
-If the operating system on your handheld or computer supports Bonjour (or "mDNS"), you can enter the Config Portal by directing your browser to http://timecircuits.local. (mDNS is supported on Windows 10 version TH2 (1511) [other sources say 1703] and later, Android 13 and later, MacOS, iOS)
+After completing these steps, your TCD is basically ready for use; you can also continue configuring it to your personal preferences through the Config Portal.
 
-If that fails, the way to enter the Config Portal depends on whether the TCD is in access point mode or not. 
-- If it is in access point mode (and your handheld/computer is connected to the WiFi network "TCP-AP"), navigate your browser to http://192.168.4.1 
-- If the device is connected to your WiFi network, you need to find out its IP address first: Hold ENTER on the keypad for 2 seconds, then repeatedly press ENTER until "NET-WORK" is shown, then hold ENTER for 2 seconds. The device will then show its current IP address. Then, on your handheld or computer, navigate to http://a.b.c.d (a.b.c.d being the IP address as shown on the display) in order to enter the Config Portal.
+## The Config Portal
 
-In the main menu, click on "Setup" to configure your TCD, first and foremost your time zone. If the time zone isn't set correctly, the TCD might show a wrong time, and DST (daylight saving) will not be switched on/off correctly.
+The "Config Portal" is the TCD's configuration web site. 
 
-| ![The_Config_Portal](https://github.com/realA10001986/Time-Circuits-Display/assets/76924199/95888ad5-5e3e-4f62-8a6c-e945de1bd281) |
+| ![The Config Portal](img/cpm.png) |
 |:--:| 
-| *The Config Portal's Setup page* |
+| *The Config Portal's main page* |
+
+It can be accessed as follows:
+
+#### If TCD is in AP mode
+
+- Connect your computer or handheld device to the WiFi network "TCD-AP".
+- Navigate your browser to http://timecircuits.local or http://192.168.4.1 to enter the Config Portal.
+
+#### If TCD is connected to WiFi network
+
+- Connect your hand-held/computer to the same WiFi network to which the TCD is connected, and
+- navigate your browser to http://timecircuits.local
+
+  Accessing the Config Portal through this address requires the operating system of your hand-held/computer to support Bonjour/mDNS: Windows 10 version TH2     (1511) [other sources say 1703] and later, Android 13 and later; MacOS and iOS since the dawn of time.
+
+  If connecting to http://timecircuits.local fails due to a name resolution error, you need to find out the TCD's IP address: Hold ENTER on the TCD's keypad for 2 seconds, then repeatedly  press ENTER until "NET-WORK" is shown, then hold ENTER for 2 seconds. The device will then show its current IP address. Then, on your handheld or computer, navigate to http://a.b.c.d (a.b.c.d being the IP address as shown on the display) in order to enter the Config Portal.
+
+In the main menu, click on "Setup" to configure your TCD. 
+
+| [<img src="img/cps-frag.png">](img/cp_setup.png) |
+|:--:| 
+| *Click for full screenshot* |
 
 A full reference of the Config Portal is [here](#appendix-a-the-config-portal).
 
@@ -108,36 +149,65 @@ A full reference of the Config Portal is [here](#appendix-a-the-config-portal).
 
 *Destination time* and *Last time departed* are stale. These, by default, work like in the movie: Upon a time travel, *present time* becomes *last time departed*, and *destination time* becomes *present time*.
 
-The TCD only supports the [Gregorian Calendar](https://en.wikipedia.org/wiki/Gregorian_calendar), which it pretends to have been used since year 1. The [Julian Calendar](https://en.wikipedia.org/wiki/Julian_calendar) is not taken into account. Therefore, some years that, in the then-used Julian Calendar, were leap years between years 1 and 1582 most of today's Europe (and its Spanish colonies in the Americas), 1700 in DK/NO/NL (except Holland and Zeeland), 1752 in the British Empire (and therefore today's USA, Canada and India), 1753 in Sweden, 1760 in Lorraine, 1872 in Japan, 1912 in China, 1915 in Bulgaria, 1917 in the Ottoman Empire, 1918 in Russia and Serbia and 1923 in Greece, are normal years in the Gregorian one. As a result, dates do not match in those two calender systems, the Julian calendar is currently 13 days behind. I wonder if Doc's TC took all this into account. (Then again, he wanted to see Christ's birth on Dec 25, 0. Luckily, he didn't actually try to travel to that date. Assuming a negative roll-over, he might have ended up in eternity.)
+>If "REPLACE BATTERY" is shown upon boot, the onboard CR2032 battery is depleted and needs to be replaced. Note that, for technical reasons, "REPLACE BATTERY" will also show up the very first time you power-up the TCD *after* changing the battery. You can, of course, disregard that message in this case.
+
+### Powering down the TCD
+
+The TCD sometimes writes data to either the internal flash file system or the SD card. These write operations should not be interrupted by a power loss.
+
+In general, it is safe to power-down the TCD when it is idle or after it has been fake-powered-down. Try to avoid powering down the TCD
+- when it is clearly busy (such as when copying or renaming audio files);
+- within 15 seconds after an audio volume change through a Rotary Encoder.
+- if [**_Make time travels persistent_**](#persistent--non-persistent-time-travels) is checked: in the first few seconds after a timetravel.
+
+### Calendar system
+
+Since the update of Dec 11, 2023, the TCD firmware uses the [Julian Calendar](https://en.wikipedia.org/wiki/Julian_calendar) calendar from Jan 1, 1, until Sep 2, 1752, and for later dates the [Gregorian](https://en.wikipedia.org/wiki/Gregorian_calendar) one. Sep 2, 1752, was the last day the Julian calendar was used in the ["First" British Empire](https://en.wikipedia.org/wiki/British_Empire#%22First%22_British_Empire_(1707%E2%80%931783)) (Great Britain and its colonies, including eastern parts of North America, Canada). Other countries stopped using this calendar system way earlier; most of Europe, including Spain plus its colonies worldwide, had switched in 1582 already. DK/NO/NL (except Holland and Zeeland) switched in 1700, Japan in 1872, China in 1912, Russia in 1918.
+
+Since the time machine was built in the USA, using 1752 for the TCD seems appropriate.
+
+So, what does this mean? First off, in the Julian calendar every 4th year is a leap year; in the Gregorian calendar there are some exceptions to this rule. This means, as a result, that the two calendars were drifting apart over time, and dates didn't match. As of 2023, the Julian calendar is 13 days ahead.
+
+Secondly, and as a result of this drift, when countries switched from one to the other calendar system, days were skipped. In case of the switch in 1752, Sep 3 until Sep 13 were skipped, so after Sep 2 came Sep 14. For using the TCD this means that dates entered within that skipped period are corrected to Sep 14.
+
+Earlier versions of the firmware only supported the Gregorian Calendar, which it pretended to have been used since year 1. The Julian Calendar was not taken into account. 
 
 Neither the Gregorian nor the Julian Calendar know a "year 0"; 1AD followed after 1BC. Nevertheless, it is possible to travel to year 0. In good old Hollywood tradition, I won't let facts and science stand in the way of an authentic movie experience.
-
-If "REPLACE BATTERY" is shown upon boot, the onboard CR2032 battery is depleted and needs to be replaced. Note that, for technical reasons, "REPLACE BATTERY" will also show up the very first time you power-up the TCD *after* changing the battery. You can, of course, disregard that message in this case.
 
 ### Time-cycling
 
 "Time cycling" is a kind of decorative mode in which the device cycles through a list of pre-programmed *destination* and *last time departed* times. These pre-programmed times match the dates/times of all time-travels that take place in the three movies.
 
-Time-cycling is enabled by setting the **_Time-cycling Interval_** in the Config Portal or the [keypad menu](#how-to-select-the-time-cycling-interval) to a non-zero value. The device will then cycle through named list every 5th, 10th, 15th, 30th or 60th minute. 
+Time-cycling is enabled by setting up a **_Time-cycling Interval_** in the Config Portal or the [keypad menu](#how-to-select-the-time-cycling-interval). The device will then cycle through named list every 5th, 10th, 15th, 30th or 60th minute. 
 
 Time-cycling will, if enabled, change the *Destination* and *Last Time Departed* displays regardless of the times already displayed, for instance as a result from an earlier time travel. Triggering a time-travel will, however, pause time-cycling for 30 minutes.
 
-Set the interval to OFF (0) to disable Time-cycling.
-
 ### World Clock mode
 
-World Clock (WC) mode is another kind of decorative mode where the red and yellow displays show not some stale times, but current time in other time zones. These time zones need to be configured in Config Portal. At least one time zone (for either the red or yellow display) must be configured in order to use WC mode. Optionally, also names for cities/locations for these time zones can be entered in the Config Portal; if a name for a time zone is configured, this name and the time will alternately be shown; if no name is configured, time will be shown permanently. Note that names can only contain letters a-z, numbers 0-9, space and minus.
+In World Clock (WC) mode, the red and yellow displays show not some stale times, but current time in other time zones. These time zones need to be configured in Config Portal. At least one time zone (for either the red or yellow display) must be configured in order to use WC mode. Optionally, also names for cities/locations for these time zones can be entered in the Config Portal; if a name for a time zone is configured, this name and the time will be shown alternately. Note that names can only contain letters a-z, numbers 0-9, space and minus.
+
+| [![Watch the video](https://img.youtube.com/vi/Uk1W7D6Ab9Y/0.jpg)](https://youtu.be/Uk1W7D6Ab9Y) |
+|:--:|
+| Click to watch the video |
+
+| ![WC mode](img/wcmode.jpg) |
+|:--:|
+| *World Clock mode* |
 
 WC mode is toggled by typing "112" followed by ENTER. 
 
 For logical reasons, WC mode will be automatically disabled in some situations:
 
-- Time travel. The time travel sequence runs like in non-WC mode: If a time travel is triggered while WC mode is enabled (and no new destination time was entered before), the currently shown *Destination Time* will be the travel target, and the *Last Time Departed* display will show your formerly current time. However: Both *Destination Time* as well as *Last Time Departed* become stale after the time travel as per the nature of the sequence.
 - After entering a destination time. WC mode is disabled at this point, because your new *Destination Time* would be overwritten otherwise.
+- Time travel. The time travel sequence runs like in non-WC mode: If a time travel is triggered while WC mode is enabled (and no new destination time was entered before), the currently shown *Destination Time* will be the travel target, and the *Last Time Departed* display will show your formerly current time. However: Both *Destination Time* as well as *Last Time Departed* become stale after the time travel as per the nature of the sequence.
 
 #### WC/RC hybrid mode
 
 [Room Condition (RC) mode](#room-condition-mode-temperaturehumidity-sensor) can be enabled together with WC mode. In that case, only one timezone is used, and the other display shows the temperature. If there is a time zone configured for the red display, the temperature will be shown in the yellow display. If there no time zone for the red display, the temperature will be shown there, and the yellow display will show time for the time zone you set up for the yellow display.
+
+| ![WC/RC hybrid](img/hybmode.jpg) |
+|:--:|
+| *WC/RC hybrid mode* |
 
 To toggle WC/RC hybrid mode, type "113" followed by ENTER.
 
@@ -149,15 +219,33 @@ To enable this mode, type 999 followed by ENTER. The default fixed time will be 
 
 Exhibition mode is persistent; the pre-programmed time will be stored and retrieved after a reboot/power-down.
 
+Not strictly part of Exhibition mode, but related: If you want your TCD to display specific times in the *Destination Time* and/or *Last Time Departed* displays, you can program those times through the [keypad menu](#how-to-program-datestimes-for-the-destination-and-last-time-departed-displays). Those times will be displayed, but replaced as soon as a time travel takes place. To quickly restore the displays to your pre-programmed times, enter 998 followed by ENTER. Note that this only works if **_Make time travels persistent_** is unchecked in the Config Portal.
+
+### Audio Output
+
+Control boards 1.4.5 and later have two ways of audio output:
+- built-in speaker, or
+- line-out (at line-level, for connecting the TCD to a stereo's line-in)
+
+By default, all audio is played over the speaker. 
+
+Entering 351 followed by ENTER enables playback over line-out for
+- music and
+- time travel sounds.
+
+All other sounds, which are supposed to be emitted by the TCD itself, are always played over the built-in speaker. Note that the TCD's volume control (knob, software-selected level, rotary encoder) only has impact on the built-in speaker.
+
+Entering 350 plus ENTER disables line-out output. This setting is persistent over reboots.
+
 ### Common usage scenarios
 
 ####  &#9654; I want my TCD to work like in the movie
 
 In this case, head to the Config Portal and
 - set the **_Time Cycling Interval_** to OFF
-- check or uncheck **_Make time travels persistent_** depending on whether you care about keeping your times across reboots
+- check or uncheck **_Make time travels persistent_** depending on whether you care about keeping the displayed times across reboots/power cycles.
 
-Note that *actual* time travel is not supported.
+>Note that *actual* time travel is not supported.
 
 #### 	&#9654; I want my TCD to show/cycle movie times
 
@@ -173,9 +261,9 @@ In this case, head to the Config Portal and
 - set the **_Time Cycling Interval_** to OFF
 - uncheck **_Make time travels persistent_**
 
-Then enter the [keypad menu](#how-to-enter-datestimes-for-the-destination-and-last-time-departed-displays) and set your favorite *Destination* and *Last time departed* times.
+Then enter the [keypad menu](#how-to-program-datestimes-for-the-destination-and-last-time-departed-displays) and set your favorite *Destination* and *Last time departed* times.
 
-Note that time-travelling will naturally lead to the displays showing other times. After a reboot, your times will be displayed again.
+Note that time-travelling will naturally lead to the displays showing other times. After a reboot, your times will be displayed again. To bring them back without rebooting, type 998 followed by ENTER.
 
 ### Keypad reference
 
@@ -230,8 +318,24 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
      <td align="left">112&#9166;</td>
     </tr>
     <tr>
-     <td align="left">Synchronously toggle <a href="#">World Clock mode</a> and <a href="#room-condition-mode-temperaturehumidity-sensor">Room Condition mode</a></td>
+     <td align="left">Toggle both <a href="#">World Clock</a> and <a href="#room-condition-mode-temperaturehumidity-sensor">Room Condition</a> (WC/RC hybrid)</td>
      <td align="left">113&#9166;</td>
+    </tr>
+    <tr>
+     <td align="left">Display weekday of currently displayed <i>present time</i> date</td>
+     <td align="left">33&#9166;</td>
+    </tr>
+   <tr>
+     <td align="left">Select audio volume level</td>
+     <td align="left">300 - 319&#9166;</td>
+    </tr>
+  <tr>
+     <td align="left">Disable/enable <a href="#audio-output">line-out audio</a> for music and time travel sounds</td>
+     <td align="left">350&#9166; / 351&#9166;</td>
+    </tr>
+   <tr>
+     <td align="left">Enable built-in volume knob</td>
+     <td align="left">399&#9166;</td>
     </tr>
     <tr>
      <td align="left">Show current <a href="#how-to-set-up-the-alarm">alarm</a> time/weekday</td>
@@ -274,7 +378,7 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
      <td align="left">770&#9166;</td>
     </tr>
     <tr>
-     <td align="left"><a href="#the-music-player">Music Player</a>: Show currently played song number</td>
+     <td align="left"><a href="#the-music-player">Music Player</a>: Show currently played song</td>
      <td align="left">55&#9166;</td>
     </tr>
     <tr>
@@ -294,15 +398,19 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
      <td align="left">888xxx&#9166;</td>
     </tr>
    <tr>
-     <td align="left">Disable / enable <a href="#car-mode"><i>car mode</i></a></td>
+     <td align="left">Disable / enable <a href="#car-mode">car mode</a></td>
      <td align="left">990&#9166; / 991&#9166;</td>
     </tr>
   <tr>
-     <td align="left">Enable / disable <a href="#exhibition-mode"><i>Exhibition mode</i></a></td>
+     <td align="left">Restore user destination/last time dep. times</td>
+     <td align="left">998&#9166;</td>
+  </tr>
+  <tr>
+     <td align="left">Enable / disable <a href="#exhibition-mode">Exhibition mode</a></td>
      <td align="left">999&#9166;</td>
     </tr>
  <tr>
-     <td align="left">Program time for <a href="#exhibition-mode"><i>Exhibition mode</i></a></td>
+     <td align="left">Program time for <a href="#exhibition-mode">Exhibition mode</a></td>
      <td align="left">99mmddyyyyhhMM&#9166;</td>
     </tr>
     <tr>
@@ -347,29 +455,27 @@ Before triggering the time travel, you can also first quickly set a new destinat
 
 To travel back to actual present time, hold "9" for 2 seconds.
 
-Beware that the alarm function, by default, is based on the real actual present time, not the time displayed. This can be changed in the Config Portal.
-
 ### Persistent / Non-persistent time travels
 
-On the Config Portal's "Setup" page, there is an option item named **_Make time travels persistent_**. The default is off.
+On the Config Portal's "Setup" page, there is an option item named **_Make time travels persistent_**. The default is off. 
+
+>Note that in order to enable this feature, an SD card is required and the option **_Save secondary settings on SD_** must be checked as well.
 
 If time travels are persistent
-- a user-programmed *destination time* is always stored in flash memory, and retrieved from there after a reboot. It can be programmed through the keypad menu, or ahead of a time travel by typing mmddyyyyhhMM/mmddyyyy/hhMM plus ENTER. In both cases, the time is stored in flash memory and retrieved upon power-up/reboot.
-- *last time departed* as displayed at any given point is always stored in flash memory, and retrieved upon power-up/reboot.
+- a user-programmed *destination time* is always saved, and retrieved after a reboot. It can be programmed through the keypad menu, or ahead of a time travel by typing mmddyyyyhhMM/mmddyyyy/hhMM plus ENTER. In both cases, the time is saved and retrieved upon power-up/reboot.
+- *last time departed* as displayed at any given point is always saved, and retrieved upon power-up/reboot.
 - *present time*, be it actual present time or "fake" after time travelling, will continue to run while the device is not powered, as long as its battery lasts, and displayed on power-up/reboot.
 
 If time travels are non-persistent
-- a user-programmed *destination time* is only stored to flash memory when programmed through the keypad menu, but not if entered ahead of a time travel (ie outside of the keypad menu, just by typing mmddyyyyhhMM/mmddyyyy/hhMM plus ENTER).
-- a user-programmed *last time departed* is only stored to flash memory when programmed through the keypad menu, but not if the result of a time travel.
+- a user-programmed *destination time* is only saved when programmed through the keypad menu, but not if entered ahead of a time travel (ie outside of the keypad menu, by typing mmddyyyyhhMM/mmddyyyy/hhMM plus ENTER).
+- a *last time departed* is only saved when programmed through the keypad menu, but not if the result of a time travel.
 - *present time* is always reset to actual present time upon power-up/reboot.
 
-If you want your device to display exactly the same after a power loss, choose persistent (and disable [Time-cycling](#time-cycling)).
+If you want your device to display exactly the same after a power loss, choose persistent (and disable [Time-cycling](#time-cycling)). 
 
-If you want to display your favorite *destination time* and *last time departed* upon power-up, and not have time travels overwrite them in flash memory, choose "non-persistent", and program your times through the [keypad menu](#how-to-enter-datestimes-for-the-destination-and-last-time-departed-displays) (and disable [Time-cycling](#time-cycling)). Those times will never be overwritten in flash memory by later time travels. Note, however, that the times displayed might actually change due to time travels.
+If you want to display your favorite *destination time* and *last time departed* upon power-up, and not have time travels overwrite them in storage, choose "non-persistent", and program your times through the [keypad menu](#how-to-program-datestimes-for-the-destination-and-last-time-departed-displays) (and disable [Time-cycling](#time-cycling)). Later time travels will, of course, change what is displayed, but not overwrite your times in storage. To bring back your stored times to the displays, type 998 followed by ENTER.
 
-Note that Time-cycling, if enabled, will force the device to cycle through the list of pre-programmed times, regardless of your time travel persistence setting. So, if Time-cycling is enabled, the only effect of persistence is that *Present Time* is kept at what it was before vs. reset to actual present time after a power loss.
-
-Persistent time travels, if done often, will cause [Flash Wear](#flash-wear).
+>Note that [Time-cycling](#time-cycling), if enabled, will force the device to cycle through the list of pre-programmed times, regardless of your time travel persistence setting. So, if Time-cycling is enabled, the only effect of persistence is that *Present Time* is kept at what it was before vs. reset to actual present time after a power loss.
 
 ## Beep on the second
 
@@ -378,11 +484,12 @@ In the movies, the Time Circuits emit a "beep" sound every second, which is only
 The beep can be permanently disabled, permanently enabled, or enabled for 30 or 60 seconds
 - after a destination time is entered (and ENTER is pressed),
 - upon triggering a time travel,
-- after switching on the TCD (real power-up or fake power-up).
+- after switching on the TCD (real power-up or fake power-up),
+- after changing "speed" using a [Rotary Encoder](#rotary-encoder).
 
 The different modes are selected by typing 000 (disabled), 001 (enabled), 002 (enabled for 30 secs) or 003 (enabled for 60 secs), followed by ENTER. The power-up default is selected in the Config Portal.
 
-Since the hardware only has one audio channel, the beep is suppressed whenever other sounds are played-back.
+For technical reasons, the beep is suppressed whenever other sounds are played-back.
 
 ## Night mode
 
@@ -410,25 +517,27 @@ Night mode schedules are always based on actual local present time.
 
 #### Sensor-controlled night-mode
 
-You can also connect a light sensor to the device. Four sensor types/models are supported: TSL2561, BH1750, VEML7700/VEML6030, LTR303/LTR329, connected through i2c with their respective default slave address. The VEML7700 can only be connected if no GPS receiver is connected at the same time; the VEML6030 needs its address to be set to  0x48 if a GPS receiver is present at the same time. All these sensor types are readily available on breakout boards from Adafruit or Seeed (Grove). Only one light sensor can be used at the same time. *Note: You cannot connect the sensor chip directly to the TCD control board; most sensors need at least a power converter/level-shifter.* This is why I exclusively used Adafruit or Seeed breakouts ([TSL2561](https://www.adafruit.com/product/439) or [here](https://www.seeedstudio.com/Grove-Digital-Light-Sensor-TSL2561.html), [BH1750](https://www.adafruit.com/product/4681), [VEML7700](https://www.adafruit.com/product/4162), [LTR303](https://www.adafruit.com/product/5610)), which all allow connecting named sensors to the 5V the TCD board operates on. For wiring information, see [here](#appendix-b-sensor-wiring).
+You can also connect a light sensor to your TCD for night-mode switching: When the sensor reports a lux level below or equal the threshold set in the Config Portal, the TCD will go into night-mode.
 
-If the measured lux level is below or equal the threshold set in the Config Portal, the device will go into night-mode. To view the currently measured lux level, use the [keypad menu](#how-to-view-sensor-info).
-
-If both a schedule is enabled and the light sensor option is checked in the Config Portal, the sensor will overrule the schedule only in non-night-mode hours; ie it will never switch off night-mode when night-mode is active according to the schedule.
+If both a schedule and the light sensor are enabled, the sensor will overrule the schedule only in non-night-mode hours; ie it will never switch off night-mode when night-mode is active according to the schedule.
 
 Switching on/off night-mode manually deactivates any schedule and the light sensor for 30 minutes. Afterwards, a programmed schedule and/or the light sensor will overrule the manual setting.
 
+In order to use a light sensor, check the option _Use light sensor_ in the Config Portal. You can observe the measured lux level through the [keypad menu](#how-to-view-sensor-info) to find out about the right lux threshold for your environment.
+
+For information on supported sensor models/types and configuration, see [here](https://github.com/CircuitSetup/Time-Circuits-Display/blob/main/DIY/README.md#light-sensor).
+
 ## Count-down timer
 
-The firmware features a simple count-down timer. This timer can count down from max 99 minutes and plays a sound when expired.
+The firmware features a simple count-down timer. This timer can count down from max 99 minutes and plays a sound upon expiry.
 
-To set the timer to MM minutes, type 44MM and press ENTER. Note that for minutes, 2 digits must be entered. To cancel a running timer, enter 440 and press ENTER.
-
-The check the remaining time, type 44 and press ENTER.
+- To set the timer to MM minutes, type 44MM and press ENTER. A single-digit number of minutes must be preceded by 0.
+- To cancel a running timer, type 440 and press ENTER.
+- The check the remaining time, type 44 and press ENTER.
 
 ## Yearly/monthly reminder
 
-The reminder is similar to the alarm, the difference being that the reminder is yearly or monthly, not daily. 
+A reminder is yearly or monthly alarm.
 
 To program a yearly reminder, enter 77mmddhhMM and press ENTER. For example: 7705150900 sets the reminder to May 15 9am. Now a reminder sound will play every year on May 15 at 9am.
 
@@ -436,58 +545,55 @@ To program a monthly reminder, enter 7700ddhhMM and press ENTER. For example: 77
 
 You can also leave out the hhMM part; in that case the time remains unchanged from a previous setting, unless both hour and minute were 0 (zero), in which case the reminder time is set to 9am.
 
-Note that, as usual, all fields consist of two digits, and hours are entered in 24-hour notation.
+Note that all fields consist of two digits, and hours are entered in 24-hour notation.
 
 Type 77 followed by ENTER to display the programmed reminder, 770 to delete it, and 777 to display the days/hours/minutes until the next reminder.
 
-The reminder only plays a sound file. The current sound-pack contains a default file; if your SD contains a file named "reminder.mp3", this will played instead of the default file.
-
-Note: While the alarm and the sound-on-the-hour adhere to the "Alarm base is real present time" setting in the config portal, the Reminder does not. It is always based on real local time.
+At the time the reminder is due, the TCD plays a sound. If a file named "reminder.mp3" is on your SD card, this will be layed instead of the default sound.
 
 ## SD card
 
-Preface note on SD cards: For unknown reasons, some SD cards simply do not work with this device. For instance, I had no luck with Sandisk Ultra 32GB and  "Intenso" cards. If your SD card is not recognized, check if it is formatted in FAT32 format (not exFAT!). Also, the size must not exceed 32GB (as larger cards cannot be formatted with FAT32). I am currently using Transcend SDHC 4GB cards and those work fine.
+Preface note on SD cards: For unknown reasons, some SD cards simply do not work with this device. For instance, I had no luck with Sandisk Ultra 32GB and  "Intenso" cards. If your SD card is not recognized, check if it is formatted in FAT32 format (not exFAT!). Also, the size must not exceed 32GB (as larger cards cannot be formatted with FAT32). Transcend SDHC cards work fine in my experience.
 
-The SD card, apart from being used to [install](#audio-file-installation) the default audio files, can be used for substituting default sounds, some additional custom sounds, and for music played back by the [Music player](#the-music-player).
+The SD card, apart from being required for [installing](#audio-data-installation) of the built-in audio data, can be used for substituting built-in sound effects, some additional custom sound effects, and for music played back by the [Music player](#the-music-player). Also, it is _strongly recommended_ to store [secondary settings](#-save-secondary-settings-on-sd) on the SD card to minimize [Flash Wear](#flash-wear).
 
 Note that the SD card must be inserted before powering up the TCD. It is not recognized if inserted while the TCD is running. Furthermore, do not remove the SD card while the TCD is powered.
 
-### Sound file substitution
+### Sound substitution
 
-The provided audio files ("sound-pack") are, after [proper installation](#audio-file-installation), integral part of the firmware and stored in the device's flash memory. 
-
-These sounds can be substituted by your own sound files on a FAT32-formatted SD card. These files will be played back directly from the SD card during operation, so the SD card has to remain in the slot. The built-in [Audio file installer](#audio-file-installation) cannot be used to replace default sounds in the device's flash memory with custom sounds.
+The TCD's built-in sound effects can be substituted by your own sound files on a FAT32-formatted SD card. These files will be played back directly from the SD card during operation, so the SD card has to remain in the slot.
 
 Your replacements need to be put in the root (top-most) directory of the SD card, be in mp3 format (128kbps max) and named as follows:
-- "alarm.mp3". Played when the alarm sounds.
-- "alarmon.mp3". Played when enabling the alarm
-- "alarmoff.mp3". Played when disabling the alarm
-- "nmon.mp3". Played when manually enabling night mode
-- "nmoff.mp3". Played when manually disabling night mode
-- "reminder.mp3". Played when the reminder is due.
-- "timer.mp3". Played when the count-down timer expires.
+- "alarm.mp3": Played when the alarm sounds.
+- "alarmon.mp3": Played when enabling the alarm,
+- "alarmoff.mp3": Played when disabling the alarm,
+- "nmon.mp3": Played when manually enabling night mode,
+- "nmoff.mp3": Played when manually disabling night mode,
+- "reminder.mp3": Played when the reminder is due.
+- "timer.mp3": Played when the count-down timer expires.
+- "ping.mp3": Played when re-connecting/re-enabling WiFi by holding '7' on the keypad.
 
 The following sounds are time-sync'd to display action. If you decide to substitute these with your own, be prepared to lose synchronicity:
-- "enter.mp3". Played when a date was entered and ENTER was pressed
-- "baddate.mp3". Played when a bad (too short or too long) date was entered and ENTER was pressed
-- "intro.mp3": Played during the power-up intro
-- "travelstart.mp3". Played when a time travel starts.
-- "timetravel.mp3". Played when re-entry of a time travel takes place.
-- "shutdown.mp3". Played when the device is fake "powered down" using an external switch (see below)
-- "startup.mp3". Played when the TCD is connected to power and finished booting
-
-If you intend to use the very same SD card that you used for installing the default sound files, please remove the files from the sound-pack from the SD card first.
+- "enter.mp3": Played when a date was entered and ENTER was pressed.
+- "baddate.mp3": Played when a bad (too short or too long) date was entered and ENTER was pressed.
+- "intro.mp3": Played during the power-up intro.
+- "travelstart.mp3": Played when a time travel starts (including "acceleration").
+- "travelstart2.mp3": Played when a time travel starts (without "acceleration").
+- "timetravel.mp3": Played when re-entry of a time travel takes place.
+- "shutdown.mp3": Played when the device is fake "powered down".
+- "startup.mp3": Played when the TCD is starting up.
 
 ### Additional Custom Sounds
 
-The firmware supports some additional user-provided sound effects, which it will load from the SD card. If the respective file is present, it will be used. If that file is absent, no sound will be played.
+The firmware supports some additional, user-provided sound effects, which it will load from the SD card. If the respective file is present, it will be used. If that file is absent, no sound will be played.
 
+- "ttaccel.mp3": Will be played immediately upon triggering a time travel when a speedo display is connected, during the acceleration phase (ie while the speedo counts up to 88). This sound is then interrupted by the usual time travel sound. You can use, for instance, the sound of a car accelerating for this.
 - "hour.mp3": Will be played every hour, on the hour. This feature is disabled in night mode.
 - "hour-xx.mp3", xx being 00 through 23: Sounds-on-the-hour for specific hours that will be played instead of "hour.mp3". If a sound for a specific hour is not present, "hour.mp3" will be played, if that one exists.
-- "key3.mp3" and/or "key6.mp3": Will be played if you hold the "3"/"6" key for 2 seconds.
-- "ha-alert.mp3" will be played when a [HA/MQTT](#home-assistant--mqtt) message is received.
+- "key3.mp3"/"key6.mp3": Will be played when holding the "3"/"6" key for 2 seconds.
+- "ha-alert.mp3": Will be played when a [HA/MQTT](#home-assistant--mqtt) message is received.
 
-"hour.mp3"/"hour-xx.mp3", "key3.mp3", "key6.mp3" and "ha-alert.mp3" are not provided here. You can use any mp3, with 128kpbs or less.
+Those files are not provided here. You can use any mp3, with a bitrate of 128kpbs or less.
 
 ## The Music Player
 
@@ -522,14 +628,13 @@ The menu is invoked by holding the ENTER button.
 Data entry, such as for dates and times, is done through the keypad's number keys and works as follows: Whenever a data entry is requested, the field for that data is lit (while the rest of the display is dark) and a pre-set value is shown. If you want to keep that pre-set, press ENTER to proceed to next field. Otherwise press a digit on the keypad; the pre-set is then overwritten by the value entered. 2 digits can be entered (4 for years), upon which the new value is stored and the next field is activated. You can also enter less than 2 digits (4 for years) and press ENTER when done with the field. Note that a month needs to be entered numerically (1-12), and hours need to be entered in 24-hour notation (0-23), regardless of 12-hour or 24-hour mode as per the Config Portal setting.
 
 After invoking the keypad menu, the first step is to choose a menu item. The available items are  
-- install the default audio files ("INSTALL AUDIO FILES")
 - set the alarm ("ALA-RM"),
 - set the audio volume (VOL-UME),
 - set the Music Player folder number ("MUSIC FOLDER NUMBER")
 - select the Time-cycling Interval ("TIME-CYCLING"),
 - select the brightness for the three displays ("BRIGHTNESS"),
 - show network information ("NET-WORK"),
-- set the internal Real Time Clock (RTC) ("SET RTC"),
+- set the internal Real Time Clock (RTC) ("SET CLOCK"),
 - enter dates/times for the *Destination* and *Last Time Departed* displays,
 - show light/temperature/humidity sensor info (if such a sensor is connected) ("SENSORS"),
 - show when time was last sync'd with NTP or GPS ("TIME SYNC"),
@@ -537,14 +642,6 @@ After invoking the keypad menu, the first step is to choose a menu item. The ava
 - quit the menu ("END").
  
 Pressing ENTER cycles through the list, holding ENTER selects an item.
-
-#### How to install the default audio files:
-
-- Hold ENTER to invoke main menu
-- If the SD card holds the files of the sound-pack archive from this repo, "INSTALL AUDIO FILES" is shown as the first menu item. See the [Audio file installation](#audio-file-installation) section.
-- Hold ENTER to proceed
-- Press ENTER to toggle between "CANCEL" and "PROCEED"
-- Hold ENTER to proceed. If "PROCEED" was chosen, the audio files fill be installed and the TCD will reboot.
  
 #### How to set up the alarm:
 
@@ -568,14 +665,18 @@ Note that the alarm is recurring, ie it rings at the programmed time, unless dis
 
 #### How to set the audio volume:
 
-Basically, and by default, the device uses the hardware volume knob to determine the desired volume. You can change this to a fixed-level setting as follows:
+By default, the device uses the built-in hardware volume knob to determine the desired volume. You can change this to a pre-selected level as follows:
 - Hold ENTER to invoke main menu
 - Press ENTER repeatedly until "VOL-UME" is shown
 - Hold ENTER
-- Press ENTER to toggle between "USE VOLUME KNOB" and "FIXED LEVEL"
+- Press ENTER to toggle between "USE VOLUME KNOB" and "SELECT LEVEL"
 - Hold ENTER to proceed
-- If you chose "FIXED LEVEL/"SW", you can now select the desired level by pressing ENTER repeatedly. There are 20 levels available. The volume knob is now ignored.
+- If you chose "SELECT LEVEL", you can now select the desired level by pressing ENTER repeatedly. There are 20 levels available. The volume knob is now ignored.
 - Hold ENTER to save and quit the menu
+
+You can also quickly set the volume by typing a code on the keypad followed by ENTER. 300-319 select a level, 399 enables the volume knob.
+
+If you are using a Rotary Encoder for volume, you need to disable the volume knob by pre-selecting a level (00-19). While the built-in volume knob is active, the Rotary Encoder will do nothing.
 
 #### How to select the music folder number:
 
@@ -583,8 +684,8 @@ In order for this menu item to show up, an SD card is required.
 
 - Hold ENTER to invoke main menu
 - Press ENTER repeatedly until "MUSIC FOLDER NUMBER" is shown
-- Hold ENTER, "NUM" is displayed
-- Press ENTER repeatedly to cycle through the possible values. The message "NOT FOUND" appears if either the folder itself or 000.mp3 in that very folder is not present.            
+- Hold ENTER, "FOLDER" and a number is displayed
+- Press ENTER repeatedly to cycle through the possible values. The message "NOT FOUND" appears if either the folder itself or 000.mp3 in that very folder is not present. "PROCESSING REQUIRED" means that the TCD will prepare the folder(eg rename files) after selection.
 - Hold ENTER to select the value shown and exit the menu ("SAVING" is displayed briefly)
 
 If shuffle was enabled before, the new folder is also played in shuffled order.
@@ -596,9 +697,7 @@ Note that the Music Folder Number is saved in a config file on the SD card.
 - Hold ENTER to invoke main menu
 - Press ENTER repeatedly until "TIME-CYCLING" is shown
 - Hold ENTER, "INTERVAL" is displayed
-- Press ENTER repeatedly to cycle through the possible Time-cycling Interval values.
-- A value of 0 disables automatic time cycling ("OFF").
-- Non-zero values make the device cycle through a number of pre-programmed times. The value means "minutes" (hence "MIN-UTES") between changes.              
+- Press ENTER repeatedly to cycle through the possible Time-cycling intervals. "0" disables automatic time cycling ("OFF").
 - Hold ENTER to select the value shown and exit the menu ("SAVING" is displayed briefly)
  
 #### How to adjust the display brightness:
@@ -620,18 +719,20 @@ Note that the Music Folder Number is saved in a config file on the SD card.
 
 #### How to set the Real Time Clock (RTC):
 
-Adjusting the RTC is useful if you can't use NTP for time keeping, and really helpful when using GPS. Always set your actual local present time here; if you want to display some other time, use the Time Travel function. Note: The time you entered will be overwritten if/when the device has access to authoritative time such as via NTP or GPS. For DST (daylight saving) and GPS, it is essential that you first set the correct time zone in the [Config Portal](#the-config-portal).
+If you can't use network time (NTP) as a source of time, you need to manually adjust the TCD's clock. Moreover, manual clock adjustment is a required prerequisite for using [GPS](#gps-receiver). Before setting the TCD's clock, it is essential that you set the correct time zone in the [Config Portal](#the-config-portal).
+
+Always set your actual local present time here; if you want to display some other time, use the Time Travel function. 
 
 - Hold ENTER to invoke main menu
-- Press ENTER repeatedly until "SET RTC" is displayed and the *Present Time* display shows a date and time 
+- Press ENTER repeatedly until "SET CLOCK" is displayed and the *Present Time* display shows a date and time 
 - Hold ENTER until the *Present Time* display goes off except for the first field to enter data into
 - The field to enter data into is shown (exclusively), pre-set with its current value
 - Data entry works as described [above](#the-keypad-menu); remember that months need to be entered numerically (01-12), and hours in 24-hour notation (0-23).
 - After entering data into all fields, the data is saved and the menu is left automatically.
 
-#### How to enter dates/times for the *Destination* and *Last Time Departed* displays:
+The time you entered will be re-set/overruled/re-adjusted when the TCD has access to authoritative time via NTP or GPS.
 
-Note that when entering dates/times into the *destination time* or *last time departed* displays, the Time-cycling Interval is automatically set to 0. Your entered date/time(s) are shown until overwritten by time travels.
+#### How to program dates/times for the *Destination* and *Last Time Departed* displays:
 
 - Hold ENTER to invoke main menu
 - Press ENTER repeatedly until the desired display is the only one lit and shows a date and time
@@ -639,6 +740,12 @@ Note that when entering dates/times into the *destination time* or *last time de
 - The field to enter data into is shown (exclusively), pre-set with its current value
 - Data entry works as described [above](#the-keypad-menu); remember that months need to be entered numerically (01-12), and hours in 24-hour notation (0-23).
 - After entering data into all fields, the data is saved and the menu is left automatically.
+
+Your entered date/time(s) are stored, and shown until replaced by the results of time travels; you can then quickly bring your times back to the displays by typing 998 followed by ENTER.
+
+When entering dates/times into the *destination time* or *last time departed* displays, the Time-cycling Interval is automatically set to 0. 
+
+Note: Your dates/times will be overwritten in storage after a time travel when **_Make time travels persistent_** is checked. Please see [here](#persistent--non-persistent-time-travels) for details.
 
 #### How to view sensor info
 
@@ -649,7 +756,7 @@ Note that when entering dates/times into the *destination time* or *last time de
 - Press ENTER to toggle between light sensor and temperature sensor info (if both are connected)
 - Hold ENTER to exit the menu
 
-Note: Sometimes, light sensors report a lux value of -1. This is mostly due to the fact that all the supported sensors are adjusted for indoor usage and might overload in broad daylight. Also, some sensors might have issues with halogen lamps (reportedly TSL2561), and most sensors also "overload" if too much IR light is directed at them, for instance from surveillance cameras.
+>Note: Sometimes a lux value of -1 might be displayed, indicating a sensor overload. This can have the following reasons: The TCD firmware sets up the sensors for indoor usage and, as a result, sensors will overload in broad daylight. Secondly, some sensors have issues with halogen lamps (reportedly TSL2561), and most sensors also "overload" if too much IR light is directed at them, for instance from surveillance cameras.
 
 #### How to see a list of BTTF-Network clients
 
@@ -665,16 +772,34 @@ Note: Sometimes, light sensors report a lux value of -1. This is mostly due to t
  - While the menu is active, press ENTER repeatedly until "END" is displayed.
  - Hold ENTER to leave the menu
 
+## Car Mode
+
+If the TCD, perhaps along with other props such as Flux Capacitor or SID, is mounted in a car, there are a few things to be considered:
+
+- There is no point in attempting to connect a WiFi network.
+- If the TCD acts as WiFi access point for Flux Capacitor and/or SID, it should boot quickly so that the other props can connect to it as soon as possible.
+
+This is what *car mode* is for: If enabled, the TCD will always boot in AP mode, regardless of a configured WiFi network. This speeds up booting.
+
+To enable *car mode*, type 991 followed by ENTER. The TCD will reboot in AP mode.
+
+To disable *car mode*, type 990 followed by ENTER. The TCD will reboot and attempt to connect to a previously configured WiFi network.
+
+*Car mode* is persistent, i.e. it remains active (even across reboots and power-downs) until disabled.
+
+>Note that the TCD has no internet access while in car mode; this means that, unless a GPS receiver is present, it cannot update its clock automatically. If the time runs off over time, you need to re-adjust it using the [keypad menu](#how-to-set-the-real-time-clock-rtc).
+
 ## Peripherals and connection
 
-![The BTTF Prop Family](https://github.com/realA10001986/Time-Circuits-Display/assets/76924199/e925de4f-b165-4a9c-ad0f-4ac99c034fe6)
+![The BTTF Prop Family](img/family-head.png)
 
 - [Fake Power Switch](#fake-power-switch)
 - [Speedometer](#speedometer)
 - [GPS-Receiver](#gps-receiver)
+- [Rotary encoder](#rotary-encoder)
 - [Temperature Sensor](#room-condition-mode-temperaturehumidity-sensor)
-- [Light Sensor](#night-mode)
-- [Other Props](#controlling-other-props) (Flux Capacitor, SID, ...)
+- [Light Sensor](#sensor-controlled-night-mode)
+- [Other Props](#controlling-other-props) (Flux Capacitor, SID, Dash Gauges, VSR, ...)
 
 ## Fake power Switch 
 
@@ -682,75 +807,75 @@ You probably noticed that the device takes longer to boot than would be required
 
 If the **_Use fake power switch_** option is checked in the Config Portal, the device will power-up, initialize everything, but stay quiet and dark. Only when the fake "power switch" is activated, the device will visually "power up". Likewise, you can also fake "power off" the device using this switch. Fake "off" disables the displays, all audio (except the alarm) and the keypad. Just like in the movie.
 
-On Control Boards V1.3 and later, there is a dedicated header labeled "Fake PWR" to connect the switch to. The pins to be shortened by the switch are labeled "GND" and "PWR Trigger":
+On Control Boards V1.3 and later, there is a dedicated header labeled "Fake PWR" to connect the switch to. The pins to be connected by the switch are labeled "GND" and "PWR Trigger":
 
-![pwr_trigger](https://github.com/realA10001986/Time-Circuits-Display/assets/76924199/59bbcfcb-1898-4d9c-b34f-d1a6cf3892fd)
+![pwr_trigger](img/fakepwr.jpg)
 
-On earlier Control Boards (1.2 and below), the switch needs shorten the pins labeled "IO13" and "GND" as shown here:
+On earlier Control Boards (1.2 and below), the switch needs connect the pins labeled "IO13" and "GND" as shown here: (The pin headers are not present on original boards)
 
-![access_to_io13](https://user-images.githubusercontent.com/76924199/194283241-3bee5fef-f51a-4b1a-a158-ed92292bcf32.jpg)
-
-Here is a close-up of one of my boards; I have soldered some headers on the io ports.
-
-![io13neu](https://user-images.githubusercontent.com/76924199/212369689-f945dcf1-55f9-41e9-8fd7-fc0dbc69906c.jpg)
+![pwr_trigger1_2](img/fakepwr12.jpg)
 
 Note that the switch actually needs to be a switch with a maintained contact; the pins need to remain connected for as long as the device is fake-switched-on.
 
 In order to use the Fake Power Switch, check **_Use fake power switch_** in the Config Portal.
 
-[Here](https://github.com/realA10001986/Time-Circuits-Display/wiki/Time-Circuits-Switch) are some hints for building a TFC Switch.
+CircuitSetup offers a [TFC Drive Switch Terminal PCB](https://circuitsetup.us/product/delorean-time-machine-tfc-drive-switch-terminal-pcb/), which can be hoooked up to the fake power switch to turn things on just like in the movie.
+
+[Here](https://github.com/realA10001986/TFC-Switch) are some hints for building a TFC Switch like this one:
+
+![TFC Switch](img/tfcswitch.jpg)
 
 ## External Time Travel Trigger
 
 As mentioned above, a time travel can be triggered by holding "0" on the keypad. Since this doesn't really allow for an authentic movie-like experience, the firmware also supports an external trigger, such as a button switch or even another prop to trigger a time travel. Note that, unlike the [Fake Power Switch](#fake-power-switch), this trigger must be a momentary toggle.
 
-On Control Boards V1.3 and later, there is a dedicated header for the button labeled "Time Travel". The button needs to shorten pins "TT IN" and "GND".
+On Control Boards V1.3 and later, there is a dedicated header for the button labeled "Time Travel". The button needs to connect pins "TT IN" and "GND".
 
-| ![ttin](https://github.com/realA10001986/Time-Circuits-Display/assets/76924199/8ec8d88a-f2df-484c-b9b9-1d389dc6d480) |
+| ![ttin](img/ttin.jpg) |
 |:--:|
 | TT_IN on TCB 1.3 |
 
-Unfortunately, there is no header and no break out for IO27 on TC control boards V1.2 and below. Some soldering is required. The button needs to be 
-connected to the two marked pins in the image below:
+Unfortunately, there is no header and no break out for IO27 on TC control boards V1.2 and below. There is, however, a row of solder pads right next to the socket on the control board, where a pin header or cable can easily be soldered on:
 
-![nodemcuio272](https://github.com/realA10001986/Time-Circuits-Display/assets/76924199/9ace6814-87d6-48db-babe-39d44c03eaed)
-
-Luckily, there is a row of solder pads right next to the socket on the control board, where a pin header or cable can easily be soldered on:
-
-| ![tcboard_io27](https://user-images.githubusercontent.com/76924199/194284336-2fe9fa9b-d5e5-49f5-b1cd-b0fd2abdff53.jpg) |
+| ![tcboard_io27](img/ttin12.jpg) |
 |:--:|
 | IO27 (TT_IN) on TCB 1.2 |
 
-In order to trigger a time-travel sequence on the Time Circuits, "TT IN"/IO27 and GND must be shortened for at least 200ms and then opened; the time travel is triggered upon release of the button. If the button is pressed for 3000ms (3 seconds), a ["Return from Time Travel"](#time-travel) is triggered.
+In order to trigger a time-travel sequence on the Time Circuits, "TT IN"/IO27 and GND must be connected for at least 200ms and then opened; the time travel is triggered upon release of the button. If the button is pressed for 3000ms (3 seconds), a ["Return from Time Travel"](#time-travel) is triggered.
 
 The Config Portal allows configuring a delay for matching/synchronizing the TCD to another prop. The delay, if any, starts running after the button is released. The time travel sequence starts after the delay has expired.
 
 ## Speedometer
 
-The firmware supports a speedometer display connected via i2c (slave address 0x70) as part of the time travel sequence. As CircuitSetup's upcoming Speedo display is not available yet, you are on your own to build one for the time being.
-
-What you need is a box, the LED segment displays and a HT16K33-based PCB that allows accessing the LED displays via i2c. There are various readily available LED segment displays with suitable i2c break-outs from Adafruit and Seeed (Grove) that can be used as a basis. Adafruit [878](https://www.adafruit.com/product/878), [1270](https://www.adafruit.com/product/1270) and [1911](https://www.adafruit.com/product/1911), as well as Grove 0.54" 14-segment [2-digit](https://www.seeedstudio.com/Grove-0-54-Red-Dual-Alphanumeric-Display-p-4031.html) or [4-digit](https://www.seeedstudio.com/Grove-0-54-Red-Quad-Alphanumeric-Display-p-4032.html) alphanumeric displays are supported. (The product numbers vary with color, the numbers here are the red ones.)
+The firmware supports [CircuitSetups's speedometer display](https://circuitsetup.us/product/delorean-time-machine-speedometer-kit/) as part of the time travel sequence and for other purposes.
 
 | [![Watch the video](https://img.youtube.com/vi/opAZugb_W1Q/0.jpg)](https://youtu.be/opAZugb_W1Q) |
 |:--:|
 | Click to watch the video |
 
-The speedo display shown in this video is based on a fairly well-designed stand-alone replica I purchased on ebay. I removed the electronics inside and wired the LED segments to an Adafruit i2c backpack (from the Adafruit 878 product) and connected it to the TCD. Yes, it is really that simple. (The switch was made by me, see [here](https://github.com/realA10001986/Time-Circuits-Display/wiki/Time-Circuits-Switch), it uses the [Fake Power Switch](#fake-power-switch) feature of the TCD.)
+Full disclosure: The video was shot before the CircuitSetup speedo became available. The speedo shown is a DIY prop and not the - much better looking - CircuitSetup speedo. The video is only meant to demonstrate how the TCD and the speedo inter-operate.
 
-In order to use the Speedometer display, select the correct display type in the Config Portal. There are two special options in the Speedo Display Type drop-down: *Ada 1911 (left tube)* and *Ada 878 (left tube)*. These two can be used if you connect only one 2-digit-tube to the respective Adafruit i2c backpack, as I did in case of my speedo replica as well as my [Wall Clock](#my-custom-made-time-circuits-wall-clock).
+The CircuitSetup [Speedo Kit](https://circuitsetup.us/product/delorean-time-machine-speedometer-kit/) needs to be wired as shown below:
 
-Since the I2C bus is already quite long from the control board to the last display in the chain, I recommend soldering another XH 4pin plug onto the control board (there are two additional i2c break-outs available), and to connect the speedometer there.
+![speedo_i2c](img/speedo_i2c.jpg)
+
+If you want to make your own speedo, see [here](https://github.com/CircuitSetup/Time-Circuits-Display/blob/main/DIY/README.md#speedometer).
+
+#### Software setup
+
+In order to use the Speedometer display, select the correct model/display type in the Config Portal. This is, surprisingly, "CircuitSetup" for the CircuitSetup speedo. 
 
 ## GPS receiver
 
-The firmware supports an MT(K)3333-based GPS receiver, connected through i2c (slave address 0x10). The CircuitSetup-designed speedo display will have such a chip built-in, but since this gadget is not yet available, in the meantime, you can use alternatives such as the Adafruit Mini GPS PA1010D (product id [4415](https://www.adafruit.com/product/4415)) or the Pimoroni P1010D GPS Breakout ([PIM525](https://shop.pimoroni.com/products/pa1010d-gps-breakout?variant=32257258881107)). The GPS receiver can be used as a source of authoritative time (like NTP), and speed of movement (to be displayed on a [speedo display](#speedometer)).
+A GPS receiver can be used as a source of authoritative time (like NTP) and speed of movement.
 
-GPS receivers receive signals from satellites, but in order to do so, they need to be "tuned in" (aka get a "fix"). This "tuning" process can take a long time; after first power up, it can take 30 minutes or more for a receiver to be able to determine its position. In order to speed up this process, modern GPS receivers have special "assisting" features. One key element is knowledge of current time, as this helps identifying satellite signals quicker. So, in other words, initially, you need to tell the receiver, what it is supposed to tell you. However, as soon as the receiver has received satellite signals for 15-20 minutes, it saves the data it collected to its battery-backed memory and will find a fix within seconds after power-up in the future.
+The CircuitSetup original [speedo](https://circuitsetup.us/product/delorean-time-machine-speedometer-pcb/?v=fa868488740a) has a built-in GPS receiver. If you want to use a third party GPS receiver, see [here](https://github.com/CircuitSetup/Time-Circuits-Display/blob/main/DIY/README.md#gps-receiver). 
+
+GPS receivers receive signals from satellites, but in order to do so, they need to be "tuned in" (aka get a "fix"). This "tuning" process can take a long time; after first power up, it can take 30 minutes or more for a receiver to be able to determine its position. In order to speed up this process, modern GPS receivers have special "assisting" features. One key element is knowledge of current time, as this helps identifying satellite signals quicker. So, in other words, initially, you need to tell the receiver what it is supposed to tell you. However, as soon as the receiver has received satellite signals for 15-20 minutes, it saves the data it collected to its battery-backed memory and will find a fix within seconds after power-up in the future.
 
 For using GPS effectively as a long-term source of accurate time, it is therefore essential, that 
-- the TimeCircuit's RTC (real time clock) is initially [set to correct local time](#how-to-set-the-real-time-clock-rtc), 
+- the Time Circuit's RTC (real time clock) is initially [set to correct local time](#how-to-set-the-real-time-clock-rtc), 
 - the correct time zone is defined in the Config Portal,
-- the GPS receiver has a battery
 - and has been receiving data for 15-20 mins at least once a month.
 
 If/as long as the GPS receiver has a fix and receives data from satellites, the dot in the present time's year field is lit.
@@ -769,118 +894,82 @@ In order to use the GPS receiver for speed, check **_Display GPS speed_** in the
 
 If other props using GPS speed are connected via [BTTF-Network](#bttf-network-bttfn), check the option **_Provide GPS speed for wireless props_** in the Config Portal.
 
+## Rotary Encoder
+
+A rotary encoder is, simply put, a turnable knob. On the TCD, rotary encoders can be used for speed and/or audio volume.
+
+For information on supported encoder models/types and configuration, see [here](https://github.com/CircuitSetup/Time-Circuits-Display/blob/main/DIY/README.md#rotary-encoder).
+
+Up to two rotary encoders can be connected, one for speed, one for volume.
+
+### Rotary Encoder for Speed 
+
+The rotary encoder, if configured for speed, allows manually selecting a speed to be displayed on the Speedo display, as well as to be sent to [BTTFN](#bttf-network-bttfn) clients in place of actual (GPS) speed.
+
+| [![Watch the video](https://img.youtube.com/vi/Y6uu1SU6YJA/0.jpg)](https://youtu.be/Y6uu1SU6YJA) |
+|:--:|
+| Click to watch the video |
+
+Remarks:
+- The encoder is only evaluated if no GPS receiver is connected, or if the **_Display GPS speed_** is unchecked. GPS speed has priority over the encoder.
+- The encoder is also evaluated if no speedo display is connected; it can be operated "blindly" to trigger time travels and its movement is send to BTTFN clients like GPS speed (if no GPS receiver is connected, or the option **_Provide GPS speed for wireless props_** is unchecked)
+- The speedo displays "0" as long as the encoder is not moved; if the encoder is turned counter-clockwise a couple of notches, the speedo display will be switched off.
+
+### Rotary Encoder for Audio Volume
+
+The rotary encoder for volume replaces the volume knob on back of the TCD's keypad. The advantages of the rotary encoder are that it is more precise, especially at lower volume levels, and it can be relocated. In order to use the rotary encoder for volume, the TCD's own volume knob must be disabled; this is done by pre-selecting an audio level in the keypad menu, or by typing 3xx (xx being 00-19) followed by ENTER.
+
 ## Room Condition Mode, Temperature/humidity sensor
 
 The firmware supports connecting a temperature/humidity sensor for "room condition mode"; in this mode, *destination* and *last departed* times are replaced by temperature and humidity (if applicable), respectively. To toggle between normal and room condition mode, enter "111" and press ENTER. 
 
-![rcmode](https://user-images.githubusercontent.com/76924199/208133653-f0fb0a38-51e4-4436-9506-d841ef1bfa6c.jpg)
+![rcmode](img/rcmode.jpg)
 
-Room condition mode can be used together with [World Clock mode](#world-clock-mode); if both are enabled, only one alternative time and only temperature is shown. To toggle RC and WC mode simultaniously, type "113" and press ENTER.
+Room condition mode can be used together with [World Clock mode](#world-clock-mode); if both are enabled, only one alternative time and only temperature is shown. To toggle RC and WC mode simultaneously, type "113" and press ENTER.
 
 Temperature on speedometer display: Unless you do time travelling on a regular basis, the [speedo display](#speedometer) is idle most of the time in a typical home setup. To give it more of a purpose, the firmware can display ambient temperature on the speedo while idle.
 
-#### Sensor hardware
-
 In order to use a temperature/humidity sensor, no special configuration is required. If a sensor is detected by the firmware during boot, it will be used.
 
-Seven sensor types are supported: MCP9808 (i2c address 0x18), BMx280 (0x77), SI7021 (0x40), SHT40 (0x44), TMP117 (0x49), AHT20/AM2315C (0x38), HTU31D (0x41). All of those are readily available on breakout boards from Adafruit or Seeed (Grove). The BMP280 (unlike BME280), MCP9808 and TMP117 work as pure temperature sensors, the others for temperature and humidity. For wiring information, see [here](#appendix-b-sensor-wiring).
-
-*Note: You cannot connect the sensor chip directly to the TCD control board; most sensors need at least a power converter/level-shifter.* This is why I exclusively used Adafruit or Seeed breakouts ([MCP9808](https://www.adafruit.com/product/1782), [BME280](https://www.adafruit.com/product/2652), [SI7021](https://www.adafruit.com/product/3251), [SHT40](https://www.adafruit.com/product/4885), [TMP117](https://www.adafruit.com/product/4821), [AHT20](https://www.adafruit.com/product/4566), [HTU31D](https://www.adafruit.com/product/4832)), which all allow connecting named sensors to the 5V the TCD board operates on.
-
-## Car Mode
-
-If the TCD, perhaps along with other props such as Flux Capacitor or SID, is mounted in a car, there are a few things to be considered:
-
-- There is no point in attempting to connect a WiFi network.
-- If the TCD acts as WiFi access point for Flux Capacitor and/or SID, it should boot quickly so that the other props can connect to it as soon as possible.
-
-This is what *car mode* is for: If enabled, the TCD will always boot in AP mode, regardless of a configured WiFi network. This speeds up booting.
-
-To enable *car mode*, type 991 followed by ENTER. The TCD will reboot in AP mode.
-
-To disable *car mode*, type 990 followed by ENTER. The TCD will reboot and attempt to connect to a previously configured WiFi network.
-
-*Car mode* is persistent, i.e. it remains active (even accross reboots and power-downs) until disabled.
-
-Note that the TCD has no internet access while in car mode; this means that it cannot update its clock automatically. If the time runs off over time, you need to re-adjust it using the [keypad menu](#how-to-set-the-real-time-clock-rtc).
+For information on supported sensor models/types and configuration, see [here](https://github.com/CircuitSetup/Time-Circuits-Display/blob/main/DIY/README.md#temperaturehumidity-sensor).
 
 ## Controlling other props
 
 ### Connecting props by wire
 
-The device can tell other props about a time travel, and in essence act as a "master controller" in a setup of several props. It does so via IO14 (labeled "TT OUT" on Control Boards 1.3 and later).
+The device can tell other props about a time travel, and in essence act as a "master controller" in a setup of several props. 
 
-![Wired connection](https://github.com/realA10001986/Time-Circuits-Display/assets/76924199/9a2f93a9-603c-4389-8973-0c8e09e9af74)
+![Wired connection](img/family-wired.png)
 
-You need two wires for connecting the TCD to the other prop: TT_OUT (IO14) and GND, which need to be connected to the respective pins of the prop.
+For detailed wiring instructions, please see the documentation for the prop ([Flux capacitor](https://github.com/CircuitSetup/Flux-Capacitor/tree/main?tab=readme-ov-file#connecting-a-tcd-by-wire), [SID](https://github.com/CircuitSetup/SID/tree/main?tab=readme-ov-file#connecting-a-tcd-by-wire), [Dash Gauges](https://github.com/CircuitSetup/Dash-Gauges/blob/main/DIY/README.md#connecting-a-tcd-to-the-dash-gauges-by-wire), [VSR](https://github.com/CircuitSetup/VSR#connecting-a-tcd-by-wire)); for DIY props, see [here](https://github.com/CircuitSetup/Time-Circuits-Display/blob/main/DIY/README.md#other-props).
 
-| ![ttout](https://github.com/realA10001986/Time-Circuits-Display/assets/76924199/b1330e4d-12ba-48ef-a454-3d6167fb2a5d) |
-|:--:|
-| TT_OUT/IO14 on board version 1.3 |
+If external gear is connected by wire and you want to use this control feature, check **_Control props connected by wire_** in the Config Portal.
 
-| ![ttout](https://github.com/realA10001986/Time-Circuits-Display/assets/76924199/112c0240-6a3b-44c3-a15d-5af7477a8791) |
-|:--:|
-| IO14 on board version 1.2 |
+For CircuitSetup original props connected by wire, the option **_Signal Time Travel without 5s lead_** should not be set since it skips the "acceleration phase"; however, if that option is set on the TCD (for instance, if third-party props are connected by wire as well), the respective option on the prop must be set, too. If those props are connected wirelessly, this option has no effect.
 
-If external gear is connected to TT_OUT/IO14 and you want to use this control feature, check **_Control props connected by wire_** in the Config Portal.
-
-In case you want to design your own props, here's the timing diagram:
-
-1) Option **_Signal Time Travel without 5s lead_** unchecked
-
-```
-|<---------- speedo acceleration --------->|                         |<-speedo de-acceleration->|
-0....10....20....................xx....87..88------------------------88...87....................0
-                                           |<--Actual Time Travel -->|
-                                           |  (Display disruption)   |
-                                      TT starts                      Reentry phase
-                                           |                         |
-             |<---------ETTO lead--------->|                         |
-             |                                                       |
-             |                                                       |
-             |                                                       |
-    TT-OUT/IO14: LOW->HIGH                                  TT-OUT/IO14: HIGH->LOW
- ```
-
-"ETTO lead", ie the lead time between TT_OUT/IO14 going high and the actual start of a time travel is defined as 5000ms (ETTO_LEAD_TIME). In this window of time, the prop can play its pre-time-travel (warm-up/acceleration/etc) sequence. The sequence inside the time "tunnel" follows after that lead time, and when IO14 goes LOW, the re-entry into the destination time takes place.
-
-2) Option **_Signal Time Travel without 5s lead_** checked
-
-```
-|<---------- speedo acceleration --------->|                         |<-speedo de-acceleration->|
-0....10....20....................xx....87..88------------------------88...87....................0
-                                           |<--Actual Time Travel -->|
-                                           |  (Display disruption)   |
-                                      TT starts                      Reentry phase
-                                           |                         |
-                                           |                         |
-                                           |                         |
-                                           |                         |
-                                           |                         |
-                                  TT-OUT/IO14: LOW->HIGH    TT-OUT/IO14: HIGH->LOW
- ```
-
-In this case, there is no lead. The time travel starts immediately.
-
-For CircuitSetup original props connected by wire, the option **_Signal Time Travel without 5s lead_** should not be set since it skips the "acceleration phase"; however, if that option is - for some reason - set on the TCD, the respective option on the prop must be set, too. If those props are connected wirelessly, this option has no effect.
-
-Note that a wired connection only allows for synchronized time travel sequences, no other communication takes place. Therefore I strongly recommend a wireless BTTFN connection, see immediately below.
+Note that a wired connection only allows for synchronized time travel sequences, no other communication takes place. A wireless connection allows for more features, see immediately below.
 
 ### Connecting props wirelessly
 
 #### BTTF-Network (BTTFN)
 
-The TCD can communicate with other compatible props wirelessly, via WiFi. It can send out information about a time travel and an alarm, and other props can query the TCD for time, speed and some other data.
+The TCD can communicate with other compatible props wirelessly, via the built-in "**B**asic-**T**elematics-**T**ransmission-**F**ramework" over WiFi. It can send out information about a time travel and an alarm, and other props can query the TCD for time, speed and some other data.
 
-![bttfn connection](https://github.com/realA10001986/Time-Circuits-Display/assets/76924199/8d9a54bc-12c9-459a-96cf-ab3f7982af24)
+![bttfn connection](img/family-wifi-bttfn.png)
 
-On the TCD, no special configuration is required. However, if the TCD is supposed to send out notifications about time travel and alarm to connected BTTFN clients, usage of MQTT must be disabled or the **_Send event notifications_** option in the MQTT section of the Config Portal must be _unchecked_. The TCD only sends out such notifications either via BTTFN or MQTT, never both.
+Here is a demonstration of all the props connected through BTTFN:
 
-On the other prop, such as CircuitSetup's [Flux Capacitor](https://fc.backtothefutu.re) or (upcoming) [SID](https://sid.backtothefutu.re), the TCD's IP address (not hostname!) must be entered into the *IP address of TCD* field on the Setup page in their Config Portal - that's all.
+| [![Watch the video](https://img.youtube.com/vi/u9oTVXUIOXA/0.jpg)](https://youtu.be/u9oTVXUIOXA) |
+|:--:|
+| Click to watch the video |
 
-The fact that the devices communicate directly with each other makes BTTFN the ideal solution for car setups. Also, while at home, the devices might be connected to an existing WiFi network, in a car, the TCD can act as access point for Flux Capacitor and SID (ie they are connecting to the *TCD-AP* WiFi network), and those then can talk the TCD wirelessly. The TCD has *car mode* for doing exactly this, see [here](#car-mode) and the documentation of the respective prop. 
+On the TCD, no special configuration is required. 
 
-To see which BTTFN devices are currently known to the TCD, enter the keypad menu and select "BTTFN CIENTS".
+On the other prop, such as CircuitSetup's [Flux Capacitor](https://circuitsetup.us/product/flux-capacitor-light-sound-pcb/), [SID](https://circuitsetup.us/product/delorean-time-machine-status-indicator-display-sid/) or [Dash Gauges](github.com/CircuitSetup/Dash-Gauges), the TCD's IP address (or hostname) must be entered into the *IP address or hostname of TCD* field on the Setup page in their Config Portal - that's all.
+
+The fact that the devices communicate directly with each other makes BTTFN the ideal solution for car setups. Also, while at home, the devices might be connected to an existing WiFi network, in a car, the TCD can act as access point for Flux Capacitor and SID (ie they are connecting to the *TCD-AP* WiFi network), and those then can talk the TCD wirelessly. The TCD has *car mode* for aiding this, see [here](#car-mode) and the documentation of the respective prop. 
+
+To see which BTTFN devices are currently known to the TCD, enter the keypad menu and select "BTTFN CLIENTS".
 
 ## Home Assistant / MQTT
 
@@ -897,13 +986,13 @@ Only ASCII messages are supported, the maximum length is 255 characters.
 The TCD can - to a limited extent - be controlled through messages sent to topic **bttf/tcd/cmd**. Support commands are
 - TIMETRAVEL: Start a time travel
 - RETURN: Return from time travel
-- BEEP_ON: Enables the *annoying beep*(tm)
-- BEEP_OFF: Disables the *annoying beep*(tm)
+- BEEP_ON: Enables the [beep](#beep-on-the-second)
+- BEEP_OFF: Disables the [beep](#beep-on-the-second)
 - BEEP_30, BEEP_60: Set the beep modes as described [here](#beep-on-the-second)
 - ALARM_ON: Enable the alarm
 - ALARM_OFF: Disable the alarm
-- NIGHTMODE_ON: Enable manual night mode
-- NIGHTMODE_OFF: Disable manual night mode
+- NIGHTMODE_ON: Enable manual [night mode](#night-mode)
+- NIGHTMODE_OFF: Disable manual [night mode](#night-mode)
 - MP_PLAY: Starts the Music Player
 - MP_STOP: Stops the Music Player
 - MP_NEXT: Jump to next song
@@ -915,13 +1004,17 @@ The TCD can - to a limited extent - be controlled through messages sent to topic
 
 If both the TCD and the other props are connected to the same broker, and the option **_Send event notifications_** is checked on the TCD's side, other compatible props will receive information on time travel and alarm and play their sequences in sync with the TCD. The topic is called  **bttf/tcd/pub**.
 
-![MQTT connection](https://github.com/realA10001986/Time-Circuits-Display/assets/76924199/51986583-455c-491d-8d9c-4d5b9bf2d8ff)
+![MQTT connection](img/family-wifi-mqtt.png)
 
-The timing is identical to the wired protocol, see [here](#controlling-other-props). TIMETRAVEL is sent to **bttf/tcd/pub** when IO14 goes high, ie with a lead time (ETTO LEAD) of 5 seconds. REENTRY is sent when the re-entry sequence starts (ie when IO14 goes low). Note that network traffic has some latency, so timing might not be as exact as a wired connection.
+The timing is identical to the wired protocol; TIMETRAVEL is sent to **bttf/tcd/pub** with a lead time of 5 seconds. REENTRY is sent when the re-entry sequence starts.
 
-When the [alarm](#how-to-set-up-the-alarm) sounds, the TCD can send "ALARM" to **bttf/tcd/pub**.
+When the [alarm](#how-to-set-up-the-alarm) sounds, the TCD sends "ALARM" to **bttf/tcd/pub**.
 
-MQTT and BTTFN can co-exist. The TCD only sends out time travel and alarm notifications through either MQTT or BTTFN, never both. If you have other MQTT-aware devices listening to the TCD's public topic (bttf/tcd/pub) in order to react to time travel or alarm messages, use MQTT (i.e. check **_Send event notifications_**). If only BTTFN-aware devices are to be used, uncheck this option to use BTTFN as it has less latency.
+#### MQTT vs BTTFN
+
+MQTT and BTTFN can co-exist. The TCD only sends out time travel and alarm notifications through _either_ MQTT _or_ BTTFN, never both; selection is done by checking or unchecking the option **_Send event notifications_** in the MQTT section of the Config Portal's Setup page.
+
+If you have other MQTT-aware devices listening to the TCD's public topic (bttf/tcd/pub) in order to react to time travel or alarm messages, use MQTT (i.e. check **_Send event notifications_**). If only BTTFN-aware devices are to be used, uncheck this option to use BTTFN as it has less latency.
 
 ### Setup
 
@@ -949,11 +1042,311 @@ Note that if your configured WiFi network was not available when the TCD was try
 
 ## Flash Wear
 
-Flash memory has a somewhat limited life-time. It can be written to only between 10.000 and 100.000 times before becoming unreliable. The firmware writes to the internal flash memory when saving settings and other data. Every time you change settings through the keypad menu or the Config Portal, data is written to flash memory. The same goes for changing alarm settings (including enabling/disabling the alarm), and time travelling if time travels are [persistent](#persistent--non-persistent-time-travels).
+Flash memory has a somewhat limited life-time. It can be written to only between 10.000 and 100.000 times before becoming unreliable. The firmware writes to the internal flash memory when saving settings and other data. Every time you change settings through the keypad menu or the Config Portal, data is written to flash memory.
 
-In order to reduce the number of write operations and thereby prolong the life of your TCD, it is recommended
-- to uncheck the option **_[Make time travels persistent](#persistent--non-persistent-time-travels)_** in the Config Portal,
-- to use a good-quality SD card and to check **_[Save alarm/volume settings on SD](#-save-alarmvolume-settings-on-sd)_** in the Config Portal; alarm and volume settings are then stored on the SD card (which also suffers from wear but is easy to replace). If you want to swap the SD card but preserve your alarm/volume settings, go to the Config Portal while the old SD card is still in place, uncheck the **_Save alarm/volume settings on SD_** option, click on Save and wait until the TCD has rebooted. You can then power down the TCD, swap the SD card and power-up again. Then go to the Config Portal, change the option back on and click on Save. Your settings are now on the new SD card.
+In order to reduce the number of write operations and thereby prolong the life of your TCD, it is recommended to use a good-quality SD card and to check **_[Save secondary settings on SD](#-save-secondary-settings-on-sd)_** in the Config Portal; secondary settings (volume, alarm, reminder, carmode state, exhibition mode data and state, time travel data and state) are then stored on the SD card (which also suffers from wear but is easy to replace). See [here](#-save-secondary-settings-on-sd) for more information.
 
-## [Appendix: The Config Portal & Sensor Wiring](https://github.com/CircuitSetup/Time-Circuits-Display/wiki/Appendix:-The-Config-Portal-&-Sensor-Wiring)
+## Appendix A: The Config Portal
+
+### Main page
+
+##### &#9654; Configure WiFi
+
+Clicking this leads to the WiFi configuration page. On that page, you can connect your TCD to your WiFi network by selecting/entering the SSID (WiFi network name) as well as a password (WPA2). By default, the TCD requests an IP address via DHCP. However, you can also configure a static IP for the TCD by entering the IP, netmask, gateway and DNS server. All four fields must be filled for a valid static IP configuration. If you want to stick to DHCP, leave those four fields empty.
+
+Note that this page has nothing to do with Access Point mode; it is strictly for connecting your TCD to an existing WiFi network as a client.
+
+##### &#9654; Setup
+
+This leads to the [Setup page](#setup-page).
+
+##### &#9654; Update
+
+This leads to the firmware and audio update page. 
+
+In order to upload a new firmware binary (such as the ones published here in the install/ folder), select that image file in the top file selector and click "Update".
+
+You can also install the TCD's audio data on this page; download the current sound-pack, extract it and select the resulting TCDA.bin file in the bottom file selector. Finally, click "Upload". Note that an SD card is required for this operation.
+
+Note that either a firmware or audio data can be uploaded at once, not both at the same time.
+
+##### &#9654; Erase WiFi Config
+
+Clicking this (and saying "yes" in the confirmation dialog) erases the WiFi configuration (WiFi network and password) and reboots the device; it will restart in "access point" mode. See [here](#initial-configuration).
+
+---
+
+### Setup page
+
+#### Basic settings
+
+##### &#9654; Play intro
+
+Selects whether the animated intro should be played upon power-up.
+
+##### &#9654; 24-hour clock mode
+
+Selects 24-hour clock mode, ie hours go from 0 to 23, "AM" and "PM" are permanently dark.
+
+##### &#9654; Power-up beep mode
+
+Selects the default, power-up ["beep"](#beep-on-the-second) mode. "Auto: xx secs" enables the beep for xx seconds after entering a destination time, after triggering a time travel, and upon (real or fake) power-on. Can be changed at any time by typing 000 (off), 001 (on), 002 (Auto 30secs) or 003 (Auto 60secs) followed by ENTER.
+
+##### &#9654; Time-cycling interval
+
+In this decorative mode the device cycles through a list of pre-programmed, movie-accurate *destination* and *last time departed* times. This mode is enabled by setting the "Time-cycling Interval" to anything but "off". The device will cycle through named list every 5th, 10th, 15th, 30th or 60th minute, and thereby change the displays. Set the interval to "off" to disable. See [here](#time-cycling)
+
+##### &#9654; Alarm base is real present time
+
+Selects whether the alarm and sound-on-the-hour are based on real, actual present time, or "present" time as displayed (eg after a time travel).
+
+Note that the night mode schedules and the Reminder are always based on actual present time.
+
+#### Network & time synchronization settings
+
+##### &#9654; Hostname
+
+The device's hostname in the WiFi network. Defaults to 'timecircuits'. This also is the domain name at which the Config Portal is accessible from a browser in the same local network. The URL of the Config Portal then is http://<i>hostname</i>.local (the default is http://timecircuits.local)
+
+If you have more than one TCD in your local network, please give them unique hostnames.
+
+##### &#9654; AP Mode: Network name appendix
+
+By default, if the TCD creates a WiFi network of its own ("AP-mode"), this network is named "TCD-AP". In case you have multiple TCDs in your vicinity, you can have a string appended to create a unique network name. If you, for instance, enter "-ABC" here, the WiFi network name will be "TCD-AP-ABC". Characters A-Z, a-z, 0-9 and - are allowed.
+
+##### &#9654; AP Mode: WiFi password
+
+By default, and if this field is empty, the TCD's own WiFi network ("AP-mode") will be unprotected. If you want to protect your TCD access point, enter your password here. It needs to be 8 characters in length and only characters A-Z, a-z, 0-9 and - are allowed.
+
+If you forget this password and are thereby locked out of your TCD, power-down, hold the ENTER key, power-up and wait until the white LED flashes, then release the ENTER key. The TCD will boot and start the access point temporarily without a password. Then connect to the TCD's AP with your computer or handheld, enter the Config Portal ( http://192.168.4.1 ) and either look up or change your AP WiFi password. Note that this ENTER-key-procedure is not persistent: When you reboot or re-power the TCD, the AP will be password protected again.
+
+##### &#9654; WiFi connection attempts
+
+Number of times the firmware tries to reconnect to a WiFi network, before falling back to AP-mode. See [here](#short-summary-of-first-steps)
+
+##### &#9654; WiFi connection timeout
+
+Number of seconds before a timeout occurs when connecting to a WiFi network. When a timeout happens, another attempt is made (see immediately above), and if all attempts fail, the device falls back to AP-mode. See [here](#short-summary-of-first-steps)
+
+##### &#9654; Periodic reconnection attempts
+
+Selects whether periodic re-connection attempts (between 12am and 6am) should be made after a failure to connect to a configured WiFi network.
+
+In typical home setups with 24/7 WiFi, this option hardly matters. However, if you have connected your TCD to your WiFi network, but move it between environments (with and without WiFi access) on a regular basis, uncheck this to keep the TCD from searching for your configured WiFi network unnecessarily.
+
+This option has no effect if the TCD is in [Car Mode](#car-mode).
+
+##### &#9654; WiFi power save timer
+
+See [here](#wifi-power-saving-features)
+
+##### &#9654; WiFi power save timer for AP-mode
+
+See [here](#wifi-power-saving-features)
+
+##### &#9654; Time zone
+
+The time zone of the place where the device is operated in POSIX format. Needs to be set in order to use NTP or GPS, and for DST (daylight saving). Defaults to UTC0. See [here](#appendix-b-time-zones), [here](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv) or [here](https://tz.out-a-ti.me) for a list of valid time zones.
+
+##### &#9654; NTP Server
+
+Name of your preferred NTP (network time protocol) server for time synchronization. Leave this empty to disable NTP.
+
+#### World Clock mode
+
+##### &#9654; Time zone for Destination Time display
+
+The time zone for the red display in [World Clock mode](#world-clock-mode). Default: unset. Needs to be in [Posix](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv) format.
+
+##### &#9654; Time zone for Last Time Dep. display
+
+The time zone for the yellow display in [World Clock mode](#world-clock-mode). Default: unset. Needs to be in [Posix](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv) format.
+
+##### &#9654; City/location name
+
+For each World Clock time zones, a city or location name can be configured. For example "SYDNEY" or "LORD HOWE". This name will be shown every few seconds alternately with time.
+
+#### Night-mode
+
+##### &#9654; Destination time off in night mode
+
+Selects whether the *destination time* display is dimmed or switched of in night mode.
+
+##### &#9654; Present time off in night mode
+
+Selects whether the *present time* display is dimmed or switched of in night mode.
+
+##### &#9654; Last time dep. off in night mode
+
+Selects whether the *last time departed* display is dimmed or switched of in night mode.
+
+##### &#9654; Schedule
+
+Selects a schedule for night-mode. See [here](#night-mode)
+
+##### &#9654; Daily night-mode start hour
+
+If "Daily" is chosen in the "Schedule"-drop-down, enter night-mode start hour here.
+
+##### &#9654; Daily night-mode end hour
+
+If "Daily" is chosen in the "Schedule"-drop-down, enter night-mode end hour here.
+
+##### &#9654; Use light sensor
+
+Select whether to use a light sensor's data to enable night-mode. See [here](#night-mode).
+
+##### &#9654; Light (lux) threshold
+
+If the light sensor reports a number of lux below or equal to this value, night-mode is activated. See [here](#night-mode).
+
+#### Temperature/humidity sensor settings
+
+##### &#9654; Display in °Celsius
+
+Selects between Fahrenheit and Celsius for temperature display. See [here](#room-condition-mode-temperaturehumidity-sensor)
+
+##### &#9654; Temperature offset
+
+This offset, which can range from -3.0 to 3.0, is added to the sensor measurement, in order to compensate sensor inaccuracy or suboptimal sensor placement.
+
+#### Speedometer settings
+
+##### &#9654; Speedo display type
+
+Type of [speedo](#speedometer) display. Apart from [CircuitSetups's own](https://circuitsetup.us/product/delorean-time-machine-speedometer-pcb/?v=fa868488740a), several other types are also supported, mostly Adafruit or Seeed/Grove LED segment displays. For 4-digit-displays there are options to display speed left- or right-aligned. Two special options for Adafruit 828 and 1911 are at the end of the list; use these if you connect only one 2-digit-tube to the respective i2c backpack.
+
+##### &#9654; Speedo brightness
+
+Brightness of speedo display when displaying speed.
+
+##### &#9654; Speedo sequence speed factor
+
+Since the DMC-12 wasn't the world's fastest car, it's acceleration figures might soon cause boredom if played in real-time as part of the time travel sequence with a speedo display. This factor speeds up the acceleration. 2.0 means twice as fast as the real car.
+
+##### &#9654; Display GPS speed
+
+If a GPS receiver is connected, this selects whether to display GPS speed on the speedo display. This only makes sense if the Time Circuits are mounted in a car. See [here](#gps-receiver)
+
+##### &#9654; Update rate
+
+If GPS speed is to be shown on a speedo display (see option immediately above), you can select in what rate the speed should be updated. The choices are once, twice, four times or five times per second.
+
+It appears that the GPS receiver calculates speed on every satellite position update, and the higher the update rate, the shorter the travelled distance, and the higher the error rate. The default is therefore 2Hz (twice per second) as it provides the (IMHO) best combination of quickness and accuracy.
+
+##### &#9654; Display temperature
+
+Selects whether temperature as received from a suitable sensor is displayed on the speedo display, when it is idle (ie no time travel is in progress).
+
+##### &#9654; Temperature brightness
+
+Brightness of speedo display when displaying temperature.
+
+##### &#9654; Temperature off in night mode
+
+Selects whether the temperature display is dimmed or switched of in night mode.
+
+#### External switches/buttons
+
+##### &#9654; Use fake power switch
+
+Check this if you want to use a fake power switch. See [here](#fake-power-switch).
+
+##### &#9654; External time travel button: Delay
+
+Selects a delay (in milliseconds) from when pressing the external time travel button until the time travel sequence starts. See [here](#external-time-travel-trigger).
+
+#### Settings for other peripherals
+
+##### &#9654; Control props connected by wire
+
+This selects whether the TT_OUT/IO14 pin is activated upon a time-travel in order to play synchronized time travel sequences on other props, if those props are connected by wire. See [here](#controlling-other-props).
+
+##### &#9654; Signal Time Travel without 5s lead
+
+If this option is unchecked (which is the default), a time travel is signaled for wired props with a 5 second lead, in order to give the prop time to play an acceleration sequence. If this option is checked, TT_OUT/IO14 is activated when the time travel actually starts.
+
+For CircuitSetup original props, if they are connected by wire, this option should not be set. If it has to be set (because you are also driving third-party props, for instance), the corresponding option must be set in the prop's Config Portal.
+
+For wirelessly connected props this option has no effect. Also see [here](#controlling-other-props).
+
+##### &#9654; Provide GPS speed for wireless props
+
+Some [BTTF-Network](#bttf-network-bttfn) clients query the TCD for GPS speed, such as CircuitSetup's Flux Capacitor and SID. Check this option if such clients are connected, so that they get frequent GPS speed updates.
+
+##### &#9654; Play time travel sounds
+
+If other props are connected, they might bring their own time travel sound effects. In this case, you can uncheck this to disable the Time Circuit's own time travel sounds. Note that this only covers sounds played during time travel, not other sound effects.
+
+#### Home Assistant / MQTT settings
+
+##### &#9654; Use Home Assistant (MQTT 3.1.1)
+
+If checked, the TCD will connect to the broker (if configured) and send and receive messages via [MQTT](#home-assistant--mqtt).
+
+##### &#9654; Broker IP[:port] or domain[:port]
+
+The broker server address. Can be a domain (eg. "myhome.me") or an IP address (eg "192.168.1.5"). The default port is 1883. If different port is to be used, it can be specified after the domain/IP and a colon ":", for example: "192.168.1.5:1884". Specifying the IP address is preferred over a domain since the DNS call adds to the network overhead. Note that ".local" (MDNS) domains are not supported.
+
+##### &#9654; User[:Password]
+
+The username (and optionally the password) to be used when connecting to the broker. Can be left empty if the broker accepts anonymous logins.
+
+##### &#9654; Topic to display
+
+An optional topic the TCD subscribes to in order to display messages on the *Destination Time* display.
+
+##### &#9654; Send event notifications
+
+Check this if you want the TCD to send notifications on time travel and alarm via [MQTT](#home-assistant--mqtt).
+
+Note that if this option is checked, the TCD will not send out such notifications via [BTTF-Network](#bttf-network-bttfn).
+
+#### Music Player settings
+
+##### &#9654; Shuffle at startup
+
+When checked, songs are shuffled when the device is booted. When unchecked, songs will be played in order.
+
+#### Other settings
+
+##### &#9654; Save secondary settings on SD
+
+If this is checked, secondary settings (brightness, time cycling interval, volume, alarm, reminder, car mode state, exhibition mode data and state, time travel state and data) are stored on the SD card (if one is present). This helps to minimize write operations to the internal flash memory and to prolong the lifetime of your TCD. See [Flash Wear](#flash-wear).
+
+Apart from Flash Wear, there is another reason for using an SD card for settings: Writing data to internal flash memory can cause delays of up to 1.5 seconds, which interrupt sound playback and have other undesired effects. The TCD needs to save data from time to time, so in order for a smooth experience without unexpected and unwanted delays, please use an SD card and check this option.
+
+It is safe to have this option checked even with no SD card present.
+
+If you want copy settings from one SD card to another, do as follows:
+- With the old SD card still in the slot, enter the Config Portal, turn off _Save secondary settings on SD_, and click "SAVE".
+- After the TCD has rebooted, power it down, and swap the SD card for your new one.
+- Power-up the TCD, enter the Config Portal, re-enable _Save secondary settings on SD_, and click "SAVE".
+
+This procedure ensures that all your settings are copied from the old to the new SD card.
+
+##### &#9654; Make time travels persistent
+
+See [here](#persistent--non-persistent-time-travels). For this option to take effect, it is required that the _Save secondary settings on SD_ is checked as well, and an SD card is present. Time travel data is only ever stored on SD, never in internal flash memory.
+
+## Appendix B: Time zones
+
+Here are the probably most used times zones:
+
+America:
+- Eastern Standard Time: EST5EDT,M3.2.0,M11.1.0
+- Central Standard Time: 	CST6CDT,M3.2.0,M11.1.0
+- Mountain Standard Time: MST7MDT,M3.2.0,M11.1.0 (Arizona: MST7)
+- Pacific Standard Time: 	PST8PDT,M3.2.0,M11.1.0
+
+Europe:
+- Western European Time: GMT0BST,M3.5.0/1,M10.5.0
+- Central European Time: CET-1CEST,M3.5.0,M10.5.0/3
+- Eastern European Time: EET-2EEST,M3.5.0/3,M10.5.0/4
+
+A full list is [here](https://tz.out-a-ti.me).
+
+
+_Text & images: (C) Thomas Winischhofer ("A10001986"). See LICENSE._
+
 
