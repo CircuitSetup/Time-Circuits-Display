@@ -44,6 +44,8 @@
  */
 
 /*  Changelog
+ *  2024/06/19 (A10001986)
+ *    - Fix: Unmute secondary audio DAC (CB 1.4.5)
  *  2024/06/05 (A10001986)
  *    - Minor fixes for WiFiManager
  *    * Switched to esp32-arduino 2.0.17 for pre-compiled binary.
