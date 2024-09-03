@@ -1,31 +1,29 @@
 This folder holds all files necessary for immediate installation on your Time Circuits Display. Here you'll find
 - a binary of the current firmware, ready for upload to the device;
-- the latest audio files
+- the latest audio data
 
-### Firmware installation
+## Firmware Installation
 
-#### Updating Firmware
-![tcd_firmware_update](https://github.com/CircuitSetup/Time-Circuits-Display/assets/34163498/5dc557c6-1cd7-463a-a1b0-60b63c004daf)
+If a previous version of the Time Circuits Display firmware is installed on your device, you can update easily using the pre-compiled binary. Enter the Config Portal, click on "Update" and select the pre-compiled binary file provided in this repository. 
 
-If a previous version of the Time Circuits firmware was installed on your device, you can upload the provided binary to update to the current version: 
-- Download the latest version of the firmware from here
-- Go to the TCD Config Portal ([see here for how to connect to it](https://github.com/CircuitSetup/Time-Circuits-Display/wiki/8.-WiFi-Connection-&-TCD-Settings#connecting-to-your-wifi-network) - you do not need to connect the TCD to your WiFi network to access the config portal)
-- Click on "Update"
-- Select the previously downloaded binary (.bin)
-- Click "Update" to update the firmware
+If you are using a fresh ESP32 board, please see [timecircuits-A10001986.ino](https://github.com/realA10001986/Time-Circuits-Display/blob/main/timecircuits-A10001986/timecircuits-A10001986.ino) for detailed build and upload information, or, if you don't want to deal with source code, compilers and all that nerd stuff, go [here](https://install.out-a-ti.me) and follow the instructions.
 
-The TCD will restart.
+## Audio data installation
 
-#### Clean Install
-For a fresh installation, [see here for details](https://github.com/CircuitSetup/Time-Circuits-Display/wiki/9.-Programming-&-Upgrading-the-Firmware-(ESP32)#programming-from-source). This method is the one for fresh ESP32 boards and/or folks familiar with Arduino programming.
+The firmware comes with some audio data ("sound-pack") which needs to be installed separately. The audio data is not updated as often as the firmware itself. If you have previously installed the latest version of the sound-pack, you normally don't have to re-install the audio data when you update the firmware. Only if the TCD displays "PLEASE INSTALL AUDIO FILES" during boot, an update of the audio data is needed.
 
-#### Audio file installation
+>If your TCD previously ran a firmware from CircuitSetup (ie. pre-installed or downloaded from their github), installing of the audio data **from this repository** is required. You cannot use CircuitSetup's audio data with the firmware available here, or vice versa.
 
-The sound pack is not updated as often as the firmware itself. If you have previously installed the latest version of the sound-pack, you normally don't have to re-install the audio files when you update the firmware. Only if either a new version of the sound-pack is released here, or your clock is quiet after a firmware update, a re-installation is needed.
+The first step is to download "install/sound-pack-xxxxxxxx.zip" and extract it. It contains one file named "TCDA.bin".
 
-- Download "sound-pack-xxxxxxxx.zip" and extract it to the root directory of of a FAT32 formatted SD card
-- Power down the TCD
-- Insert this SD card into the device's slot and 
-- Power up the TCD
+Then there are two alternative ways to proceed. Note that both methods *require an SD card*.
 
-If (and only if) the exact and complete contents of sound-pack archive is found on the SD card, the clock will show "INSTALL AUDIO FILES?" after power-up. Press ENTER briefly to toggle between "CANCEL" and "PROCEED". Choose "PROCEED" and hold the ENTER key for 2 seconds.
+1) Through the Config Portal. Click on *Update*, select the "TCDA.bin" file in the bottom file selector and click on *Upload*. Note that an SD card must be in the slot during this operation.
+
+2) Via SD card:
+- Copy "TCDA.bin" to the root directory of of a FAT32 formatted SD card;
+- power down the TCD,
+- insert this SD card into the slot and 
+- power up the TCD; the audio data will be installed automatically.
+
+See also [here](https://github.com/CircuitSetup/Time-Circuits-Display/blob/main/README.md#audio-data-installation).
