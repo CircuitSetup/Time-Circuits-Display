@@ -4,7 +4,7 @@ This folder holds all files necessary for immediate installation on your Time Ci
 
 ## Firmware Installation
 
-If a previous version of the Time Circuits Display firmware is installed on your device, you can update easily using the pre-compiled binary. Enter the Config Portal, click on "Update" and select the pre-compiled binary file provided in this repository. 
+If a previous version of the Time Circuits Display firmware is installed on your device, you can update easily using the pre-compiled binary. Enter the [Config Portal](https://github.com/CircuitSetup/Time-Circuits-Display/tree/master?tab=readme-ov-file#the-config-portal), click on "Update" and select the pre-compiled binary file provided in this repository. 
 
 ## Audio data installation
 
@@ -22,4 +22,4 @@ Then there are two alternative ways to proceed. Note that both methods *require 
 - insert this SD card into the slot and 
 - power up the TCD; the audio data will be installed automatically.
 
-See also [here](https://github.com/CircuitSetup/Time-Circuits-Display/blob/main/README.md#audio-data-installation).
+See also [here](https://github.com/CircuitSetup/Time-Circuits-Display/tree/master?tab=readme-ov-file#audio-data-installation).
