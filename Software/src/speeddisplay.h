@@ -17,7 +17,7 @@
  * 
  * The i2c slave address must be 0x70.
  * -------------------------------------------------------------------
- * License: MIT
+ * License: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -29,6 +29,25 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ *
+ * In addition, the following restrictions apply:
+ * 
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
@@ -87,6 +106,7 @@ class speedDisplay {
         bool begin(int dispType);
         void on();
         void off();
+        bool getOnOff();
         #if 0
         void lampTest();
         #endif
@@ -110,14 +130,9 @@ class speedDisplay {
         void setDot(bool dot01 = true);
         void setColon(bool colon);
 
-        uint8_t getSpeed();
+        int8_t getSpeed();
         bool getDot();
         bool getColon();
-
-        #if 0
-        void showTextDirect(const char *text);
-        void setColonDirect(bool colon);
-        #endif
 
     private:
 
@@ -138,7 +153,7 @@ class speedDisplay {
         bool _dot01 = false;
         bool _colon = false;
 
-        uint8_t _speed = 1;
+        int8_t _speed = 0;
 
         uint8_t _brightness = 15;
         uint8_t _origBrightness = 15;

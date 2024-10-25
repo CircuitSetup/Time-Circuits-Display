@@ -9,7 +9,7 @@
  * WiFi and Config Portal handling
  *
  * -------------------------------------------------------------------
- * License: MIT
+ * License: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,25 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ *
+ * In addition, the following restrictions apply:
+ * 
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
@@ -166,10 +185,10 @@ WiFiManagerParameter custom_tzsel("<datalist id='tz'><option value='PST8PDT,M3.2
 
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
 WiFiManagerParameter custom_playIntro("plIn", "Play intro (0=off, 1=on)", settings.playIntro, 1, aco);
-WiFiManagerParameter custom_mode24("md24", "24-hour clock mode: (0=12hr, 1=24hr)", settings.mode24, 1, aco);
+WiFiManagerParameter custom_mode24("md24", "Clock mode (0=12hr, 1=24hr)", settings.mode24, 1, aco);
 #else // -------------------- Checkbox hack: --------------
 WiFiManagerParameter custom_playIntro("plIn", "Play intro", settings.playIntro, 1, "type='checkbox' style='margin-top:3px'", WFM_LABEL_AFTER);
-WiFiManagerParameter custom_mode24("md24", "24-hour clock mode", settings.mode24, 1, "type='checkbox'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_mode24("md24", "24-hour clock", settings.mode24, 1, "type='checkbox'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 WiFiManagerParameter custom_beep_aint(beepaintCustHTML);  // beep + aint
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
@@ -178,19 +197,19 @@ WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is RTC (1) or displayed
 WiFiManagerParameter custom_ttrp("ttrp", "Make time travels persistent (0=no, 1=yes)", settings.timesPers, 1, "autocomplete='off'");
 #endif
 #else // -------------------- Checkbox hack: --------------
-WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is real present time", settings.alarmRTC, 1, "title='If unchecked, the alarm base is the displayed \"present\" time' type='checkbox'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_alarmRTC("artc", "Alarm base is real present time", settings.alarmRTC, 1, "title='If unchecked, alarm base is the displayed \"present\" time' type='checkbox'", WFM_LABEL_AFTER);
 #ifndef PERSISTENT_SD_ONLY
 WiFiManagerParameter custom_ttrp("ttrp", "Make time travels persistent", settings.timesPers, 1, "type='checkbox'", WFM_LABEL_AFTER);
 #endif
 #endif // -------------------------------------------------
 
 #if defined(TC_MDNS) || defined(TC_WM_HAS_MDNS)
-#define HNTEXT "Hostname<br><span style='font-size:80%'>The Config Portal is accessible at http://<i>hostname</i>.local<br>(Valid characters: a-z/0-9/-)</span>"
+#define HNTEXT "Hostname<br><span style='font-size:80%'>The Config Portal is accessible at http://<i>hostname</i>.local<br>[Valid characters: a-z/0-9/-]</span>"
 #else
 #define HNTEXT "Hostname<br><span style='font-size:80%'>(Valid characters: a-z/0-9/-)</span>"
 #endif
 WiFiManagerParameter custom_hostName("hostname", HNTEXT, settings.hostName, 31, "pattern='[A-Za-z0-9\\-]+' placeholder='Example: timecircuits'");
-WiFiManagerParameter custom_sysID("sysID", "AP Mode: Network name appendix<br><span style='font-size:80%'>Will be appended to \"TCD-AP\" to create a unique name if multiple TCDs in range. [a-z/0-9/-]</span>", settings.systemID, 7, "pattern='[A-Za-z0-9\\-]+'");
+WiFiManagerParameter custom_sysID("sysID", "AP Mode: Network name appendix<br><span style='font-size:80%'>Will be appended to \"TCD-AP\" [a-z/0-9/-]</span>", settings.systemID, 7, "pattern='[A-Za-z0-9\\-]+'");
 WiFiManagerParameter custom_appw("appw", "AP Mode: WiFi password<br><span style='font-size:80%'>Password to protect TCD-AP. Empty or 8 characters [a-z/0-9/-]<br><b>Write this down, you might lock yourself out!</b></span>", settings.appw, 8, "minlength='8' pattern='[A-Za-z0-9\\-]+'");
 WiFiManagerParameter custom_wifiConRetries("wifiret", "WiFi connection attempts (1-10)", settings.wifiConRetries, 2, "type='number' min='1' max='10' autocomplete='off'", WFM_LABEL_BEFORE);
 WiFiManagerParameter custom_wifiConTimeout("wificon", "WiFi connection timeout (7-25[seconds])", settings.wifiConTimeout, 2, "type='number' min='7' max='25'");
@@ -235,28 +254,33 @@ WiFiManagerParameter custom_lxLim("lxLim", "<br>Lux threshold (0-50000)", settin
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
 WiFiManagerParameter custom_tempUnit("uTem", "Temperature unit (0=°F, 1=°C)", settings.tempUnit, 1, "autocomplete='off' title='Select unit for temperature'");
 #else // -------------------- Checkbox hack: --------------
-WiFiManagerParameter custom_tempUnit("temUnt", "Show temperature in °Celsius", settings.tempUnit, 1, "title='Fahrenheit if unchecked' type='checkbox' class='mt5'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_tempUnit("temUnt", "Show temperature in Celsius", settings.tempUnit, 1, "title='Fahrenheit if unchecked' type='checkbox' class='mt5'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 WiFiManagerParameter custom_tempOffs("tOffs", "<br>Temperature offset (-3.0-3.0)", settings.tempOffs, 4, "type='number' min='-3.0' max='3.0' step='0.1' title='Correction value to add to temperature' autocomplete='off'");
 #endif // TC_HAVETEMP
 
 #ifdef TC_HAVESPEEDO
 WiFiManagerParameter custom_speedoType(spTyCustHTML);
-WiFiManagerParameter custom_speedoBright("speBri", "<br>Speedo brightness (0-15)", settings.speedoBright, 2, "type='number' min='0' max='15' autocomplete='off'");
-WiFiManagerParameter custom_speedoFact("speFac", "Speedo sequence speed factor (0.5-5.0)", settings.speedoFact, 3, "type='number' min='0.5' max='5.0' step='0.5' title='1.0 means real-world DMC-12 acceleration time.' autocomplete='off'");
+WiFiManagerParameter custom_speedoBright("speBri", "<br>Speed brightness (0-15)", settings.speedoBright, 2, "type='number' min='0' max='15' autocomplete='off'");
+#ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
+WiFiManagerParameter custom_sAF("sAF", "Acceleration times (0=real, 1=movie)", settings.speedoAF, 1, "autocomplete='off'");
+#else // -------------------- Checkbox hack: --------------
+WiFiManagerParameter custom_sAF("sAF", "Real-life acceleration figures", settings.speedoAF, 1, "autocomplete='off' title='If unchecked, movie-like times are used' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
+#endif // -------------------------------------------------
+WiFiManagerParameter custom_speedoFact("speFac", "<br>Factor for real-life figures (0.5-5.0)", settings.speedoFact, 3, "type='number' min='0.5' max='5.0' step='0.5' title='1.0 means real-world DMC-12 acceleration time.' autocomplete='off'");
 #ifdef TC_HAVEGPS
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
-WiFiManagerParameter custom_useGPSS("uGPSS", "Display GPS speed (0=no, 1=yes)", settings.useGPSSpeed, 1, "autocomplete='off' title='Enable to use a GPS receiver to display actual speed on speedo display'");
+WiFiManagerParameter custom_useGPSS("uGPSS", "Display GPS speed (0=no, 1=yes)", settings.useGPSSpeed, 1, "autocomplete='off' title='Enable to display actual GPS speed on speedo'");
 #else // -------------------- Checkbox hack: --------------
-WiFiManagerParameter custom_useGPSS("uGPSS", "Display GPS speed", settings.useGPSSpeed, 1, "autocomplete='off' title='Check to use a GPS receiver to display actual speed on speedo display' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_useGPSS("uGPSS", "Display GPS speed", settings.useGPSSpeed, 1, "autocomplete='off' title='Check to display actual GPS speed on speedo' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 WiFiManagerParameter custom_updrt(spdRateCustHTML);  // speed update rate
 #endif // TC_HAVEGPS
 #ifdef TC_HAVETEMP
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
-WiFiManagerParameter custom_useDpTemp("dpTemp", "Display temperature (0=no, 1=yes)", settings.dispTemp, 1, "autocomplete='off' title='Enable to display temperature on speedo display when idle'");
+WiFiManagerParameter custom_useDpTemp("dpTemp", "Display temperature (0=no, 1=yes)", settings.dispTemp, 1, "autocomplete='off' title='Enable to display temperature on speedo when idle'");
 #else // -------------------- Checkbox hack: --------------
-WiFiManagerParameter custom_useDpTemp("dpTemp", "Display temperature", settings.dispTemp, 1, "autocomplete='off' title='Check to display temperature on speedo display when idle' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_useDpTemp("dpTemp", "Display temperature", settings.dispTemp, 1, "autocomplete='off' title='Check to display temperature on speedo when idle' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 WiFiManagerParameter custom_tempBright("temBri", "<br>Temperature brightness (0-15)", settings.tempBright, 2, "type='number' min='0' max='15' autocomplete='off'");
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
@@ -518,7 +542,8 @@ void wifi_setup()
     #ifdef TC_HAVESPEEDO
       &custom_sectstart, 
       &custom_speedoType, 
-      &custom_speedoBright, 
+      &custom_speedoBright,
+      &custom_sAF,
       &custom_speedoFact,
     #ifdef TC_HAVEGPS
       &custom_useGPSS,
@@ -938,6 +963,7 @@ void wifi_loop()
             #endif
             
             #ifdef TC_HAVESPEEDO
+            mystrcpy(settings.speedoAF, &custom_sAF);
             #ifdef TC_HAVEGPS
             mystrcpy(settings.useGPSSpeed, &custom_useGPSS);
             #endif
@@ -998,6 +1024,7 @@ void wifi_loop()
             #endif
             
             #ifdef TC_HAVESPEEDO
+            strcpyCB(settings.speedoAF, &custom_sAF);
             #ifdef TC_HAVEGPS
             strcpyCB(settings.useGPSSpeed, &custom_useGPSS);
             #endif
@@ -1643,6 +1670,7 @@ void updateConfigPortalValues()
     custom_tempUnit.setValue(settings.tempUnit, 1);
     #endif
     #ifdef TC_HAVESPEEDO
+    custom_sAF.setValue(settings.speedoAF, 1);
     #ifdef TC_HAVEGPS
     custom_useGPSS.setValue(settings.useGPSSpeed, 1);
     #endif
@@ -1692,6 +1720,7 @@ void updateConfigPortalValues()
     setCBVal(&custom_tempUnit, settings.tempUnit);
     #endif
     #ifdef TC_HAVESPEEDO
+    setCBVal(&custom_sAF, settings.speedoAF);
     #ifdef TC_HAVEGPS
     setCBVal(&custom_useGPSS, settings.useGPSSpeed);
     #endif
@@ -2036,31 +2065,33 @@ static void setCBVal(WiFiManagerParameter *el, char *sv)
 
 int16_t filterOutUTF8(char *src, char *dst, int srcLen = 0, int maxChars = 99999)
 {
-    int i, j, slen = srcLen ? srcLen : strlen(src);
-    unsigned char c, d, e, f;
+    int i, j, k, slen = srcLen ? srcLen : strlen(src);
+    unsigned char c, d, e;
 
     for(i = 0, j = 0; i < slen && j <= maxChars; i++) {
         c = (unsigned char)src[i];
-        if(c >= 32 && c < 127 - 1) {    // 127 = °, non-std, skip
+        if(c >= 32 && c <= 126) {     // skip 127 = DEL
             if(c >= 'a' && c <= 'z') c &= ~0x20;
-            dst[j++] = c;
-        } else if(c >= 194 && c < 224 && (i+1) < slen) {
-            d = (unsigned char)src[i+1];
-            if(d > 127 && d < 192) i++;
-        } else if(c < 240 && (i+2) < slen) {
-            d = (unsigned char)src[i+1];
-            e = (unsigned char)src[i+2];
-            if(d > 127 && d < 192 && 
-               e > 127 && e < 192) 
-                i+=2;
-        } else if(c < 245 && (i+3) < slen) {
-            d = (unsigned char)src[i+1];
-            e = (unsigned char)src[i+2];
-            f = (unsigned char)src[i+3];
-            if(d > 127 && d < 192 && 
-               e > 127 && e < 192 && 
-               f > 127 && f < 192)
-                i+=3;
+            else if(c == 126) c = '-';   // 126 = ~ but displayed as °, so make '-'
+            dst[j++] = c; 
+        } else {
+            e = 0;
+            if     (c >= 192 && c < 224)  e = 1;
+            else if(c >= 224 && c < 240)  e = 2;
+            else if(c >= 240 && c < 245)  e = 3;    // yes, 245 (otherwise bad UTF8)
+            if(e) {
+                if((i + e) < slen) {
+                    /*
+                    for(k = i + 1, d = 0; k <= i + 1 + e; k++) {
+                        d |= (unsigned char)src[k];
+                    }
+                    if(d > 127 && d < 192) i += e;
+                    */
+                    i += e;   // Why check? Just skip.
+                } else {
+                    break;
+                }
+            }
         }
     }
     dst[j] = 0;
@@ -2069,10 +2100,33 @@ int16_t filterOutUTF8(char *src, char *dst, int srcLen = 0, int maxChars = 99999
 }
 
 #ifdef TC_HAVEMQTT
+static void truncateUTF8(char *src)
+{
+    int i, j, slen = strlen(src);
+    unsigned char c, e;
+
+    for(i = 0; i < slen; i++) {
+        c = (unsigned char)src[i];
+        e = 0;
+        if     (c >= 192 && c < 224)  e = 1;
+        else if(c >= 224 && c < 240)  e = 2;
+        else if(c >= 240 && c < 248)  e = 3;  // Invalid UTF8 >= 245, but consider 4-byte char anyway
+        if(e) {
+            if((i + e) < slen) {
+                i += e;
+            } else {
+                src[i] = 0;
+                return;
+            }
+        }
+    }
+}
+
 static void strcpyutf8(char *dst, const char *src, unsigned int len)
 {
     strncpy(dst, src, len - 1);
     dst[len - 1] = 0;
+    truncateUTF8(dst);
 }
 
 static void mqttLooper()

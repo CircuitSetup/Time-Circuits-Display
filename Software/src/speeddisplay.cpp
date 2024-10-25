@@ -17,7 +17,7 @@
  * 
  * The i2c slave address must be 0x70.
  * -------------------------------------------------------------------
- * License: MIT
+ * License: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -29,6 +29,25 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ *
+ * In addition, the following restrictions apply:
+ * 
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
@@ -291,27 +310,26 @@ static const struct dispConf {
     uint8_t  colon_pos;      //   Pos of center colon in 16bit buffer (255 = no colon)
     uint16_t colon_bit;      //   The bitmask for the center colon
     uint8_t  num_digs;       //   total number of digits/letters
-    uint8_t  buf_packed;     //   2 digits in one buffer pos? (0=no, 1=yes) (for 7seg only)
     uint8_t  bufPosArr[4];   //   The buffer positions of each of the digits from left to right
     uint8_t  bufShftArr[4];  //   Shift-value for each digit from left to right
     const uint16_t *fontSeg; //   Pointer to font
 } displays[SP_NUM_TYPES] = {
-  { true,  0, 1, 0, 8, 1, 8, 255,      0, 2, 0, { 0, 1 },       { 0, 8 },       font7segGeneric },  // CircuitSetup Speedo+GPS add-on
-  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right) (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)  (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
-  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)  (ADA-1270/1271;1269)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 0, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)   (ADA-1270/1271;1269)
-  { false, 2, 3, 0, 0, 3, 0, 255,      0, 4, 0, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right) (ADA-1911/1910;1912/2157/2158/2160)
-  { false, 0, 1, 0, 0, 1, 0, 255,      0, 4, 0, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)  (ADA-1911/1910;1912/2157/2158/2160)
-  { false, 2, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 2, 1 },       { 0, 0, 0, 0 }, font14segGrove },   // SP_GROVE_2DIG14
-  { false, 3, 4, 0, 0, 4, 0,   5, 0x2080, 4, 0, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
-  { false, 1, 2, 0, 0, 2, 0,   5, 0x2080, 4, 0, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
-  { false, 0, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 0, 1 },       { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L(ADA-1911), but left tube only (TW wall clock)
-  { true,  0, 1, 0, 0, 1, 0, 255,      0, 2, 0, { 0, 1 },       { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L(ADA-878), but left tube only (TW speedo replica) - needs rewiring
+  { true,  0, 1, 0, 8, 1, 8, 255,      0, 2, { 0, 1 },       { 0, 8 },       font7segGeneric },  // CircuitSetup Speedo+GPS add-on
+  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right) (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
+  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)  (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
+  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)  (ADA-1270/1271;1269)
+  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)   (ADA-1270/1271;1269)
+  { false, 2, 3, 0, 0, 3, 0, 255,      0, 4, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right) (ADA-1911/1910;1912/2157/2158/2160)
+  { false, 0, 1, 0, 0, 1, 0, 255,      0, 4, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)  (ADA-1911/1910;1912/2157/2158/2160)
+  { false, 2, 1, 0, 0, 1, 0, 255,      0, 2, { 2, 1 },       { 0, 0, 0, 0 }, font14segGrove },   // SP_GROVE_2DIG14
+  { false, 3, 4, 0, 0, 4, 0,   5, 0x2080, 4, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
+  { false, 1, 2, 0, 0, 2, 0,   5, 0x2080, 4, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
+  { false, 0, 1, 0, 0, 1, 0, 255,      0, 2, { 0, 1 },       { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L(ADA-1911), but left tube only (TW wall clock)
+  { true,  0, 1, 0, 0, 1, 0, 255,      0, 2, { 0, 1 },       { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L(ADA-878), but left tube only (TW speedo replica) - needs rewiring
 // .... for testing only:
-//{ true,  7, 7, 0, 8, 7, 8, 255,      0, 2, 1, { 7 },          { 0, 8 },       font7segGeneric },  // SP_TCD_TEST7
-//{ false, 1, 2, 0, 0, 2, 0, 255,      0, 3, 0, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }, // SP_TCD_TEST14 right
-//{ false, 0, 1, 0, 0, 1, 0, 255,      0, 3, 0, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }  // SP_TCD_TEST14 left
+//{ true,  7, 7, 0, 8, 7, 8, 255,      0, 2, { 7, 7 },       { 0, 8 },       font7segGeneric },  // SP_TCD_TEST7
+//{ false, 1, 2, 0, 0, 2, 0, 255,      0, 3, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }, // SP_TCD_TEST14 right
+//{ false, 0, 1, 0, 0, 1, 0, 255,      0, 3, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }  // SP_TCD_TEST14 left
 };
 
 // Grove 4-digit special handling
@@ -354,7 +372,6 @@ bool speedDisplay::begin(int dispType)
     _colon_pos = displays[dispType].colon_pos;
     _colon_bm = displays[dispType].colon_bit;
     _num_digs = displays[dispType].num_digs;
-    _buf_packed = displays[dispType].buf_packed;
     _bufPosArr = displays[dispType].bufPosArr;
     _bufShftArr = displays[dispType].bufShftArr;
     
@@ -385,6 +402,11 @@ void speedDisplay::off()
     if(!_onCache) return;
     directCmd(0x80);
     _onCache = 0;
+}
+
+bool speedDisplay::getOnOff()
+{
+    return !!_onCache;
 }
 
 // Turn on all LEDs
@@ -521,30 +543,20 @@ void speedDisplay::show()
 // ignored.)
 void speedDisplay::setText(const char *text)
 {
-    int idx = 0, pos = 0, dgt = 0;
+    int idx = 0, pos = 0;
     int temp = 0;
 
     clearBuf();
 
     if(_is7seg) {
-        while(text[idx] && (pos < (_num_digs / (1<<_buf_packed)))) {
-            temp = getLEDChar(text[idx]) << (*(_bufShftArr + dgt));
+        while(text[idx] && (pos < _num_digs)) {
+            temp = getLEDChar(text[idx]) << (*(_bufShftArr + pos));
             idx++;
             if(text[idx] == '.') {
-                temp |= (getLEDChar('.') << (*(_bufShftArr + dgt)));
+                temp |= (getLEDChar('.') << (*(_bufShftArr + pos)));
                 idx++;
             }
-            dgt++;
-            if(_buf_packed && text[idx]) {
-                temp |= (getLEDChar(text[idx]) << (*(_bufShftArr + dgt)));
-                idx++;
-                if(text[idx] == '.') {
-                    temp |= (getLEDChar('.') << (*(_bufShftArr + dgt)));
-                    idx++;
-                }
-                dgt++;
-            }
-            _displayBuffer[*(_bufPosArr + pos)] = temp;
+            _displayBuffer[*(_bufPosArr + pos)] |= temp;
             pos++;
         }
     } else {
@@ -602,9 +614,11 @@ void speedDisplay::setTemperature(float temp)
     int t, strlenBuf = 0;
     const char *myNan = "----";
 
+    bool tempNan = isnan(temp);
+
     switch(_num_digs) {
     case 2:
-        if(isnan(temp))        setText(myNan);
+        if(tempNan)            setText(myNan);
         else if(temp <= -10.0) setText("Lo");
         else if(temp >= 100.0) setText("Hi");
         else if(temp >= 10.0 || temp < 0.0) {
@@ -617,7 +631,7 @@ void speedDisplay::setTemperature(float temp)
         }
         break;
     case 3:
-        if(isnan(temp))         setText(myNan);
+        if(tempNan)             setText(myNan);
         else if(temp <= -100.0) setText("Low");
         else if(temp >= 1000.0) setText("Hi");
         else if(temp >= 100.0 || temp <= -10.0) {
@@ -630,7 +644,7 @@ void speedDisplay::setTemperature(float temp)
         }
         break;
     default:
-        sprintf(buf, isnan(temp) ? myNan : "%.1f", temp);
+        sprintf(buf, tempNan ? myNan : "%.1f", temp);
         for(int i = 0; i < strlen(buf); i++) {
             if(buf[i] != '.') strlenBuf++;
         }
@@ -664,7 +678,7 @@ void speedDisplay::setColon(bool colon)
 // Query data ------------------------------------------------------------------
 
 
-uint8_t speedDisplay::getSpeed()
+int8_t speedDisplay::getSpeed()
 {
     return _speed;
 }
@@ -679,98 +693,6 @@ bool speedDisplay::getColon()
 {
     return _colon;
 }
-
-// Special purpose -------------------------------------------------------------
-
-#if 0 // Currently unused
-
-// Clears the display RAM and only shows the given text
-// does not use the buffer, writes directly to display
-// (clears colon; dots work like the buffer version.)
-void speedDisplay::showTextDirect(const char *text)
-{
-    int idx = 0, pos = 0, dgt = 0;
-    int temp = 0;
-    uint16_t tt = 0, spec = 0;
-    bool commaAdded = false;
-
-    clearDisplay();
-
-    if(_is7seg) {
-        while(text[idx] && (pos < (_num_digs / (1<<_buf_packed)))) {
-            commaAdded = false;
-            temp = getLEDChar(text[idx]) << (*(_bufShftArr + dgt));
-            idx++;
-            if(text[idx] == '.') {
-                temp |= (getLEDChar('.') << (*(_bufShftArr + dgt)));
-                idx++;
-                commaAdded = true;
-            }
-            dgt++;
-            if(_buf_packed && text[idx]) {
-                temp |= (getLEDChar(text[idx]) << (*(_bufShftArr + dgt)));
-                idx++;
-                if(text[idx] == '.') {
-                    temp |= (getLEDChar('.') << (*(_bufShftArr + dgt)));
-                    idx++;
-                }
-                dgt++;
-            }
-            directCol(*(_bufPosArr + pos), temp);
-            switch(_dispType) {
-            case SP_ADAF_B7x4:
-            case SP_ADAF_B7x4L:
-                if(pos == 2 && commaAdded) {
-                    spec |= 0x10;
-                }
-                break;
-            }
-            pos++;
-        }
-    } else {
-        while(text[idx] && pos < _num_digs) {
-            tt = getLEDChar(text[idx]);
-            idx++;
-            if(text[idx] == '.') {
-                tt |= getLEDChar('.');
-                idx++;
-            }
-            directCol(*(_bufPosArr + pos), tt);
-            switch(_dispType) {
-            case SP_GROVE_4DIG14:
-            case SP_GROVE_4DIG14L:
-                spec |= ((tt & 0x2) ? gr4_sh1[pos] : 0);
-                spec |= ((tt & 0x4) ? gr4_sh2[pos] : 0);
-                break;
-            }
-            pos++;
-        }
-    }
-
-    switch(_dispType) {
-    case SP_ADAF_B7x4:
-    case SP_ADAF_B7x4L:
-    case SP_GROVE_4DIG14:
-    case SP_GROVE_4DIG14L:
-        directCol(_colon_pos, spec);
-    }
-}
-
-void speedDisplay::setColonDirect(bool colon)
-{
-    uint16_t t = _lastBufPosCol;
-
-    _colon = colon;
-
-    if(_colon_pos < 255) {
-        if(_colon) t |= _colon_bm;
-        else       t &= (~_colon_bm);
-
-        directCol(_colon_pos, t);
-    }
-}
-
-#endif // if 0
 
 // Private functions ###########################################################
 

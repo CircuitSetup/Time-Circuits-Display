@@ -9,11 +9,11 @@
  *
  * This is designed for 
  * - MCP9808, TMP117, BMx280, SHT4x-Ax, SI7012, AHT20/AM2315C, HTU31D, 
- *   MS8607 temperature/humidity sensors,
+ *   MS8607, HDC302X temperature/humidity sensors,
  * - BH1750, TSL2561, TSL2591, LTR303/329 and VEML7700/VEML6030 light 
  *   sensors.
  * -------------------------------------------------------------------
- * License: MIT
+ * License: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -25,6 +25,25 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ *
+ * In addition, the following restrictions apply:
+ * 
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
@@ -51,8 +70,6 @@ class tcSensor {
         void     write16(uint16_t regno, uint16_t value, bool LSBfirst = false);
         void     write8(uint16_t regno, uint8_t value);
 
-        uint8_t  crc8(uint8_t initVal, uint8_t poly, uint8_t len, uint8_t *buf);
-
         uint8_t _address;
 
         // Ptr to custom delay function
@@ -71,7 +88,8 @@ enum {
     TMP117,           // 0x49 [non-default] (unsupported: 0x48)
     AHT20,            // 0x38
     HTU31,            // 0x41 [non-default] (unsupported: 0x40)
-    MS8607            // 0x76+0x40
+    MS8607,           // 0x76+0x40
+    HDC302X           // 0x45 [non-default] (unsupported: 0x44, 0x46, 0x47)
 };
 
 class tempSensor : tcSensor {
@@ -83,6 +101,7 @@ class tempSensor : tcSensor {
 
         float readTemp(bool celsius = true);
         float readLastTemp() { return _lastTemp; };
+        bool lastTempNan() { return _lastTempNan; };
 
         void setOffset(float myOffs);
 
@@ -92,13 +111,14 @@ class tempSensor : tcSensor {
     private:
 
         int     _numTypes = 0;
-        uint8_t _addrArr[8*2];    // up to 8 sensor types fit here
+        uint8_t _addrArr[9*2];    // up to 9 sensor types fit here
         int8_t  _st = -1;
         int8_t  _hum = -1;
         bool    _haveHum = false;
         unsigned long _delayNeeded = 0;
 
         float  _lastTemp = NAN;
+        bool   _lastTempNan = true;
 
         float  _userOffset = 0.0;
 
@@ -121,6 +141,8 @@ class tempSensor : tcSensor {
         unsigned long _tempReadNow = 0;
 
         float BMx280_CalcTemp(uint32_t ival, uint32_t hval);
+        void  HDC302x_setDefault(uint16_t reg, uint8_t val1, uint8_t val2);
+        bool  readAndCheck6(uint8_t *buf, uint16_t& t, uint16_t& h, uint8_t crcinit, uint8_t crcpoly);
 };
 #endif
 
@@ -150,10 +172,6 @@ class lightSensor : tcSensor {
         void VEML7700SetAIT(uint16_t ait, bool doWrite = true);
         void VEML7700OnOff(bool enable, bool doWait = true);
 
-        int32_t  LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
-        uint32_t TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
-        int32_t  TSL2591CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
-        
         int     _numTypes = 0;
         uint8_t _addrArr[8*2];    // up to 8 sensor types fit here
         int8_t  _st = -1;

@@ -9,7 +9,7 @@
  * Sound handling
  *
  * -------------------------------------------------------------------
- * License: MIT
+ * License: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,25 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ *
+ * In addition, the following restrictions apply:
+ * 
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
@@ -152,9 +171,10 @@ void audio_setup()
         // Switch to internal speaker
         pinMode(SWITCH_LINEOUT_PIN, OUTPUT);
         digitalWrite(SWITCH_LINEOUT_PIN, LOW);
-        // Init mute for line-out
+        // Unmute line-out DAC
         pinMode(MUTE_LINEOUT_PIN, OUTPUT);
-        digitalWrite(MUTE_LINEOUT_PIN, HIGH);
+        //digitalWrite(MUTE_LINEOUT_PIN, LOW);  // Mute
+        digitalWrite(MUTE_LINEOUT_PIN, HIGH);   // Unmute
     }
 
     // Set resolution for volume pot
@@ -202,9 +222,9 @@ void audio_setup()
  *
  */
 void audio_loop()
-{   
+{
     float vol;
-    
+
     if(wav->isRunning()) {
         if(!wav->loop()) {
             wav->stop();
@@ -276,8 +296,9 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
     beepRunning = false;
 
     #ifdef TC_HAVELINEOUT
-    playLineOut = (useLineOut && (flags & PA_LINEOUT)) ? true : false;
+    playLineOut = (haveLineOut && useLineOut && (flags & PA_LINEOUT)) ? true : false;
     setLineOut(playLineOut);
+    if(playLineOut) flags &= ~PA_DYNVOL;
     #else
     playLineOut = false;
     #endif
@@ -507,9 +528,10 @@ static float getVolume()
 #ifdef TC_HAVELINEOUT
 static void setLineOut(bool doLineOut)
 {
-    if(useLineOut) {       
-        //digitalWrite(MUTE_LINEOUT_PIN, doLineOut ? HIGH : LOW);
-        if(doLineOut) {
+    if(haveLineOut) {
+        if(useLineOut && doLineOut) {
+            // Mute/un-mute secondary DAC? No, for now.
+            //digitalWrite(MUTE_LINEOUT_PIN, doLineOut ? HIGH : LOW);
             out->SetOutputModeMono(false);
             // Switch off MAX98357, switch on PCM510x
             digitalWrite(SWITCH_LINEOUT_PIN, HIGH);
@@ -592,6 +614,7 @@ static void copyId3String(char *src, char *dst, int tagSz, int maxChrs)
           c = *src++;
           if(c >= ' ' && c <= 126)  {
               if(c >= 'a' && c <= 'z') c &= ~0x20;
+              else if(c == 126) c = '-';  // 126 = ~ but displayed as °, so make it '-'
               *dst++ = c;
               *dst = 0;
           }
@@ -605,8 +628,9 @@ static void copyId3String(char *src, char *dst, int tagSz, int maxChrs)
           if(!chr) return;
           if(chr >= 0xd800 && chr <= 0xdbff) {
               src += 2;
-          } else if(chr >= ' ' && chr <= 126) {
+          } else if(chr >= ' ' && chr <= 126) {   
               if(chr >= 'a' && chr <= 'z') chr &= ~0x20;
+              else if(chr == 126) chr = '-';  // 126 = ~ but displayed as °, so make it '-'
               *dst++ = chr & 0xff;
               *dst = 0;
           }

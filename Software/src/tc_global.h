@@ -13,7 +13,7 @@
 #define _TC_GLOBAL_H
 
 /*************************************************************************
- ***                           Miscellaneous                           ***
+ ***                     Basic Hardware Definition                     ***
  *************************************************************************/
 
 // Uncomment if month is 2 digits (7-seg), as in the original A-Car display.
@@ -25,11 +25,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION "V3.0.99"          // 13 chars max
+#define TC_VERSION "V3.1.1"          // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "JUN052024"  // 13 chars max
+#define TC_VERSION_EXTRA "OCT232024"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "06052024"   // 12 chars max
+#define TC_VERSION_EXTRA "10232024"   // 12 chars max
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -81,6 +81,11 @@
 // allows temperature to be shown, if so configured).
 // A secondary rotary encoder is used for audio volume.
 //#define TC_HAVE_RE
+
+// Uncomment for Remote support
+// "Remote" is a modified Futaba remote control with CS/A10001986 control board
+// and the A10001986 "remote" firmware.
+//#define TC_HAVE_REMOTE
 
 // Uncomment for support of a temperature/humidity sensor (MCP9808, BMx280, 
 // SI7021, SHT4x, TMP117, AHT20, HTU31D, MS8607) connected via i2c. Will be used 
@@ -140,13 +145,11 @@
 // doing severe harm to user experience (and causes flash wear...)
 #define PERSISTENT_SD_ONLY
 
-// --- end of config options
-
 /*************************************************************************
  ***                           Miscellaneous                           ***
  *************************************************************************/
 
-// If this is uncommented, support for line-out audio (CB 1.4) is included.
+// If this is uncommented, support for line-out audio (CB 1.4.5) is included.
 // If enabled (350/351 on keypad), Time travel sounds as well as music from 
 // the Music Player will be played over line-out, and not the built-in speaker.
 //#define TC_HAVELINEOUT
@@ -179,7 +182,13 @@
 // Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino >= 2.x)
 //#define USE_SPIFFS
 
-// Custom stuff -----
+// Uncomment for PCF2129 RTC chip support
+//#define HAVE_PCF2129
+
+/*************************************************************************
+ ***                           Customization                           ***
+ *************************************************************************/
+
 //#define TWSOUND         // Use A10001986's sound files
 //#define TWPRIVATE     // A10001986's private customizations
 
@@ -191,7 +200,10 @@
 #define TC_VERSION "A10001986"
 #endif
 
-// Sanitation ----
+/*************************************************************************
+ ***                             Sanitation                            ***
+ *************************************************************************/
+
 #ifndef TC_HAVESPEEDO
 #undef SP_ALWAYS_ON
 #endif
@@ -216,7 +228,7 @@
  ***                             GPIO pins                             ***
  *************************************************************************/
 
-#define STATUS_LED_PIN      2      // Status LED (on ESP) (TCD CB <V1.4)
+#define STATUS_LED_PIN      2      // Status LED (on ESP) (unused on TCD CB <V1.4)
 #define SECONDS_IN_PIN     15      // SQW Monitor 1Hz from the DS3231
 #define ENTER_BUTTON_PIN   16      // enter key
 #define WHITE_LED_PIN      17      // white led
@@ -234,11 +246,11 @@
 #define SPI_SCK_PIN        18
 
 #define VOLUME_PIN         32      // analog input pin (TCD CB <V1.4.5)
-#define VOLUME_PIN_NEW     34      // analog input pin (TCD CB >=V1.4.5 preliminary)
+#define VOLUME_PIN_NEW     34      // analog input pin (TCD CB >=V1.4.5)
 
-#define MUTE_LINEOUT_PIN    2      // TCD CB >=1.4.5 (preliminary)
-#define SWITCH_LINEOUT_PIN 32      // TCD CB >=1.4.5 (preliminary)
-#define MLO_MIRROR         35      // TCD CB >=1.4.5 (preliminary)
+#define MUTE_LINEOUT_PIN    2      // TCD CB >=1.4.5
+#define SWITCH_LINEOUT_PIN 32      // TCD CB >=1.4.5
+#define MLO_MIRROR         35      // TCD CB >=1.4.5
 
 #define FAKE_POWER_BUTTON_PIN       13  // Fake "power" switch
 #define EXTERNAL_TIMETRAVEL_IN_PIN  27  // Externally triggered TT (input)
@@ -288,6 +300,5 @@
 // Epoch for general use; increase yearly, no limit
 // Defines the minimum date considered valid
 #define TCEPOCH_GEN   2024
-
 
 #endif

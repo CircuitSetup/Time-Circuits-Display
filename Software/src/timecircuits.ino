@@ -44,6 +44,60 @@
  */
 
 /*  Changelog
+ *  2024/10/23 (A10001986)
+ *    - Speedo/acceleration: Implement option to use either real-life figures
+ *      (as before), or movie-like figures (matching the Futaba Remote's times).
+ *      Accel factor only applies to real-life times.
+ *      "Movie-like" is measured/interpolated from mph incrementing times on the 
+ *      Remote control's display.
+ *      If speedo is not found or disabled, movie-like times are used.
+ *  2024/10/15 (A10001986)
+ *    - Add support for HDC302X temperature/humidity sensor (yet untested)
+ *  2024/10/03 (A10001986)
+ *    - Smoothen speedo's catch-up to Remote speed
+ *  2024/10/02 (A10001986)
+ *    - Speedo: Minor (cosmetic) changes
+ *  2024/09/28 (A10001986)
+ *    - Revisit UTF8 filtering for MQTT messages and ID3 data.
+ *    - Properly truncate UTF8 strings (MQTT user/topics) if beyond buffer
+ *      size. (Browsers' 'maxlength' is in characters, buffers are in bytes.
+ *      MQTT is generally UTF8, and WiFiManager treats maxlength=buffer size,
+ *      something to deal with at some point.)
+ *  2024/09/22 (A10001986)
+ *    - Sensors: Add logic to update display when sensor wasn't ready at last
+ *      sensor read.
+ *  2024/09/13 (A10001986)
+ *    - Remote: Override user-configured accel factor when the TCD catches up to  
+ *      the Remote when brake released (so that doing that at 65 still allows for
+ *      the TCD to fully catch up)
+ *  2024/09/11 (A10001986)
+ *    - Fix C99-compliance
+ *  2024/09/10 (A10001986)
+ *    - Fake GPS speed for BTTFN clients during P0
+ *    - TCD becomes speed master over Remote in P0
+ *  2024/09/09 (A10001986)
+ *    - New custom sounds: "remoteon.mp3"/"remoteoff.mp3" on SD card, will
+ *      be played when Remote is switched on/off. No default sounds.
+ *    - Fix logic which speed to tell BTTFN clients
+ *  2024/09/08 (A10001986) [A10001986 3.1]
+ *    - Fix for line-out switching
+ *    - Fix for Remote vs. GPS when no GPS speed is available
+ *  2024/09/02 (A10001986)
+ *    - Skip white led blink if fake power switch is on pos during boot
+ *  2024/08/30-31 (A10001986)
+ *    - Many fixes for Remote feature
+ *    - Make rotary encoder react quicker after end of time travel (removed
+ *      4 second delay)
+ *  2024/08/26-29 (A10001986)
+ *    - Add preliminary support for CS/A10001986-modified Futaba remote prop
+ *  2024/08/23 (A10001986)
+ *    - Key3, key6 are now played over line-out (if available and enabled)
+ *  2024/08/05 (A10001986)
+ *    - Audio: Clear DYNVOL flag if sound is played over line-out
+ *    - Intro sound is now played over line-out (if available and enabled)
+ *    - New stereo intro sound (sound-pack update required)
+ *  2024/07/23 (A10001986)
+ *    - Disable ESP32 status led on CB < 1.4.5
  *  2024/06/19 (A10001986)
  *    - Fix: Unmute secondary audio DAC (CB 1.4.5)
  *  2024/06/05 (A10001986)

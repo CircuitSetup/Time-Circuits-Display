@@ -9,7 +9,7 @@
  * Settings & file handling
  *
  * -------------------------------------------------------------------
- * License: MIT
+ * License: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,25 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ *
+ * In addition, the following restrictions apply:
+ * 
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
@@ -72,6 +91,7 @@ extern uint8_t musFolderNum;
 #define DEF_ETT_DELAY       0     // in ms; Default 0: ETT immediately
 #define DEF_ETT_LONG        1     // [removed] 0: Ext. TT short (reentry), 1: long
 #define DEF_SPEEDO_TYPE     99    // Default display type: None
+#define DEF_SPEEDO_ACCELFIG 0     // Accel figures: 0: Movie (approximated), 1: Real-life
 #define DEF_SPEEDO_FACT     2.0   // Speedo factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
 #define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness for speed
 #define DEF_USE_GPS_SPEED   0     // 0: Do not show GPS speed on speedo display
@@ -140,6 +160,7 @@ struct Settings {
 #ifdef TC_HAVESPEEDO
     char speedoType[4]      = MS(DEF_SPEEDO_TYPE);
     char speedoBright[4]    = MS(DEF_BRIGHT_SPEEDO);
+    char speedoAF[4]        = MS(DEF_SPEEDO_ACCELFIG);
     char speedoFact[6]      = MS(DEF_SPEEDO_FACT);
 #ifdef TC_HAVEGPS
     char useGPSSpeed[4]     = MS(DEF_USE_GPS_SPEED);
@@ -150,7 +171,7 @@ struct Settings {
     char tempBright[4]      = MS(DEF_TEMP_BRIGHT);
     char tempOffNM[4]       = MS(DEF_TEMP_OFF_NM);
 #endif
-#endif // HAVESPEEDO
+#endif // HAVESPEEDO 
 #ifdef EXTERNAL_TIMETRAVEL_OUT
     char useETTO[4]         = MS(DEF_USE_ETTO);
     char noETTOLead[4]      = MS(DEF_NO_ETTO_LEAD);
@@ -219,6 +240,10 @@ void saveStaleTime(void *source, bool currentOn);
 #ifdef TC_HAVELINEOUT
 void loadLineOut();
 void saveLineOut();
+#endif
+
+#ifdef TC_HAVE_REMOTE
+void saveRemoteAllowed();
 #endif
 
 bool loadIpSettings();

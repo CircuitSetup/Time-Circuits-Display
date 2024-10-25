@@ -9,7 +9,7 @@
  * Settings & file handling
  *
  * -------------------------------------------------------------------
- * License: MIT
+ * License: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,25 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ *
+ * In addition, the following restrictions apply:
+ * 
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
@@ -75,10 +94,10 @@
 #define AC_FMTV 2
 #define AC_OHSZ (14 + ((10+NUM_AUDIOFILES+1)*(32+4)))
 #ifndef TWSOUND
-#define SND_REQ_VERSION "CS02"
+#define SND_REQ_VERSION "CS03"
 #define AC_TS 1236252
 #else
-#define SND_REQ_VERSION "TW02"
+#define SND_REQ_VERSION "TW03"
 #define AC_TS 1231539
 #endif
 
@@ -104,6 +123,10 @@ static const char *cmCfgName  = "/cmconfig.json";   // Carmode (flash/SD)
 #ifdef TC_HAVELINEOUT
 static const char *loCfgName  = "/loconfig.json";   // LineOut (flash/SD)
 #endif
+#ifdef TC_HAVE_REMOTE
+static const char *raCfgName  = "/raconfig.json";   // RemoteAllowed (flash/SD)
+#endif
+
 
 static const char *fsNoAvail = "File System not available";
 static const char *failFileWrite = "Failed to open file for writing";
@@ -153,6 +176,10 @@ static bool loadAutoInterval();
 
 static void deleteReminder();
 static void loadCarMode();
+
+#ifdef TC_HAVE_REMOTE
+static void loadRemoteAllowed();
+#endif
 
 static void setupDisplayConfigOnSD();
 static void saveDisplayData();
@@ -217,6 +244,7 @@ void settings_setup()
         volumePin = VOLUME_PIN_NEW;
     } else {
         volumePin = VOLUME_PIN;
+        digitalWrite(MUTE_LINEOUT_PIN, LOW);  // Disable "status led" on CB < 1.4.5
     }
 
     pinMode(volumePin, INPUT);
@@ -364,6 +392,9 @@ void settings_setup()
     // Load carMode setting
     loadCarMode();
 
+    // Load RemoveAllowed setting
+    loadRemoteAllowed();
+
     // Check if (current) audio data is installed
     haveAudioFiles = audio_files_present();
     
@@ -451,7 +482,7 @@ static bool read_settings(File configFile)
         wd |= CopyCheckValidNumParm(json["beep"], settings.beep, sizeof(settings.beep), 0, 3, DEF_BEEP);
         
         // Transition - now in separate file
-        CopyCheckValidNumParm(json["autoRotateTimes"], settings.autoRotateTimes, sizeof(settings.autoRotateTimes), 0, 5, DEF_AUTOROTTIMES);
+        //CopyCheckValidNumParm(json["autoRotateTimes"], settings.autoRotateTimes, sizeof(settings.autoRotateTimes), 0, 5, DEF_AUTOROTTIMES);
 
         if(json["hostName"]) {
             CopyTextParm(settings.hostName, json["hostName"], sizeof(settings.hostName));
@@ -492,9 +523,9 @@ static bool read_settings(File configFile)
         } else wd = true;
 
         // Transition - now separate config file
-        CopyCheckValidNumParm(json["destTimeBright"], settings.destTimeBright, sizeof(settings.destTimeBright), 0, 15, DEF_BRIGHT_DEST);
-        CopyCheckValidNumParm(json["presTimeBright"], settings.presTimeBright, sizeof(settings.presTimeBright), 0, 15, DEF_BRIGHT_PRES);
-        CopyCheckValidNumParm(json["lastTimeBright"], settings.lastTimeBright, sizeof(settings.lastTimeBright), 0, 15, DEF_BRIGHT_DEPA);
+        //CopyCheckValidNumParm(json["destTimeBright"], settings.destTimeBright, sizeof(settings.destTimeBright), 0, 15, DEF_BRIGHT_DEST);
+        //CopyCheckValidNumParm(json["presTimeBright"], settings.presTimeBright, sizeof(settings.presTimeBright), 0, 15, DEF_BRIGHT_PRES);
+        //CopyCheckValidNumParm(json["lastTimeBright"], settings.lastTimeBright, sizeof(settings.lastTimeBright), 0, 15, DEF_BRIGHT_DEPA);
 
         wd |= CopyCheckValidNumParm(json["dtNmOff"], settings.dtNmOff, sizeof(settings.dtNmOff), 0, 1, DEF_DT_OFF);
         wd |= CopyCheckValidNumParm(json["ptNmOff"], settings.ptNmOff, sizeof(settings.ptNmOff), 0, 1, DEF_PT_OFF);
@@ -528,6 +559,7 @@ static bool read_settings(File configFile)
         }
         
         wd |= CopyCheckValidNumParm(json["speedoBright"], settings.speedoBright, sizeof(settings.speedoBright), 0, 15, DEF_BRIGHT_SPEEDO);
+        wd |= CopyCheckValidNumParm(json["speedoAF"], settings.speedoAF, sizeof(settings.speedoAF), 0, 1, DEF_SPEEDO_ACCELFIG);
         wd |= CopyCheckValidNumParmF(json["speedoFact"], settings.speedoFact, sizeof(settings.speedoFact), 0.5, 5.0, DEF_SPEEDO_FACT);
         #ifdef TC_HAVEGPS
         wd |= CopyCheckValidNumParm(json["useGPSSpeed"], settings.useGPSSpeed, sizeof(settings.useGPSSpeed), 0, 1, DEF_USE_GPS_SPEED);
@@ -649,6 +681,7 @@ void write_settings()
     #ifdef TC_HAVESPEEDO    
     json["speedoType"] = (const char *)settings.speedoType;
     json["speedoBright"] = (const char *)settings.speedoBright;
+    json["speedoAF"] = (const char *)settings.speedoAF;
     json["speedoFact"] = (const char *)settings.speedoFact;
     #ifdef TC_HAVEGPS
     json["useGPSSpeed"] = (const char *)settings.useGPSSpeed;
@@ -768,13 +801,13 @@ static bool checkValidNumParmF(char *text, float lowerLim, float upperLim, float
     float f;
 
     if(len == 0) {
-        sprintf(text, "%1.1f", setDefault);
+        sprintf(text, "%.1f", setDefault);
         return true;
     }
 
     for(i = 0; i < len; i++) {
         if(text[i] != '.' && text[i] != '-' && (text[i] < '0' || text[i] > '9')) {
-            sprintf(text, "%1.1f", setDefault);
+            sprintf(text, "%.1f", setDefault);
             return true;
         }
     }
@@ -782,15 +815,15 @@ static bool checkValidNumParmF(char *text, float lowerLim, float upperLim, float
     f = strtof(text, NULL);
 
     if(f < lowerLim) {
-        sprintf(text, "%1.1f", lowerLim);
+        sprintf(text, "%.1f", lowerLim);
         return true;
     } else if(f > upperLim) {
-        sprintf(text, "%1.1f", upperLim);
+        sprintf(text, "%.1f", upperLim);
         return true;
     }
 
     // Re-do to get rid of formatting errors (eg "0.")
-    sprintf(text, "%1.1f", f);
+    sprintf(text, "%.1f", f);
 
     return false;
 }
@@ -1041,7 +1074,7 @@ void saveCurVolume(bool useCache)
 
 bool loadAlarm()
 {
-    const char *funcName = "loadAlarm";
+    const char *funcName = "lAl";
     bool writedefault = true;
     bool haveConfigFile = false;
     File configFile;
@@ -1092,7 +1125,7 @@ bool loadAlarm()
 
 void saveAlarm()
 {
-    const char *funcName = "saveAlarm";
+    const char *funcName = "sAl";
     char aooBuf[8];
     char hourBuf[8];
     char minBuf[8];
@@ -1122,7 +1155,7 @@ void saveAlarm()
 
 bool loadReminder()
 {
-    const char *funcName = "loadReminder";
+    const char *funcName = "lRem";
     bool writedefault = false;
     File configFile;
 
@@ -1170,7 +1203,7 @@ bool loadReminder()
 
 void saveReminder()
 {
-    const char *funcName = "saveReminder";
+    const char *funcName = "sRem";
     char monBuf[8];
     char dayBuf[8];
     char hourBuf[8];
@@ -1225,7 +1258,7 @@ static void loadCarMode()
     if(openCfgFileRead(cmCfgName, configFile)) {
         DECLARE_S_JSON(512,json);
         //StaticJsonDocument<512> json;
-        if(!readJSONCfgFile(json, configFile, "loadCarMode")) {
+        if(!readJSONCfgFile(json, configFile, "lCM")) {
             if(json["CarMode"]) {
                 carMode = (atoi(json["CarMode"]) > 0);
             }
@@ -1247,7 +1280,7 @@ void saveCarMode()
     buf[1] = 0;
     json["CarMode"] = (const char *)buf;
 
-    writeJSONCfgFile(json, cmCfgName, configOnSD, "saveCarMode");
+    writeJSONCfgFile(json, cmCfgName, configOnSD, "sCM");
 }
 
 /*
@@ -1324,7 +1357,7 @@ void loadLineOut()
     if(openCfgFileRead(loCfgName, configFile)) {
         DECLARE_S_JSON(512,json);
         //StaticJsonDocument<512> json;
-        if(!readJSONCfgFile(json, configFile, "loadLineOut")) {
+        if(!readJSONCfgFile(json, configFile, "lLO")) {
             if(json["LineOut"]) {
                 useLineOut = (atoi(json["LineOut"]) > 0);
             }
@@ -1349,7 +1382,49 @@ void saveLineOut()
     buf[1] = 0;
     json["LineOut"] = (const char *)buf;
 
-    writeJSONCfgFile(json, loCfgName, configOnSD, "saveLineOut");
+    writeJSONCfgFile(json, loCfgName, configOnSD, "sLO");
+}
+#endif
+
+/*
+ *  Load/save remoteAllowed
+ */
+
+#ifdef TC_HAVE_REMOTE
+static void loadRemoteAllowed()
+{
+    bool haveConfigFile = false;
+    File configFile;
+
+    if(!haveFS && !configOnSD)
+        return;
+
+    if(openCfgFileRead(raCfgName, configFile)) {
+        DECLARE_S_JSON(512,json);
+        //StaticJsonDocument<512> json;
+        if(!readJSONCfgFile(json, configFile, "lRA")) {
+            if(json["Remote"]) {
+                remoteAllowed = (atoi(json["Remote"]) > 0);
+            }
+        } 
+        configFile.close();
+    }
+}
+
+void saveRemoteAllowed()
+{
+    char buf[2];
+    DECLARE_S_JSON(512,json);
+    //StaticJsonDocument<512> json;
+
+    if(!haveFS && !configOnSD)
+        return;
+
+    buf[0] = remoteAllowed ? '1' : '0';
+    buf[1] = 0;
+    json["Remote"] = (const char *)buf;
+
+    writeJSONCfgFile(json, raCfgName, configOnSD, "sRA");
 }
 #endif
 
@@ -1371,7 +1446,7 @@ bool loadMusFoldNum()
         if(configFile) {
             DECLARE_S_JSON(512,json);
             //StaticJsonDocument<512> json;
-            if(!readJSONCfgFile(json, configFile, "loadMusFoldNum")) {
+            if(!readJSONCfgFile(json, configFile, "lMF")) {
                 if(!CopyCheckValidNumParm(json["folder"], temp, sizeof(temp), 0, 9, 0)) {
                     musFolderNum = atoi(temp);
                     writedefault = false;
@@ -1392,7 +1467,7 @@ bool loadMusFoldNum()
 
 void saveMusFoldNum()
 {
-    const char *funcName = "saveMusFoldNum";
+    const char *funcName = "sMF";
     DECLARE_S_JSON(512,json);
     //StaticJsonDocument<512> json;
     char buf[4];
@@ -1427,7 +1502,7 @@ bool loadIpSettings()
 
             DECLARE_S_JSON(512,json);
             //StaticJsonDocument<512> json;
-            DeserializationError error = readJSONCfgFile(json, configFile, "loadIpSettings");
+            DeserializationError error = readJSONCfgFile(json, configFile, "lIp");
 
             if(!error) {
 
@@ -1498,7 +1573,7 @@ void writeIpSettings()
     json["Netmask"]   = (const char *)ipsettings.netmask;
     json["DNS"]       = (const char *)ipsettings.dns;
 
-    writeJSONCfgFile(json, ipCfgName, FlashROMode, "writeIpSettings");
+    writeJSONCfgFile(json, ipCfgName, FlashROMode, "wIp");
 }
 
 void deleteIpSettings()

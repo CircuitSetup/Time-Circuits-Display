@@ -9,7 +9,7 @@
  * Keypad handling
  *
  * -------------------------------------------------------------------
- * License: MIT
+ * License: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,25 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ *
+ * In addition, the following restrictions apply:
+ * 
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
@@ -219,13 +238,13 @@ void keypad_setup()
     digitalWrite(WHITE_LED_PIN, LOW);
 
     // Set up Enter button
-    enterKey.setTicks(ENTER_DEBOUNCE, ENTER_PRESS_TIME, ENTER_HOLD_TIME);
+    enterKey.setTiming(ENTER_DEBOUNCE, ENTER_PRESS_TIME, ENTER_HOLD_TIME);
     enterKey.attachPress(enterKeyPressed);
     enterKey.attachLongPressStart(enterKeyHeld);
 
 #ifdef EXTERNAL_TIMETRAVEL_IN
     // Set up External time travel button
-    ettKey.setTicks(ETT_DEBOUNCE, ETT_PRESS_TIME, ETT_HOLD_TIME);
+    ettKey.setTiming(ETT_DEBOUNCE, ETT_PRESS_TIME, ETT_HOLD_TIME);
     ettKey.attachPress(ettKeyPressed);
     ettKey.attachLongPressStart(ettKeyHeld);
 
@@ -304,7 +323,7 @@ static void keypadEvent(char key, KeyState kstate)
         case '6':    // "6" held down -> play audio file "key6.mp3"
             doKey = false;
             keySnd[4] = key;
-            play_file(keySnd, PA_INTSPKR|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
+            play_file(keySnd, PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
             break;
         case '7':    // "7" held down -> re-enable/re-connect WiFi
             doKey = false;
@@ -859,6 +878,17 @@ void keypad_loop()
                     }
                     validEntry = true;
                     break;
+                #ifdef TC_HAVE_REMOTE
+                case 992:
+                case 993:
+                    rcModeState = remoteAllowed;
+                    remoteAllowed = (code == 993);
+                    if(rcModeState != remoteAllowed) {
+                        saveRemoteAllowed();
+                    }
+                    validEntry = true;
+                    break;
+                #endif
                 case 998:
                     if(timetravelPersistent) {
                         invalidEntry = true;
@@ -1020,6 +1050,7 @@ void keypad_loop()
                         (dateBuffer[0] == '3' ||
                          dateBuffer[0] == '5' ||
                          dateBuffer[0] == '6' ||
+                         dateBuffer[0] == '7' ||
                          dateBuffer[0] == '8' ||
                          dateBuffer[0] == '9')) {
                       
@@ -1037,6 +1068,9 @@ void keypad_loop()
                 break;
             case '6':
                 bttfnSendSIDCmd(cmd);
+                break;
+            case '7':
+                bttfnSendRemCmd(cmd);
                 break;
             case '8':
                 bttfnSendVSRCmd(cmd);

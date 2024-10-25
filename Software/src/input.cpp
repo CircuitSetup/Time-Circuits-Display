@@ -19,9 +19,9 @@
  *
  * Keypad part inspired by "Keypad" library by M. Stanley & A. Brevig
  * Fractions of this code are customized, minimized derivates of parts 
- * of OneButton library by Matthias Hertel.
+ * of the OneButton library by Matthias Hertel.
  * -------------------------------------------------------------------
- * License of Keypad_I2C class: MIT
+ * License of Keypad_I2C class: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -34,6 +34,34 @@
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
  *
+ * In addition, the following restrictions apply:
+ * 
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
+ *
+ * 4. The source code and the binary form, and any modifications made 
+ * to them may not be used for the purpose of training or improving 
+ * machine learning algorithms, including but not limited to artificial
+ * intelligence, natural language processing, or data mining. This 
+ * condition applies to any derivatives, modifications, or updates 
+ * based on the Software code. Any usage of the source code or the 
+ * binary form in an AI-training dataset is considered a breach of 
+ * this License.
+
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
@@ -331,11 +359,11 @@ TCButton::TCButton(const int pin, const boolean activeLow, const bool pullupActi
 // debounce: Number of millisec that have to pass by before a click is assumed stable
 // press:    Number of millisec that have to pass by before a short press is detected
 // lPress:   Number of millisec that have to pass by before a long press is detected
-void TCButton::setTicks(const int debounceTs, const int pressTs, const int lPressTs)
+void TCButton::setTiming(const int debounceDur, const int pressDur, const int lPressDur)
 {
-    _debounceTicks = debounceTs;
-    _pressTicks = pressTs;
-    _longPressTicks = lPressTs;
+    _debounceDur = debounceDur;
+    _pressDur = pressDur;
+    _longPressDur = lPressDur;
 }
 
 // Register function for short press event
@@ -372,21 +400,21 @@ void TCButton::scan(void)
         break;
 
     case TCBS_PRESSED:
-        if((!active) && (waitTime < _debounceTicks)) {  // de-bounce
+        if((!active) && (waitTime < _debounceDur)) {  // de-bounce
             transitionTo(_lastState);
         } else if(!active) {
             transitionTo(TCBS_RELEASED);
             _startTime = now;
-        } else if((active) && (waitTime > _longPressTicks)) {
+        } else if(waitTime > _longPressDur) {
             if(_longPressStartFunc) _longPressStartFunc();
             transitionTo(TCBS_LONGPRESS);
         }
         break;
 
     case TCBS_RELEASED:
-        if((active) && (waitTime < _debounceTicks)) {  // de-bounce
+        if((active) && (waitTime < _debounceDur)) {  // de-bounce
             transitionTo(_lastState);
-        } else if((!active) && (waitTime > _pressTicks)) {
+        } else if((!active) && (waitTime > _pressDur)) {
             if(_pressFunc) _pressFunc();
             reset();
         }
@@ -400,9 +428,9 @@ void TCButton::scan(void)
         break;
 
     case TCBS_LONGPRESSEND:
-        if((active) && (waitTime < _debounceTicks)) { // de-bounce
+        if((active) && (waitTime < _debounceDur)) { // de-bounce
             transitionTo(_lastState);
-        } else if(waitTime >= _debounceTicks) {
+        } else if(waitTime >= _debounceDur) {
             if(_longPressStopFunc) _longPressStopFunc();
             reset();
         }
@@ -676,6 +704,20 @@ void TCRotEnc::disabledPos()
     rotEncPos = getEncPos();
     targetSpeed = -OFF_SLOTS;
     fakeSpeed = -1;
+}
+
+// Init dec to speed position (speed only)
+void TCRotEnc::speedPos(int16_t speed)
+{   
+    if(speed < 0) {
+        disabledPos();
+        return;
+    }
+
+    zeroEnc(speed);
+    rotEncPos = getEncPos();
+    
+    fakeSpeed = targetSpeed = speed;
 }
 
 int16_t TCRotEnc::updateFakeSpeed(bool force)

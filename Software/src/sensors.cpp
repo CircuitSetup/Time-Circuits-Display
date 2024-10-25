@@ -9,7 +9,7 @@
  *
  * This is designed for 
  * - MCP9808, TMP117, BMx280, SHT4x-Ax, SI7012, AHT20/AM2315C, HTU31D, 
- *   MS8607 temperature/humidity sensors,
+ *   MS8607, HDC302X temperature/humidity sensors,
  * - BH1750, TSL2561, TSL2591, LTR303/329 and VEML7700/VEML6030 light 
  *   sensors.
  *                             
@@ -22,6 +22,7 @@
  * AHT20/AM2315C: 0x38                [temperature, humidity]
  * HTU31D:        0x41 [non-default]  [temperature, humidity]
  * MS8607:        0x76+0x40           [temperature, humidity]
+ * HDC302x:       0x45 [non-default]  [temperature, humidity]
  * 
  * TSL2561:       0x29
  * TSL2591:       0x29
@@ -34,7 +35,7 @@
  * - the VEML7700 cannot be used;
  * - the VEML6030 needs to be set to address 0x48.
  * -------------------------------------------------------------------
- * License: MIT
+ * License: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -46,6 +47,25 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ *
+ * In addition, the following restrictions apply:
+ * 
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
@@ -67,6 +87,21 @@
 static void defaultDelay(unsigned long mydelay)
 {
     delay(mydelay);
+}
+
+static uint8_t crc8(uint8_t initVal, uint8_t poly, uint8_t len, uint8_t *buf)
+{
+    uint8_t crc = initVal;
+ 
+    while(len--) {
+        crc ^= *buf++;
+ 
+        for(uint8_t i = 0; i < 8; i++) {
+            crc = (crc & 0x80) ? (crc << 1) ^ poly : (crc << 1);
+        }
+    }
+ 
+    return crc;
 }
 
 void tcSensor::prepareRead(uint16_t regno)
@@ -154,20 +189,6 @@ void tcSensor::write8(uint16_t regno, uint8_t value)
     Wire.endTransmission();
 }
 
-uint8_t tcSensor::crc8(uint8_t initVal, uint8_t poly, uint8_t len, uint8_t *buf)
-{
-    uint8_t crc = initVal;
- 
-    while(len--) {
-        crc ^= *buf++;
- 
-        for(uint8_t i = 0; i < 8; i++) {
-            crc = (crc & 0x80) ? (crc << 1) ^ poly : (crc << 1);
-        }
-    }
- 
-    return crc;
-}
 #endif
 
 
@@ -276,6 +297,17 @@ uint8_t tcSensor::crc8(uint8_t initVal, uint8_t poly, uint8_t len, uint8_t *buf)
 #define MS8607_ADDR_RH    0x40
 #define MS8607_DUMMY      0x100
 
+#define HDC302x_DUMMY     0x100
+#define HDC302x_TRIGGER   0x2400  // 00 = longest conversion time (12.5ms)
+#define HDC302x_HEAT_OFF  0x3066
+#define HDC302x_AUTO_OFF  0x3093
+#define HDC302x_OFFSETS   0xa004
+#define HDC302x_PUMS      0x61bb
+#define HDC302x_RESET     0x30a2
+#define HDC302x_READID    0x3781
+#define HDC302x_CRC_INIT  0xff
+#define HDC302x_CRC_POLY  0x31
+
 // Store i2c address
 tempSensor::tempSensor(int numTypes, uint8_t addrArr[])
 {
@@ -293,7 +325,7 @@ bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long)
     uint8_t temp, timeOut = 20;
     uint16_t t16 = 0;
     size_t i2clen;
-    uint8_t buf[6];
+    uint8_t buf[8];
     unsigned long millisNow = millis();
     
     _customDelayFunc = defaultDelay;
@@ -355,6 +387,12 @@ bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long)
                     foundSt = true;
                 }
                 break;
+            case HDC302X:
+                write16(HDC302x_DUMMY, HDC302x_READID);
+                if(read16(HDC302x_DUMMY) == 0x3000) {
+                    foundSt = true;
+                }
+                break;
             case AHT20:
             case HTU31:
                 foundSt = true;
@@ -365,7 +403,7 @@ bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long)
                 _st = _addrArr[i+1];
     
                 #ifdef TC_DBG
-                const char *tpArr[8] = { "MCP9808", "BMx280", "SHT4x", "SI7021", "TMP117", "AHT20/AM2315C", "HTU31D", "MS8607" };
+                const char *tpArr[9] = { "MCP9808", "BMx280", "SHT4x", "SI7021", "TMP117", "AHT20/AM2315C", "HTU31D", "MS8607", "HDC302X" };
                 Serial.printf("Temperature sensor: Detected %s\n", tpArr[_st]);
                 #endif
     
@@ -501,7 +539,7 @@ bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long)
         write8(MS8607_DUMMY, 0x1e);
         _address = MS8607_ADDR_RH;
         write8(MS8607_DUMMY, 0xfe);
-        delay(15);
+        (*_customDelayFunc)(15);
         // Read t prom data
         _address = MS8607_ADDR_T;
         _MS8607_C5 = (int32_t)((uint16_t)read16(0xaa) << 8);
@@ -517,7 +555,23 @@ bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long)
         _haveHum = true;
         _delayNeeded = 20;
         break;
-        
+
+    case HDC302X:
+        write16(HDC302x_DUMMY, HDC302x_RESET);
+        (*_customDelayFunc)(10);
+        // Heater off
+        write16(HDC302x_DUMMY, HDC302x_HEAT_OFF);
+        // Exit auto mode, put into sleep
+        write16(HDC302x_DUMMY, HDC302x_AUTO_OFF);
+        (*_customDelayFunc)(2);
+        // Check (and reset) power-up measurement mode
+        HDC302x_setDefault(HDC302x_PUMS, 0x00, 0x81);
+        // Check (and reset) offsets
+        HDC302x_setDefault(HDC302x_OFFSETS, 0, 0);
+        // Trigger new conversion
+        write16(HDC302x_DUMMY, HDC302x_TRIGGER);  
+        _delayNeeded = 20;
+        break;
     default:
         return false;
     }
@@ -533,7 +587,8 @@ bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long)
 float tempSensor::readTemp(bool celsius)
 {
     float temp = NAN;
-    uint16_t t = 0;
+    uint16_t t = 0, h = 0;
+    uint8_t buf[8];
     
     if(_delayNeeded > 0) {
         unsigned long elapsed = millis() - _tempReadNow;
@@ -554,7 +609,6 @@ float tempSensor::readTemp(bool celsius)
         write8(BMx280_DUMMY, BMx280_REG_TEMP);
         t = _haveHum ? 5 : 3;
         if(Wire.requestFrom(_address, (uint8_t)t) == t) {
-            uint8_t buf[5];
             uint32_t t1; 
             uint16_t t2 = 0;
             for(uint8_t i = 0; i < t; i++) buf[i] = Wire.read();
@@ -565,25 +619,16 @@ float tempSensor::readTemp(bool celsius)
         break;
 
     case SHT40:
-        if(Wire.requestFrom(_address, (uint8_t)6) == 6) {
-            uint8_t buf[6];
-            for(uint8_t i = 0; i < 6; i++) buf[i] = Wire.read();
-            if(crc8(SHT40_CRC_INIT, SHT40_CRC_POLY, 2, buf) == buf[2]) {
-                t = (buf[0] << 8) | buf[1];
-                temp = ((175.0 * (float)t) / 65535.0) - 45.0;
-            }
-            if(crc8(SHT40_CRC_INIT, SHT40_CRC_POLY, 2, buf+3) == buf[5]) {
-                t = (buf[3] << 8) | buf[4];
-                _hum = (int8_t)(((125.0 * (float)t) / 65535.0) - 6.0);
-                if(_hum < 0) _hum = 0;
-            }
+        if(readAndCheck6(buf, t, h, SHT40_CRC_INIT, SHT40_CRC_POLY)) {
+            temp = ((175.0 * (float)t) / 65535.0) - 45.0;
+            _hum = (int8_t)(((125.0 * (float)h) / 65535.0) - 6.0);
+           if(_hum < 0) _hum = 0;
         }
         write8(SHT40_DUMMY, SHT40_CMD_RTEMPM);    // Trigger new measurement
         break;
 
     case SI7021:
         if(Wire.requestFrom(_address, (uint8_t)3) == 3) {
-            uint8_t buf[3];
             for(uint8_t i = 0; i < 3; i++) buf[i] = Wire.read();
             if(crc8(SI7021_CRC_INIT, SI7021_CRC_POLY, 2, buf) == buf[2]) {
                 t = (buf[0] << 8) | buf[1];
@@ -593,7 +638,6 @@ float tempSensor::readTemp(bool celsius)
         }
         write8(SI7021_DUMMY, SI7021_CMD_RTEMPQ);
         if(Wire.requestFrom(_address, (uint8_t)2) == 2) {
-            uint8_t buf[2];
             for(uint8_t i = 0; i < 2; i++) buf[i] = Wire.read();
             t = (buf[0] << 8) | buf[1];
             temp = ((175.72 * (float)t) / 65536.0) - 46.85;
@@ -610,7 +654,6 @@ float tempSensor::readTemp(bool celsius)
 
     case AHT20:
         if(Wire.requestFrom(_address, (uint8_t)7) == 7) {
-            uint8_t buf[7];
             for(uint8_t i = 0; i < 7; i++) buf[i] = Wire.read();
             if(crc8(AHT20_CRC_INIT, AHT20_CRC_POLY, 6, buf) == buf[6]) {
                 _hum = ((uint32_t)((buf[1] << 12) | (buf[2] << 4) | (buf[3] >> 4))) * 100 >> 20; // / 1048576;
@@ -622,18 +665,10 @@ float tempSensor::readTemp(bool celsius)
 
     case HTU31:
         write8(HTU31_DUMMY, HTU31_READTRH);  // Read t+rh
-        if(Wire.requestFrom(_address, (uint8_t)6) == 6) {
-            uint8_t buf[6];
-            for(uint8_t i = 0; i < 6; i++) buf[i] = Wire.read();
-            if(crc8(HTU31_CRC_INIT, HTU31_CRC_POLY, 2, buf) == buf[2]) {
-                t = (buf[0] << 8) | buf[1];
-                temp = ((165.0 * (float)t) / 65535.0) - 40.0;
-            }
-            if(crc8(HTU31_CRC_INIT, HTU31_CRC_POLY, 2, buf+3) == buf[5]) {
-                t = (buf[3] << 8) | buf[4];
-                _hum = (int8_t)((100.0 * (float)t) / 65535.0);
-                if(_hum < 0) _hum = 0;
-            }
+        if(readAndCheck6(buf, t, h, HTU31_CRC_INIT, HTU31_CRC_POLY)) {
+            temp = ((165.0 * (float)t) / 65535.0) - 40.0;
+            _hum = (int8_t)((100.0 * (float)h) / 65535.0);
+            if(_hum < 0) _hum = 0;
         }
         write8(HTU31_DUMMY, HTU31_CONV);  // Trigger new conversion
         break;
@@ -664,6 +699,15 @@ float tempSensor::readTemp(bool celsius)
         // Trigger new conversion rH
         write8(MS8607_DUMMY, 0xf5);
         break;
+
+    case HDC302X:
+        if(readAndCheck6(buf, t, h, HDC302x_CRC_INIT, HDC302x_CRC_POLY)) {
+            temp = ((175.0 * (float)t) / 65535.0) - 45.0;
+            _hum = (int8_t)((100.0 * (float)h) / 65535.0);
+            if(_hum < 0) _hum = 0;
+        }
+        write16(HDC302x_DUMMY, HDC302x_TRIGGER);  // Trigger new conversion
+        break;
     }
 
     _tempReadNow = millis();
@@ -671,6 +715,9 @@ float tempSensor::readTemp(bool celsius)
     if(!isnan(temp)) {
         if(!celsius) temp = temp * 9.0 / 5.0 + 32.0;
         temp += _userOffset;
+        _lastTempNan = false;
+    } else {
+        _lastTempNan = true;
     }
 
     // We use only 2 digits, so truncate
@@ -722,6 +769,46 @@ float tempSensor::BMx280_CalcTemp(uint32_t ival, uint32_t hval)
     }
     
     return (float)((fine_t * 5 + 128) / 256) / 100.0;
+}
+
+void tempSensor::HDC302x_setDefault(uint16_t reg, uint8_t val1, uint8_t val2)
+{
+    uint8_t buf[8];
+    
+    write16(HDC302x_DUMMY, reg);
+    (*_customDelayFunc)(5);
+    if(Wire.requestFrom(_address, (uint8_t)3) == 3) {
+        for(uint8_t i = 0; i < 3; i++) buf[i] = Wire.read();
+        if(crc8(HDC302x_CRC_INIT, HDC302x_CRC_POLY, 2, buf) == buf[2]) {
+            if(buf[0] != val1 || buf[1] != val2) {
+                buf[0] = reg >> 8; buf[1] = reg & 0xff;
+                buf[2] = val1; buf[3] = val2;
+                buf[4] = crc8(HDC302x_CRC_INIT, HDC302x_CRC_POLY, 2, &buf[2]);
+                Wire.beginTransmission(_address);
+                for(int i=0; i < 5; i++) {
+                    Wire.write(buf[i]);
+                }
+                Wire.endTransmission();
+                (*_customDelayFunc)(80);
+            }
+        }
+    }
+}
+
+bool tempSensor::readAndCheck6(uint8_t *buf, uint16_t& t, uint16_t& h, uint8_t crcinit, uint8_t crcpoly)
+{
+    if(Wire.requestFrom(_address, (uint8_t)6) == 6) {
+        for(int i = 0; i < 6; i++) buf[i] = Wire.read();
+        if(crc8(crcinit, crcpoly, 2, buf) == buf[2]) {
+            t = (buf[0] << 8) | buf[1];
+            if(crc8(crcinit, crcpoly, 2, buf+3) == buf[5]) {
+                h = (buf[3] << 8) | buf[4];
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 #endif // TC_HAVETEMP
@@ -864,6 +951,10 @@ static const float resFact[6][4] = {
     { 0.1152, 0.0576, 0.0144, 0.0072 },
     { 0.0576, 0.0288, 0.0072, 0.0036 }    
 };
+
+static int32_t LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
+static uint32_t TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
+static int32_t TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32_t ch1);
 
 // Store i2c address
 lightSensor::lightSensor(int numTypes, uint8_t addrArr[])
@@ -1158,7 +1249,7 @@ void lightSensor::VEML7700OnOff(bool enable, bool doWait)
     if(enable && doWait) (*_customDelayFunc)(5);
 }
 
-int32_t lightSensor::LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1)
+static int32_t LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1)
 {
     const float gains[]   = {   1.0,   2.0,   4.0,  8.0, 48.0, 96.0 };
     const int32_t maxLux[] = { 64000, 32000, 16000, 8000, 1300, 600 };
@@ -1224,7 +1315,7 @@ int32_t lightSensor::LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, ui
 // TSL2561: Calculate Lux from ch0 and ch1 data
 // iGain: 0=1x, 1=16x
 // tInt:  0=13.7ms, 1:100ms, 2:402
-uint32_t lightSensor::TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1)
+static uint32_t TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1)
 {
     uint32_t chScale, channel0, channel1;
     uint32_t b = 0, m = 0, ratio, ratio1 = 0;
@@ -1294,7 +1385,7 @@ uint32_t lightSensor::TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, 
 
 #define TLS2691_USE_LEGACY           // Use TAOS/AMS generic lux calculation (written for 2671)
 
-int32_t lightSensor::TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32_t ch1)
+static int32_t TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32_t ch1)
 {
     #if (TLS9_USE_IT == TSL2591_IT_100)
         if(ch0 > TSL2591_MAX_COUNT_100MS || ch1 > TSL2591_MAX_COUNT_100MS) {
