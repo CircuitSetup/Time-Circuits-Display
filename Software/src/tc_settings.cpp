@@ -189,8 +189,8 @@ static bool audio_files_present();
 
 static bool CopyIPParm(const char *json, char *text, uint8_t psize);
 
-static DeserializationError readJSONCfgFile(JsonDocument& json, File& configFile, const char *funcName);
-static bool writeJSONCfgFile(const JsonDocument& json, const char *fn, bool useSD, const char *funcName);
+static DeserializationError readJSONCfgFile(JsonDocument& json, File& configFile);
+static bool writeJSONCfgFile(const JsonDocument& json, const char *fn, bool useSD);
 
 extern void start_file_copy();
 extern void file_copy_progress();
@@ -208,7 +208,9 @@ extern void file_copy_done(int err);
  */
 void settings_setup()
 {
+    #ifdef TC_DBG
     const char *funcName = "settings_setup";
+    #endif
     bool writedefault = false;
     bool SDres = false;
 
@@ -296,8 +298,8 @@ void settings_setup()
 
     } else {
 
-        Serial.println(F("\n***Mounting flash FS failed."));
-        Serial.println(F("*** All settings will be stored on the SD card (if available)"));
+        Serial.println(F("*** Mounting flash FS failed."));
+        Serial.println(F("*** Settings will be stored on SD card (if available)"));
 
     }
     
@@ -411,7 +413,7 @@ void settings_setup()
 
         unsigned long mnow = millis();
 
-        Serial.printf("%s: Deleting ip config; temporarily clearing AP mode WiFi password\n", funcName);
+        Serial.printf("Deleting ip config; temporarily clearing AP mode WiFi password\n");
 
         deleteIpSettings();
 
@@ -448,21 +450,19 @@ void unmount_fs()
 
 static bool read_settings(File configFile)
 {
+    #ifdef TC_DBG
     const char *funcName = "read_settings";
+    #endif
     bool wd = false;
     size_t jsonSize = 0;
     DECLARE_D_JSON(JSON_SIZE,json);
-    /*
-    //StaticJsonDocument<JSON_SIZE> json;
-    DynamicJsonDocument json(JSON_SIZE);
-    */
 
-    DeserializationError error = readJSONCfgFile(json, configFile, funcName);
+    DeserializationError error = readJSONCfgFile(json, configFile);
 
     #if ARDUINOJSON_VERSION_MAJOR < 7
     jsonSize = json.memoryUsage();
     if(jsonSize > JSON_SIZE) {
-        Serial.printf("%s: ERROR: Config too large (%d vs %d), memory corrupted.\n", funcName, jsonSize, JSON_SIZE);
+        Serial.printf("ERROR: Config too large (%d vs %d), memory corrupted.\n", jsonSize, JSON_SIZE);
     }
     
     #ifdef TC_DBG
@@ -481,9 +481,6 @@ static bool read_settings(File configFile)
         wd |= CopyCheckValidNumParm(json["mode24"], settings.mode24, sizeof(settings.mode24), 0, 1, DEF_MODE24);
         wd |= CopyCheckValidNumParm(json["beep"], settings.beep, sizeof(settings.beep), 0, 3, DEF_BEEP);
         
-        // Transition - now in separate file
-        //CopyCheckValidNumParm(json["autoRotateTimes"], settings.autoRotateTimes, sizeof(settings.autoRotateTimes), 0, 5, DEF_AUTOROTTIMES);
-
         if(json["hostName"]) {
             CopyTextParm(settings.hostName, json["hostName"], sizeof(settings.hostName));
         } else wd = true;
@@ -522,21 +519,11 @@ static bool read_settings(File configFile)
             CopyTextParm(settings.timeZoneNDep, json["timeZoneNDep"], sizeof(settings.timeZoneNDep));
         } else wd = true;
 
-        // Transition - now separate config file
-        //CopyCheckValidNumParm(json["destTimeBright"], settings.destTimeBright, sizeof(settings.destTimeBright), 0, 15, DEF_BRIGHT_DEST);
-        //CopyCheckValidNumParm(json["presTimeBright"], settings.presTimeBright, sizeof(settings.presTimeBright), 0, 15, DEF_BRIGHT_PRES);
-        //CopyCheckValidNumParm(json["lastTimeBright"], settings.lastTimeBright, sizeof(settings.lastTimeBright), 0, 15, DEF_BRIGHT_DEPA);
-
         wd |= CopyCheckValidNumParm(json["dtNmOff"], settings.dtNmOff, sizeof(settings.dtNmOff), 0, 1, DEF_DT_OFF);
         wd |= CopyCheckValidNumParm(json["ptNmOff"], settings.ptNmOff, sizeof(settings.ptNmOff), 0, 1, DEF_PT_OFF);
         wd |= CopyCheckValidNumParm(json["ltNmOff"], settings.ltNmOff, sizeof(settings.ltNmOff), 0, 1, DEF_LT_OFF);
 
         wd |= CopyCheckValidNumParm(json["autoNMPreset"], settings.autoNMPreset, sizeof(settings.autoNMPreset), 0, 10, DEF_AUTONM_PRESET);
-        if(json["autoNM"]) {    // transition old boolean "autoNM" setting
-            char temp[4] = { '0', 0, 0, 0 };
-            CopyCheckValidNumParm(json["autoNM"], temp, sizeof(temp), 0, 1, 0);
-            if(temp[0] == '0') strcpy(settings.autoNMPreset, "10");
-        }
         
         wd |= CopyCheckValidNumParm(json["autoNMOn"], settings.autoNMOn, sizeof(settings.autoNMOn), 0, 23, DEF_AUTONM_ON);
         wd |= CopyCheckValidNumParm(json["autoNMOff"], settings.autoNMOff, sizeof(settings.autoNMOff), 0, 23, DEF_AUTONM_OFF);
@@ -552,12 +539,6 @@ static bool read_settings(File configFile)
 
         #ifdef TC_HAVESPEEDO
         wd |= CopyCheckValidNumParm(json["speedoType"], settings.speedoType, sizeof(settings.speedoType), SP_MIN_TYPE, 99, DEF_SPEEDO_TYPE);
-        if(json["useSpeedo"]) {    // transition old boolean "useSpeedo" setting
-            char temp[4] = { '0', 0, 0, 0 };
-            CopyCheckValidNumParm(json["useSpeedo"], temp, sizeof(temp), 0, 1, 0);
-            if(temp[0] == '0') strcpy(settings.speedoType, "99");
-        }
-        
         wd |= CopyCheckValidNumParm(json["speedoBright"], settings.speedoBright, sizeof(settings.speedoBright), 0, 15, DEF_BRIGHT_SPEEDO);
         wd |= CopyCheckValidNumParm(json["speedoAF"], settings.speedoAF, sizeof(settings.speedoAF), 0, 1, DEF_SPEEDO_ACCELFIG);
         wd |= CopyCheckValidNumParmF(json["speedoFact"], settings.speedoFact, sizeof(settings.speedoFact), 0.5, 5.0, DEF_SPEEDO_FACT);
@@ -622,15 +603,13 @@ static bool read_settings(File configFile)
 
 void write_settings()
 {
+    #ifdef TC_DBG
     const char *funcName = "write_settings";
+    #endif
     DECLARE_D_JSON(JSON_SIZE,json);
-    /*
-    DynamicJsonDocument json(JSON_SIZE);
-    //StaticJsonDocument<JSON_SIZE> json;
-    */
 
     if(!haveFS && !FlashROMode) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+        Serial.printf("%s\n", fsNoAvail);
         return;
     }
 
@@ -727,7 +706,7 @@ void write_settings()
     json["CfgOnSD"] = (const char *)settings.CfgOnSD;
     //json["sdFreq"] = (const char *)settings.sdFreq;
 
-    writeJSONCfgFile(json, cfgName, FlashROMode, funcName);
+    writeJSONCfgFile(json, cfgName, FlashROMode);
 }
 
 bool checkConfigExists()
@@ -860,14 +839,14 @@ static void updateBriCache()
 
 static bool loadBrightness()
 {
+    #ifdef TC_DBG
     const char *funcName = "loadBrightness";
+    #endif
     bool wd = true;
     File configFile;
 
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+    if(!haveFS && !configOnSD)
         return false;
-    }
 
     #ifdef TC_DBG
     Serial.printf("%s: Loading from %s\n", funcName, configOnSD ? "SD" : "flash FS");
@@ -876,9 +855,8 @@ static bool loadBrightness()
     if(openCfgFileRead(briCfgName, configFile)) {
 
         DECLARE_S_JSON(512,json);
-        //StaticJsonDocument<512> json;
 
-        if(!readJSONCfgFile(json, configFile, funcName)) {
+        if(!readJSONCfgFile(json, configFile)) {
             wd =  CopyCheckValidNumParm(json["dBri"], settings.destTimeBright, sizeof(settings.destTimeBright), 0, 15, DEF_BRIGHT_DEST);
             wd |= CopyCheckValidNumParm(json["pBri"], settings.presTimeBright, sizeof(settings.presTimeBright), 0, 15, DEF_BRIGHT_PRES);
             wd |= CopyCheckValidNumParm(json["lBri"], settings.lastTimeBright, sizeof(settings.lastTimeBright), 0, 15, DEF_BRIGHT_DEPA);
@@ -900,10 +878,7 @@ static bool loadBrightness()
 
 void saveBrightness(bool useCache)
 {
-    const char *funcName = "saveBrightness";
-    
     DECLARE_S_JSON(512,json);
-    //StaticJsonDocument<512> json;
 
     if(useCache && 
        (preSavedDBri == atoi(settings.destTimeBright)) &&
@@ -912,16 +887,14 @@ void saveBrightness(bool useCache)
         return;
     }
 
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+    if(!haveFS && !configOnSD)
         return;
-    }
 
     json["dBri"] = (const char *)settings.destTimeBright;
     json["pBri"] = (const char *)settings.presTimeBright;
     json["lBri"] = (const char *)settings.lastTimeBright;
 
-    writeJSONCfgFile(json, briCfgName, configOnSD, funcName);
+    writeJSONCfgFile(json, briCfgName, configOnSD);
 
     updateBriCache();
 }
@@ -932,14 +905,14 @@ void saveBrightness(bool useCache)
  */
 static bool loadAutoInterval()
 {
+    #ifdef TC_DBG
     const char *funcName = "loadAutoInterval";
+    #endif
     bool wd = true;
     File configFile;
 
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+    if(!haveFS && !configOnSD)
         return false;
-    }
 
     #ifdef TC_DBG
     Serial.printf("%s: Loading from %s\n", funcName, configOnSD ? "SD" : "flash FS");
@@ -948,9 +921,8 @@ static bool loadAutoInterval()
     if(openCfgFileRead(ainCfgName, configFile)) {
 
         DECLARE_S_JSON(512,json);
-        //StaticJsonDocument<512> json;
 
-        if(!readJSONCfgFile(json, configFile, funcName)) {
+        if(!readJSONCfgFile(json, configFile)) {
             wd = CopyCheckValidNumParm(json["ai"], settings.autoRotateTimes, sizeof(settings.autoRotateTimes), 0, 5, DEF_AUTOROTTIMES);
         }
         configFile.close();
@@ -971,25 +943,19 @@ static bool loadAutoInterval()
 
 void saveAutoInterval(bool useCache)
 {
-    const char *funcName = "saveAutoInterval";
-    
     DECLARE_S_JSON(512,json);
-    //StaticJsonDocument<512> json;
 
-    if(useCache && (preSavedAI == autoInterval)) {
+    if(useCache && (preSavedAI == autoInterval))
         return;
-    }
 
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+    if(!haveFS && !configOnSD)
         return;
-    }
 
     sprintf(settings.autoRotateTimes, "%d", autoInterval);
 
     json["ai"] = (const char *)settings.autoRotateTimes;
     
-    writeJSONCfgFile(json, ainCfgName, configOnSD, funcName);
+    writeJSONCfgFile(json, ainCfgName, configOnSD);
 
     preSavedAI = autoInterval;
 }
@@ -1001,17 +967,17 @@ void saveAutoInterval(bool useCache)
 
 bool loadCurVolume()
 {
+    #ifdef TC_DBG
     const char *funcName = "loadCurVolume";
+    #endif
     char temp[6];
     bool writedefault = true;
     File configFile;
 
     curVolume = DEFAULT_VOLUME;
 
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+    if(!haveFS && !configOnSD)
         return false;
-    }
 
     #ifdef TC_DBG
     Serial.printf("%s: Loading from %s\n", funcName, configOnSD ? "SD" : "flash FS");
@@ -1019,8 +985,7 @@ bool loadCurVolume()
 
     if(openCfgFileRead(volCfgName, configFile)) {
         DECLARE_S_JSON(512,json);
-        //StaticJsonDocument<512> json;
-        if(!readJSONCfgFile(json, configFile, funcName)) {
+        if(!readJSONCfgFile(json, configFile)) {
             if(!CopyCheckValidNumParm(json["volume"], temp, sizeof(temp), 0, 255, 255)) {
                 int ncv = atoi(temp);
                 if((ncv >= 0 && ncv <= 19) || ncv == 255) {
@@ -1046,24 +1011,19 @@ bool loadCurVolume()
 
 void saveCurVolume(bool useCache)
 {
-    const char *funcName = "saveCurVolume";
     char buf[6];
     DECLARE_S_JSON(512,json);
-    //StaticJsonDocument<512> json;
 
-    if(useCache && (prevSavedVol == curVolume)) {
+    if(useCache && (prevSavedVol == curVolume))
         return;
-    }
 
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+    if(!haveFS && !configOnSD)
         return;
-    }
 
     sprintf(buf, "%d", curVolume);
     json["volume"] = (const char *)buf;
 
-    if(writeJSONCfgFile(json, volCfgName, configOnSD, funcName)) {
+    if(writeJSONCfgFile(json, volCfgName, configOnSD)) {
         prevSavedVol = curVolume;
     }
 }
@@ -1074,15 +1034,15 @@ void saveCurVolume(bool useCache)
 
 bool loadAlarm()
 {
+    #ifdef TC_DBG
     const char *funcName = "lAl";
+    #endif
     bool writedefault = true;
     bool haveConfigFile = false;
     File configFile;
 
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+    if(!haveFS && !configOnSD)
         return false;
-    }
 
     #ifdef TC_DBG
     Serial.printf("%s: Loading from %s\n", funcName, configOnSD ? "SD" : "flash FS");
@@ -1091,9 +1051,8 @@ bool loadAlarm()
     if(openCfgFileRead(almCfgName, configFile)) {
 
         DECLARE_S_JSON(512,json);
-        //StaticJsonDocument<512> json;
         
-        if(!readJSONCfgFile(json, configFile, funcName)) {
+        if(!readJSONCfgFile(json, configFile)) {
             if(json["alarmonoff"] && json["alarmhour"] && json["alarmmin"]) {
                 int aoo = atoi(json["alarmonoff"]);
                 alarmHour = atoi(json["alarmhour"]);
@@ -1125,17 +1084,13 @@ bool loadAlarm()
 
 void saveAlarm()
 {
-    const char *funcName = "sAl";
     char aooBuf[8];
     char hourBuf[8];
     char minBuf[8];
     DECLARE_S_JSON(512,json);
-    //StaticJsonDocument<512> json;
 
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+    if(!haveFS && !configOnSD)
         return;
-    }
 
     sprintf(aooBuf, "%d", (alarmWeekday * 16) + (alarmOnOff ? 1 : 0));
     json["alarmonoff"] = (const char *)aooBuf;
@@ -1146,7 +1101,7 @@ void saveAlarm()
     json["alarmhour"] = (const char *)hourBuf;
     json["alarmmin"] = (const char *)minBuf;
 
-    writeJSONCfgFile(json, almCfgName, configOnSD, funcName);
+    writeJSONCfgFile(json, almCfgName, configOnSD);
 }
 
 /*
@@ -1155,14 +1110,14 @@ void saveAlarm()
 
 bool loadReminder()
 {
+    #ifdef TC_DBG
     const char *funcName = "lRem";
+    #endif
     bool writedefault = false;
     File configFile;
 
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+    if(!haveFS && !configOnSD)
         return false;
-    }
 
     #ifdef TC_DBG
     Serial.printf("%s: Loading from %s\n", funcName, configOnSD ? "SD" : "flash FS");
@@ -1171,9 +1126,8 @@ bool loadReminder()
     if(openCfgFileRead(remCfgName, configFile)) {
 
         DECLARE_S_JSON(512,json);
-        //StaticJsonDocument<512> json;
         
-        if(!readJSONCfgFile(json, configFile, funcName)) {
+        if(!readJSONCfgFile(json, configFile)) {
             if(json["month"] && json["hour"] && json["min"]) {
                 remMonth  = atoi(json["month"]);
                 remDay  = atoi(json["day"]);
@@ -1203,18 +1157,14 @@ bool loadReminder()
 
 void saveReminder()
 {
-    const char *funcName = "sRem";
     char monBuf[8];
     char dayBuf[8];
     char hourBuf[8];
     char minBuf[8];
     DECLARE_S_JSON(512,json);
-    //StaticJsonDocument<512> json;
 
-    if(!haveFS && !configOnSD) {
-        Serial.printf("%s: %s\n", funcName, fsNoAvail);
+    if(!haveFS && !configOnSD)
         return;
-    }
 
     if(!remMonth && !remDay) {
         deleteReminder();
@@ -1231,7 +1181,7 @@ void saveReminder()
     json["hour"] = (const char *)hourBuf;
     json["min"] = (const char *)minBuf;
 
-    writeJSONCfgFile(json, remCfgName, configOnSD, funcName);
+    writeJSONCfgFile(json, remCfgName, configOnSD);
 }
 
 static void deleteReminder()
@@ -1257,8 +1207,7 @@ static void loadCarMode()
 
     if(openCfgFileRead(cmCfgName, configFile)) {
         DECLARE_S_JSON(512,json);
-        //StaticJsonDocument<512> json;
-        if(!readJSONCfgFile(json, configFile, "lCM")) {
+        if(!readJSONCfgFile(json, configFile)) {
             if(json["CarMode"]) {
                 carMode = (atoi(json["CarMode"]) > 0);
             }
@@ -1271,7 +1220,6 @@ void saveCarMode()
 {
     char buf[2];
     DECLARE_S_JSON(512,json);
-    //StaticJsonDocument<512> json;
 
     if(!haveFS && !configOnSD)
         return;
@@ -1280,7 +1228,7 @@ void saveCarMode()
     buf[1] = 0;
     json["CarMode"] = (const char *)buf;
 
-    writeJSONCfgFile(json, cmCfgName, configOnSD, "sCM");
+    writeJSONCfgFile(json, cmCfgName, configOnSD);
 }
 
 /*
@@ -1356,12 +1304,11 @@ void loadLineOut()
 
     if(openCfgFileRead(loCfgName, configFile)) {
         DECLARE_S_JSON(512,json);
-        //StaticJsonDocument<512> json;
-        if(!readJSONCfgFile(json, configFile, "lLO")) {
+        if(!readJSONCfgFile(json, configFile)) {
             if(json["LineOut"]) {
                 useLineOut = (atoi(json["LineOut"]) > 0);
             }
-        } 
+        }
         configFile.close();
     }
 }
@@ -1370,7 +1317,6 @@ void saveLineOut()
 {
     char buf[2];
     DECLARE_S_JSON(512,json);
-    //StaticJsonDocument<512> json;
 
     if(!haveFS && !configOnSD)
         return;
@@ -1382,7 +1328,7 @@ void saveLineOut()
     buf[1] = 0;
     json["LineOut"] = (const char *)buf;
 
-    writeJSONCfgFile(json, loCfgName, configOnSD, "sLO");
+    writeJSONCfgFile(json, loCfgName, configOnSD);
 }
 #endif
 
@@ -1401,8 +1347,7 @@ static void loadRemoteAllowed()
 
     if(openCfgFileRead(raCfgName, configFile)) {
         DECLARE_S_JSON(512,json);
-        //StaticJsonDocument<512> json;
-        if(!readJSONCfgFile(json, configFile, "lRA")) {
+        if(!readJSONCfgFile(json, configFile)) {
             if(json["Remote"]) {
                 remoteAllowed = (atoi(json["Remote"]) > 0);
             }
@@ -1415,7 +1360,6 @@ void saveRemoteAllowed()
 {
     char buf[2];
     DECLARE_S_JSON(512,json);
-    //StaticJsonDocument<512> json;
 
     if(!haveFS && !configOnSD)
         return;
@@ -1424,7 +1368,7 @@ void saveRemoteAllowed()
     buf[1] = 0;
     json["Remote"] = (const char *)buf;
 
-    writeJSONCfgFile(json, raCfgName, configOnSD, "sRA");
+    writeJSONCfgFile(json, raCfgName, configOnSD);
 }
 #endif
 
@@ -1445,8 +1389,7 @@ bool loadMusFoldNum()
         File configFile = SD.open(musCfgName, "r");
         if(configFile) {
             DECLARE_S_JSON(512,json);
-            //StaticJsonDocument<512> json;
-            if(!readJSONCfgFile(json, configFile, "lMF")) {
+            if(!readJSONCfgFile(json, configFile)) {
                 if(!CopyCheckValidNumParm(json["folder"], temp, sizeof(temp), 0, 9, 0)) {
                     musFolderNum = atoi(temp);
                     writedefault = false;
@@ -1467,9 +1410,7 @@ bool loadMusFoldNum()
 
 void saveMusFoldNum()
 {
-    const char *funcName = "sMF";
     DECLARE_S_JSON(512,json);
-    //StaticJsonDocument<512> json;
     char buf[4];
 
     if(!haveSD)
@@ -1478,7 +1419,7 @@ void saveMusFoldNum()
     sprintf(buf, "%1d", musFolderNum);
     json["folder"] = (const char *)buf;
 
-    writeJSONCfgFile(json, musCfgName, true, funcName);
+    writeJSONCfgFile(json, musCfgName, true);
 }
 
 /*
@@ -1501,8 +1442,8 @@ bool loadIpSettings()
         if(configFile) {
 
             DECLARE_S_JSON(512,json);
-            //StaticJsonDocument<512> json;
-            DeserializationError error = readJSONCfgFile(json, configFile, "lIp");
+
+            DeserializationError error = readJSONCfgFile(json, configFile);
 
             if(!error) {
 
@@ -1560,7 +1501,6 @@ static bool CopyIPParm(const char *json, char *text, uint8_t psize)
 void writeIpSettings()
 {
     DECLARE_S_JSON(512,json);
-    //StaticJsonDocument<512> json;
 
     if(!haveFS && !FlashROMode)
         return;
@@ -1573,7 +1513,7 @@ void writeIpSettings()
     json["Netmask"]   = (const char *)ipsettings.netmask;
     json["DNS"]       = (const char *)ipsettings.dns;
 
-    writeJSONCfgFile(json, ipCfgName, FlashROMode, "wIp");
+    writeJSONCfgFile(json, ipCfgName, FlashROMode);
 }
 
 void deleteIpSettings()
@@ -1707,7 +1647,9 @@ static bool dfile_open(File &file, const char *fn, const char *md)
 
 static void cfc(File& sfile, int& haveErr, int& haveWriteErr)
 {
+    #ifdef TC_DBG
     const char *funcName = "cfc";
+    #endif
     uint8_t buf1[1+32+4];
     uint8_t buf2[1024];
     File dfile;
@@ -1736,7 +1678,7 @@ static void cfc(File& sfile, int& haveErr, int& haveWriteErr)
     } else {
         haveErr++;
         haveWriteErr++;
-        Serial.printf("%s: Error opening destination file: %s\n", funcName, buf1);
+        Serial.printf("Error opening destination file: %s\n", buf1);
     }
 }
 
@@ -1789,6 +1731,23 @@ void formatFlashFS()
  * changed "save to SD"-option in CP
  * Esp is rebooted afterwards!
  */
+
+static void writeAllSecSettings()
+{
+    saveBrightness(false);
+    saveAutoInterval(false);
+    saveCurVolume(false);
+    saveAlarm();
+    saveReminder();
+    saveCarMode();
+    #ifdef HAVE_STALE_PRESENT
+    if(stalePresent) {
+        saveStaleTime((void *)&stalePresentTime[0], stalePresent);
+    }
+    #endif
+    saveDisplayData();
+}
+
 void copySettings()
 {       
     if(!haveSD || !haveFS) 
@@ -1800,18 +1759,7 @@ void copySettings()
         #ifdef TC_DBG
         Serial.println(F("copySettings: Copying secondary settings to other medium"));
         #endif
-        saveBrightness(false);
-        saveAutoInterval(false);
-        saveCurVolume(false);
-        saveAlarm();
-        saveReminder();
-        saveCarMode();
-        #ifdef HAVE_STALE_PRESENT
-        if(stalePresent) {
-            saveStaleTime((void *)&stalePresentTime[0], stalePresent);
-        }
-        #endif
-        saveDisplayData();
+        writeAllSecSettings();
     }
 
     configOnSD = !configOnSD;
@@ -1839,19 +1787,8 @@ void rewriteSecondarySettings()
     // regardless of SD-option
     configOnSD = false;
 
-    saveBrightness(false);
-    saveAutoInterval(false);
-    saveCurVolume(false);
-    saveAlarm();
-    saveReminder();
-    saveCarMode();
-    #ifdef HAVE_STALE_PRESENT
-    if(stalePresent) {
-        saveStaleTime((void *)&stalePresentTime[0], stalePresent);
-    }
-    #endif
-    saveDisplayData();
-    
+    writeAllSecSettings();
+
     configOnSD = oldconfigOnSD;
     setupDisplayConfigOnSD();
 
@@ -1886,14 +1823,14 @@ static void saveDisplayData()
 /*
  * Helpers for JSON config files
  */
-static DeserializationError readJSONCfgFile(JsonDocument& json, File& configFile, const char *funcName)
+static DeserializationError readJSONCfgFile(JsonDocument& json, File& configFile)
 {
     const char *buf = NULL;
     size_t bufSize = configFile.size();
     DeserializationError ret;
 
     if(!(buf = (const char *)malloc(bufSize + 1))) {
-        Serial.printf("%s: Buffer allocation failed (%d)\n", funcName, bufSize);
+        Serial.printf("rJSON: malloc failed (%d)\n", bufSize);
         return DeserializationError::NoMemory;
     }
 
@@ -1912,14 +1849,14 @@ static DeserializationError readJSONCfgFile(JsonDocument& json, File& configFile
     return ret;
 }
 
-static bool writeJSONCfgFile(const JsonDocument& json, const char *fn, bool useSD, const char *funcName)
+static bool writeJSONCfgFile(const JsonDocument& json, const char *fn, bool useSD)
 {
     char *buf;
     size_t bufSize = measureJson(json);
     bool success = false;
 
     if(!(buf = (char *)malloc(bufSize + 1))) {
-        Serial.printf("%s: Buffer allocation failed (%d)\n", funcName, bufSize);
+        Serial.printf("wJSON: malloc failed (%d) (%s)\n", bufSize, fn);
         return false;
     }
 
@@ -1940,7 +1877,7 @@ static bool writeJSONCfgFile(const JsonDocument& json, const char *fn, bool useS
     free(buf);
 
     if(!success) {
-        Serial.printf("%s: %s\n", funcName, failFileWrite);
+        Serial.printf("wJSON: %s - %s\n", fn, failFileWrite);
     }
 
     return success;

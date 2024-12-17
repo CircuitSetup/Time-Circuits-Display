@@ -1114,7 +1114,9 @@ static bool mp_renameFilesInDir(bool isSetup)
 #ifdef HAVE_GETNEXTFILENAME
     bool isDir;
 #endif
+    #if defined(TC_DBG) || defined(TC_DBG_MP)
     const char *funcName = "MusicPlayer/Renamer: ";
+    #endif
 
     headLineShown = false;
     blinker = true;

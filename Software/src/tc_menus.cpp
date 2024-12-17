@@ -2048,11 +2048,29 @@ static void doShowNetInfo()
 /*
  * Show BTTFN network clients ##################################
  */
+
+static bool bttfnValChar(char *s, int i)
+{
+    char a = s[i];
+
+    if(a == '-') return true;
+    if(a < '0') return false;
+    if(a > '9' && a < 'A') return false;
+    if(a <= 'Z') return true;
+    if(a >= 'a' && a <= 'z') {
+        s[i] &= ~0x20;
+        return true;
+    }
+    return false; 
+}
+
 static void displayClient(int numCli, int number)
 {
     uint8_t *ip;
     char *id;
     uint8_t type;
+    char idbuf[16];
+    const char *tpArr[6] = { "[FLUX]", "[SID]", "[GAUGES]", "[VSR]", "[AUX]", "[REMOTE]" };
     
     if(!numCli) {
         dt_showTextDirect("NO CLIENTS");
@@ -2064,7 +2082,33 @@ static void displayClient(int numCli, int number)
     if(number >= numCli) number = numCli - 1;
 
     if(bttfnGetClientInfo(number, &id, &ip, &type)) {
-        dt_showTextDirect(id);
+       
+        bool badName = false;
+        if(!*id) {
+            badName = true;
+        } else {
+            for(int j = 0; j < 12; j++) {
+                if(!id[j]) break;
+                if(!bttfnValChar(id, j)) {
+                    badName = true;
+                    break;
+                }
+            }
+        }
+
+        if(badName) {
+            if(type >= 1 && type <= 6) {
+                strcpy(idbuf, tpArr[type-1]);
+            } else {
+                strcpy(idbuf, "[UNKNOWN]");
+            }
+        } else {
+            strncpy(idbuf, id, 12);
+            idbuf[12] = 0;
+        }
+      
+        dt_showTextDirect(idbuf);
+        
         presentTime.showHalfIPDirect(ip[0], ip[1], CDT_CLEAR);
         departedTime.showHalfIPDirect(ip[2], ip[3], CDT_CLEAR);
         pt_on();
@@ -2088,8 +2132,8 @@ void doShowBTTFNInfo()
 
     oldNumCli = numCli;
 
+    dt_showTextDirect("");
     dt_on();
-
     displayClient(numCli, number);
 
     isEnterKeyHeld = false;

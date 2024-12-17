@@ -584,9 +584,14 @@ void speedDisplay::setSpeed(int8_t speedNum)
 
     _speed = speedNum;
 
+    #ifndef GPS_DISPLAY_DASHES
+    if(speedNum < 0) speedNum = 0;
+    #else
     if(speedNum < 0) {
         b1 = b2 = *(_fontXSeg + 37);
-    } else if(speedNum > 99) {
+    } else 
+    #endif
+           if(speedNum > 99) {
         b1 = *(_fontXSeg + ('H' - 'A' + 10));
         b2 = *(_fontXSeg + ('I' - 'A' + 10));
     } else {

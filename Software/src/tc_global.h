@@ -25,11 +25,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION "V3.1.1"          // 13 chars max
+#define TC_VERSION "V3.2.000"         // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "OCT232024"  // 13 chars max
+#define TC_VERSION_EXTRA "NOV072024"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "10232024"   // 12 chars max
+#define TC_VERSION_EXTRA "11072024"   // 12 chars max
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -69,6 +69,9 @@
 // Uncomment to enable the fake-0 on CircuitSetup's speedo; is not usable
 // as a full third digit, just displays "0" when speed to be displayed
 //#define SP_CS_0ON
+// Uncomment to have the Speedo display "--" when there is no GPS fix.
+// When commented, it will display 0.
+//#define GPS_DISPLAY_DASHES
 #endif
 
 // Uncomment for rotary encoder support
@@ -82,7 +85,7 @@
 // A secondary rotary encoder is used for audio volume.
 //#define TC_HAVE_RE
 
-// Uncomment for Remote support
+// Uncomment for Remote control support
 // "Remote" is a modified Futaba remote control with CS/A10001986 control board
 // and the A10001986 "remote" firmware.
 //#define TC_HAVE_REMOTE
@@ -124,13 +127,17 @@
 // The defined pin is set HIGH on a time travel, and LOW upon re-entry from 
 // a time travel. See tc_time.c for a timing diagram.
 // Uncomment to include support for ETTO, see below for pin number
-// This is also needed if MQTT or BTTFN is used to trigger external props.
+// This is also needed if MQTT or BTTFN is used to trigger other props.
 #define EXTERNAL_TIMETRAVEL_OUT
 
 // Uncomment for HomeAssistant MQTT protocol support
 #define TC_HAVEMQTT
 
-// Uncomment for bttfn discover (multicast)
+// Uncomment for bttfn discover (multicast) and notification broadcast.
+// This is REQUIRED for operating a Futaba remote control, and very
+// useful for other props' quicker speed updates. Supported by the 
+// following firmwares: 
+// Flux >= 1.60, SID >= 1.40, DG >= 1.10, VSR >= 1.10, Remote >= 0.90
 #define TC_BTTFN_MC
 
 // Uncomment to include Exhibition mode
