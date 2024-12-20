@@ -44,6 +44,26 @@
  */
 
 /*  Changelog
+ *  2024/11/15 (A10001986)
+ *    - Set version number to 3.2.000, in order define a lower limit for Remote
+ *      compatibility. No changes.
+ *  2024/11/07 (A10001986)
+ *    - GPS: Display "0" when there is no fix. Old behavior (--) can be compile-time
+ *      configured. Use case: Indoor presentation....
+ *  2024/10/27 (A10001986)
+ *    - BTTFN: Do regular speed broadcasts every ~3 secs even if speed didn't change.
+ *    - BTTFN: Speed from RotEnc only valid while fake power is on
+ *  2024/10/26 (A10001986)
+ *    - BTTFN: Use multicast for TCD's notifications, instead of sending out
+ *      several packets to individual clients. Only used if all connected clients
+ *      support that.
+ *    - BTTFN: Add "speed broadcast" (only sent if at least one client supports
+ *      this); replace specific NOT_REM_SPD packets by this broadcast. (This means
+ *      that Futaba "remote" firmwares <0.90 won't work correctly anymore. Get your
+ *      update here: https://remote.out-a-ti.me)
+ *  2024/10/24 (A10001986)
+ *    - Remote: Transmit start of P0 at speed = 0 as well (as opposed to
+ *      start transmitting after first increase).
  *  2024/10/23 (A10001986)
  *    - Speedo/acceleration: Implement option to use either real-life figures
  *      (as before), or movie-like figures (matching the Futaba Remote's times).
