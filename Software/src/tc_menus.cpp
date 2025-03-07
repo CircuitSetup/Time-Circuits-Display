@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -84,6 +84,7 @@
  *     - show network information ("NET-WORK"),
  *     - enter dates/times for the three displays/set built-in RTC,
  *     - show currently measured data from connected sensors ("SENSORS"),
+ *     - show currently registered BTTF clients ("BTTF CLIENTS"),
  *     - quit the menu ("END").
  *
  * Pressing ENTER cycles through the list, holding ENTER selects an item.

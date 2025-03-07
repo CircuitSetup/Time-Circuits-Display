@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -66,6 +66,10 @@
 #include <math.h>
 #include "speeddisplay.h"
 #include <Wire.h>
+
+// Speedo displays "--" for NO_FIX_DASHES ms if GPS fix is
+// lost, afterwards it will display "00.".
+#define NO_FIX_DASHES 1000*60
 
 // The segments' wiring to buffer bits
 // This reflects the actual hardware wiring
@@ -578,32 +582,39 @@ void speedDisplay::setText(const char *text)
 // (including current dot01 setting; colon is cleared and ignored)
 void speedDisplay::setSpeed(int8_t speedNum)
 {
-    uint16_t b1, b2;
+    unsigned long b1 = 0, b2 = 0; 
+    uint8_t b3 = 0b00111111;
+    unsigned long now = millis();
     
     clearBuf();
 
     _speed = speedNum;
 
-    #ifndef GPS_DISPLAY_DASHES
-    if(speedNum < 0) speedNum = 0;
-    #else
     if(speedNum < 0) {
-        b1 = b2 = *(_fontXSeg + 37);
-    } else 
-    #endif
-           if(speedNum > 99) {
-        b1 = *(_fontXSeg + ('H' - 'A' + 10));
-        b2 = *(_fontXSeg + ('I' - 'A' + 10));
-    } else {
-        b1 = *(_fontXSeg + (speedNum / 10));
-        b2 = *(_fontXSeg + (speedNum % 10));
-        #ifdef SP_CS_0ON
-        if(_dispType == SP_CIRCSETUP) {
-            // Hack to display "0" after dot
-            _displayBuffer[2] = 0b00111111;
+        if((_lastPosSpd > 3) && (now - _posSpdNow < NO_FIX_DASHES)) {
+            b1 = b2 = 37;
+            b3 = 0;
         }
-        #endif
+    } else {
+        _posSpdNow = now;
+        _lastPosSpd = speedNum;
+        if(speedNum > 99) {
+            b1 = 'H' - 'A' + 10;
+            b2 = 'I' - 'A' + 10;
+            b3 = 0;
+        } else {
+            b1 = speedNum / 10;
+            b2 = speedNum % 10;
+        }
     }
+    b1 = *(_fontXSeg + b1);
+    b2 = *(_fontXSeg + b2);
+    #ifdef SP_CS_0ON
+    if(_dispType == SP_CIRCSETUP) {
+        // Hack to display "0" after dot
+        _displayBuffer[2] = b3;
+    }
+    #endif
 
     _displayBuffer[_speed_pos10] |= (b1 << _dig10_shift);
     _displayBuffer[_speed_pos01] |= (b2 << _dig01_shift);

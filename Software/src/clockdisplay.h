@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -146,6 +146,8 @@ class clockDisplay {
         const char* getMonthString(uint8_t month);
 
         int16_t  getYearOffset();
+
+        void getCompressed(uint8_t *buf, uint8_t& over);
 
         void showMonthDirect(int monthNum, uint16_t dflags = 0);
         void showDayDirect(int dayNum, uint16_t dflags = 0);

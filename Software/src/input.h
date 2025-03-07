@@ -1,19 +1,24 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
  * Keypad_I2C Class, TCButton Class: I2C-Keypad and Button handling
  * 
  * TCRotEnc: Rotary Encoder handling:
- * Supports Adafruit 4991, DuPPA I2CEncoder 2.1, DFRobot Gravity 360
- * DuPPA I2CEncoder 2.1 must be set to i2c address 0x01 (A0 closed).
+ * Supports Adafruit 4991, DuPPA I2CEncoder 2.1, DFRobot Gravity 360.
+ * For Speed, the encoders must be set to their default i2c address
+ * (DuPPA I2CEncoder 2.1 must be set to i2c address 0x01 (A0 closed)).
+ * For Volume, the encoders must be configured as follows:
+ * - Ada4991: A0 closed (i2c address 0x37)
+ * - DFRobot Gravity 360: SW1 off, SW2 on (i2c address 0x55)
+ * - DuPPA I2CEncoder 2.1: A0 and A1 closed (i2c address 0x03)
  *
  * Keypad part inspired by "Keypad" library by M. Stanley & A. Brevig
  * Fractions of this code are customized, minimized derivates of parts 
- * of OneButton library by Matthias Hertel.
+ * of the OneButton library by Matthias Hertel.
  * -------------------------------------------------------------------
  * License of Keypad_I2C class: MIT NON-AI
  * 
@@ -183,7 +188,7 @@ typedef enum {
 class TCButton {
   
     public:
-        TCButton(const int pin, const boolean activeLow = true, const bool pullupActive = true);
+        TCButton(const int pin, const bool activeLow = true, const bool pullupActive = true);
       
         void setTiming(const int debounceDur, const int pressDur, const int lPressDur);
       

@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -613,6 +613,15 @@ int16_t clockDisplay::getYearOffset()
     return _yearoffset;
 }
 
+void clockDisplay::getCompressed(uint8_t *buf, uint8_t& over)
+{
+    
+    buf[0] = (_year << 2) | (_month >> 2);
+    buf[1] = (_year >> 6);
+    buf[2] = (_month << 6)  | (_day << 1) | (_hour >> 4);
+    buf[3] = (_hour << 4) | (_minute >> 2);
+    over |= _minute & 0x03;
+}
 
 // Put data directly on display (bypass buffer) --------------------------------
 

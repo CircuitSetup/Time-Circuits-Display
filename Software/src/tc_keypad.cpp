@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -111,6 +111,12 @@
 #define EEXSP4 118949255
 #define EEXSP5 1753125
 #endif
+
+// BTTFN keystates
+enum {
+    BTTFN_KP_KS_PRESSED,
+    BTTFN_KP_KS_HOLD,
+};
 
 static const char keys[4*3] = {
      '1', '2', '3',
@@ -453,6 +459,38 @@ static uint8_t read2digs(uint8_t idx)
 {
    return ((dateBuffer[idx] - '0') * 10) + (dateBuffer[idx+1] - '0');
 }
+
+#ifdef TC_HAVE_REMOTE
+void injectKeypadKey(char key, int kaction)
+{
+    if(menuActive) return;
+    
+    if(key == 'E') {
+        switch(kaction) {
+        case BTTFN_KP_KS_PRESSED:
+            isEnterKeyPressed = true;
+            isEnterKeyHeld = false;
+            break;
+        case BTTFN_KP_KS_HOLD:
+            //isEnterKeyPressed = false;    // No, we don't enter the keypad menu remotely.
+            //isEnterKeyHeld = true;
+            break;
+        }
+    } else if(key >= '0' && key <= '9') {
+        switch(kaction) {
+        case BTTFN_KP_KS_PRESSED:
+            keypadEvent(key, TCKS_PRESSED);
+            keypadEvent(key, TCKS_RELEASED);
+            break;
+        case BTTFN_KP_KS_HOLD:
+            keypadEvent(key, TCKS_PRESSED);
+            keypadEvent(key, TCKS_HOLD);
+            keypadEvent(key, TCKS_RELEASED);
+            break;
+        }
+    }
+}
+#endif
 
 /*
  * keypad_loop()
@@ -888,6 +926,15 @@ void keypad_loop()
                     }
                     validEntry = true;
                     break;
+                case 994:
+                case 995:
+                    rcModeState = remoteKPAllowed;
+                    remoteKPAllowed = (code == 995);
+                    if(rcModeState != remoteKPAllowed) {
+                        saveRemoteAllowed();
+                    }
+                    validEntry = true;
+                    break;
                 #endif
                 case 998:
                     if(timetravelPersistent) {
@@ -1128,11 +1175,13 @@ void keypad_loop()
 
                 stalePresentTime[0].year = ((int)read2digs(6) * 100) + read2digs(8);
 
-                if(temp1 < 1)  temp1 = 1;
-                if(temp1 > 12) temp1 = 12;
+                if(temp1 < 1) temp1 = 1;
+                else if(temp1 > 12) temp1 = 12;
                 if(temp2 < 1)  temp2 = 1;
-                int temp3 = daysInMonth(temp1, stalePresentTime[0].year);
-                if(temp2 > temp3) temp2 = temp3;
+                else {
+                    int temp3 = daysInMonth(temp1, stalePresentTime[0].year);
+                    if(temp2 > temp3) temp2 = temp3;
+                }
                 #ifdef TC_JULIAN_CAL
                 correctNonExistingDate(stalePresentTime[0].year, temp1, temp2);
                 #endif
@@ -1141,12 +1190,12 @@ void keypad_loop()
                 
                 temp1 = read2digs(10);
                 if(temp1 < 0) temp1 = 0;
-                if(temp1 > 23) temp1 = 23;
+                else if(temp1 > 23) temp1 = 23;
                 stalePresentTime[0].hour = temp1;
                 
                 temp1  = read2digs(12);
                 if(temp1 < 0) temp1 = 0;
-                if(temp1 > 59) temp1 = 59;
+                else if(temp1 > 59) temp1 = 59;
                 stalePresentTime[0].minute = temp1;
 
                 memcpy((void *)&stalePresentTime[1], (void *)&stalePresentTime[0], sizeof(dateStruct));
@@ -1197,12 +1246,12 @@ void keypad_loop()
                 }
 
                 // Check month
-                if (_setMonth < 1)  _setMonth = 1;
-                if (_setMonth > 12) _setMonth = 12;
+                if(_setMonth < 1) _setMonth = 1;
+                else if(_setMonth > 12) _setMonth = 12;
 
                 // Check day
-                if(_setDay < 1)     _setDay = 1;
-                if(_setDay > daysInMonth(_setMonth, _setYear)) {
+                if(_setDay < 1) _setDay = 1;
+                else if(_setDay > daysInMonth(_setMonth, _setYear)) {
                     // set to max day in that month
                     _setDay = daysInMonth(_setMonth, _setYear); 
                 }
@@ -1693,7 +1742,7 @@ int toggleNightMode()
 }
 
 /*
- * LEDs (TCD control board 1.3)
+ * LEDs (TCD control board 1.3+)
  */
  
 void leds_on()

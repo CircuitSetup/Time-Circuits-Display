@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -64,7 +64,7 @@
 #include "tc_audio.h"
 #include "tc_wifi.h"
 #include "tc_settings.h"
-#if defined(FAKE_POWER_ON) || defined(TC_HAVE_RE)
+#if defined(FAKE_POWER_ON) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
 #include "input.h"
 #endif
 
@@ -253,6 +253,7 @@ static uint8_t       bttfnOldRemCurSpd = 255;
 static uint8_t       bttfnRemCurSpdOld = 255;
 static unsigned long lastRemSpdUpd = 0, remSpdCatchUpDelay = 80;
 bool                 remoteAllowed = false;
+bool                 remoteKPAllowed = false;
 static int           remoteWasMaster = 0;
 static bool          haveRemoteOnSound = false;
 static bool          haveRemoteOffSound = false;
@@ -829,6 +830,9 @@ bool bttfnHaveClients = false;
 #define BTTFN_REMCMD_PING       1   // Implicit "Register"/keep-alive
 #define BTTFN_REMCMD_BYE        2   // Forced unregister
 #define BTTFN_REMCMD_COMBINED   3   // All switches & speed combined
+#define BTTFN_REMCMD_KP_PING    4
+#define BTTFN_REMCMD_KP_KEY     5
+#define BTTFN_REMCMD_KP_BYE     6
 #define BTTFN_SSRC_NONE         0
 #define BTTFN_SSRC_GPS          1
 #define BTTFN_SSRC_ROTENC       2
@@ -872,7 +876,9 @@ static unsigned long bttfnLastSpeedNot = 0;
 #endif
 #ifdef TC_HAVE_REMOTE
 static uint32_t      registeredRemID  = 0;
+static uint32_t      registeredRemKPID  = 0;
 static uint32_t      bttfnLastSeq_co  = 0;
+static uint32_t      bttfnLastSeq_ky  = 0;
 #ifdef TC_HAVE_RE
 static bool          bttfnBUseRotEnc;
 #ifdef TC_HAVESPEEDO
@@ -4190,17 +4196,18 @@ bool isRcMode()
 static void updateTemperature(bool force)
 {
     unsigned long tui = tempUpdInt;
+    unsigned long now = millis();
 
     if(!useTemp)
         return;
 
-    if(tempSens.lastTempNan() && (millis() - powerupMillis < 15*1000)) {
+    if(tempSens.lastTempNan() && (now - powerupMillis < 15*1000)) {
         tui = 5 * 1000;
     }
         
-    if(force || (millis() - tempReadNow >= tui)) {
+    if(force || (now - tempReadNow >= tui)) {
         tempSens.readTemp(tempUnit);
-        tempReadNow = millis();
+        tempReadNow = now;
     }
 }
 #endif
@@ -6047,7 +6054,7 @@ static bool bttfnipcmp(uint8_t *ip1, uint8_t *ip2)
     return false;
 }
 
-static void storeBTTFNClient(uint8_t *ip, uint8_t *buf, uint8_t type, uint8_t MCSupport)
+static uint32_t storeBTTFNClient(uint8_t *ip, uint8_t *buf, uint8_t type, uint8_t MCSupport)
 {
     int     i;
     uint8_t *pip;
@@ -6063,7 +6070,7 @@ static void storeBTTFNClient(uint8_t *ip, uint8_t *buf, uint8_t type, uint8_t MC
 
     // Bail if no slot available
     if(i == BTTFN_MAX_CLIENTS)
-        return;
+        return 0;
 
     bttfnHaveClients = true;
 
@@ -6083,15 +6090,20 @@ static void storeBTTFNClient(uint8_t *ip, uint8_t *buf, uint8_t type, uint8_t MC
     }
     #endif
 
+    bttfnClientType[i] = type;
+    
     #ifdef TC_HAVE_REMOTE
-    if((bttfnClientType[i] = type) == BTTFN_TYPE_REMOTE) {
-        bttfnRemID[i] = GET32(buf, 35);
-    } else {
-        bttfnRemID[i] = 0;
-    }
+    //bttfnRemID[i] = GET32(buf, 35);
+    memcpy(&bttfnRemID[i], &buf[35], 4);
     #endif
     
     bttfnClientALIVE[i] = millis();
+
+    #ifdef TC_HAVE_REMOTE
+    return bttfnRemID[i];
+    #else
+    return 0;
+    #endif
 }
 
 static void bttfn_expire_clients()
@@ -6123,6 +6135,12 @@ static void bttfn_expire_clients()
                         registeredRemID = 0;
                         bttfnMakeRemoteSpeedMaster(false);
                     }
+                } else if(bttfnRemID[i] == registeredRemKPID) {
+                    #ifdef TC_DBG
+                    Serial.printf("Expiring remote KP id: %d %d\n", bttfnRemID[i], registeredRemKPID);
+                    #endif
+                    registeredRemKPID = 0;
+                    bttfnLastSeq_ky = 0;    // seq cnt starts at 1 after every registration
                 }
                 #endif
                 numClients--;
@@ -6352,6 +6370,7 @@ static void bttfn_evalremotecommand(uint32_t seq, uint8_t cmd, uint8_t p1, uint8
         break;
         
     case BTTFN_REMCMD_PING:
+    case BTTFN_REMCMD_KP_PING:
         // Do nothing, command only for registering or keep-alive
         break;
 
@@ -6363,6 +6382,26 @@ static void bttfn_evalremotecommand(uint32_t seq, uint8_t cmd, uint8_t p1, uint8
         registeredRemID = 0;
         #ifdef TC_DBG
         Serial.printf("Remote unregistered)\n");
+        #endif
+        break;
+
+    case BTTFN_REMCMD_KP_KEY:
+        // Skip outdated packets
+        if(seq == 1 || seq > bttfnLastSeq_ky) {
+            injectKeypadKey((char)p1, (int)p2);
+        } else {
+            #ifdef TC_DBG
+            Serial.printf("Command out of sequence seq:%d last:%d)\n", seq, bttfnLastSeq_ky);
+            #endif
+        }
+        bttfnLastSeq_ky = seq;
+        break;
+
+    case BTTFN_REMCMD_KP_BYE:
+        bttfnLastSeq_ky = 0;    // seq cnt starts at 1 after every registration
+        registeredRemKPID = 0;
+        #ifdef TC_DBG
+        Serial.printf("Remote KP unregistered)\n");
         #endif
         break;
 
@@ -6466,6 +6505,7 @@ static bool bttfn_handlePacket(uint8_t *buf, bool isMC)
     uint8_t tip[4] = { 0 };
     uint8_t a = 0, ctype = 0, parm = 0, supportsMC = 0;
     int16_t temp = 0;
+    uint32_t receivedRemID;
     
     // Check header
     if(memcmp(buf, BTTFUDPHD, 4))
@@ -6510,7 +6550,7 @@ static bool bttfn_handlePacket(uint8_t *buf, bool isMC)
 
     ctype = (uint8_t)buf[10+13];
     
-    storeBTTFNClient(tip, buf, ctype, supportsMC);
+    receivedRemID = storeBTTFNClient(tip, buf, ctype, supportsMC);
 
     // Remote time travel?
     if(!isMC && (buf[5] & 0x80)) {
@@ -6531,48 +6571,50 @@ static bool bttfn_handlePacket(uint8_t *buf, bool isMC)
     }
 
     // Retrieve (optional) request parameter
+    // 0-3: Device type for IP lookup
+    // 4-6: For future use
+    // 7: Request displayed destination, present, departed times with date/time request
     parm = buf[24];
 
-    // Eval query and build reply into buf
+    // Check if we received a remote command
     #ifdef TC_HAVE_REMOTE
-    if(buf[25] && ctype == BTTFN_TYPE_REMOTE) {
+    if(buf[25]) {
 
-        uint32_t receivedRemID = GET32(buf, 35);
-        #ifdef TC_DBG
-        bool remIDempty = !registeredRemID;
-        #endif
-
-        if( remoteAllowed && 
-            (!registeredRemID || registeredRemID == receivedRemID) ) {
-
-            if(!((registeredRemID = receivedRemID))) {
-                #ifdef TC_DBG
-                Serial.printf("Remote ID %d rejected\n", registeredRemID);
-                #endif
+        if(!receivedRemID) return false;
+      
+        if(ctype == BTTFN_TYPE_REMOTE) {
+            if(!remoteAllowed) return false;
+            if(!registeredRemID) {
+                registeredRemID = receivedRemID;
+            } else if(registeredRemID != receivedRemID) {
                 return false;
             }
-
-            #ifdef TC_DBG
-            if(remIDempty) Serial.printf("Remote ID %d registered\n", registeredRemID);
-            #endif
-
-            // buf[6]-buf[9]: Sequence of packets: 
-            // Remote sends separate seq counters for each command type.
-            // If seq is < previous, packet is skipped.
-            uint32_t seq = GET32(buf, 6);
+        } else if(remoteKPAllowed) {
+            if(!registeredRemKPID) {
+                registeredRemKPID = receivedRemID;
+            } else if(registeredRemKPID != receivedRemID) {
+                return false;
+            }
+        } else
+            return false;
     
-            // Eval command from remote: 
-            // 25: Command code (0=no command, used for polling like other clients)
-            // 26, 27: parameters
-            bttfn_evalremotecommand(seq, buf[25], buf[26], buf[27]);
+        // buf[6]-buf[9]: Sequence of packets: 
+        // Remote sends separate seq counters for each command type.
+        // If seq is < previous, packet is skipped.
+        uint32_t seq = GET32(buf, 6);
 
-        }
+        // Eval command from remote: 
+        // 25: Command code
+        // 26, 27: parameters
+        bttfn_evalremotecommand(seq, buf[25], buf[26], buf[27]);
 
         // Send no response
         return false;
         
     } else {
     #endif
+
+        // Eval query and build reply into buf
 
         // Add response marker to version byte
         buf[4] |= 0x80;
@@ -6583,6 +6625,15 @@ static bool bttfn_handlePacket(uint8_t *buf, bool isMC)
         if(buf[5] & 0x01) {    // date/time
             memcpy(&buf[10], bttfnDateBuf, sizeof(bttfnDateBuf));
             if(presentTime.get1224()) buf[17] |= 0x80;
+            if(parm & 0x80) {
+                uint8_t ov = 0;
+                destinationTime.getCompressed(&buf[36], ov);
+                ov <<= 2;
+                presentTime.getCompressed(&buf[32], ov);
+                ov <<= 2;
+                departedTime.getCompressed(&buf[40], ov);
+                buf[44] = ov;
+            }
         }
         if(buf[5] & 0x02) {    // speed  (-1 if unavailable)
             temp = -1;         // (Client is supposed to support MC-notifications instead)
@@ -6651,8 +6702,9 @@ static bool bttfn_handlePacket(uint8_t *buf, bool isMC)
             #endif
             #ifdef TC_HAVE_REMOTE
             if(remoteAllowed)              a |= 0x04; // Remote controlling allowed (1) or disabled (0)
+            if(remoteKPAllowed)            a |= 0x08; // Remote Keypad controlling allowed(1) or disabled(0)
             #endif
-            // bits 3+4 for future use
+            // bit 4 for future use
             // bit 5 is for "speed from remote", see above
             // bit 6 used for temp unit, see above
             // bit 7 used for "speed from RotEnc", see above
@@ -6660,6 +6712,7 @@ static bool bttfn_handlePacket(uint8_t *buf, bool isMC)
         }
         if(buf[5] & 0x20) {    // Request IP of given device type
             buf[5] &= ~0x20;
+            parm &= 0x0f;
             if(parm) {
                 for(int i = 0; i < BTTFN_MAX_CLIENTS; i++) {
                     if(parm == bttfnClientType[i]) {
@@ -6674,12 +6727,12 @@ static bool bttfn_handlePacket(uint8_t *buf, bool isMC)
         }
         if(buf[5] & 0x40) {    // Request TCD Capabilities
             #ifdef TC_BTTFN_MC
-            a = 0x01;                  // Support multicast notifications
+            a = 0x01 | 0x04 | 0x08;  // Support MC notifications | Can send dest/pres/dep times | Remote KP support
             #else
-            a = 0;
+            a = 0x04 | 0x08;         // Can send dest/pres/dep times | Remote KP support
             #endif
             #ifdef TC_HAVESPEEDO
-            if(useSpeedo) a |= 0x02;   // TCD has speedo connected
+            if(useSpeedo) a |= 0x02; // TCD has speedo connected
             #endif
             buf[31] = a;
         }
@@ -6786,6 +6839,7 @@ static void bttfn_notify(uint8_t targetType, uint8_t event, uint16_t payload, ui
 
     #ifdef TC_BTTFN_MC
     if((!targetType && !bttfnNotAllSupportMC) || spdNot) {
+        // Send out through multicast
         tcdUDP->beginPacket(ip, BTTF_DEFAULT_LOCAL_PORT + 2);
         tcdUDP->write(BTTFUDPBuf, BTTF_PACKET_SIZE);
         tcdUDP->endPacket();

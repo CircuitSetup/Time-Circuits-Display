@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -25,11 +25,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION "V3.2.000"         // 13 chars max
+#define TC_VERSION "V3.2.003"         // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "NOV072024"  // 13 chars max
+#define TC_VERSION_EXTRA "JAN122025"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "11072024"   // 12 chars max
+#define TC_VERSION_EXTRA "01122025"   // 12 chars max
 #endif
 
 //#define TC_DBG              // debug output on Serial
@@ -63,15 +63,12 @@
 #define SP_MIN_TYPE     0
 #ifdef TC_HAVESPEEDO
 // Uncomment to keep speedo showing "00." when neither temp, nor GPS speed, 
-// nor fake speed through rotary encoder are to be displayed instead of 
+// nor fake speed through rotary encoder are to be displayed, instead of 
 // switching it off when idle.
 //#define SP_ALWAYS_ON
 // Uncomment to enable the fake-0 on CircuitSetup's speedo; is not usable
 // as a full third digit, just displays "0" when speed to be displayed
 //#define SP_CS_0ON
-// Uncomment to have the Speedo display "--" when there is no GPS fix.
-// When commented, it will display 0.
-//#define GPS_DISPLAY_DASHES
 #endif
 
 // Uncomment for rotary encoder support
@@ -87,15 +84,15 @@
 
 // Uncomment for Remote control support
 // "Remote" is a modified Futaba remote control with CS/A10001986 control board
-// and the A10001986 "remote" firmware.
+// and the A10001986 "remote" firmware. See https://remote.out-a-ti.me
 //#define TC_HAVE_REMOTE
 
 // Uncomment for support of a temperature/humidity sensor (MCP9808, BMx280, 
-// SI7021, SHT4x, TMP117, AHT20, HTU31D, MS8607) connected via i2c. Will be used 
-// for room condition mode and to display ambient temperature on speedometer  
-// display when idle (GPS speed has higher priority, ie if "Display GPS speed"
-// is checked in the Config Portal, temperature will not be shown on speedo).
-// See sensors.cpp for supported i2c slave addresses
+// SI7021, SHT4x, TMP117, AHT20, HTU31D, MS8607, HDC302x) connected via i2c. 
+// Will be used for room condition mode and to display ambient temperature on 
+// speedometer display when idle (GPS speed has higher priority, ie if "Display 
+// GPS speed" is checked in the Config Portal, temperature will not be shown on 
+// speedo). See sensors.cpp for supported i2c slave addresses
 //#define TC_HAVETEMP
 
 // Uncomment for support of a light sensor (TSL2561/2591, BH1750, VEML7700/6030
@@ -173,7 +170,7 @@
 //#define JSWITCH_1582
 
 // Uncomment if using a real GTE/TRW keypad control board
-//#define GTE_KEYPAD 
+#define GTE_KEYPAD 
 
 // Uncomment for alternate "animation" when entering a destination time
 // (Does not affect other situations where animation is shown, like time
@@ -300,12 +297,12 @@
 
 // NTP baseline data: Prolong life time of NTP and GPS
 // Set this to current year. Stop at 2036.
-#define TCEPOCH       2024
+#define TCEPOCH       2025
 // Set to SECS1970_xxxx, xxxx being current year. Stop at 2036.
-#define TCEPOCH_SECS  SECS1970_2024
+#define TCEPOCH_SECS  SECS1970_2025
 
 // Epoch for general use; increase yearly, no limit
 // Defines the minimum date considered valid
-#define TCEPOCH_GEN   2024
+#define TCEPOCH_GEN   2025
 
 #endif

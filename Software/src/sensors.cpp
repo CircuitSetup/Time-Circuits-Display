@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -311,7 +311,7 @@ void tcSensor::write8(uint16_t regno, uint8_t value)
 // Store i2c address
 tempSensor::tempSensor(int numTypes, uint8_t addrArr[])
 {
-    _numTypes = min(8, numTypes);
+    _numTypes = min(9, numTypes);
 
     for(int i = 0; i < _numTypes * 2; i++) {
         _addrArr[i] = addrArr[i];
@@ -389,8 +389,12 @@ bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long)
                 break;
             case HDC302X:
                 write16(HDC302x_DUMMY, HDC302x_READID);
-                if(read16(HDC302x_DUMMY) == 0x3000) {
-                    foundSt = true;
+                if(Wire.requestFrom(_address, (uint8_t)3) == 3) {
+                    t16 = Wire.read() << 8;
+                    t16 |= Wire.read();
+                    if(t16 == 0x3000) {
+                        foundSt = true;
+                    }
                 }
                 break;
             case AHT20:
@@ -565,11 +569,12 @@ bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long)
         write16(HDC302x_DUMMY, HDC302x_AUTO_OFF);
         (*_customDelayFunc)(2);
         // Check (and reset) power-up measurement mode
-        HDC302x_setDefault(HDC302x_PUMS, 0x00, 0x81);
+        HDC302x_setDefault(HDC302x_PUMS, 0x00, 0x00);
         // Check (and reset) offsets
         HDC302x_setDefault(HDC302x_OFFSETS, 0, 0);
         // Trigger new conversion
-        write16(HDC302x_DUMMY, HDC302x_TRIGGER);  
+        write16(HDC302x_DUMMY, HDC302x_TRIGGER);
+        _haveHum = true;
         _delayNeeded = 20;
         break;
     default:
@@ -780,7 +785,13 @@ void tempSensor::HDC302x_setDefault(uint16_t reg, uint8_t val1, uint8_t val2)
     if(Wire.requestFrom(_address, (uint8_t)3) == 3) {
         for(uint8_t i = 0; i < 3; i++) buf[i] = Wire.read();
         if(crc8(HDC302x_CRC_INIT, HDC302x_CRC_POLY, 2, buf) == buf[2]) {
+            #ifdef TC_DBG
+            Serial.printf("HDC302x: Read 0x%x\n", reg);
+            #endif
             if(buf[0] != val1 || buf[1] != val2) {
+                #ifdef TC_DBG
+                Serial.printf("HDC302x: EEPROM mismatch: 0x%x <> 0x%x, 0x%x <> 0x%x\n", buf[0], val1, buf[1], val2);
+                #endif
                 buf[0] = reg >> 8; buf[1] = reg & 0xff;
                 buf[2] = val1; buf[3] = val2;
                 buf[4] = crc8(HDC302x_CRC_INIT, HDC302x_CRC_POLY, 2, &buf[2]);
@@ -790,8 +801,20 @@ void tempSensor::HDC302x_setDefault(uint16_t reg, uint8_t val1, uint8_t val2)
                 }
                 Wire.endTransmission();
                 (*_customDelayFunc)(80);
+            } else {
+                #ifdef TC_DBG
+                Serial.printf("HDC302x: EEPROM match: 0x%x, 0x%x\n", buf[0], buf[1]);
+                #endif
             }
+        } else {
+            #ifdef TC_DBG
+            Serial.printf("HDC302x: EEPROM reading 0x%x failed CRC check\n", reg);
+            #endif
         }
+    } else {
+        #ifdef TC_DBG
+        Serial.printf("HDC302x: EEPROM reading 0x%x failed on i2c level\n", reg);
+        #endif
     }
 }
 

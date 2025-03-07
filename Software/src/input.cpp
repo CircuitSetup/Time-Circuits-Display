@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -16,7 +16,6 @@
  * - DFRobot Gravity 360: SW1 off, SW2 on (i2c address 0x55)
  * - DuPPA I2CEncoder 2.1: A0 and A1 closed (i2c address 0x03)
  * 
- *
  * Keypad part inspired by "Keypad" library by M. Stanley & A. Brevig
  * Fractions of this code are customized, minimized derivates of parts 
  * of the OneButton library by Matthias Hertel.
@@ -346,7 +345,7 @@ void Keypad_I2C::port_write(uint8_t val)
  * activeLow: Set to true when the input level is LOW when the button is pressed, Default is true.
  * pullupActive: Activate the internal pullup when available. Default is true.
  */
-TCButton::TCButton(const int pin, const boolean activeLow, const bool pullupActive)
+TCButton::TCButton(const int pin, const bool activeLow, const bool pullupActive)
 {
     _pin = pin;
 

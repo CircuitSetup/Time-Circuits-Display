@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2024 Thomas Winischhofer (A10001986)
+ * (C) 2022-2025 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -65,17 +65,17 @@ extern uint8_t musFolderNum;
 #define XMS(s) #s
 
 // Default settings
-#define DEF_PLAY_INTRO      1     // 0-1;  Default: 1 = Play intro
-#define DEF_MODE24          0     // 0-1;  Default: 0 = 12-hour-mode
-#define DEF_BEEP            0     // 0-1:  Default: 0 = annoying beep(tm) off
-#define DEF_AUTOROTTIMES    1     // 0-5;  Default: Auto-rotate every 5th minute
-#define DEF_ALARM_RTC       1     // 0-1;  Default: 1 = Alarm is RTC-based (otherwise 0 = presentTime-based)
+#define DEF_PLAY_INTRO      1     // 0: Skip intro; 1: Play intro
+#define DEF_MODE24          0     // 0: 12 hour clock; 1: 24 hour clock
+#define DEF_BEEP            0     // 0: annoying beep(tm) off, 1: on, 2: on (30 secs), 3: on (60 secs)
+#define DEF_AUTOROTTIMES    1     // Time cycling interval. 0: off, 1: 5min, 2: 10min, 3: 15min, 4: 30min, 5: 60min
+#define DEF_ALARM_RTC       1     // 0: Alarm is presentTime-based; 1: Alarm is RTC-based
 #define DEF_HOSTNAME        "timecircuits"
 #define DEF_WIFI_RETRY      3     // 1-10; Default: 3 retries
 #define DEF_WIFI_TIMEOUT    7     // 7-25; Default: 7 seconds
 #define DEF_WIFI_OFFDELAY   0     // 0/10-99; Default 0 = Never power down WiFi in STA-mode
 #define DEF_WIFI_APOFFDELAY 0     // 0/10-99; Default 0 = Never power down WiFi in AP-mode
-#define DEF_WIFI_PRETRY     1     // Default: Nightly, periodic WiFi reconnection attempts for time sync
+#define DEF_WIFI_PRETRY     1     // 1: Nightly, periodic WiFi reconnection attempts for time sync; 0: off
 #define DEF_NTP_SERVER      "pool.ntp.org"
 #define DEF_TIMEZONE        ""    // Default: UTC; Posix format
 #define DEF_BRIGHT_DEST     10    // 1-15; Default: medium brightness
@@ -84,33 +84,33 @@ extern uint8_t musFolderNum;
 #define DEF_AUTONM_PRESET   10    // Default: AutoNM disabled
 #define DEF_AUTONM_ON       0     // Default: Both 0
 #define DEF_AUTONM_OFF      0
-#define DEF_DT_OFF          1     // Default: Dest. time off in night mode
-#define DEF_PT_OFF          0     // Default: Present time dimmed in night mode
-#define DEF_LT_OFF          1     // Default: Last dep. time off in night mode
-#define DEF_FAKE_PWR        0     // 0-1;  Default: 0 = Do not use external fake "power" switch
+#define DEF_DT_OFF          1     // 1: Dest. time off in night mode; 0: dimmed
+#define DEF_PT_OFF          0     // 1: Present time off in night mode; 0: dimmed
+#define DEF_LT_OFF          1     // 1: Last dep. time off in night mode; 0: dimmed
+#define DEF_FAKE_PWR        0     // 0: Do not use external fake "power" switch, 1: Do
 #define DEF_ETT_DELAY       0     // in ms; Default 0: ETT immediately
 #define DEF_ETT_LONG        1     // [removed] 0: Ext. TT short (reentry), 1: long
 #define DEF_SPEEDO_TYPE     99    // Default display type: None
 #define DEF_SPEEDO_ACCELFIG 0     // Accel figures: 0: Movie (approximated), 1: Real-life
-#define DEF_SPEEDO_FACT     2.0   // Speedo factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
+#define DEF_SPEEDO_FACT     2.0   // Real-life acceleration factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
 #define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness for speed
-#define DEF_USE_GPS_SPEED   0     // 0: Do not show GPS speed on speedo display
-#define DEF_SPD_UPD_RATE    1     // 0:1Hz, 1:2Hz, 2:4Hz, 3:5Hz; default 2Hz
-#define DEF_DISP_TEMP       1     // 1: Display temperature (if available) on speedo
+#define DEF_USE_GPS_SPEED   0     // 0: Do not show GPS speed on speedo display; 1: Do
+#define DEF_SPD_UPD_RATE    1     // 0: 1Hz, 1: 2Hz (default), 2: 4Hz, 3: 5Hz
+#define DEF_DISP_TEMP       1     // 1: Display temperature (if available) on speedo; 0: do not (speedo off)
 #define DEF_TEMP_BRIGHT     3     // Default temperature brightness
-#define DEF_TEMP_OFF_NM     1     // Default: temperature off in night mode
-#define DEF_TEMP_UNIT       0     // Default: temperature unit Fahrenheit
+#define DEF_TEMP_OFF_NM     1     // Default: 1: temperature off in night mode; 0: dimmed
+#define DEF_TEMP_UNIT       0     // Default: 0: temperature unit Fahrenheit; 1: Celsius
 #define DEF_TEMP_OFFS       0.0   // Default: temperature offset 0.0
 #define DEF_USE_LIGHT       0     // Default: No i2c light sensor
-#define DEF_LUX_LIMIT       3     // Default Lux for night mode
-#define DEF_USE_ETTO        0     // Default: 0: No external props
-#define DEF_NO_ETTO_LEAD    0     // Default: 0: ETTO with ETTO_LEAD lead time; 1 without
-#define DEF_QUICK_GPS       0     // Default: Slow GPS updates (unless speed is being displayed)
+#define DEF_LUX_LIMIT       3     // Default Lux threshold for night mode
+#define DEF_USE_ETTO        0     // Default: 0: No external props (wired); 1: Wired props present
+#define DEF_NO_ETTO_LEAD    0     // Default: 0: ETTO with ETTO_LEAD lead time; 1: without
+#define DEF_QUICK_GPS       0     // Default: 0: Do not provide GPS speed for BTTF props; 1: Do
 #define DEF_PLAY_TT_SND     1     // Default: 1: Play time travel sounds (0: Do not; for use with external equipment)
-#define DEF_USE_LINEOUT     0     // Default: 0: Play all sound through built-in speaker; 1 Use Line out for music & time travel sound 
-#define DEF_SHUFFLE         0     // Music Player: Do not shuffle by default
-#define DEF_CFG_ON_SD       1     // Default: Save secondary settings on SD
-#define DEF_TIMES_PERS      0     // 0-1;  Default: 0 = TimeTravel not persistent
+#define DEF_USE_LINEOUT     0     // Default: 0: Play all sound through built-in speaker; 1: Use Line out for music & time travel sound 
+#define DEF_SHUFFLE         0     // Music Player: 0: Do not shuffle by default, 1: Do
+#define DEF_CFG_ON_SD       1     // Default: 1: Save secondary settings on SD, 0: Do not (use internal Flash)
+#define DEF_TIMES_PERS      0     // Default: 0: Timetravels not persistent; 1: TT persistent
 #define DEF_SD_FREQ         0     // SD/SPI frequency: Default 16MHz
 
 struct Settings {
