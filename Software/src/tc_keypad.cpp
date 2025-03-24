@@ -185,8 +185,8 @@ static int timeIndex = 0;
 
 bool menuActive = false;
 
-static bool doKey = false;
-static char keySnd[] = "/key3.mp3";   // not const
+static bool     doKey = false;
+static uint16_t preDTMFkeyplayed = 0;
 
 static unsigned long enterDelay = 0;
 
@@ -289,7 +289,7 @@ static void keypadEvent(char key, KeyState kstate)
     switch(kstate) {
     case TCKS_PRESSED:
         if(key != '#' && key != '*') {
-            play_keypad_sound(key);
+            preDTMFkeyplayed = play_keypad_sound(key);
             doKey = true;
         }
         break;
@@ -328,8 +328,7 @@ static void keypadEvent(char key, KeyState kstate)
         case '3':    // "3" held down -> play audio file "key3.mp3"
         case '6':    // "6" held down -> play audio file "key6.mp3"
             doKey = false;
-            keySnd[4] = key;
-            play_file(keySnd, PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
+            play_key(key - '0', preDTMFkeyplayed);
             break;
         case '7':    // "7" held down -> re-enable/re-connect WiFi
             doKey = false;

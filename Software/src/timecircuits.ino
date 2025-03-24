@@ -45,6 +45,11 @@
 
 /*  Changelog
  *
+ *  2025/01/15-17 (A10001986) [3.2.004]
+ *    - Optimize play_key; keyX will be stopped instead of (re)started if it is 
+ *      currently played when repeatedly triggered.
+ *    - Do not reduce volume in night mode for sound played over line-out
+ *    - Minor audio file-check optimizations
  *  2025/01/11-12 (A10001986) [3.2.003]
  *    - BTTFN: Add support for requesting currently displayed present, destination, 
  *      departed times

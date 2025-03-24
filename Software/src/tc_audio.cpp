@@ -131,17 +131,25 @@ static bool   curChkNM   = true;
 static bool   dynVol     = true;
 static int    sampleCnt  = 0;
 
+uint16_t      key_playing = 0;
+
 bool          haveLineOut = false;
 bool          useLineOut  = false;
 static bool   playLineOut = false;
+
+static char   keySnd[] = "/key3.mp3";   // not const
+static uint16_t haveKeySnd = 0;
 
 static const char *tcdrdone = "/TCD_DONE.TXT";
 bool          headLineShown = false;
 bool          blinker       = true;
 unsigned long renNow1, renNow2;
 
-static char       dtmfBuf[] = "/Dtmf-0.wav\0";    // Not const
+static char       dtmfBuf[] = "/Dtmf-0.wav";    // Not const
 static const char *hsnd     = "/hour.mp3";
+static char       shsnd[]   = "/hour-00.mp3";   // Not const
+static bool       haveHrSnd = false;
+static uint32_t   haveSpHrSnd = 0;
 
 static float  getVolume();
 #ifdef TC_HAVELINEOUT
@@ -214,7 +222,31 @@ void audio_setup()
     // MusicPlayer init
     mp_init(true);
 
+    // Check for sound files to avoid unsuccessful file-lookups later
+    
+    for(int i = 1; i < 10; i++) {
+        if(i == 8) continue;
+        keySnd[4] = '0' + i;
+        if(check_file_SD(keySnd)) {
+            haveKeySnd |= (1 << i);
+        }
+    }
+
+    haveHrSnd = check_file_SD(hsnd);
+
+    for(int i = 0; i <= 23; i++) {
+        shsnd[6] = (i / 10) + '0';
+        shsnd[7] = (i % 10) + '0';
+        if(check_file_SD(shsnd)) {
+            haveSpHrSnd |= (1 << i);
+        }
+    }
+
     audioInitDone = true;
+
+    #ifdef TC_DBG
+    Serial.printf("haveKeySnd 0x%x, haveSPHrSnd 0x%x\n", haveKeySnd, haveSpHrSnd);
+    #endif
 }
 
 /*
@@ -223,7 +255,7 @@ void audio_setup()
  */
 void audio_loop()
 {
-    float vol;
+    //float vol;
 
     if(wav->isRunning()) {
         if(!wav->loop()) {
@@ -233,14 +265,16 @@ void audio_loop()
     } else if(mp3->isRunning()) {
         if(!mp3->loop()) {
             mp3->stop();
+            key_playing = 0;
             if(mpActive) {
                 mp_next(true);
             }
-        } else {
+        } else if(dynVol) {
             sampleCnt++;
             if(sampleCnt > 1) {
-                vol = getVolume();
-                if(dynVol) out->SetGain(vol);
+                //vol = getVolume();
+                //if(dynVol) out->SetGain(vol);
+                out->SetGain(getVolume());
                 sampleCnt = 0;
             }
         }
@@ -287,24 +321,20 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
     #endif
 
     // If something is currently on, kill it
-    if(mp3->isRunning()) {
-        mp3->stop();
-    } 
-    if(wav->isRunning()) {
-        wav->stop();
-    }
+    stopAudio();
     beepRunning = false;
 
     #ifdef TC_HAVELINEOUT
     playLineOut = (haveLineOut && useLineOut && (flags & PA_LINEOUT)) ? true : false;
     setLineOut(playLineOut);
-    if(playLineOut) flags &= ~PA_DYNVOL;
+    if(playLineOut) flags &= ~(PA_DYNVOL|PA_CHECKNM);
     #else
     playLineOut = false;
     #endif
     
-    curChkNM   = (flags & PA_CHECKNM) ? true : false;
-    dynVol     = (flags & PA_DYNVOL) ? true : false;
+    curChkNM    = (flags & PA_CHECKNM) ? true : false;
+    dynVol      = (flags & PA_DYNVOL) ? true : false;
+    key_playing = flags & 0xff00;
 
     curVolFact = volumeFactor;
 
@@ -316,7 +346,6 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
     out->SetGain(getVolume());
 
     if(haveSD && ((flags & PA_ALLOWSD) || FlashROMode) && mySD0->open(audio_file)) {
-
         if(!(flags & PA_NOID3TS)) {
             id3[0] = 0;
             mySD0->read((void *)id3, 10);
@@ -330,7 +359,6 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
             mySD0->seek(pos, SEEK_SET);
         }
         mp3->begin(mySD0, out);
-                 
         #ifdef TC_DBG
         Serial.println(F("Playing from SD"));
         #endif
@@ -351,13 +379,11 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
         } else {
             wav->begin(myFS0, out);
         }
-
         #ifdef TC_DBG
         Serial.println(F("Playing from flash FS"));
         #endif
-        
     } else {
-      
+        key_playing = 0;
         #ifdef TC_DBG
         Serial.println(F("Audio file not found"));
         #endif
@@ -369,28 +395,25 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
  * Play specific sounds
  * 
  */
-void play_keypad_sound(char key)
+
+uint16_t play_keypad_sound(char key)
 {
+    uint16_t kp = key_playing;
     dtmfBuf[6] = key;
     play_file(dtmfBuf, PA_ISWAV|PA_INTSPKR|PA_CHECKNM, 0.6);
+    return kp;
 }
 
 void play_hour_sound(int hour)
 {
-    char buf[32];
-
-    if(!haveSD || mpActive) return;
+    if(mpActive) return;
     // Not even called in night mode
-    
-    sprintf(buf, "/hour-%02d.mp3", hour);
-    if(SD.exists(buf)) {
-        play_file(buf, PA_INTSPKR|PA_ALLOWSD);
-        return;
-    }
 
-    // Check for file so we do not interrupt anything
-    // if the file does not exist
-    if(SD.exists(hsnd)) {
+    if(haveSpHrSnd & (1 << hour)) {
+        shsnd[6] = (hour / 10) + '0';
+        shsnd[7] = (hour % 10) + '0';
+        play_file(shsnd, PA_INTSPKR|PA_ALLOWSD);
+    } else if(haveHrSnd) {
         play_file(hsnd, PA_INTSPKR|PA_ALLOWSD);
     }
 }
@@ -429,6 +452,29 @@ void play_beep()
     myPM->open(data_beep_wav, data_beep_wav_len);
     wav->begin(myPM, out);
     beepRunning = true;
+    key_playing = 0;
+}
+
+void play_key(int k, uint16_t preDTMFkp)
+{
+    uint16_t pa_key;
+    
+    if(!(haveKeySnd & (1 << k)))
+        return;
+
+    pa_key = (k == 9) ? 0x8000 : (1 << (7+k));
+
+    if(pa_key == preDTMFkp) {
+        return;
+    }
+    if(pa_key == key_playing) {
+        stopAudio();
+        return;
+    }
+    
+    keySnd[4] = '0' + k;
+    
+    play_file(keySnd, pa_key|PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
 }
 
 // Returns value for volume based on the position of the pot
@@ -549,6 +595,9 @@ static void setLineOut(bool doLineOut)
  */
 bool check_file_SD(const char *audio_file)
 {
+    #ifdef TC_DBG
+    Serial.printf("check_file_SD: Checking for %s\n", audio_file);
+    #endif
     return (haveSD && SD.exists(audio_file));
 }
 
@@ -584,6 +633,7 @@ void stopAudio()
     } else if(wav->isRunning()) {
         wav->stop();
     }
+    key_playing = 0;
 }
 
 /*

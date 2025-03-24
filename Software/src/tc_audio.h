@@ -65,14 +65,16 @@
 #define PA_LINEOUT 0x0040
 #define PA_INTSPKR 0x0000
 #define PA_ISWAV   0x0080
+// upper 8 bits all taken
 
 void  audio_setup();
 void  audio_loop();
 
-void  play_file(const char *audio_file, uint16_t flags, float volumeFactor = 1.0);
-void  play_keypad_sound(char key);
-void  play_hour_sound(int hour);
-void  play_beep();
+void      play_file(const char *audio_file, uint16_t flags, float volumeFactor = 1.0);
+uint16_t  play_keypad_sound(char key);
+void      play_hour_sound(int hour);
+void      play_beep();
+void      play_key(int k, uint16_t preDTMFkp);
 
 bool  check_file_SD(const char *audio_file);
 int   getSWVolFromHWVol();
