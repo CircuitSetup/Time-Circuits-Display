@@ -170,7 +170,7 @@
 //#define JSWITCH_1582
 
 // Uncomment if using a real GTE/TRW keypad control board
-#define GTE_KEYPAD 
+//#define GTE_KEYPAD 
 
 // Uncomment for alternate "animation" when entering a destination time
 // (Does not affect other situations where animation is shown, like time
