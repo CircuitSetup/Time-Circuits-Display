@@ -4,7 +4,7 @@
 |:--:|
 | *This very TCD is now used in the Universal Studios [BTTF Escape Room](https://www.universalorlando.com/web/en/us/things-to-do/entertainment/universals-great-movie-escape) (Orlando)* |
 
-The CircuitSetup Time Circuits Display has been meticulously reproduced to be as accurate as possible to the one seen in the DeLorean Time Machine in the Back to the Future movies. The LED displays are custom made to the correct size for CircuitSetup. This includes the month 14 segment/3 character displays being closer together, and both the 7 & 14 segment displays being 0.6" high by 0.35" wide.
+The CircuitSetup Time Circuits Display has been meticulously reproduced to be as accurate as possible to the one seen in the DeLorean Time Machine. The LED displays are custom made to the correct size for CircuitSetup. This includes the month 14 segment/3 character displays being closer together, and both the 7 & 14 segment displays being 0.6" high by 0.35" wide.
 
 ## TCD Kits
 [Time Circuits Display kits can be purchased here with or without 3d printed parts or aluminum enclosures.](https://circuitsetup.us/product/complete-time-circuits-display-kit/)
