@@ -8,11 +8,13 @@
 
 #### Enclosures:
 Print all in a silver or grey color
-- _enclosure_one_piece-v4_
+- _enclosure_one_piece-v4.1_
 - _dest_time_enclosure-v2.5_
 - _pres_time_enclosure-v2.5_
 - _last_time_enclosure-v2.5_ - print face down with supports (for the speaker mounting tabs)
 - _display_faceplate_ (x3) - print face down so the face is as smooth as possible. You will need 3 of these.
+
+_circuitsetup_time_circuits_display.3mf_ - multi plate file for Bambu Labs printers.
 
 # Revision History
 ### 8/1/24
