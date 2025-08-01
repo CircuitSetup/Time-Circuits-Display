@@ -6356,7 +6356,14 @@ static void bttfn_evalremotecommand(uint32_t seq, uint8_t cmd, uint8_t p1, uint8
     case BTTFN_REMCMD_COMBINED: // Update status and speed from remote
         // Skip outdated packets
         if(seq == 1 || seq > bttfnLastSeq_co) {
-            bttfnMakeRemoteSpeedMaster(!!(p1 & 0x01));
+            bool remotePower = (p1 & 0x01);
+            bttfnMakeRemoteSpeedMaster(remotePower);
+            #ifdef FAKE_POWER_ON
+            if(remotePower != isFPBKeyPressed) {
+                if(remotePower) fpbKeyPressed();
+                else fpbKeyLongPressStop();
+            }
+            #endif
             bttfnRemStop = !!(p1 & 0x02);
             if(p2 > 127) bttfnRemoteSpeed = 0;
             else bttfnRemoteSpeed = p2;  // p2 = speed (0-88)
@@ -6380,6 +6387,9 @@ static void bttfn_evalremotecommand(uint32_t seq, uint8_t cmd, uint8_t p1, uint8
         bttfnRemStop = false;
         bttfnRemoteSpeed = 0;
         registeredRemID = 0;
+        #ifdef FAKE_POWER_ON
+        fpbKeyLongPressStop();
+        #endif
         #ifdef TC_DBG
         Serial.printf("Remote unregistered)\n");
         #endif
