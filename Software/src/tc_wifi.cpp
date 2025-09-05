@@ -268,6 +268,11 @@ WiFiManagerParameter custom_sAF("sAF", "Acceleration times (0=real, 1=movie)", s
 WiFiManagerParameter custom_sAF("sAF", "Real-life acceleration figures", settings.speedoAF, 1, "autocomplete='off' title='If unchecked, movie-like times are used' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
 #endif // -------------------------------------------------
 WiFiManagerParameter custom_speedoFact("speFac", "<br>Factor for real-life figures (0.5-5.0)", settings.speedoFact, 3, "type='number' min='0.5' max='5.0' step='0.5' title='1.0 means real-world DMC-12 acceleration time.' autocomplete='off'");
+#ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
+WiFiManagerParameter custom_sL0("sL0", "Display speed with leading 0 (0=no, 1=yes)", settings.speedoL0Spd, 1, "autocomplete='off'");
+#else // -------------------- Checkbox hack: --------------
+WiFiManagerParameter custom_sL0("sL0", "Display speed with leading 0", settings.speedoL0Spd, 1, "autocomplete='off' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
+#endif // -------------------------------------------------
 #ifdef TC_HAVEGPS
 #ifdef TC_NOCHECKBOXES  // --- Standard text boxes: -------
 WiFiManagerParameter custom_useGPSS("uGPSS", "Display GPS speed (0=no, 1=yes)", settings.useGPSSpeed, 1, "autocomplete='off' title='Enable to display actual GPS speed on speedo'");
@@ -545,6 +550,7 @@ void wifi_setup()
       &custom_speedoBright,
       &custom_sAF,
       &custom_speedoFact,
+      &custom_sL0,
     #ifdef TC_HAVEGPS
       &custom_useGPSS,
       &custom_updrt,
@@ -964,6 +970,7 @@ void wifi_loop()
             
             #ifdef TC_HAVESPEEDO
             mystrcpy(settings.speedoAF, &custom_sAF);
+            mystrcpy(settings.speedoL0Spd, &custom_sL0);
             #ifdef TC_HAVEGPS
             mystrcpy(settings.useGPSSpeed, &custom_useGPSS);
             #endif
@@ -1025,6 +1032,7 @@ void wifi_loop()
             
             #ifdef TC_HAVESPEEDO
             strcpyCB(settings.speedoAF, &custom_sAF);
+            strcpyCB(settings.speedoL0Spd, &custom_sL0);
             #ifdef TC_HAVEGPS
             strcpyCB(settings.useGPSSpeed, &custom_useGPSS);
             #endif
@@ -1671,6 +1679,7 @@ void updateConfigPortalValues()
     #endif
     #ifdef TC_HAVESPEEDO
     custom_sAF.setValue(settings.speedoAF, 1);
+    custom_sL0.setValue(settings.speedoL0Spd, 1);
     #ifdef TC_HAVEGPS
     custom_useGPSS.setValue(settings.useGPSSpeed, 1);
     #endif
@@ -1721,6 +1730,7 @@ void updateConfigPortalValues()
     #endif
     #ifdef TC_HAVESPEEDO
     setCBVal(&custom_sAF, settings.speedoAF);
+    setCBVal(&custom_sL0, settings.speedoL0Spd);
     #ifdef TC_HAVEGPS
     setCBVal(&custom_useGPSS, settings.useGPSSpeed);
     #endif

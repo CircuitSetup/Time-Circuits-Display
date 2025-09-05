@@ -134,6 +134,8 @@ class speedDisplay {
         bool getDot();
         bool getColon();
 
+        bool dispL0Spd = true;
+
     private:
 
         void handleColon();

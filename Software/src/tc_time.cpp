@@ -1612,6 +1612,8 @@ void time_setup()
         speedo.setBrightness(atoi(settings.speedoBright), true);
         speedo.setDot(true);
 
+        speedo.dispL0Spd = (atoi(settings.speedoL0Spd) > 0);
+
         // No TT sounds to play -> no user-provided sound.
         if(!playTTsounds) havePreTTSound = false;
 

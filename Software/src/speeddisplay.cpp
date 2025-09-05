@@ -616,7 +616,7 @@ void speedDisplay::setSpeed(int8_t speedNum)
     }
     #endif
 
-    _displayBuffer[_speed_pos10] |= (b1 << _dig10_shift);
+    if(dispL0Spd || speedNum > 9 /*|| b1 == 37*/) _displayBuffer[_speed_pos10] |= (b1 << _dig10_shift);
     _displayBuffer[_speed_pos01] |= (b2 << _dig01_shift);
     
     if(_dot01) _displayBuffer[_dot_pos01] |= (*(_fontXSeg + 36) << _dot01_shift);

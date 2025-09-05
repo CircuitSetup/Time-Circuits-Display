@@ -93,6 +93,7 @@ extern uint8_t musFolderNum;
 #define DEF_SPEEDO_TYPE     99    // Default display type: None
 #define DEF_SPEEDO_ACCELFIG 0     // Accel figures: 0: Movie (approximated), 1: Real-life
 #define DEF_SPEEDO_FACT     2.0   // Real-life acceleration factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
+#define DEF_SPEEDO_L0SPD    0     // Speedo: Display leading 0 for speeds < 10 (1: yes, 0: no)
 #define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness for speed
 #define DEF_USE_GPS_SPEED   0     // 0: Do not show GPS speed on speedo display; 1: Do
 #define DEF_SPD_UPD_RATE    1     // 0: 1Hz, 1: 2Hz (default), 2: 4Hz, 3: 5Hz
@@ -162,6 +163,7 @@ struct Settings {
     char speedoBright[4]    = MS(DEF_BRIGHT_SPEEDO);
     char speedoAF[4]        = MS(DEF_SPEEDO_ACCELFIG);
     char speedoFact[6]      = MS(DEF_SPEEDO_FACT);
+    char speedoL0Spd[6]     = MS(DEF_SPEEDO_L0SPD);
 #ifdef TC_HAVEGPS
     char useGPSSpeed[4]     = MS(DEF_USE_GPS_SPEED);
     char spdUpdRate[4]      = MS(DEF_SPD_UPD_RATE);
