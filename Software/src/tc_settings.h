@@ -272,10 +272,22 @@ bool writeFileToSD(const char *fn, uint8_t *buf, int len);
 bool readFileFromFS(const char *fn, uint8_t *buf, int len);
 bool writeFileToFS(const char *fn, uint8_t *buf, int len);
 
+#define MAX_SIM_UPLOADS 16
+#define UPL_OPENERR 1
+#define UPL_NOSDERR 2
+#define UPL_WRERR   3
+#define UPL_BADERR  4
+#define UPL_MEMERR  5
+#define UPL_UNKNOWN 6
+#define UPL_DPLBIN  7
 #include <FS.h>
-bool   openACFile(File& file);
+bool   openUploadFile(String& fn, File& file, int idx, bool haveAC, int& opType, int& errNo);
 size_t writeACFile(File& file, uint8_t *buf, size_t len);
 void   closeACFile(File& file);
-void   removeACFile();
+void   removeACFile(int idx);
+void   renameUploadFile(int idx);
+char   *getUploadFileName(int idx);
+int    getUploadFileNameLen(int idx);
+void   freeUploadFileNames();
 
 #endif

@@ -6,8 +6,10 @@
  * 
  * @author Creator tzapu
  * @author tablatronix
- * @version 0.0.0
+ * @version 2.0.15+A10001986
  * @license MIT
+ *
+ * Modified by Thomas Winischhofer (A10001986)
  */
 
 
@@ -23,17 +25,24 @@
 #include <vector>
 
 // A10001986 added start
-#define WM_NOHELP
-#define WM_NODEBUG		
+//#define WM_NOHELP						// Removed entirely
+#define WM_NODEBUG
+#define _A10001986_NO_INFO				// Skip unused functions
+#define _A10001986_NO_RESET
+#define _A10001986_NO_EXIT
+#define _A10001986_NO_CLOSE
+#define _A10001986_NO_STATUS
+#define _A10001986_NO_RESETSETTINGS
+#define _A10001986_NO_COUNTRY
+#define _A10001986_STR_RESERVE			// Use String.reserve()
+#define _A10001986_NO_BR				// Kill superfluous <br>s in HTML
+//#define _A10001986_DBG
 // A10001986 end
 
 // #define WM_MDNS            // includes MDNS, also set MDNS with sethostname
 // #define WM_FIXERASECONFIG  // use erase flash fix
 // #define WM_ERASE_NVS       // esp32 erase(true) will erase NVS 
 // #define WM_RTC             // esp32 info page will include reset reasons
-
-// #define WM_JSTEST                      // build flag for enabling js xhr tests
-// #define WIFI_MANAGER_OVERRIDE_STRINGS // build flag for using own strings include
 
 #ifdef ARDUINO_ESP8266_RELEASE_2_3_0
 #warning "ARDUINO_ESP8266_RELEASE_2_3_0, some WM features disabled" 
@@ -44,24 +53,10 @@
 #define WM_NOSOFTAPSSID    // no softapssid() @todo shim
 #endif
 
-// #ifdef CONFIG_IDF_TARGET_ESP32S2
-// #warning ESP32S2
-// #endif
-
-// #ifdef CONFIG_IDF_TARGET_ESP32C3
-// #warning ESP32C3
-// #endif
-
-// #ifdef CONFIG_IDF_TARGET_ESP32S3
-// #warning ESP32S3
-// #endif
-
 #if defined(ARDUINO_ESP32S3_DEV) || defined(CONFIG_IDF_TARGET_ESP32S3)
 #warning "WM_NOTEMP"
 #define WM_NOTEMP // disabled temp sensor, have to determine which chip we are on
 #endif
-
-// #include "soc/efuse_reg.h" // include to add efuse chip rev to info, getChipRevision() is almost always the same though, so not sure why it matters.
 
 // #define esp32autoreconnect    // implement esp32 autoreconnect event listener kludge, @DEPRECATED
 // autoreconnect is WORKING https://github.com/espressif/arduino-esp32/issues/653#issuecomment-405604766
@@ -151,9 +146,6 @@
 
 // #include <esp_idf_version.h>
 #ifdef ESP_IDF_VERSION
-    // #pragma message "ESP_IDF_VERSION_MAJOR = " WM_STRING(ESP_IDF_VERSION_MAJOR)
-    // #pragma message "ESP_IDF_VERSION_MINOR = " WM_STRING(ESP_IDF_VERSION_MINOR)
-    // #pragma message "ESP_IDF_VERSION_PATCH = " WM_STRING(ESP_IDF_VERSION_PATCH)
     #define VER_IDF_STR WM_STRING(ESP_IDF_VERSION_MAJOR)  "."  WM_STRING(ESP_IDF_VERSION_MINOR)  "."  WM_STRING(ESP_IDF_VERSION_PATCH)
 #else 
     #define VER_IDF_STR "Unknown"
@@ -165,9 +157,6 @@
     #endif
     // esp_get_idf_version
     #ifdef ESP_ARDUINO_VERSION
-        // #pragma message "ESP_ARDUINO_VERSION_MAJOR = " WM_STRING(ESP_ARDUINO_VERSION_MAJOR)
-        // #pragma message "ESP_ARDUINO_VERSION_MINOR = " WM_STRING(ESP_ARDUINO_VERSION_MINOR)
-        // #pragma message "ESP_ARDUINO_VERSION_PATCH = " WM_STRING(ESP_ARDUINO_VERSION_PATCH)
         #ifdef ESP_ARDUINO_VERSION_MAJOR
         #define VER_ARDUINO_STR WM_STRING(ESP_ARDUINO_VERSION_MAJOR)  "."  WM_STRING(ESP_ARDUINO_VERSION_MINOR)  "."  WM_STRING(ESP_ARDUINO_VERSION_PATCH)
         #else
@@ -175,10 +164,7 @@
         #endif
     #else
         #include <core_version.h>
-        // #pragma message "ESP_ARDUINO_VERSION_GIT  = " WM_STRING(ARDUINO_ESP32_GIT_VER)//  0x46d5afb1
-        // #pragma message "ESP_ARDUINO_VERSION_DESC = " WM_STRING(ARDUINO_ESP32_GIT_DESC) //  1.0.6
-        // #pragma message "ESP_ARDUINO_VERSION_REL  = " WM_STRING(ARDUINO_ESP32_RELEASE) //"1_0_6"
-        #ifdef ESP_ARDUINO_VERSION_MAJOR
+	    #ifdef ESP_ARDUINO_VERSION_MAJOR
         #define VER_ARDUINO_STR WM_STRING(ESP_ARDUINO_VERSION_MAJOR)  "."  WM_STRING(ESP_ARDUINO_VERSION_MINOR)  "."  WM_STRING(ESP_ARDUINO_VERSION_PATCH)
         #else
         #define VER_ARDUINO_STR "Unknown"
@@ -187,9 +173,6 @@
 #else 
 #define VER_ARDUINO_STR "Unknown"
 #endif
-
-// #pragma message "VER_IDF_STR = " WM_STRING(VER_IDF_STR)
-// #pragma message "VER_ARDUINO_STR = " WM_STRING(VER_ARDUINO_STR)
 
 #ifndef WIFI_MANAGER_MAX_PARAMS
     #define WIFI_MANAGER_MAX_PARAMS 5 // params will autoincrement and realloc by this amount when max is reached
@@ -273,7 +256,9 @@ class WiFiManager
     int           getRSSIasQuality(int RSSI);
 
     // erase wifi credentials
+	#ifndef _A10001986_NO_RESETSETTINGS
     void          resetSettings();
+	#endif // _A10001986_NO_RESETSETTINGS
 
     // reboot esp
     void          reboot();
@@ -322,6 +307,10 @@ class WiFiManager
 
     //called when config portal is timeout
     void          setConfigPortalTimeoutCallback( std::function<void()> func );
+	
+    //A10001986 inserted / called after erasing WiFi config, before reboot
+    void          setPostEraseCallback( std::function<void()> func );
+	// --- end
 
     //sets timeout before AP,webserver loop ends and exits even if there has been no setup.
     //useful for devices that failed to connect at some point and got stuck in a webserver loop
@@ -469,10 +458,10 @@ class WiFiManager
     void          setCountry(String cc);
 
     // set body class (invert), may be used for hacking in alt classes
-    void          setClass(String str);
+    //void          setClass(String str);
 
     // set dark mode via invert class
-    void          setDarkMode(bool enable);
+    //void          setDarkMode(bool enable);
 
     // get default ap esp uses , esp_chipid etc
     String        getDefaultAPName();
@@ -491,7 +480,11 @@ class WiFiManager
 
     // get hostname helper
     String        getWiFiHostname();
-
+	
+	// A10001986 inserted: Calc size of param page in order to build String with reserved size
+	#ifdef _A10001986_STR_RESERVE
+	void		  calcParmPageSize();
+    #endif // _A10001986_STR_RESERVE
 
     std::unique_ptr<DNSServer>        dnsServer;
 
@@ -528,7 +521,7 @@ class WiFiManager
     unsigned long _startconn              = 0; // ms for timing wifi connects
 
     // defaults
-    const byte    DNS_PORT                = 53;
+    const uint8_t DNS_PORT                = 53;
     String        _apName                 = "no-net";
     String        _apPassword             = "";
     String        _ssid                   = ""; // var temp ssid
@@ -598,9 +591,11 @@ class WiFiManager
     // internal options
     
     // wifiscan notes
-    // currently disabled due to issues with caching, sometimes first scan is empty esp32 wifi not init yet race, or portals hit server nonstop flood
+    // currently disabled due to issues with caching, sometimes first scan is empty esp32 
+	// wifi not init yet race, or portals hit server nonstop flood
     // The following are background wifi scanning optimizations
-    // experimental to make scans faster, preload scans after starting cp, and visiting home page, so when you click wifi its already has your list
+    // experimental to make scans faster, preload scans after starting cp, and visiting home 
+	// page, so when you click wifi its already has your list
     // ideally we would add async and xhr here but I am holding off on js requirements atm
     // might be slightly buggy since captive portals hammer the home page, @todo workaround this somehow.
     // cache time helps throttle this
@@ -620,7 +615,9 @@ class WiFiManager
     
     boolean       _disableIpFields        = false; // modify function of setShow_X_Fields(false), forces ip fields off instead of default show if set, eg. _staShowStaticFields=-1
 
+    #ifndef _A10001986_NO_COUNTRY
     String        _wificountry            = "";  // country code, @todo define in strings lang
+    #endif
 
     // wrapper functions for handling setting and unsetting persistent for now.
     bool          esp32persistent         = false;
@@ -656,14 +653,22 @@ class WiFiManager
     void          handleWifi(boolean scan);
     void          handleWifiSave();
     void          handleInfo();
+	#ifndef _A10001986_NO_RESET
     void          handleReset();
+	#endif
     void          handleNotFound();
+	#ifndef _A10001986_NO_EXIT
     void          handleExit();
+	#endif
+	#ifndef _A10001986_NO_CLOSE
     void          handleClose();
+	#endif
     // void          handleErase();
     void          handleErase(boolean opt);
     void          handleParam();
+	#ifndef _A10001986_NO_STATUS
     void          handleWiFiStatus();
+    #endif
     void          handleRequest();
     void          handleParamSave();
     void          doParamSave();
@@ -733,11 +738,15 @@ class WiFiManager
     #endif
 
     // output helpers
-    String        getParamOut();
+    #ifndef _A10001986_STR_RESERVE
+	String        getParamOut();
+    #else
+	void          getParamOut(String &page);
+    #endif // _A10001986_STR_RESERVE
     String        getIpForm(String id, String title, String value);
     String        getScanItemOut();
     String        getStaticOut();
-    String        getHTTPHead(String title);
+    String        getHTTPHead(String title, bool includeQI = false);	// A10001986 added bool param
     String        getMenuOut();
     //helpers
     boolean       isIp(String str);
@@ -745,7 +754,12 @@ class WiFiManager
     boolean       validApPassword();
     String        encryptionTypeStr(uint8_t authmode);
     void          reportStatus(String &page);
+	#ifndef _A10001986_NO_INFO
     String        getInfoData(String id);
+	#endif // _A10001986_NO_INFO
+	#ifdef _A10001986_STR_RESERVE
+	unsigned int  getParamOutSize();
+    #endif // _A10001986_STR_RESERVE
 
     // flags
     boolean       connect             = false;
@@ -757,6 +771,19 @@ class WiFiManager
     boolean       portalAbortResult   = false;
     boolean       storeSTAmode        = true; // option store persistent STA mode in connectwifi 
     int           timer               = 0;    // timer for debug throttle for numclients, and portal timeout messages
+	
+	// A10001986 inserted
+	#ifdef _A10001986_STR_RESERVE
+	unsigned int  paramPageSize	  	  = 0;
+	unsigned int  pItemMaxLength	  = 0;
+	unsigned int  pHeadersize		  = 0;
+	unsigned int  pFStartSize		  = 0;
+	unsigned int  pHeadSize			  = 0;
+	#ifdef _A10001986_DBG
+    unsigned long debugPMCtiming 	  = 0;
+	#endif // _A10001986_DBG
+    #endif
+	// --- end
     
     // WiFiManagerParameter
     int         _paramsCount          = 0;
@@ -825,13 +852,15 @@ class WiFiManager
     std::function<void()> _resetcallback;
     std::function<void()> _preotaupdatecallback;
     std::function<void()> _configportaltimeoutcallback;
+	// A10001986 inserted
+	std::function<void()> _posterasecallback;
+	// --- end
 
     template <class T>
     auto optionalIPFromString(T *obj, const char *s) -> decltype(  obj->fromString(s)  ) {
       return  obj->fromString(s);
     }
     auto optionalIPFromString(...) -> bool {
-      // DEBUG_WM("NO fromString METHOD ON IPAddress, you need ESP8266 core 2.1.0 or newer for Custom IP configuration to work.");
       return false;
     }
 

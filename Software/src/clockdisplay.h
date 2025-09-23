@@ -84,9 +84,10 @@ class clockDisplay {
         clockDisplay(uint8_t did, uint8_t address);
         void begin();
         void on();
-        void onCond();
         void off();
+        void onCond();        
         void onBlink(uint8_t blink);
+
         #if 0
         void realLampTest();
         #endif
@@ -97,17 +98,17 @@ class clockDisplay {
         uint8_t setBrightness(uint8_t level, bool setInitial = false);
         void    resetBrightness();
         uint8_t setBrightnessDirect(uint8_t level);
-        uint8_t getBrightness();
+        uint8_t getBrightness() { return _brightness; }
 
-        void set1224(bool hours24);
-        bool get1224();
+        void set1224(bool hours24) { _mode24 = hours24; }
+        bool get1224()             { return _mode24; }
 
-        void setNightMode(bool mode);
-        bool getNightMode();
-        void setNMOff(bool NMOff);
+        void setNightMode(bool mymode)  { _nightmode = mymode; }
+        bool getNightMode()             { return _nightmode; }
+        void setNMOff(bool NMOff)       { _NmOff = NMOff; }
 
-        void setRTC(bool rtc);  // make this an RTC display
-        bool isRTC();
+        void setRTC(bool rtc) { _rtc = rtc; }  // make this an RTC display
+        bool isRTC()          { return _rtc; }
 
         void show();
         void showAnimate1();
@@ -121,8 +122,8 @@ class clockDisplay {
         void showAlt();
         void setAltText(const char *text);
 
-        void setDateTime(DateTime& dt);          // Set object date & time using a DateTime
-        void setFromStruct(const dateStruct *s); // Set object date & time from struct
+        void setDateTime(DateTime& dt);
+        void setFromStruct(const dateStruct *s);
         void setFromParms(int year, int month, int day, int hour, int minute);
 
         void getToParms(int& year, int& month, int& day, int& hour, int& minute);
@@ -133,19 +134,19 @@ class clockDisplay {
         void setHour(uint16_t hourNum);
         void setMinute(int minNum);
 
-        void setColon(bool col);
+        void setColon(bool col) { _colon = _nightmode ? true : col; } // colon is on in night mode
 
         void setYearOffset(int16_t yearOffs);
 
-        uint8_t  getMonth();
-        uint8_t  getDay();
-        uint16_t getYear();
-        uint8_t  getHour();
-        uint8_t  getMinute();
+        uint8_t  getMonth()  { return _month; }
+        uint8_t  getDay()    { return _day;  }
+        uint16_t getYear()   { return _year; }
+        uint8_t  getHour()   { return _hour; }
+        uint8_t  getMinute() { return _minute; }
 
         const char* getMonthString(uint8_t month);
 
-        int16_t  getYearOffset();
+        int16_t  getYearOffset() { return _yearoffset; }
 
         void getCompressed(uint8_t *buf, uint8_t& over);
 
@@ -197,11 +198,7 @@ class clockDisplay {
 
         void AM();
         void PM();
-        void AMPMoff();
-        void directAMPM(int val1, int val2);
-        void directAM();
-        void directPM();
-        void directAMPMoff();
+        void directAMPM(uint16_t val);
 
         void directCmd(uint8_t val);
 

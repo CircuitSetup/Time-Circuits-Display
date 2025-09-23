@@ -132,10 +132,10 @@ class PubSubClient {
     
         ~PubSubClient();
     
-        void setServer(IPAddress ip, uint16_t port);
-        void setServer(const char *domain, uint16_t port);
-        void setCallback(void (*callback)(char *, uint8_t *, unsigned int));
-        void setLooper(void (*looper)());
+        void setServer(IPAddress ip, uint16_t port) { this->ip = ip; this->port = port; this->domain = NULL; }
+        void setServer(const char *domain, uint16_t port) { this->domain = domain; this->port = port; }
+        void setCallback(void (*callback)(char *, uint8_t *, unsigned int)) { this->callback = callback; }
+        void setLooper(void (*looper)()) { this->looper = looper; }
     
         bool setBufferSize(uint16_t size);
     
@@ -153,12 +153,12 @@ class PubSubClient {
         bool loop();
         
         bool connected();
-        int  state();
+        int  state() { return this->_state; }
 
         bool sendPing();
         bool pollPing();
         void cancelPing();
-        int  pstate();
+        int  pstate() { return this->_pstate; }
     
     private:
 

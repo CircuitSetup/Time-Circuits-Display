@@ -106,7 +106,7 @@ class speedDisplay {
         bool begin(int dispType);
         void on();
         void off();
-        bool getOnOff();
+        bool getOnOff() { return !!_onCache; }
         #if 0
         void lampTest();
         #endif
@@ -115,10 +115,10 @@ class speedDisplay {
 
         uint8_t setBrightness(uint8_t level, bool isInitial = false);
         uint8_t setBrightnessDirect(uint8_t level) ;
-        uint8_t getBrightness();
+        uint8_t getBrightness() { return _brightness; }
 
-        void setNightMode(bool mode);
-        bool getNightMode();
+        void setNightMode(bool mymode)  { _nightmode = mymode; }
+        bool getNightMode()             { return _nightmode; }
 
         void show();
 
@@ -127,12 +127,12 @@ class speedDisplay {
         #ifdef TC_HAVETEMP
         void setTemperature(float temp);
         #endif
-        void setDot(bool dot01 = true);
-        void setColon(bool colon);
+        void setDot(bool dot01 = true) { _dot01 = dot01; }
+        void setColon(bool colon)      { _colon = colon; }
 
-        int8_t getSpeed();
-        bool getDot();
-        bool getColon();
+        int8_t getSpeed() { return _speed; }
+        bool getDot()     { return _dot01; }
+        bool getColon()   { return _colon; }
 
         bool dispL0Spd = true;
 

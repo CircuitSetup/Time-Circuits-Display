@@ -76,6 +76,14 @@
 #define CD_AMPM_POS   CD_DAY_POS
 #define CD_COLON_POS  CD_YEAR_POS
 
+#ifndef REV_AMPM
+#define _AM 0x0080
+#define _PM 0x8000
+#else
+#define _AM 0x8000
+#define _PM 0x0080
+#endif
+
 extern bool     alarmOnOff;
 #ifdef TC_HAVEGPS
 extern bool     gpsHaveFix();
@@ -92,9 +100,10 @@ extern bool writeFileToSD(const char *fn, uint8_t *buf, int len);
 extern bool readFileFromFS(const char *fn, uint8_t *buf, int len);
 extern bool writeFileToFS(const char *fn, uint8_t *buf, int len);
 
-static const char months[12][4] = {
+static const char months[13][4] = {
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+    "  _"
 };
 
 #ifdef BTTF3_ANIM
@@ -120,6 +129,8 @@ static const char *fnSD[3] = {
 static const char *fnLastYear   = "/tcdly";
 static const char *fnLastYearSD = "/tcdly.bin";
 
+static const uint16_t _am = _AM;
+static const uint16_t _pm = _PM;
 
 /*
  * ClockDisplay class
@@ -244,48 +255,6 @@ uint8_t clockDisplay::setBrightnessDirect(uint8_t level)
     return level;
 }
 
-uint8_t clockDisplay::getBrightness()
-{
-    return _brightness;
-}
-
-void clockDisplay::set1224(bool hours24)
-{
-    _mode24 = hours24;
-}
-
-bool clockDisplay::get1224(void)
-{
-    return _mode24;
-}
-
-void clockDisplay::setNightMode(bool mymode)
-{
-    _nightmode = mymode;
-}
-
-bool clockDisplay::getNightMode(void)
-{
-    return _nightmode;
-}
-
-void clockDisplay::setNMOff(bool NMOff)
-{
-    _NmOff = NMOff;
-}
-
-// Track if this is will be holding real time.
-void clockDisplay::setRTC(bool rtc)
-{
-    _rtc = rtc;
-}
-
-bool clockDisplay::isRTC()
-{
-    return _rtc;
-}
-
-
 // Setup date in buffer --------------------------------------------------------
 
 
@@ -388,7 +357,7 @@ void clockDisplay::showAnimate3(int mystep)
         if(!handleNM())
             return;
         off();
-        AMPMoff();
+        _displayBuffer[CD_AMPM_POS] &= 0x7F7F;  // AM/PM off
         colonOff();
         showAnimate2(CD_DAY_POS);
         on();
@@ -553,14 +522,6 @@ void clockDisplay::setMinute(int minNum)
     _displayBuffer[CD_MIN_POS] = makeNum(minNum) | seg;
 }
 
-void clockDisplay::setColon(bool col)
-{
-    // set true to turn it on
-    // colon is on in night mode
-    
-    _colon = _nightmode ? true : col;
-}
-
 void clockDisplay::setYearOffset(int16_t yearOffs)
 {
     if(_rtc) {
@@ -574,32 +535,6 @@ void clockDisplay::setYearOffset(int16_t yearOffs)
 
 // Query data ------------------------------------------------------------------
 
-
-uint8_t clockDisplay::getMonth()
-{
-    return _month;
-}
-
-uint8_t clockDisplay::getDay()
-{
-    return _day;
-}
-
-uint16_t clockDisplay::getYear()
-{
-    return _year;
-}
-
-uint8_t clockDisplay::getHour()
-{
-    return _hour;
-}
-
-uint8_t clockDisplay::getMinute()
-{
-    return _minute;
-}
-
 const char * clockDisplay::getMonthString(uint8_t mon)
 {
     if(mon >= 1 && mon <= 12)
@@ -608,14 +543,8 @@ const char * clockDisplay::getMonthString(uint8_t mon)
         return nullStr;
 }
 
-int16_t clockDisplay::getYearOffset()
-{
-    return _yearoffset;
-}
-
 void clockDisplay::getCompressed(uint8_t *buf, uint8_t& over)
 {
-    
     buf[0] = (_year << 2) | (_month >> 2);
     buf[1] = (_year >> 6);
     buf[2] = (_month << 6)  | (_day << 1) | (_hour >> 4);
@@ -624,7 +553,6 @@ void clockDisplay::getCompressed(uint8_t *buf, uint8_t& over)
 }
 
 // Put data directly on display (bypass buffer) --------------------------------
-
 
 void clockDisplay::showMonthDirect(int monthNum, uint16_t dflags)
 {
@@ -638,14 +566,12 @@ void clockDisplay::showMonthDirect(int monthNum, uint16_t dflags)
 #else
     if(monthNum > 0) {
         monthNum--;
-        directCol(CD_MONTH_POS,     getLEDAlphaChar(months[monthNum][0]));
-        directCol(CD_MONTH_POS + 1, getLEDAlphaChar(months[monthNum][1]));
-        directCol(CD_MONTH_POS + 2, getLEDAlphaChar(months[monthNum][2]));
     } else {
-        directCol(CD_MONTH_POS,     0);
-        directCol(CD_MONTH_POS + 1, 0);
-        directCol(CD_MONTH_POS + 2, getLEDAlphaChar('_'));
+        monthNum = 12;
     }
+    directCol(CD_MONTH_POS,     getLEDAlphaChar(months[monthNum][0]));
+    directCol(CD_MONTH_POS + 1, getLEDAlphaChar(months[monthNum][1]));
+    directCol(CD_MONTH_POS + 2, getLEDAlphaChar(months[monthNum][2]));
 #endif
 }
 
@@ -663,7 +589,7 @@ void clockDisplay::showYearDirect(int yearNum, uint16_t dflags)
 
     clearDisplay();
 
-    while(yearNum >= 10000) 
+    while(yearNum >= 10000)
         yearNum -= 10000;
 
     y100 = yearNum / 100;
@@ -685,7 +611,7 @@ void clockDisplay::showHourDirect(int hourNum, uint16_t dflags)
 
     if(!_mode24 && !(dflags & CDD_FORCE24)) {
 
-        (hourNum > 11) ? directPM() : directAM();
+        directAMPM((hourNum > 11) ? _pm : _am);
 
         if(hourNum == 0) {
             hourNum = 12;
@@ -695,7 +621,7 @@ void clockDisplay::showHourDirect(int hourNum, uint16_t dflags)
 
     } else {
 
-        directAMPMoff();
+        directAMPM(0);
 
     }
 
@@ -1196,7 +1122,6 @@ uint16_t clockDisplay::getLEDAlphaChar(uint8_t value)
 #endif
 
 // Make a 2 digit number from the array and return the segment data
-// (makes leading 0s)
 uint16_t clockDisplay::makeNum(uint8_t num, uint16_t dflags)
 {
     uint16_t segments = 0;
@@ -1278,7 +1203,7 @@ void clockDisplay::showInt(bool animate, bool Alt)
     if(!_mode24) {
         (_hour < 12) ? AM() : PM();
     } else {
-        AMPMoff();
+        _displayBuffer[CD_AMPM_POS] &= 0x7F7F;
     }
 
     (_colon) ? colonOn() : colonOff();
@@ -1305,73 +1230,35 @@ void clockDisplay::showInt(bool animate, bool Alt)
     if(_NmOff) _oldnm = 0;
 }
 
-void clockDisplay::colonOn()
+inline void clockDisplay::colonOn()
 {
     _displayBuffer[CD_COLON_POS] |= 0x8080;
 }
 
-void clockDisplay::colonOff()
+inline void clockDisplay::colonOff()
 {
     _displayBuffer[CD_COLON_POS] &= 0x7F7F;
 }
-
-void clockDisplay::AM()
+    
+inline void clockDisplay::AM()
 {
-#ifndef REV_AMPM
-    _displayBuffer[CD_AMPM_POS] |= 0x0080;
-    _displayBuffer[CD_AMPM_POS] &= 0x7FFF;
-#else
-    _displayBuffer[CD_AMPM_POS] |= 0x8000;
-    _displayBuffer[CD_AMPM_POS] &= 0xFF7F;
-#endif
+    _displayBuffer[CD_AMPM_POS] |= _am; 
+    _displayBuffer[CD_AMPM_POS] &= (~_pm);
 }
 
-void clockDisplay::PM()
+inline void clockDisplay::PM()
 {
-#ifndef REV_AMPM  
-    _displayBuffer[CD_AMPM_POS] |= 0x8000;
-    _displayBuffer[CD_AMPM_POS] &= 0xFF7F;
-#else
-    _displayBuffer[CD_AMPM_POS] |= 0x0080;
-    _displayBuffer[CD_AMPM_POS] &= 0x7FFF;
-#endif    
+    _displayBuffer[CD_AMPM_POS] |= _pm;
+    _displayBuffer[CD_AMPM_POS] &= (~_am);
 }
 
-void clockDisplay::AMPMoff()
-{
-    _displayBuffer[CD_AMPM_POS] &= 0x7F7F;
-}
-
-void clockDisplay::directAMPM(int val1, int val2)
+void clockDisplay::directAMPM(uint16_t val)
 {
     Wire.beginTransmission(_address);
     Wire.write(CD_AMPM_POS * 2);
-    Wire.write(val1 & 0xff);
-    Wire.write(val2 & 0xff);
+    Wire.write(val & 0xff);
+    Wire.write(val >> 8);
     Wire.endTransmission();
-}
-
-void clockDisplay::directAM()
-{
-#ifndef REV_AMPM  
-    directAMPM(0x80, 0x00);
-#else
-    directAMPM(0x00, 0x80);
-#endif    
-}
-
-void clockDisplay::directPM()
-{
-#ifndef REV_AMPM  
-    directAMPM(0x00, 0x80);
-#else
-    directAMPM(0x80, 0x00);
-#endif
-}
-
-void clockDisplay::directAMPMoff()
-{
-    directAMPM(0x00, 0x00);
 }
 
 void clockDisplay::directCmd(uint8_t val)

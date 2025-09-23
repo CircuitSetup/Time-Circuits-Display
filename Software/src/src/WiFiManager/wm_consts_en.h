@@ -6,8 +6,10 @@
  *
  * @author Creator tzapu
  * @author tablatronix
- * @version 0.0.0
+ * @version 2.0.15+A10001986
  * @license MIT
+ *
+ * Modified by Thomas Winischhofer (A10001986)
  */
 
 #ifndef _WM_CONSTS_H
@@ -17,7 +19,7 @@
 // -----------------------------------------------------------------------------------------------
 // TOKENS
 
-const char WM_VERSION_STR[] PROGMEM = "v2.0.15-rc.1";
+const char WM_VERSION_STR[] PROGMEM = "v2.0.15-A10001986";
 
 const uint8_t _nummenutokens = 11;
 const char * const _menutokens[_nummenutokens] PROGMEM = {
@@ -34,6 +36,7 @@ const char * const _menutokens[_nummenutokens] PROGMEM = {
     "custom"
 };
 
+// Routes
 const char R_root[]               PROGMEM = "/";
 const char R_wifi[]               PROGMEM = "/wifi";
 const char R_wifinoscan[]         PROGMEM = "/0wifi";
@@ -49,14 +52,11 @@ const char R_status[]             PROGMEM = "/status";
 const char R_update[]             PROGMEM = "/update";
 const char R_updatedone[]         PROGMEM = "/u";
 
-
 //Strings
 const char S_ip[]                 PROGMEM = "ip";
 const char S_gw[]                 PROGMEM = "gw";
 const char S_sn[]                 PROGMEM = "sn";
 const char S_dns[]                PROGMEM = "dns";
-
-
 
 //Tokens
 //@todo consolidate and reduce
@@ -127,7 +127,7 @@ const char * const AUTH_MODE_NAMES[] PROGMEM
 
 const char* const WIFI_MODES[] PROGMEM = { "NULL", "STA", "AP", "STA+AP" };
 
-
+#ifndef _A10001986_NO_COUNTRY
 #ifdef ESP32
 // as 2.5.2
 // typedef struct {
@@ -151,7 +151,7 @@ const wifi_country_t WM_COUNTRY_US{"US",1,11,WIFI_COUNTRY_POLICY_AUTO};
 const wifi_country_t WM_COUNTRY_CN{"CN",1,13,WIFI_COUNTRY_POLICY_AUTO};
 const wifi_country_t WM_COUNTRY_JP{"JP",1,14,WIFI_COUNTRY_POLICY_AUTO};
 #endif
-
+#endif // _A10001986_NO_COUNTRY
 
 /*
 * ESP32 WiFi Events

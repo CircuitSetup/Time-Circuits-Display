@@ -127,7 +127,7 @@ class tcRTC
 {
     public:
 
-        tcRTC(int numTypes, uint8_t addrArr[]);
+        tcRTC(int numTypes, const uint8_t addrArr[]);
 
         bool begin(unsigned long powerupTime);
 

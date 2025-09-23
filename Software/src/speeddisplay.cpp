@@ -408,11 +408,6 @@ void speedDisplay::off()
     _onCache = 0;
 }
 
-bool speedDisplay::getOnOff()
-{
-    return !!_onCache;
-}
-
 // Turn on all LEDs
 #if 0
 void speedDisplay::lampTest()
@@ -466,21 +461,6 @@ uint8_t speedDisplay::setBrightnessDirect(uint8_t level)
     }
 
     return level;
-}
-
-uint8_t speedDisplay::getBrightness()
-{
-    return _brightness;
-}
-
-void speedDisplay::setNightMode(bool mymode)
-{
-    _nightmode = mymode;
-}
-
-bool speedDisplay::getNightMode(void)
-{
-    return _nightmode;
 }
 
 
@@ -591,9 +571,14 @@ void speedDisplay::setSpeed(int8_t speedNum)
     _speed = speedNum;
 
     if(speedNum < 0) {
-        if((_lastPosSpd > 3) && (now - _posSpdNow < NO_FIX_DASHES)) {
-            b1 = b2 = 37;
-            b3 = 0;
+        if(_lastPosSpd > 3) {
+            if(!_posSpdNow) _posSpdNow = now;
+            if(now - _posSpdNow < NO_FIX_DASHES) {
+                b1 = b2 = 37;
+                b3 = 0;
+            } else {
+                _lastPosSpd = 0;
+            }
         }
     } else {
         _posSpdNow = now;
@@ -677,38 +662,6 @@ void speedDisplay::setTemperature(float temp)
     }
 }
 #endif
-
-// Set/clear dot at speed's 1's position.
-void speedDisplay::setDot(bool dot01)
-{
-    _dot01 = dot01;
-}
-
-// Set/clear the colon
-void speedDisplay::setColon(bool colon)
-{
-    _colon = colon;
-}
-
-
-// Query data ------------------------------------------------------------------
-
-
-int8_t speedDisplay::getSpeed()
-{
-    return _speed;
-}
-
-bool speedDisplay::getDot()
-{
-    return _dot01;
-}
-
-// Set/clear the colon
-bool speedDisplay::getColon()
-{
-    return _colon;
-}
 
 // Private functions ###########################################################
 

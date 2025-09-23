@@ -326,6 +326,7 @@ int16_t tcGPS::getSpeed()
         speedfk = strtof(_sbuf, NULL);
         if(speedfk >= 2.61) {        // 3.00mph
             _speed = (int)roundf(speedfk * GPS_MPH_PER_KNOT);
+            if(_speed > 127) _speed = 127;    // needs to fit into int8
         } else if(speedfk <= 2.17) { // 2.50mph
             _speed = 0;
         } else if(speedfk <= 2.40) { // 2.76mph
@@ -338,12 +339,6 @@ int16_t tcGPS::getSpeed()
     }
 
     return -1;
-}
-
-
-bool tcGPS::haveTime()
-{
-    return (_haveDateTime || _haveDateTime2);
 }
 
 /*

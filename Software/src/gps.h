@@ -67,7 +67,7 @@ class tcGPS {
         void    loop(bool doDelay);
 
         int16_t getSpeed();
-        bool    haveTime();
+        bool    haveTime() { return (_haveDateTime || _haveDateTime2); }
         bool    getDateTime(struct tm *timeInfo, unsigned long *fixAge, unsigned long updInt);
         bool    setDateTime(struct tm *timeinfo);
         

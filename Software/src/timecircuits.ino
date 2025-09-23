@@ -44,7 +44,36 @@
  */
 
 /*  Changelog
- *
+  *  2025/09/19 (A10001986) [3.3.1]
+ *    - Extend mp3 upload by allowing multiple (max 16) mp3 files to be uploaded
+ *      at once. The TCDA.bin file can be uploaded at the same time as well.
+ *  2025/09/17-18 (A10001986)
+ *    - WiFi Manager: Remove some more unused code to reduce bin size. Reduce 
+ *      HTML output by removing "quality icon" styles where not needed. 
+ *  2025/09/15 (A10001986) [3.3.0]
+ *    - Refine mp3 upload facility; allow deleting files from SD by prefixing
+ *      filename with "delete-".
+ *    - WiFi manager: Remove lots of <br> tags; makes Safari display the
+ *      pages better.
+ *  2025/09/14 (A10001986)
+ *    - Allow uploading .mp3 files to SD through config portal. Uses the same
+ *      interface as audio container upload. Files are stored in the root
+ *      folder of the SD; hence not suitable for music player.
+ *  2025/09/13 (A10001986)
+ *    - WiFi manager: Remove (ie skip compilation of) unused code
+ *    - WiFi manager: Add callback to Erase WiFi settings, before reboot
+ *    - WiFi manager: Build param page with fixed size string to avoid memory 
+ *      fragmentation; add functions to calculate String size beforehand.
+ *  2025/09/12 (A10001986)
+ *    - Use "century" bit of RTC in order to restore correct time from RTC if 
+ *      TCD is powered down before 1/1/2099 and powered-up after 31/12/2099.
+ *    - Make several class methods (implicitly) "inline" to reduce bin size
+ *    - Limit speed from GPS receiver to int8 range; minor fix for "-" to "0"
+ *      transition in case of lacking fix.
+ *  2025/09/09 (A10001986)
+ *    - Change version display: TW edition = "A", CS edition = "C"
+ *  2025/08/30 (A10001986) [3.2.005]
+ *    - Speedo: Add option to display speed with leading 0. Defaults to off.
  *  2025/01/15-17 (A10001986) [3.2.004]
  *    - Optimize play_key; keyX will be stopped instead of (re)started if it is 
  *      currently played when repeatedly triggered.

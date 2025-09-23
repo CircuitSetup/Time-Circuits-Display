@@ -25,12 +25,13 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION "V3.2.005"         // 13 chars max
+#define TC_VERSION_REV   "V3.3.1"     // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "AUG302025"  // 13 chars max
+#define TC_VERSION_EXTRA "SEP192025"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "08302025"   // 12 chars max
+#define TC_VERSION_EXTRA "09192025"   // 12 chars max
 #endif
+#define TC_VERSION TC_VERSION_REV
 
 //#define TC_DBG              // debug output on Serial
 
@@ -62,7 +63,7 @@
 #define SP_NUM_TYPES    12  // Number of speedo display types supported
 #define SP_MIN_TYPE     0
 #ifdef TC_HAVESPEEDO
-// Uncomment to keep speedo showing "00." when neither temp, nor GPS speed, 
+// Uncomment to keep speedo showing "0." when neither temp, nor GPS speed, 
 // nor fake speed through rotary encoder are to be displayed, instead of 
 // switching it off when idle.
 //#define SP_ALWAYS_ON
@@ -72,8 +73,8 @@
 #endif
 
 // Uncomment for rotary encoder support
-// Currently Adafruit 4991, DFRobot Gravity 360 and DuPPA I2CEncoder 2.1 are
-// supported.
+// Currently Adafruit 4991/5880, DFRobot Gravity 360 and DuPPA I2CEncoder 2.1
+// are supported.
 // The primary rotary encoder is used to manually select a speed to be
 // displayed on a speed display, and/or to be sent to wirelessly connected
 // props (BTTFN); also, time travels can be triggered by turning the knob up
@@ -169,7 +170,7 @@
 // 1582, Oct 15 followed Oct 4; in case of 1752, Sep 14 followed Sep 2.
 //#define JSWITCH_1582
 
-// Uncomment if using a real GTE/TRW keypad control board
+// Uncomment if using a GTE/TRW keypad control board
 //#define GTE_KEYPAD 
 
 // Uncomment for alternate "animation" when entering a destination time
@@ -180,14 +181,16 @@
 // Uncomment if AM and PM should be reversed (like in BTTF2/3-version of TCD)
 //#define REV_AMPM
 
-// Uncomment to disable the tt animation
+// Uncomment to disable the tt display animation
 //#define TT_NO_ANIM
 
 // Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino >= 2.x)
 //#define USE_SPIFFS
 
-// Uncomment for PCF2129 RTC chip support
+// (Un)comment for RTC chip selection. At least one MUST be defined.
+#define HAVE_DS3231
 //#define HAVE_PCF2129
+
 
 /*************************************************************************
  ***                           Customization                           ***
@@ -196,17 +199,24 @@
 //#define TWSOUND         // Use A10001986's sound files
 //#define TWPRIVATE     // A10001986's private customizations
 
-#ifdef TWPRIVATE
-#undef TC_VERSION
-#define TC_VERSION "A10001986P"
-#elif defined(TWSOUND)
-#undef TC_VERSION
-#define TC_VERSION "A10001986"
-#endif
-
 /*************************************************************************
  ***                             Sanitation                            ***
  *************************************************************************/
+
+#ifdef TWPRIVATE
+#undef TC_VERSION
+#define TC_VERSION TC_VERSION_REV " P"
+#elif defined(TWSOUND)
+#undef TC_VERSION
+#define TC_VERSION TC_VERSION_REV " A"
+#else
+#undef TC_VERSION
+#define TC_VERSION TC_VERSION_REV " C"
+#endif
+
+#if !defined(HAVE_PCF2129) && !defined(HAVE_DS3231)
+#define HAVE_DS3231
+#endif
 
 #ifndef TC_HAVESPEEDO
 #undef SP_ALWAYS_ON

@@ -1643,7 +1643,9 @@ void prepareReboot()
     destinationTime.on();
     delay(ENTER_DELAY);
     digitalWrite(WHITE_LED_PIN, LOW);
+    delay(500);
     unmount_fs();
+    delay(100);
 }
 
 /*

@@ -85,7 +85,7 @@
  * tcRTC Class for DS3231/PCF2129
  ****************************************************************/
 
-tcRTC::tcRTC(int numTypes, uint8_t addrArr[])
+tcRTC::tcRTC(int numTypes, const uint8_t addrArr[])
 {
     _numTypes = min(2, numTypes);
 
@@ -131,7 +131,7 @@ bool tcRTC::begin(unsigned long powerupTime)
 }
 
 /*
- * Set the date/time from individual elements
+ * Set RTC
  * 
  * - Only years 2000-2099
  * - No calculation of dayOfWeek
@@ -164,6 +164,7 @@ void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte day
 
     case RTCT_DS3231:
     default:
+        #ifdef HAVE_DS3231
         buffer[0] = DS3231_TIME;
         buffer[4] = bin2bcd(dowToDS3231(dayOfWeek));
         buffer[5] = bin2bcd(dayOfMonth);
@@ -173,6 +174,7 @@ void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte day
         statreg = read_register(DS3231_STATUS);
         statreg &= ~0x80;
         write_register(DS3231_STATUS, statreg);
+        #endif
         break;
     }
 
@@ -188,30 +190,37 @@ void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte day
 void tcRTC::now(DateTime& dt) 
 {
     uint8_t buffer[7];
+    uint16_t y = 2000;
 
     switch(_rtcType) {
 
     case RTCT_PCF2129:
         #ifdef HAVE_PCF2129
         read_bytes(PCF2129_TIME, buffer, 7);
-        dt.set(bcd2bin(buffer[6]) + 2000U,
-               bcd2bin(buffer[5] & 0x7F),
+        dt.set(bcd2bin(buffer[6]) + y,
+               bcd2bin(buffer[5] & 0x7f),
                bcd2bin(buffer[3]),
                bcd2bin(buffer[2]),
                bcd2bin(buffer[1]),
-               bcd2bin(buffer[0] & 0x7F));
+               bcd2bin(buffer[0] & 0x7f));
         #endif
         break;
 
     case RTCT_DS3231:
     default:
+        #ifdef HAVE_DS3231
         read_bytes(DS3231_TIME, buffer, 7);
-        dt.set(bcd2bin(buffer[6]) + 2000U,
-               bcd2bin(buffer[5] & 0x7F),
+        if(buffer[5] & 0x80) {
+             y += 100;
+             buffer[5] &= 0x7f;
+        }
+        dt.set(bcd2bin(buffer[6]) + y,
+               bcd2bin(buffer[5]),
                bcd2bin(buffer[4]),
                bcd2bin(buffer[2]),
                bcd2bin(buffer[1]),
-               bcd2bin(buffer[0] & 0x7F));
+               bcd2bin(buffer[0] & 0x7f));
+        #endif
     }
 }
 
@@ -237,12 +246,14 @@ void tcRTC::clockOutEnable()
 
     case RTCT_DS3231:
     default:
+        #ifdef HAVE_DS3231
         readValue = read_register(DS3231_CONTROL);
         // enable squarewave and set to 1Hz
         // Bit 2 INTCN - 0 enables wave output
         // Bit 3 and 4 - 0 0 sets 1Hz
         readValue &= B11100011;
         write_register(DS3231_CONTROL, readValue);
+        #endif
         break;
     }
 }
@@ -301,9 +312,11 @@ bool tcRTC::lostPower(void)
 
     case RTCT_DS3231:
     default:
+        #ifdef HAVE_DS3231
         // Check Oscillator Stop Flag to see 
         // if RTC stopped due to power loss
         return read_register(DS3231_STATUS) >> 7;
+        #endif
     }
 
     return false;
@@ -331,6 +344,7 @@ bool tcRTC::battLow(void)
  */
 float tcRTC::getTemperature() 
 {
+    #ifdef HAVE_DS3231
     uint8_t buffer[2];
 
     switch(_rtcType) {
@@ -339,7 +353,8 @@ float tcRTC::getTemperature()
         read_bytes(DS3231_TEMP, buffer, 2);
         return (float)buffer[0] + (float)(buffer[1] >> 6) * 0.25f;
     }
-
+    #endif
+    
     return 0.0f;
 }
 

@@ -309,7 +309,7 @@ void tcSensor::write8(uint16_t regno, uint8_t value)
 #define HDC302x_CRC_POLY  0x31
 
 // Store i2c address
-tempSensor::tempSensor(int numTypes, uint8_t addrArr[])
+tempSensor::tempSensor(int numTypes, const uint8_t addrArr[])
 {
     _numTypes = min(9, numTypes);
 
@@ -740,11 +740,6 @@ float tempSensor::readTemp(bool celsius)
     return temp;
 }
 
-void tempSensor::setOffset(float myOffs)
-{
-    _userOffset = myOffs;
-}
-
 // Private functions ###########################################################
 
 float tempSensor::BMx280_CalcTemp(uint32_t ival, uint32_t hval)
@@ -980,7 +975,7 @@ static uint32_t TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32
 static int32_t TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32_t ch1);
 
 // Store i2c address
-lightSensor::lightSensor(int numTypes, uint8_t addrArr[])
+lightSensor::lightSensor(int numTypes, const uint8_t addrArr[])
 {
     _numTypes = min(8, numTypes);
 
@@ -1100,11 +1095,6 @@ bool lightSensor::begin(bool skipLast, unsigned long powerupTime, void (*myDelay
     _customDelayFunc = myDelay;
 
     return true;
-}
-
-int32_t lightSensor::readLux()
-{
-    return _lux;
 }
 
 void lightSensor::loop()

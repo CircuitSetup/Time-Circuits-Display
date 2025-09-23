@@ -613,34 +613,6 @@ bool PubSubClient::connected()
     return rc;
 }
 
-void PubSubClient::setServer(IPAddress ip, uint16_t port)
-{
-    this->ip = ip;
-    this->port = port;
-    this->domain = NULL;
-}
-
-void PubSubClient::setServer(const char *domain, uint16_t port)
-{
-    this->domain = domain;
-    this->port = port;
-}
-
-void PubSubClient::setCallback(void (*callback)(char*, uint8_t*, unsigned int))
-{
-    this->callback = callback;
-}
-
-void PubSubClient::setLooper(void (*looper)())
-{
-    this->looper = looper;
-}
-
-int PubSubClient::state()
-{
-    return this->_state;
-}
-
 bool PubSubClient::setBufferSize(uint16_t size)
 {
     if(size == 0)
@@ -773,11 +745,6 @@ void PubSubClient::cancelPing()
 
     closesocket(_s);
     _pstate = PING_IDLE;   
-}
-
-int PubSubClient::pstate()
-{
-    return this->_pstate;
 }
 
 #endif  // TC_HAVEMQTT

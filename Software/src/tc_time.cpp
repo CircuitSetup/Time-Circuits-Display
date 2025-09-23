@@ -420,8 +420,8 @@ static const uint8_t NTPUDPHD[4] = { 'T', 'C', 'D', '1' };
 static uint32_t      NTPUDPID    = 0;
  
 // The RTC object
-tcRTC rtc(2, (uint8_t[2*2]){ PCF2129_ADDR, RTCT_PCF2129, 
-                             DS3231_ADDR,  RTCT_DS3231 });
+tcRTC rtc(2, (const uint8_t[2*2]){ PCF2129_ADDR, RTCT_PCF2129, 
+                                   DS3231_ADDR,  RTCT_DS3231 });
 #ifdef HAVE_PCF2129
 static unsigned long OTPRDoneNow = 0;
 static bool          RTCNeedsOTPR = false;
@@ -447,12 +447,12 @@ speedDisplay speedo(SPEEDO_ADDR);
 #endif
 #ifdef TC_HAVE_RE
 static TCRotEnc rotEnc(3, 
-            (uint8_t[3*2]){ ADDA4991_ADDR, TC_RE_TYPE_ADA4991,
+      (const uint8_t[3*2]){ ADDA4991_ADDR, TC_RE_TYPE_ADA4991,
                             DUPPAV2_ADDR,  TC_RE_TYPE_DUPPAV2,
                             DFRGR360_ADDR, TC_RE_TYPE_DFRGR360
                           });
 static TCRotEnc rotEncV(3, 
-            (uint8_t[3*2]){ ADDA4991V_ADDR, TC_RE_TYPE_ADA4991,
+      (const uint8_t[3*2]){ ADDA4991V_ADDR, TC_RE_TYPE_ADA4991,
                             DUPPAV2V_ADDR,  TC_RE_TYPE_DUPPAV2,
                             DFRGR360V_ADDR, TC_RE_TYPE_DFRGR360
                           });                          
@@ -460,7 +460,7 @@ static TCRotEnc *rotEncVol;
 #endif
 #ifdef TC_HAVETEMP
 tempSensor tempSens(9, 
-            (uint8_t[9*2]){ MCP9808_ADDR, MCP9808,
+      (const uint8_t[9*2]){ MCP9808_ADDR, MCP9808,
                             BMx280_ADDR,  BMx280,
                             SHT40_ADDR,   SHT40,
                             MS8607_ADDR,  MS8607,   // before Si7021
@@ -473,7 +473,7 @@ tempSensor tempSens(9,
 #endif
 #ifdef TC_HAVELIGHT
 lightSensor lightSens(6, 
-            (uint8_t[6*2]){ LTR3xx_ADDR,  LST_LTR3xx,   // must be before TSL26x1
+      (const uint8_t[6*2]){ LTR3xx_ADDR,  LST_LTR3xx,   // must be before TSL26x1
                             TSL2591_ADDR, LST_TSL2591,  // must be after LTR3xx
                             TSL2561_ADDR, LST_TSL2561,  // must be after LTR3xx
                             BH1750_ADDR,  LST_BH1750,
@@ -745,30 +745,30 @@ static const uint32_t hours1kYears[] =
 };
 
 #ifdef TC_JULIAN_CAL
-static uint64_t tdro = 5258967840;
+static const uint64_t tdro = 5258967840;
 #ifndef JSWITCH_1582
-static int jCentStart   = 1700;      // Start of century when switch took place
-static int jCentEnd     = 1799;      // Last year of century when switch took place
-static int jSwitchYear  = 1752;      // Year in which switch to Gregorian Cal took place
-static int jSwitchMon   = 9;         // Month in which switch to Gregorian Cal took place
-static int jSwitchDay   = 2;         // Last day of Julian Cal
-static int jSwitchSkipD = 11;        // Number of days skipped
-static int jSwitchSkipH = 11 * 24;   // Num hours skipped
+static const int jCentStart   = 1700;      // Start of century when switch took place
+static const int jCentEnd     = 1799;      // Last year of century when switch took place
+static const int jSwitchYear  = 1752;      // Year in which switch to Gregorian Cal took place
+static const int jSwitchMon   = 9;         // Month in which switch to Gregorian Cal took place
+static const int jSwitchDay   = 2;         // Last day of Julian Cal
+static const int jSwitchSkipD = 11;        // Number of days skipped
+static const int jSwitchSkipH = 11 * 24;   // Num hours skipped
 #else
-static int jCentStart   = 1500;      // Start of century when switch took place
-static int jCentEnd     = 1599;      // Last year of century when switch took place
-static int jSwitchYear  = 1582;      // Year in which switch to Gregorian Cal took place
-static int jSwitchMon   = 10;        // Month in which switch to Gregorian Cal took place
-static int jSwitchDay   = 4;         // Last day of Julian Cal
-static int jSwitchSkipD = 10;        // Number of days skipped
-static int jSwitchSkipH = 10 * 24;   // Num hours skipped
+static const int jCentStart   = 1500;      // Start of century when switch took place
+static const int jCentEnd     = 1599;      // Last year of century when switch took place
+static const int jSwitchYear  = 1582;      // Year in which switch to Gregorian Cal took place
+static const int jSwitchMon   = 10;        // Month in which switch to Gregorian Cal took place
+static const int jSwitchDay   = 4;         // Last day of Julian Cal
+static const int jSwitchSkipD = 10;        // Number of days skipped
+static const int jSwitchSkipH = 10 * 24;   // Num hours skipped
 #endif
 static int mon_yday_jSwitch[13];     // Accumulated days per month in year of Switch
 static int mon_ydayt24t60J[13];      // Accumulated mins per month in year of Switch
 static int jSwitchYrHrs;
 static uint32_t jSwitchHash = 0;
 #else
-static uint64_t tdro = 5258964960;
+static const uint64_t tdro = 5258964960;
 #endif
 #define a(f, j) (f << (*monthDays - j))
 uint8_t* e(uint8_t *d, uint32_t m, int y) { return (*r)(d, m, y); }
@@ -1224,7 +1224,7 @@ void time_setup()
     #ifdef TC_HAVESPEEDO
     speedoUpdateRate = atoi(settings.spdUpdRate) & 3;
     #else
-    speedoUpdateRate = 0;
+    speedoUpdateRate = provGPS2BTTFN ? 1 : 0;
     #endif
 
     // Check for GPS receiver
@@ -1363,15 +1363,16 @@ void time_setup()
     // Start bttf network
     bttfn_setup();
 
-    // Load UTC time from RTC (requires valid pt's yearOffset)
+    // Load UTC time from RTC (requires valid yearOffset)
     myrtcnow(dtu);
 
-    // rtcYear: Current UTC-year (as read from the RTC-Yoffs)
+    // rtcYear: Current UTC-year (as read from the RTC, minus Yoffs)
     uint16_t rtcYear = dtu.year();
 
     // lastYear: The UTC-year when the RTC was adjusted for the last time.
-    // If the RTC was just updated, everything is in place.
-    // Otherwise use value loaded from NVM and make required re-calculations.
+    // If the RTC was just updated (haveAuthTime), everything is in place.
+    // Otherwise use lastYear loaded from NVM, compare it to RTC year, and 
+    // make required re-calculations (based on RTC year) if they don't match.
     if(haveAuthTime) {
         lastYear = rtcYear;
     }
@@ -1488,8 +1489,7 @@ void time_setup()
             // so the buffer fills in 3000/1500ms. We poll every 
             // 250/250ms, hence the entire buffer is read in
             // 1000/1000ms (64 bytes per poll).
-            // The max delay to get current speed is therefore 500ms,
-            // which is ok as BTTFN clients only poll once per sec.
+            // The max delay to get current speed is therefore 500ms.
             GPSupdateFreq = 250; //(!speedoUpdateRate) ? 250 : 250;
         } else {
             // For when GPS speed is to be displayed on speedo:
@@ -6779,7 +6779,7 @@ static void bttfn_notify_of_speed()
         ssrc = BTTFN_SSRC_REM;
     #endif
     #ifdef TC_HAVEGPS
-    } else if(useGPS && provGPS2BTTFN) {    
+    } else if(useGPS && provGPS2BTTFN) {
         // Why "&& provGPS2BTTFN"?
         // Because: If stationary user uses GPS for time only, speed will
         // be 0 permanently, and rotary encoder never gets a chance.
