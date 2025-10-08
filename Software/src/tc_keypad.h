@@ -53,6 +53,8 @@
 #ifndef _TC_KEYPAD_H
 #define _TC_KEYPAD_H
 
+extern bool p3anim;
+
 extern bool isEnterKeyPressed;
 extern bool isEnterKeyHeld;
 #ifdef EXTERNAL_TIMETRAVEL_IN

@@ -77,6 +77,9 @@ struct dateStruct {
 #define CDD_FORCE24 0x0001
 #define CDD_NOLEAD0 0x0002
 
+#define _AM 0x0080
+#define _PM 0x8000
+
 class clockDisplay {
 
     public:
@@ -103,6 +106,8 @@ class clockDisplay {
         void set1224(bool hours24) { _mode24 = hours24; }
         bool get1224()             { return _mode24; }
 
+        void setAMPMOrder(bool reverse) { _am = reverse ? _PM : _AM; _pm = reverse ? _AM : _PM; }
+
         void setNightMode(bool mymode)  { _nightmode = mymode; }
         bool getNightMode()             { return _nightmode; }
         void setNMOff(bool NMOff)       { _NmOff = NMOff; }
@@ -112,11 +117,11 @@ class clockDisplay {
 
         void show();
         void showAnimate1();
-        #ifdef BTTF3_ANIM
+        #ifdef IS_ACAR_DISPLAY
+        void showAnimate2();
+        #else
         void showAnimate2(int until = CD_BUF_SIZE);
         void showAnimate3(int mystep);
-        #else
-        void showAnimate2();
         #endif
 
         void showAlt();
@@ -214,6 +219,10 @@ class clockDisplay {
         int16_t  _lastWrittenYO = -11111;
         bool     _lastWrittenRead = false;
 
+        bool     _mode24 = false;       // true = 24 hour mode, false = 12 hour mode
+        uint16_t _am = _AM;
+        uint16_t _pm = _PM;
+
         uint8_t _month = 1;
         uint8_t _day = 1;
         uint8_t _hour = 0;
@@ -222,7 +231,6 @@ class clockDisplay {
         bool    _rtc = false;           // will this be displaying real time
         uint8_t _brightness = 15;       // current display brightness
         uint8_t _origBrightness = 15;   // value from settings
-        bool    _mode24 = false;        // true = 24 hour mode, false = 12 hour mode
         bool    _nightmode = false;     // true = dest/dept times off
         bool    _NmOff = false;         // true = off during night mode, false = dimmed
         int     _oldnm = -1;

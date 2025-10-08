@@ -134,11 +134,12 @@ extern int timeTravelP0;
 extern int timeTravelP1;
 extern int timeTravelP2;
 extern int specDisp;
+extern bool playingIntro;
 
 extern uint8_t  mqttDisp;
 #ifdef TC_HAVEMQTT
 extern uint8_t  mqttOldDisp;
-extern char mqttMsg[256];
+extern char *mqttMsg;
 extern uint16_t mqttIdx;
 extern int16_t  mqttMaxIdx;
 extern bool     mqttST;

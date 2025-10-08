@@ -1,70 +1,39 @@
 /**
  * wm_consts.h
- * internal const strings/tokens
- * WiFiManager, a library for the ESP8266/Arduino platform
- * for configuration of WiFi credentials using a Captive Portal
+ *
+ * Based on:
+ *
+ * WiFiManager, a library for the ESP32/Arduino platform
  *
  * @author Creator tzapu
  * @author tablatronix
  * @version 2.0.15+A10001986
  * @license MIT
  *
- * Modified by Thomas Winischhofer (A10001986)
+ * Adapted by Thomas Winischhofer (A10001986)
  */
 
 #ifndef _WM_CONSTS_H
 #define _WM_CONSTS_H
-
-
-// -----------------------------------------------------------------------------------------------
-// TOKENS
-
-const char WM_VERSION_STR[] PROGMEM = "v2.0.15-A10001986";
-
-const uint8_t _nummenutokens = 11;
-const char * const _menutokens[_nummenutokens] PROGMEM = {
-    "wifi",
-    "wifinoscan",
-    "info",
-    "param",
-    "close",
-    "restart",
-    "exit",
-    "erase",
-    "update",
-    "sep",
-    "custom"
-};
 
 // Routes
 const char R_root[]               PROGMEM = "/";
 const char R_wifi[]               PROGMEM = "/wifi";
 const char R_wifinoscan[]         PROGMEM = "/0wifi";
 const char R_wifisave[]           PROGMEM = "/wifisave";
-const char R_info[]               PROGMEM = "/info";
 const char R_param[]              PROGMEM = "/param";
 const char R_paramsave[]          PROGMEM = "/paramsave";
-const char R_restart[]            PROGMEM = "/restart";
-const char R_exit[]               PROGMEM = "/exit";
-const char R_close[]              PROGMEM = "/close";
 const char R_erase[]              PROGMEM = "/erase";
-const char R_status[]             PROGMEM = "/status";
 const char R_update[]             PROGMEM = "/update";
 const char R_updatedone[]         PROGMEM = "/u";
 
-//Strings
-const char S_ip[]                 PROGMEM = "ip";
-const char S_gw[]                 PROGMEM = "gw";
-const char S_sn[]                 PROGMEM = "sn";
-const char S_dns[]                PROGMEM = "dns";
+// Strings
+const char S_ip[]                 PROGMEM = WMS_ip;
+const char S_gw[]                 PROGMEM = WMS_gw;
+const char S_sn[]                 PROGMEM = WMS_sn;
+const char S_dns[]                PROGMEM = WMS_dns;
 
-//Tokens
-//@todo consolidate and reduce
-const char T_ss[]                 PROGMEM = "{"; // token start sentinel
-const char T_es[]                 PROGMEM = "}"; // token end sentinel
-const char T_1[]                  PROGMEM = "{1}"; // @token 1
-const char T_2[]                  PROGMEM = "{2}"; // @token 2
-const char T_3[]                  PROGMEM = "{3}"; // @token 2
+// Tokens
 const char T_v[]                  PROGMEM = "{v}"; // @token v
 const char T_V[]                  PROGMEM = "{V}"; // @token v
 const char T_I[]                  PROGMEM = "{I}"; // @token I
@@ -87,48 +56,8 @@ const char HTTP_HEAD_CT2[]        PROGMEM = "text/plain";
 const char HTTP_HEAD_CORS[]       PROGMEM = "Access-Control-Allow-Origin";
 const char HTTP_HEAD_CORS_ALLOW_ALL[]  PROGMEM = "*";
 
-const char * const WIFI_STA_STATUS[] PROGMEM
-{
-  "WL_IDLE_STATUS",     // 0 STATION_IDLE
-  "WL_NO_SSID_AVAIL",   // 1 STATION_NO_AP_FOUND
-  "WL_SCAN_COMPLETED",  // 2
-  "WL_CONNECTED",       // 3 STATION_GOT_IP
-  "WL_CONNECT_FAILED",  // 4 STATION_CONNECT_FAIL, STATION_WRONG_PASSWORD(NI)
-  "WL_CONNECTION_LOST", // 5
-  "WL_DISCONNECTED",    // 6
-  "WL_STATION_WRONG_PASSWORD" // 7 KLUDGE
-};
-
-#ifdef ESP32
-const char * const AUTH_MODE_NAMES[] PROGMEM
-{
-    "OPEN",
-    "WEP",
-    "WPA_PSK",
-    "WPA2_PSK",
-    "WPA_WPA2_PSK",
-    "WPA2_ENTERPRISE",
-    "MAX"
-};
-#elif defined(ESP8266)
-const char * const AUTH_MODE_NAMES[] PROGMEM
-{
-    "",
-    "",
-    "WPA_PSK",      // 2 ENC_TYPE_TKIP
-    "",
-    "WPA2_PSK",     // 4 ENC_TYPE_CCMP
-    "WEP",          // 5 ENC_TYPE_WEP
-    "",
-    "OPEN",         //7 ENC_TYPE_NONE
-    "WPA_WPA2_PSK", // 8 ENC_TYPE_AUTO
-};
-#endif
-
-const char* const WIFI_MODES[] PROGMEM = { "NULL", "STA", "AP", "STA+AP" };
-
+// Country
 #ifndef _A10001986_NO_COUNTRY
-#ifdef ESP32
 // as 2.5.2
 // typedef struct {
 //     char                  cc[3];   /**< country code string */
@@ -140,18 +69,26 @@ const char* const WIFI_MODES[] PROGMEM = { "NULL", "STA", "AP", "STA+AP" };
 const wifi_country_t WM_COUNTRY_US{"US",1,11,CONFIG_ESP32_PHY_MAX_WIFI_TX_POWER,WIFI_COUNTRY_POLICY_AUTO};
 const wifi_country_t WM_COUNTRY_CN{"CN",1,13,CONFIG_ESP32_PHY_MAX_WIFI_TX_POWER,WIFI_COUNTRY_POLICY_AUTO};
 const wifi_country_t WM_COUNTRY_JP{"JP",1,14,CONFIG_ESP32_PHY_MAX_WIFI_TX_POWER,WIFI_COUNTRY_POLICY_AUTO};
-#elif defined(ESP8266) && !defined(WM_NOCOUNTRY)
-// typedef struct {
-//     char cc[3];               /**< country code string */
-//     uint8_t schan;            /**< start channel */
-//     uint8_t nchan;            /**< total channel number */
-//     uint8_t policy;           /**< country policy */
-// } wifi_country_t;
-const wifi_country_t WM_COUNTRY_US{"US",1,11,WIFI_COUNTRY_POLICY_AUTO};
-const wifi_country_t WM_COUNTRY_CN{"CN",1,13,WIFI_COUNTRY_POLICY_AUTO};
-const wifi_country_t WM_COUNTRY_JP{"JP",1,14,WIFI_COUNTRY_POLICY_AUTO};
-#endif
 #endif // _A10001986_NO_COUNTRY
+
+// Debug
+#ifdef WM_DEBUG_LEVEL
+const char * const WIFI_STA_STATUS[] PROGMEM =
+{
+    "WL_IDLE_STATUS",     // 0 STATION_IDLE
+    "WL_NO_SSID_AVAIL",   // 1 STATION_NO_AP_FOUND
+    "WL_SCAN_COMPLETED",  // 2
+    "WL_CONNECTED",       // 3 STATION_GOT_IP
+    "WL_CONNECT_FAILED",  // 4 STATION_CONNECT_FAIL, STATION_WRONG_PASSWORD(NI)
+    "WL_CONNECTION_LOST", // 5
+    "WL_DISCONNECTED",    // 6
+    "WL_STATION_WRONG_PASSWORD" // 7 KLUDGE
+};
+#endif
+
+#ifdef WM_DEBUG_LEVEL
+const char* const WIFI_MODES[] PROGMEM = { "NULL", "STA", "AP", "STA+AP" };
+#endif
 
 /*
 * ESP32 WiFi Events
@@ -250,4 +187,4 @@ typedef union {
 
 */
 
-#endif
+#endif  // _WM_CONSTS_H

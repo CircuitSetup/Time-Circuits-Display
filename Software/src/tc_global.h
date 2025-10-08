@@ -25,27 +25,15 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION_REV   "V3.3.1"     // 13 chars max
+#define TC_VERSION_REV   "V3.5.0"     // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "SEP192025"  // 13 chars max
+#define TC_VERSION_EXTRA "OCT072025"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "09192025"   // 12 chars max
+#define TC_VERSION_EXTRA "10072025"   // 12 chars max
 #endif
 #define TC_VERSION TC_VERSION_REV
 
 //#define TC_DBG              // debug output on Serial
-
-/*************************************************************************
- ***                     mDNS (Bonjour) support                        ***
- *************************************************************************/
-
-// Supply mDNS service
-// Allows accessing the Config Portal via http://hostname.local
-// <hostname> is configurable in the Config Portal
-// This needs to be commented if WiFiManager provides mDNS
-#define TC_MDNS
-// Uncomment this if WiFiManager has mDNS enabled
-//#define TC_WM_HAS_MDNS 
 
 /*************************************************************************
  ***                 Configuration for peripherals                     ***
@@ -63,10 +51,6 @@
 #define SP_NUM_TYPES    12  // Number of speedo display types supported
 #define SP_MIN_TYPE     0
 #ifdef TC_HAVESPEEDO
-// Uncomment to keep speedo showing "0." when neither temp, nor GPS speed, 
-// nor fake speed through rotary encoder are to be displayed, instead of 
-// switching it off when idle.
-//#define SP_ALWAYS_ON
 // Uncomment to enable the fake-0 on CircuitSetup's speedo; is not usable
 // as a full third digit, just displays "0" when speed to be displayed
 //#define SP_CS_0ON
@@ -87,6 +71,10 @@
 // "Remote" is a modified Futaba remote control with CS/A10001986 control board
 // and the A10001986 "remote" firmware. See https://remote.out-a-ti.me
 //#define TC_HAVE_REMOTE
+
+// Uncomment to trigger a time travel when reaching a (real) GPS speed of 88. 
+// Use at own risk.
+//#define NOT_MY_RESPONSIBILITY
 
 // Uncomment for support of a temperature/humidity sensor (MCP9808, BMx280, 
 // SI7021, SHT4x, TMP117, AHT20, HTU31D, MS8607, HDC302x) connected via i2c. 
@@ -173,24 +161,12 @@
 // Uncomment if using a GTE/TRW keypad control board
 //#define GTE_KEYPAD 
 
-// Uncomment for alternate "animation" when entering a destination time
-// (Does not affect other situations where animation is shown, like time
-// cycling, or when RC mode is active). Mutually exclusive to a-car mode.
-//#define BTTF3_ANIM
-
-// Uncomment if AM and PM should be reversed (like in BTTF2/3-version of TCD)
-//#define REV_AMPM
-
-// Uncomment to disable the tt display animation
-//#define TT_NO_ANIM
-
 // Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino >= 2.x)
 //#define USE_SPIFFS
 
 // (Un)comment for RTC chip selection. At least one MUST be defined.
 #define HAVE_DS3231
 //#define HAVE_PCF2129
-
 
 /*************************************************************************
  ***                           Customization                           ***
@@ -216,13 +192,6 @@
 
 #if !defined(HAVE_PCF2129) && !defined(HAVE_DS3231)
 #define HAVE_DS3231
-#endif
-
-#ifndef TC_HAVESPEEDO
-#undef SP_ALWAYS_ON
-#endif
-#ifdef IS_ACAR_DISPLAY
-#undef BTTF3_ANIM
 #endif
 
 /*************************************************************************

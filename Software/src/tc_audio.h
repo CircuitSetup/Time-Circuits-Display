@@ -60,7 +60,7 @@
 #define PA_INTRMUS 0x0002
 #define PA_ALLOWSD 0x0004
 #define PA_DYNVOL  0x0008
-#define PA_NOID3TS 0x0010
+#define PA_DOID3TS 0x0010
 #define PA_LOOPNOW 0x0020
 #define PA_LINEOUT 0x0040
 #define PA_INTSPKR 0x0000
@@ -80,8 +80,11 @@ bool  check_file_SD(const char *audio_file);
 int   getSWVolFromHWVol();
 bool  checkAudioDone();
 bool  checkMP3Done();
+bool  checkMP3Running();
+bool  checkAudioStarted();
 void  stopAudio();
 void  decodeID3(char *artist, char *track);
+void  freeID3();
 
 void  mp_init(bool isSetup = false);
 void  mp_play(bool forcePlay = true);
@@ -102,7 +105,6 @@ extern bool muteBeep;
 extern bool haveMusic;
 extern bool mpActive;
 extern bool haveId3;
-extern char id3[];
 
 extern bool haveLineOut;
 extern bool useLineOut;

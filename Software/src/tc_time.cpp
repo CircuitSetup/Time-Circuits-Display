@@ -165,6 +165,7 @@
 #define TEMP_UPD_INT_S (30*1000)
 
 unsigned long        powerupMillis = 0;
+bool                 playingIntro = false;
 
 // millis64
 static unsigned long lastMillis64 = 0;
@@ -208,7 +209,7 @@ bool                 timetravelPersistent = false;
 // Alarm/HourlySound based on RTC
 static bool          alarmRTC = true;
 
-bool                 useGPS      = false;
+bool                 useGPS      = false;  // leave this false, will be true after init
 bool                 useGPSSpeed = false;
 static bool          provGPS2BTTFN = false;
 
@@ -232,9 +233,8 @@ static const char    *preTTSound = "/ttaccel.mp3";
 #ifdef TC_HAVEGPS
 static unsigned long dispGPSnow = 0;
 #endif
-#ifdef SP_ALWAYS_ON
+static bool          speedoAlwaysOn = false;
 static unsigned long dispIdlenow = 0;
-#endif
 #ifdef TC_HAVETEMP
 static int           tempBrightness = DEF_TEMP_BRIGHT;
 static bool          tempOldNM = false;
@@ -290,6 +290,7 @@ static unsigned long startupNow   = 0;
 
 // Timetravel sequence: Timers, triggers, state
 static bool          playTTsounds = true;
+static bool          skipTTAnim = false;
 int                  timeTravelP0 = 0;
 int                  timeTravelP2 = 0;
 static unsigned long timetravelP1Now = 0;
@@ -396,7 +397,7 @@ uint8_t     destShowAlt = 0, depShowAlt = 0;
 uint8_t     mqttDisp = 0;
 #ifdef TC_HAVEMQTT
 uint8_t     mqttOldDisp = 0;
-char        mqttMsg[256];
+char        *mqttMsg = NULL;
 uint16_t    mqttIdx = 0;
 int16_t     mqttMaxIdx = 0;
 bool        mqttST = false;
@@ -935,9 +936,7 @@ static bool dispTemperature(bool force = false);
 #endif
 #endif
 #ifdef TC_HAVESPEEDO
-#ifdef SP_ALWAYS_ON
 static void dispIdleZero(bool force = false);
-#endif
 #endif
 #ifdef TC_HAVE_RE                
 static void re_init(bool zero = true);
@@ -1036,7 +1035,7 @@ void time_setup()
     const char *funcName = "time_setup: ";
     #endif
 
-    Serial.println(F("Time Circuits Display version " TC_VERSION " " TC_VERSION_EXTRA));
+    Serial.println("Time Circuits Display version " TC_VERSION " " TC_VERSION_EXTRA);
 
     // Power management: Set CPU speed
     // to maximum and start timer
@@ -1115,11 +1114,23 @@ void time_setup()
     // Start (reset) the displays
     startDisplays();
 
-    // Initialize clock mode: 12 hour vs 24 hour
-    bool mymode24 = (atoi(settings.mode24) > 0);
-    presentTime.set1224(mymode24);
-    destinationTime.set1224(mymode24);
-    departedTime.set1224(mymode24);
+    {
+        // Initialize clock mode: 12 hour vs 24 hour
+        bool tempmode = (atoi(settings.mode24) > 0);
+        presentTime.set1224(tempmode);
+        destinationTime.set1224(tempmode);
+        departedTime.set1224(tempmode);
+
+        tempmode = (atoi(settings.revAmPm) > 0);
+        presentTime.setAMPMOrder(tempmode);
+        destinationTime.setAMPMOrder(tempmode);
+        departedTime.setAMPMOrder(tempmode);
+    }
+
+    #ifndef IS_ACAR_DISPLAY
+    p3anim = (atoi(settings.p3anim) > 0);
+    #endif
+    skipTTAnim = (atoi(settings.skipTTAnim) > 0);
 
     // Configure presentTime as a display that will hold real time
     presentTime.setRTC(true);
@@ -1612,6 +1623,9 @@ void time_setup()
         speedo.setBrightness(atoi(settings.speedoBright), true);
         speedo.setDot(true);
 
+        // Negate this flag, option is "Switch off", not "Keep on"
+        speedoAlwaysOn = !(atoi(settings.speedoAO) > 0);
+
         speedo.dispL0Spd = (atoi(settings.speedoL0Spd) > 0);
 
         // No TT sounds to play -> no user-provided sound.
@@ -1651,18 +1665,18 @@ void time_setup()
             speedo.on(); 
         } else {
         #endif
-            #ifdef SP_ALWAYS_ON
-            #ifdef FAKE_POWER_ON
-            if(!waitForFakePowerButton) {
-            #endif
-                speedo.setSpeed(0);
-                speedo.on();
-                speedo.show();
-                speedoStatus = SPST_ZERO;
-            #ifdef FAKE_POWER_ON
+            if(speedoAlwaysOn) {
+                #ifdef FAKE_POWER_ON
+                if(!waitForFakePowerButton) {
+                #endif
+                    speedo.setSpeed(0);
+                    speedo.on();
+                    speedo.show();
+                    speedoStatus = SPST_ZERO;
+                #ifdef FAKE_POWER_ON
+                }
+                #endif
             }
-            #endif
-            #endif
         #ifdef TC_HAVEGPS
         }
         #endif
@@ -1811,7 +1825,7 @@ void time_setup()
     if(!haveAudioFiles) {
         destinationTime.showTextDirect("PLEASE");
         presentTime.showTextDirect("INSTALL");
-        departedTime.showTextDirect("AUDIO FILES");
+        departedTime.showTextDirect("SOUND PACK");
         destinationTime.on();
         presentTime.on();
         departedTime.on();
@@ -1823,6 +1837,8 @@ void time_setup()
         const char *t1 = "             TIME";
         const char *t2 = "             CIRCUITS";
         const char *t3 = "ON";
+
+        playingIntro = true;
 
         play_file("/intro.mp3", PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
 
@@ -1861,6 +1877,8 @@ void time_setup()
 
         waitAudioDoneIntro();
         stopAudio();
+
+        playingIntro = false;
     } else {
         while(bttfn_loop()) {}
     }
@@ -1938,6 +1956,27 @@ void time_loop()
                         GPSabove88 = false;
                     }
                     #endif
+
+                    #ifdef TC_HAVESPEEDO
+                    if(useSpeedo && !useGPSSpeed && !bttfnRemoteSpeedMaster) {
+                        if(speedoAlwaysOn 
+                        #ifdef TC_HAVE_RE
+                                          || dispRotEnc
+                        #endif
+                                                       ) {
+                            speedo.setSpeed(0);
+                            speedo.setBrightness(255);
+                            speedo.show();
+                            #ifdef TC_HAVE_RE
+                            speedoStatus = dispRotEnc ? SPST_RE : SPST_ZERO;
+                            #else
+                            speedoStatus = SPST_ZERO;
+                            #endif
+                        }
+                    }
+                    #endif
+
+                    /*
                     #ifdef SP_ALWAYS_ON
                     if(useSpeedo && !useGPSSpeed && !bttfnRemoteSpeedMaster) {
                         speedo.setSpeed(0);
@@ -1957,6 +1996,8 @@ void time_loop()
                         speedoStatus = SPST_RE;
                     }
                     #endif
+                    */
+                    
                     #ifdef TC_HAVETEMP
                     updateTemperature(true);
                     #ifdef TC_HAVESPEEDO
@@ -2050,11 +2091,11 @@ void time_loop()
                     dispTemperature(true);
                 } else {
                 #endif
-                    #ifdef SP_ALWAYS_ON
-                    dispIdleZero();
-                    #else
-                    speedo.off(); // Yes, off.
-                    #endif
+                    if(speedoAlwaysOn) {
+                        dispIdleZero(true);
+                    } else {
+                        speedo.off(); // Yes, off.
+                    }
                 #ifdef TC_HAVETEMP
                 }
                 #endif
@@ -2080,7 +2121,7 @@ void time_loop()
         ettoPulseStart();
         triggerETTO = false;
         #ifdef TC_DBG
-        Serial.println(F("ETTO triggered"));
+        Serial.println("ETTO triggered");
         #endif
     }
     #endif
@@ -2146,8 +2187,11 @@ void time_loop()
         bool    countToGPSSpeed = false;
         uint8_t targetSpeed = 0;
         #ifdef TC_HAVEGPS
-        countToGPSSpeed = (useGPSSpeed && (myGPS.getSpeed() >= 0));
-        targetSpeed = countToGPSSpeed ? myGPS.getSpeed() : 0;
+        {
+            int16_t tgpsSpd = myGPS.getSpeed();
+            countToGPSSpeed = (useGPSSpeed && (tgpsSpd >= 0));
+            targetSpeed = countToGPSSpeed ? tgpsSpd : 0;
+        }
         #endif
         #ifdef TC_HAVE_REMOTE
         if(bttfnRemoteSpeedMaster) {
@@ -2184,11 +2228,11 @@ void time_loop()
             }
             #endif
             if(!useGPSSpeed && !dispRotEnc && !bttfnRemoteSpeedMaster) {
-                #ifdef SP_ALWAYS_ON
-                dispIdleZero();
-                #else
-                speedo.off();
-                #endif
+                if(speedoAlwaysOn) {
+                    dispIdleZero(true);
+                } else {
+                    speedo.off();
+                }
             }
             #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE)
             dispGPSSpeed(true);
@@ -2249,9 +2293,9 @@ void time_loop()
             Serial.printf("TT initiated %d\n", millis());
             #endif
             ettoPulseStartNoLead();
-            #ifndef TT_NO_ANIM
-            allOff();
-            #endif
+            if(!skipTTAnim) {
+                allOff();
+            }
             timetravelP1Delay = TT_P1_DELAY_P2;
             break;
         case 3:
@@ -2469,8 +2513,8 @@ void time_loop()
         #endif
         #endif
 
-        #if defined(TC_HAVESPEEDO) && defined(SP_ALWAYS_ON)
-        if(useSpeedo && !didUpdSpeedo && !useGPSSpeed && !dispRotEnc && !bttfnRemoteSpeedMaster) {
+        #ifdef TC_HAVESPEEDO  // speedoAlwaysOn can only be true of useSpeedo is true
+        if(speedoAlwaysOn && !didUpdSpeedo && !useGPSSpeed && !dispRotEnc && !bttfnRemoteSpeedMaster) {
             dispIdleZero();
         }
         #endif
@@ -3025,13 +3069,8 @@ void time_loop()
 
         x = y;
 
-        #ifndef TT_NO_ANIM
-        if(timeTravelP1 > 1)
-        #else
-        if(0) 
-        #endif    
-        {
-            
+        if(!skipTTAnim && timeTravelP1 > 1) {
+       
             int ii = 5, tt;
             switch(timeTravelP1) {
             case 2:
@@ -3264,7 +3303,7 @@ void timeTravel(bool doComplete, bool withSpeedo, bool forceNoLead)
         #endif
 
         timeTravelP0Speed = 0;
-        timetravelP0Delay = 2000;
+        timetravelP0Delay = havePreTTSound ? 500 : 2000;   // Delay of 2000 too long if we play ttaccel
         triggerP1 = false;
         #ifdef EXTERNAL_TIMETRAVEL_OUT
         triggerETTO = false;
@@ -3279,8 +3318,10 @@ void timeTravel(bool doComplete, bool withSpeedo, bool forceNoLead)
             int16_t tempSpeed = useGPSSpeed ? myGPS.getSpeed() : fakeSpeed;
             #elif defined(TC_HAVEGPS)
             int16_t tempSpeed = myGPS.getSpeed();
-            #else
+            #elif defined(TC_HAVE_RE)
             int16_t tempSpeed = fakeSpeed;
+            #else
+            int16_t tempSpeed = 0;
             #endif
             #ifdef TC_HAVE_REMOTE
             if(bttfnRemoteSpeedMaster) {
@@ -3921,7 +3962,7 @@ void pauseAuto(void)
         autoPaused = true;
         pauseNow = millis();
         #ifdef TC_DBG
-        Serial.println(F("pauseAuto: autoInterval paused for 30 minutes"));
+        Serial.println("pauseAuto: autoInterval paused for 30 minutes");
         #endif
     }
 }
@@ -4357,7 +4398,6 @@ static bool dispTemperature(bool force)
     return true;
 }
 #endif
-#ifdef SP_ALWAYS_ON
 static void dispIdleZero(bool force)
 {
     if(!FPBUnitIsOn || startup || timeTravelP0 || timeTravelP1 || timeTravelRE || timeTravelP2)
@@ -4375,7 +4415,6 @@ static void dispIdleZero(bool force)
 
     }
 }
-#endif
 #endif  // TC_HAVESPEEDO
 #ifdef TC_HAVE_REMOTE
 static void updAndDispRemoteSpeed()
@@ -4703,7 +4742,7 @@ static bool getNTPTime(bool weHaveAuthTime, DateTime& dt)
         } else {
 
             #ifdef TC_DBG
-            Serial.println(F("getNTPTime: No current NTP timestamp available"));
+            Serial.println("getNTPTime: No current NTP timestamp available");
             #endif
 
             return false;
@@ -4712,7 +4751,7 @@ static bool getNTPTime(bool weHaveAuthTime, DateTime& dt)
     } else {
 
         #ifdef TC_DBG
-        Serial.println(F("getNTPTime: WiFi not connected, NTP time sync skipped"));
+        Serial.println("getNTPTime: WiFi not connected, NTP time sync skipped");
         #endif
         
         return false;
@@ -4797,7 +4836,7 @@ static bool setGPStime()
         return false;
 
     #ifdef TC_DBG
-    Serial.println(F("setGPStime() called"));
+    Serial.println("setGPStime() called");
     #endif
 
     myrtcnow(dt);
@@ -6318,11 +6357,11 @@ static void bttfnMakeRemoteSpeedMaster(bool doit)
             if(!FPBUnitIsOn) {
                 if(!useGPSSpeed) speedo.off();
             } else if(!useGPSSpeed && !dispRotEnc) {
-                #ifdef SP_ALWAYS_ON
-                dispIdleZero();
-                #else
-                speedo.off();
-                #endif
+                if(speedoAlwaysOn) {
+                    dispIdleZero(true);
+                } else {
+                    speedo.off();
+                }
             }
         }
         #ifdef TC_HAVEGPS

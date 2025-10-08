@@ -97,6 +97,8 @@ bool audioMute     = false;
 bool muteBeep      = true;
 static bool beepRunning = false;
 
+unsigned long audioplaystart = 0;
+
 bool            haveMusic = false;
 bool            mpActive = false;
 static uint16_t maxMusic = 0;
@@ -107,7 +109,7 @@ static uint16_t currPlaying = 0;
 #define         MAXID3LEN 2048
 bool            haveId3 = false;
 int             Id3Size;
-char            id3[MAXID3LEN];
+static char     *id3 = NULL;
 
 static const float volTable[20] = {
     0.00, 0.02, 0.04, 0.06,
@@ -255,25 +257,23 @@ void audio_setup()
  */
 void audio_loop()
 {
-    //float vol;
-
     if(wav->isRunning()) {
         if(!wav->loop()) {
             wav->stop();
             beepRunning = false;
+            audioplaystart = 0;
         }
     } else if(mp3->isRunning()) {
         if(!mp3->loop()) {
             mp3->stop();
             key_playing = 0;
+            audioplaystart = 0;
             if(mpActive) {
                 mp_next(true);
             }
         } else if(dynVol) {
             sampleCnt++;
             if(sampleCnt > 1) {
-                //vol = getVolume();
-                //if(dynVol) out->SetGain(vol);
                 out->SetGain(getVolume());
                 sampleCnt = 0;
             }
@@ -343,24 +343,33 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
     rawVolIdx = 0;
     anaReadCount = 0;
 
+    haveId3 = false;
+    if(!(flags & PA_DOID3TS)) freeID3();
+
     out->SetGain(getVolume());
 
     if(haveSD && ((flags & PA_ALLOWSD) || FlashROMode) && mySD0->open(audio_file)) {
-        if(!(flags & PA_NOID3TS)) {
-            id3[0] = 0;
-            mySD0->read((void *)id3, 10);
-            if((pos = skipID3(id3))) {
-                Id3Size = pos <= MAXID3LEN ? pos : MAXID3LEN;
-                mySD0->read((void *)((char *)id3 + 10), Id3Size - 10);
-                haveId3 = true;
-            } else {
-                haveId3 = false;
+        if(flags & PA_DOID3TS) {
+            if(!id3) id3 = (char *)malloc(MAXID3LEN);
+            if(id3) {
+                id3[0] = 0;
+                mySD0->read((void *)id3, 10);
+                if((pos = skipID3(id3))) {
+                    Id3Size = pos <= MAXID3LEN ? pos : MAXID3LEN;
+                    mySD0->read((void *)((char *)id3 + 10), Id3Size - 10);
+                    haveId3 = true;
+                }
+                mySD0->seek(pos, SEEK_SET);
             }
-            mySD0->seek(pos, SEEK_SET);
+        } else {
+            buf[0] = 0;
+            mySD0->read((void *)buf, 10);
+            mySD0->seek(skipID3(buf), SEEK_SET);
         }
         mp3->begin(mySD0, out);
+        audioplaystart = millis();
         #ifdef TC_DBG
-        Serial.println(F("Playing from SD"));
+        Serial.println("Playing from SD");
         #endif
     }
     #ifdef USE_SPIFFS
@@ -370,24 +379,23 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
     #endif
     {
         if(!(flags & PA_ISWAV)) {
-            if(!(flags & PA_NOID3TS)) {
-                buf[0] = 0;
-                myFS0->read((void *)buf, 10);
-                myFS0->seek(skipID3(buf), SEEK_SET);
-            }
+            buf[0] = 0;
+            myFS0->read((void *)buf, 10);
+            myFS0->seek(skipID3(buf), SEEK_SET);
             mp3->begin(myFS0, out);
+            audioplaystart = millis();
         } else {
             wav->begin(myFS0, out);
+            //audioplaystart = 0; // is cleared by stop(), used only for mp3 playback
         }
         #ifdef TC_DBG
-        Serial.println(F("Playing from flash FS"));
+        Serial.println("Playing from flash FS");
         #endif
     } else {
         key_playing = 0;
         #ifdef TC_DBG
-        Serial.println(F("Audio file not found"));
+        Serial.println("Audio file not found");
         #endif
-        
     }
 }
 
@@ -453,6 +461,7 @@ void play_beep()
     wav->begin(myPM, out);
     beepRunning = true;
     key_playing = 0;
+    audioplaystart = 0;
 }
 
 void play_key(int k, uint16_t preDTMFkp)
@@ -626,6 +635,11 @@ bool checkMP3Done()
     return true;
 }
 
+bool checkMP3Running()
+{
+    return mp3->isRunning();
+}
+
 void stopAudio()
 {
     if(mp3->isRunning()) {
@@ -634,6 +648,20 @@ void stopAudio()
         wav->stop();
     }
     key_playing = 0;
+    audioplaystart = 0;
+    haveId3 = false;
+}
+
+bool checkAudioStarted()
+{
+    if(!audioplaystart)
+        return false;
+
+    if(millis() - audioplaystart < 3000) {
+        return true;
+    }
+
+    return false;
 }
 
 /*
@@ -796,6 +824,14 @@ void decodeID3(char *artist, char *track)
     }
 }
 
+void freeID3()
+{
+    if(id3) {
+        free((void *)id3);
+        id3 = NULL;
+    }
+}
+
 /*
  * The Music Player
  */
@@ -940,6 +976,8 @@ bool mp_stop()
     if(mpActive) {
         mp3->stop();
         mpActive = false;
+        audioplaystart = 0;
+        freeID3();
     }
     
     return ret;
@@ -1004,7 +1042,7 @@ static bool mp_play_int(bool force)
 
     mp_buildFileName(fnbuf, playList[mpCurrIdx]);
     if(SD.exists(fnbuf)) {
-        if(force) play_file(fnbuf, PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
+        if(force) play_file(fnbuf, PA_LINEOUT|PA_DOID3TS|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
         currPlaying = playList[mpCurrIdx];
         return true;
     }

@@ -76,14 +76,6 @@
 #define CD_AMPM_POS   CD_DAY_POS
 #define CD_COLON_POS  CD_YEAR_POS
 
-#ifndef REV_AMPM
-#define _AM 0x0080
-#define _PM 0x8000
-#else
-#define _AM 0x8000
-#define _PM 0x0080
-#endif
-
 extern bool     alarmOnOff;
 #ifdef TC_HAVEGPS
 extern bool     gpsHaveFix();
@@ -106,15 +98,15 @@ static const char months[13][4] = {
     "  _"
 };
 
-#ifdef BTTF3_ANIM
+#ifndef IS_ACAR_DISPLAY
 static const uint8_t idxtbl[] = {
-        0, 
-        CD_DAY_POS, CD_DAY_POS, 
-        CD_YEAR_POS, CD_YEAR_POS, 
-        CD_YEAR_POS + 1, CD_YEAR_POS + 1, 
-        CD_HOUR_POS, 
-        CD_HOUR_POS, CD_HOUR_POS, 
-        CD_MIN_POS, CD_MIN_POS
+    0, 
+    CD_DAY_POS, CD_DAY_POS, 
+    CD_YEAR_POS, CD_YEAR_POS, 
+    CD_YEAR_POS + 1, CD_YEAR_POS + 1, 
+    CD_HOUR_POS, 
+    CD_HOUR_POS, CD_HOUR_POS, 
+    CD_MIN_POS, CD_MIN_POS
 };
 #endif
 
@@ -128,9 +120,6 @@ static const char *fnSD[3] = {
 };
 static const char *fnLastYear   = "/tcdly";
 static const char *fnLastYearSD = "/tcdly.bin";
-
-static const uint16_t _am = _AM;
-static const uint16_t _pm = _PM;
 
 /*
  * ClockDisplay class
@@ -313,7 +302,7 @@ void clockDisplay::showAnimate1()
 }
 
 // Show month, assumes showAnimate1() was called before
-#ifndef BTTF3_ANIM
+#ifdef IS_ACAR_DISPLAY
 void clockDisplay::showAnimate2()
 {
     if(_nightmode && _NmOff)
@@ -327,9 +316,7 @@ void clockDisplay::showAnimate2()
     }
     Wire.endTransmission();
 }
-
-#else
-
+#else // IS_ACAR_DISPLAY
 void clockDisplay::showAnimate2(int until)
 {
     if(_nightmode && _NmOff)
@@ -386,7 +373,7 @@ void clockDisplay::showAnimate3(int mystep)
         showAnimate2(lim);
     }
 }
-#endif // BTTF3_ANIM
+#endif // IS_ACAR_DISPLAY
 
 void clockDisplay::showAlt()
 {

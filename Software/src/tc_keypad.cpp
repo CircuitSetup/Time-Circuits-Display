@@ -144,6 +144,9 @@ bool isEnterKeyHeld    = false;
 static bool enterWasPressed = false;
 
 static bool needDepTime = false;
+#ifndef IS_ACAR_DISPLAY
+bool p3anim = false;
+#endif
 
 #ifdef EXTERNAL_TIMETRAVEL_IN
 bool                 isEttKeyPressed = false;
@@ -910,7 +913,7 @@ void keypad_loop()
                     if(rcModeState != carMode) {
                         saveCarMode();
                         prepareReboot();
-                        delay(500);
+                        delay(1000);
                         esp_restart();
                     }
                     validEntry = true;
@@ -971,7 +974,7 @@ void keypad_loop()
 
             if(!(strncmp(dateBuffer, "64738", 5))) {
                 prepareReboot();
-                delay(500);
+                delay(1000);
                 esp_restart();
             }
 
@@ -1486,25 +1489,29 @@ void keypad_loop()
             } else {
             #endif
 
-                #ifdef BTTF3_ANIM
-                for(int i = 0; i < 12; i++) {
-                    destinationTime.showAnimate3(i);
-                    if(needDepTime) {
-                        departedTime.showAnimate3(i);
+                #ifndef IS_ACAR_DISPLAY
+                if(p3anim) {
+                    for(int i = 0; i < 12; i++) {
+                        destinationTime.showAnimate3(i);
+                        if(needDepTime) {
+                            departedTime.showAnimate3(i);
+                        }
+                        mydelay(5);
                     }
-                    mydelay(5);
+                } else {
+                #endif    // IS_ACAR_DISPLAY
+                    destinationTime.showAnimate1();
+                    if(needDepTime) {
+                        departedTime.showAnimate1();
+                    }
+                    mydelay(80);
+                    destinationTime.showAnimate2();
+                    if(needDepTime) {
+                        departedTime.showAnimate2();
+                    }
+                #ifndef IS_ACAR_DISPLAY    
                 }
-                #else
-                destinationTime.showAnimate1();
-                if(needDepTime) {
-                    departedTime.showAnimate1();
-                }
-                mydelay(80);
-                destinationTime.showAnimate2();
-                if(needDepTime) {
-                    departedTime.showAnimate2();
-                }
-                #endif
+                #endif  // IS_ACAR_DISPLAY
 
             #ifdef TC_HAVETEMP
             }

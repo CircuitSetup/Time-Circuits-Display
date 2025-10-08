@@ -2223,7 +2223,7 @@ void start_file_copy()
     stopAudio();
   
     dt_showTextDirect("INSTALLING");
-    pt_showTextDirect("AUDIO DATA");
+    pt_showTextDirect("SOUND PACK"); // "AUDIO DATA"
     lt_showTextDirect("PLEASE");
     dt_on();
     pt_on();

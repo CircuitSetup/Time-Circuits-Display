@@ -34,8 +34,6 @@
  * Needs ESP32 Arduino framework: https://github.com/espressif/arduino-esp32
  *
  * Library dependencies:
- *   - WifiManager (tablatronix, tzapu) https://github.com/tzapu/WiFiManager
- *     (Tested with 2.0.13beta, 2.0.15-rc1, 2.0.16rc2)
  *   - ArduinoJSON >= 6.19: https://arduinojson.org/v6/doc/installation/
  * 
  * 
@@ -44,7 +42,52 @@
  */
 
 /*  Changelog
-  *  2025/09/19 (A10001986) [3.3.1]
+ *  2025/10/07 (A10001986) [3.5]
+ *    - Add emergency firmware update via SD (for dev purposes)
+ *    - WM fixes (Upload, etc)
+ *  2025/10/06 (A10001986)
+ *    - WM: Skip setting static IP params in Save
+ *    - Add "No SD present" banner in Config Portal if no SD present
+ *  2025/10/05 (A10001986)
+ *    - CP: Show msg instead of upload file input if no sd card is present
+ *  2025/10/05 (A10001986) [3.4.3]
+ *    - Let DNS server in AP mode only resolve our domain (hostname)
+ *  2025/10/04 (A10001986) [3.4.2]
+ *    - Allow 6 clients in AP mode instead of 4. So all props can connect
+ *      to the TCD in AP mode, plus one admin computer/hand held.
+ *      HOWEVER: Under normal use, do NOT connect a computer or phone to
+ *      the TCD in AP mode unless for configuration changes. That computer 
+ *      might think it is connected to the internet, resulting in lots of 
+ *      network traffic, leading to packet loss, slowdowns or 
+ *      out-of-sync animations.
+ *  2025/10/03-04 (A10001986) [3.4.1]
+ *    - More WiFiManager changes. We no longer use NVS-stored WiFi configs, 
+ *      all is managed by our own settings. (No details are known, but it
+ *      appears as if the core saves some data to NVS on every reboot, this
+ *      is totally not needed for our purposes, nor in the interest of 
+ *      flash longevity.)
+ *    - Save static IP only if changed
+ *  2025/09/22-10/03 (A10001986) [3.4]
+ *    - WiFi Manager overhaul; many changes to Config Portal.
+ *      WiFi-related settings moved to WiFi Configuration page.
+ *      Note: If the TCD is in AP-mode, mp3 playback will be stopped when
+ *      accessing Config Portal web pages from now on.
+ *      This had lead to sound stutter and incomplete page loads in the past.
+ *    - Various code optimizations to minimize code size and used RAM
+ *  2025/09/22 (A10001986)
+ *    - Config Portal: Re-order settings; remove non-checkbox-code.
+ *  2025/09/21 (A10001986)
+ *    - Turn former compile-time option "SP_ALWAYS_ON" into run-time option
+ *      "Switch off speedo when idle". SP_ALWAYS_ON still exists but now only
+ *      defines the default setting.
+ *    - Turn former BTTF3_ANIM (for part-3-like date entry animation), REV_AM_PM 
+ *      (for reversing AM/PM) and SKIP_TT (for skipping the time-tunnel display
+ *      animation) options into run-time options. All default to off.
+ *  2025/09/20 (A10001986)
+ *    - Config Portal: Display image links to currently connected BTTFN clients 
+ *      in top menu
+ *    - Config Portal: Add "install sound pack" banner to main menu
+ *  2025/09/19 (A10001986) [3.3.1]
  *    - Extend mp3 upload by allowing multiple (max 16) mp3 files to be uploaded
  *      at once. The TCDA.bin file can be uploaded at the same time as well.
  *  2025/09/17-18 (A10001986)
@@ -450,7 +493,7 @@
  *      (TT_NO_ANIM)
  *  2023/09/11 (A10001986)
  *    - Guard SPIFFS/LittleFS calls with FS check
-*  2023/09/10 (A10001986)
+ *  2023/09/10 (A10001986)
  *    - If specific config file not found on SD, read from FlashFS - but only
  *      if it is mounted.
  *    - New link to time zones in CP

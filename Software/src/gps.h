@@ -91,10 +91,10 @@ class tcGPS {
         int     _lenIdx = 0;
         int     _lenLimit = GPS_LENBUFLIMIT;
 
-        char    _buffer[GPS_MAX_I2C_LEN];
+        char    *_buffer = NULL; 
         char    _last_char = 0;
 
-        char    _line1[GPS_MAXLINELEN];
+        char    *_line1 = NULL;
         char    *_currentline;
         uint8_t _lineidx = 0;
         unsigned long _currentTS = 0;
