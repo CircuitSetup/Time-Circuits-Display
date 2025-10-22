@@ -170,9 +170,9 @@ static uint8_t* (*r)(uint8_t *, uint32_t, int);
 
 static bool read_settings(File configFile);
 
-static void CopyTextParm(char *setting, const char *json, int setSize);
-static bool CopyCheckValidNumParm(const char *json, char *text, uint8_t psize, int lowerLim, int upperLim, int setDefault);
-static bool CopyCheckValidNumParmF(const char *json, char *text, uint8_t psize, float lowerLim, float upperLim, float setDefault);
+static bool CopyTextParm(char *setting, const char *json, const char *json2, int setSize);
+static bool CopyCheckValidNumParm(const char *json, const char *json2, char *text, uint8_t psize, int lowerLim, int upperLim, int setDefault);
+static bool CopyCheckValidNumParmF(const char *json, const char *json2, char *text, uint8_t psize, float lowerLim, float upperLim, float setDefault);
 static bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault);
 static bool checkValidNumParmF(char *text, float lowerLim, float upperLim, float setDefault);
 
@@ -499,131 +499,109 @@ static bool read_settings(File configFile)
             }
         } else settings.ssid[1] = 'X';  // marker for "no ssid tag in config file", ie read from NVS
         
-        if(json["hostName"]) {
-            CopyTextParm(settings.hostName, json["hostName"], sizeof(settings.hostName));
-        } else wd = true;
-        wd |= CopyCheckValidNumParm(json["wifiConRetries"], settings.wifiConRetries, sizeof(settings.wifiConRetries), 1, 10, DEF_WIFI_RETRY);
-        wd |= CopyCheckValidNumParm(json["wifiConTimeout"], settings.wifiConTimeout, sizeof(settings.wifiConTimeout), 7, 25, DEF_WIFI_TIMEOUT);
-        wd |= CopyCheckValidNumParm(json["wifiPRetry"], settings.wifiPRetry, sizeof(settings.wifiPRetry), 0, 1, DEF_WIFI_PRETRY);
-        wd |= CopyCheckValidNumParm(json["wifiOffDelay"], settings.wifiOffDelay, sizeof(settings.wifiOffDelay), 0, 99, DEF_WIFI_OFFDELAY);
+        wd |= CopyTextParm(settings.hostName, json["hn"], json["hostName"], sizeof(settings.hostName));
+        
+        wd |= CopyCheckValidNumParm(json["wCR"], json["wifiConRetries"], settings.wifiConRetries, sizeof(settings.wifiConRetries), 1, 10, DEF_WIFI_RETRY);
+        wd |= CopyCheckValidNumParm(json["wCT"], json["wifiConTimeout"], settings.wifiConTimeout, sizeof(settings.wifiConTimeout), 7, 25, DEF_WIFI_TIMEOUT);
+        wd |= CopyCheckValidNumParm(json["wPR"], json["wifiPRetry"], settings.wifiPRetry, sizeof(settings.wifiPRetry), 0, 1, DEF_WIFI_PRETRY);
+        wd |= CopyCheckValidNumParm(json["wOD"], json["wifiOffDelay"], settings.wifiOffDelay, sizeof(settings.wifiOffDelay), 0, 99, DEF_WIFI_OFFDELAY);
 
-        if(json["systemID"]) {
-            CopyTextParm(settings.systemID, json["systemID"], sizeof(settings.systemID));
-        } else wd = true;
-        if(json["appw"]) {
-            CopyTextParm(settings.appw, json["appw"], sizeof(settings.appw));
-        } else wd = true;
-        wd |= CopyCheckValidNumParm(json["apch"], settings.apChnl, sizeof(settings.apChnl), 0, 13, DEF_AP_CHANNEL);
-        wd |= CopyCheckValidNumParm(json["wifiAPOffDelay"], settings.wifiAPOffDelay, sizeof(settings.wifiAPOffDelay), 0, 99, DEF_WIFI_APOFFDELAY);
+        wd |= CopyTextParm(settings.systemID, json["sID"], json["systemID"], sizeof(settings.systemID));
+        wd |= CopyTextParm(settings.appw, json["appw"], NULL, sizeof(settings.appw));
+        wd |= CopyCheckValidNumParm(json["apch"], NULL, settings.apChnl, sizeof(settings.apChnl), 0, 11, DEF_AP_CHANNEL);
+        wd |= CopyCheckValidNumParm(json["wAOD"], json["wifiAPOffDelay"], settings.wifiAPOffDelay, sizeof(settings.wifiAPOffDelay), 0, 99, DEF_WIFI_APOFFDELAY);
 
         // Settings
 
-        wd |= CopyCheckValidNumParm(json["playIntro"], settings.playIntro, sizeof(settings.playIntro), 0, 1, DEF_PLAY_INTRO);
-        wd |= CopyCheckValidNumParm(json["beep"], settings.beep, sizeof(settings.beep), 0, 3, DEF_BEEP);
+        wd |= CopyCheckValidNumParm(json["pI"], json["playIntro"], settings.playIntro, sizeof(settings.playIntro), 0, 1, DEF_PLAY_INTRO);
+        wd |= CopyCheckValidNumParm(json["bep"], json["beep"], settings.beep, sizeof(settings.beep), 0, 3, DEF_BEEP);
         // Time cycling saved in separate file
-        wd |= CopyCheckValidNumParm(json["skpTTA"], settings.skipTTAnim, sizeof(settings.skipTTAnim), 0, 1, DEF_SKIP_TTANIM);
+        wd |= CopyCheckValidNumParm(json["skpTTA"], NULL, settings.skipTTAnim, sizeof(settings.skipTTAnim), 0, 1, DEF_SKIP_TTANIM);
         #ifndef IS_ACAR_DISPLAY
-        wd |= CopyCheckValidNumParm(json["p3an"], settings.p3anim, sizeof(settings.p3anim), 0, 1, DEF_P3ANIM);
+        wd |= CopyCheckValidNumParm(json["p3an"], NULL, settings.p3anim, sizeof(settings.p3anim), 0, 1, DEF_P3ANIM);
         #endif
-        wd |= CopyCheckValidNumParm(json["playTTsnds"], settings.playTTsnds, sizeof(settings.playTTsnds), 0, 1, DEF_PLAY_TT_SND);
-        wd |= CopyCheckValidNumParm(json["alarmRTC"], settings.alarmRTC, sizeof(settings.alarmRTC), 0, 1, DEF_ALARM_RTC);
-        wd |= CopyCheckValidNumParm(json["mode24"], settings.mode24, sizeof(settings.mode24), 0, 1, DEF_MODE24);
-
-        if(json["timeZone"]) {
-            CopyTextParm(settings.timeZone, json["timeZone"], sizeof(settings.timeZone));
-        } else wd = true;
-        if(json["ntpServer"]) {
-            CopyTextParm(settings.ntpServer, json["ntpServer"], sizeof(settings.ntpServer));
-        } else wd = true;
-
-        if(json["timeZoneDest"]) {
-            CopyTextParm(settings.timeZoneDest, json["timeZoneDest"], sizeof(settings.timeZoneDest));
-        } else wd = true;
-        if(json["timeZoneDep"]) {
-            CopyTextParm(settings.timeZoneDep, json["timeZoneDep"], sizeof(settings.timeZoneDep));
-        } else wd = true;
-        if(json["timeZoneNDest"]) {
-            CopyTextParm(settings.timeZoneNDest, json["timeZoneNDest"], sizeof(settings.timeZoneNDest));
-        } else wd = true;
-        if(json["timeZoneNDep"]) {
-            CopyTextParm(settings.timeZoneNDep, json["timeZoneNDep"], sizeof(settings.timeZoneNDep));
-        } else wd = true;
+        wd |= CopyCheckValidNumParm(json["pTTs"], json["playTTsnds"], settings.playTTsnds, sizeof(settings.playTTsnds), 0, 1, DEF_PLAY_TT_SND);
+        wd |= CopyCheckValidNumParm(json["alRTC"], json["alarmRTC"], settings.alarmRTC, sizeof(settings.alarmRTC), 0, 1, DEF_ALARM_RTC);
+        wd |= CopyCheckValidNumParm(json["md24"], json["mode24"], settings.mode24, sizeof(settings.mode24), 0, 1, DEF_MODE24);
         
-        wd |= CopyCheckValidNumParm(json["shuffle"], settings.shuffle, sizeof(settings.shuffle), 0, 1, DEF_SHUFFLE);
+        wd |= CopyTextParm(settings.timeZone, json["tZ"], json["timeZone"], sizeof(settings.timeZone));
+        wd |= CopyTextParm(settings.ntpServer, json["ntpS"], json["ntpServer"], sizeof(settings.ntpServer));
 
-        wd |= CopyCheckValidNumParm(json["dtNmOff"], settings.dtNmOff, sizeof(settings.dtNmOff), 0, 1, DEF_DT_OFF);
-        wd |= CopyCheckValidNumParm(json["ptNmOff"], settings.ptNmOff, sizeof(settings.ptNmOff), 0, 1, DEF_PT_OFF);
-        wd |= CopyCheckValidNumParm(json["ltNmOff"], settings.ltNmOff, sizeof(settings.ltNmOff), 0, 1, DEF_LT_OFF);
-        wd |= CopyCheckValidNumParm(json["autoNMPreset"], settings.autoNMPreset, sizeof(settings.autoNMPreset), 0, 10, DEF_AUTONM_PRESET);
-        wd |= CopyCheckValidNumParm(json["autoNMOn"], settings.autoNMOn, sizeof(settings.autoNMOn), 0, 23, DEF_AUTONM_ON);
-        wd |= CopyCheckValidNumParm(json["autoNMOff"], settings.autoNMOff, sizeof(settings.autoNMOff), 0, 23, DEF_AUTONM_OFF);
+        wd |= CopyTextParm(settings.timeZoneDest, json["tZDest"], json["timeZoneDest"], sizeof(settings.timeZoneDest));
+        wd |= CopyTextParm(settings.timeZoneDep, json["tZDep"], json["timeZoneDep"], sizeof(settings.timeZoneDep));
+        wd |= CopyTextParm(settings.timeZoneNDest, json["tZNDest"], json["timeZoneNDest"], sizeof(settings.timeZoneNDest));
+        wd |= CopyTextParm(settings.timeZoneNDep, json["tZNDep"], json["timeZoneNDep"], sizeof(settings.timeZoneNDep));
+        
+        wd |= CopyCheckValidNumParm(json["shuf"], json["shuffle"], settings.shuffle, sizeof(settings.shuffle), 0, 1, DEF_SHUFFLE);
+
+        wd |= CopyCheckValidNumParm(json["dtNmOff"], NULL, settings.dtNmOff, sizeof(settings.dtNmOff), 0, 1, DEF_DT_OFF);
+        wd |= CopyCheckValidNumParm(json["ptNmOff"], NULL, settings.ptNmOff, sizeof(settings.ptNmOff), 0, 1, DEF_PT_OFF);
+        wd |= CopyCheckValidNumParm(json["ltNmOff"], NULL, settings.ltNmOff, sizeof(settings.ltNmOff), 0, 1, DEF_LT_OFF);
+        wd |= CopyCheckValidNumParm(json["aNMPre"], json["autoNMPreset"], settings.autoNMPreset, sizeof(settings.autoNMPreset), 0, 10, DEF_AUTONM_PRESET);
+        wd |= CopyCheckValidNumParm(json["aNMOn"], json["autoNMOn"], settings.autoNMOn, sizeof(settings.autoNMOn), 0, 23, DEF_AUTONM_ON);
+        wd |= CopyCheckValidNumParm(json["aNMOff"], json["autoNMOff"], settings.autoNMOff, sizeof(settings.autoNMOff), 0, 23, DEF_AUTONM_OFF);
         #ifdef TC_HAVELIGHT
-        wd |= CopyCheckValidNumParm(json["useLight"], settings.useLight, sizeof(settings.useLight), 0, 1, DEF_USE_LIGHT);
-        wd |= CopyCheckValidNumParm(json["luxLimit"], settings.luxLimit, sizeof(settings.luxLimit), 0, 50000, DEF_LUX_LIMIT);
+        wd |= CopyCheckValidNumParm(json["uLgt"], json["useLight"], settings.useLight, sizeof(settings.useLight), 0, 1, DEF_USE_LIGHT);
+        wd |= CopyCheckValidNumParm(json["lxLim"], json["luxLimit"], settings.luxLimit, sizeof(settings.luxLimit), 0, 50000, DEF_LUX_LIMIT);
         #endif
 
         #ifdef TC_HAVETEMP
-        wd |= CopyCheckValidNumParm(json["tempUnit"], settings.tempUnit, sizeof(settings.tempUnit), 0, 1, DEF_TEMP_UNIT);
-        wd |= CopyCheckValidNumParmF(json["tempOffs"], settings.tempOffs, sizeof(settings.tempOffs), -3.0, 3.0, DEF_TEMP_OFFS);
+        wd |= CopyCheckValidNumParm(json["tmpU"], json["tempUnit"], settings.tempUnit, sizeof(settings.tempUnit), 0, 1, DEF_TEMP_UNIT);
+        wd |= CopyCheckValidNumParmF(json["tmpOf"], json["tempOffs"], settings.tempOffs, sizeof(settings.tempOffs), -3.0, 3.0, DEF_TEMP_OFFS);
         #endif
 
         #ifdef TC_HAVESPEEDO
-        wd |= CopyCheckValidNumParm(json["speedoType"], settings.speedoType, sizeof(settings.speedoType), SP_MIN_TYPE, 99, DEF_SPEEDO_TYPE);
-        wd |= CopyCheckValidNumParm(json["speedoBright"], settings.speedoBright, sizeof(settings.speedoBright), 0, 15, DEF_BRIGHT_SPEEDO);
-        wd |= CopyCheckValidNumParm(json["spAO"], settings.speedoAO, sizeof(settings.speedoAO), 0, 1, DEF_SPEEDO_AO);
-        wd |= CopyCheckValidNumParm(json["speedoAF"], settings.speedoAF, sizeof(settings.speedoAF), 0, 1, DEF_SPEEDO_ACCELFIG);
-        wd |= CopyCheckValidNumParmF(json["speedoFact"], settings.speedoFact, sizeof(settings.speedoFact), 0.5, 5.0, DEF_SPEEDO_FACT);
-        wd |= CopyCheckValidNumParm(json["speedoL0Spd"], settings.speedoL0Spd, sizeof(settings.speedoL0Spd), 0, 1, DEF_SPEEDO_L0SPD);
+        wd |= CopyCheckValidNumParm(json["spT"], json["speedoType"], settings.speedoType, sizeof(settings.speedoType), SP_MIN_TYPE, 99, DEF_SPEEDO_TYPE);
+        wd |= CopyCheckValidNumParm(json["spB"], json["speedoBright"], settings.speedoBright, sizeof(settings.speedoBright), 0, 15, DEF_BRIGHT_SPEEDO);
+        wd |= CopyCheckValidNumParm(json["spAO"], NULL, settings.speedoAO, sizeof(settings.speedoAO), 0, 1, DEF_SPEEDO_AO);
+        wd |= CopyCheckValidNumParm(json["spAF"], json["speedoAF"], settings.speedoAF, sizeof(settings.speedoAF), 0, 1, DEF_SPEEDO_ACCELFIG);
+        wd |= CopyCheckValidNumParmF(json["spFc"], json["speedoFact"], settings.speedoFact, sizeof(settings.speedoFact), 0.5, 5.0, DEF_SPEEDO_FACT);
+        wd |= CopyCheckValidNumParm(json["spP3"], json["speedoL0Spd"], settings.speedoP3, sizeof(settings.speedoP3), 0, 1, DEF_SPEEDO_P3);
+        wd |= CopyCheckValidNumParm(json["spd3rd"], NULL, settings.speedo3rdD, sizeof(settings.speedo3rdD), 0, 1, DEF_SPEEDO_3RDD);
         #ifdef TC_HAVEGPS
-        wd |= CopyCheckValidNumParm(json["useGPSSpeed"], settings.useGPSSpeed, sizeof(settings.useGPSSpeed), 0, 1, DEF_USE_GPS_SPEED);
-        wd |= CopyCheckValidNumParm(json["spdUpdRate"], settings.spdUpdRate, sizeof(settings.spdUpdRate), 0, 3, DEF_SPD_UPD_RATE);
+        wd |= CopyCheckValidNumParm(json["uGPSS"], json["useGPSSpeed"], settings.useGPSSpeed, sizeof(settings.useGPSSpeed), 0, 1, DEF_USE_GPS_SPEED);
+        wd |= CopyCheckValidNumParm(json["spUR"], json["spdUpdRate"], settings.spdUpdRate, sizeof(settings.spdUpdRate), 0, 3, DEF_SPD_UPD_RATE);
         #endif
         #ifdef TC_HAVETEMP
-        wd |= CopyCheckValidNumParm(json["dispTemp"], settings.dispTemp, sizeof(settings.dispTemp), 0, 1, DEF_DISP_TEMP);
-        wd |= CopyCheckValidNumParm(json["tempBright"], settings.tempBright, sizeof(settings.tempBright), 0, 15, DEF_TEMP_BRIGHT);
-        wd |= CopyCheckValidNumParm(json["tempOffNM"], settings.tempOffNM, sizeof(settings.tempOffNM), 0, 1, DEF_TEMP_OFF_NM);
+        wd |= CopyCheckValidNumParm(json["dTmp"], json["dispTemp"], settings.dispTemp, sizeof(settings.dispTemp), 0, 1, DEF_DISP_TEMP);
+        wd |= CopyCheckValidNumParm(json["tmpB"], json["tempBright"], settings.tempBright, sizeof(settings.tempBright), 0, 15, DEF_TEMP_BRIGHT);
+        wd |= CopyCheckValidNumParm(json["tmpONM"], json["tempOffNM"], settings.tempOffNM, sizeof(settings.tempOffNM), 0, 1, DEF_TEMP_OFF_NM);
         #endif
         #endif // HAVESPEEDO
 
         #ifdef FAKE_POWER_ON
-        wd |= CopyCheckValidNumParm(json["fakePwrOn"], settings.fakePwrOn, sizeof(settings.fakePwrOn), 0, 1, DEF_FAKE_PWR);
+        wd |= CopyCheckValidNumParm(json["fPwr"], json["fakePwrOn"], settings.fakePwrOn, sizeof(settings.fakePwrOn), 0, 1, DEF_FAKE_PWR);
         #endif
 
          #ifdef EXTERNAL_TIMETRAVEL_IN
-        wd |= CopyCheckValidNumParm(json["ettDelay"], settings.ettDelay, sizeof(settings.ettDelay), 0, ETT_MAX_DEL, DEF_ETT_DELAY);
-        //wd |= CopyCheckValidNumParm(json["ettLong"], settings.ettLong, sizeof(settings.ettLong), 0, 1, DEF_ETT_LONG);
+        wd |= CopyCheckValidNumParm(json["ettDl"], json["ettDelay"], settings.ettDelay, sizeof(settings.ettDelay), 0, ETT_MAX_DEL, DEF_ETT_DELAY);
+        //wd |= CopyCheckValidNumParm(json["ettLong"], NULL, settings.ettLong, sizeof(settings.ettLong), 0, 1, DEF_ETT_LONG);
         #endif        
         
         #ifdef TC_HAVEGPS
-        wd |= CopyCheckValidNumParm(json["quickGPS"], settings.quickGPS, sizeof(settings.quickGPS), 0, 1, DEF_QUICK_GPS);
+        wd |= CopyCheckValidNumParm(json["qGPS"], json["quickGPS"], settings.quickGPS, sizeof(settings.quickGPS), 0, 1, DEF_QUICK_GPS);
         #endif
         
         #ifdef TC_HAVEMQTT
-        wd |= CopyCheckValidNumParm(json["useMQTT"], settings.useMQTT, sizeof(settings.useMQTT), 0, 1, 0);
-        if(json["mqttServer"]) {
-            CopyTextParm(settings.mqttServer, json["mqttServer"], sizeof(settings.mqttServer));
-        } else wd = true;
-        if(json["mqttUser"]) {
-            CopyTextParm(settings.mqttUser, json["mqttUser"], sizeof(settings.mqttUser));
-        } else wd = true;
-        if(json["mqttTopic"]) {
-            CopyTextParm(settings.mqttTopic, json["mqttTopic"], sizeof(settings.mqttTopic));
-        } else wd = true;
+        wd |= CopyCheckValidNumParm(json["uMQTT"], json["useMQTT"], settings.useMQTT, sizeof(settings.useMQTT), 0, 1, 0);
+        wd |= CopyTextParm(settings.mqttServer, json["mqttS"], json["mqttServer"], sizeof(settings.mqttServer));
+        wd |= CopyTextParm(settings.mqttUser, json["mqttU"], json["mqttUser"], sizeof(settings.mqttUser));
+        wd |= CopyTextParm(settings.mqttTopic, json["mqttT"], json["mqttTopic"], sizeof(settings.mqttTopic));
         #ifdef EXTERNAL_TIMETRAVEL_OUT
-        wd |= CopyCheckValidNumParm(json["pubMQTT"], settings.pubMQTT, sizeof(settings.pubMQTT), 0, 1, 0);
+        wd |= CopyCheckValidNumParm(json["pMQTT"], json["pubMQTT"], settings.pubMQTT, sizeof(settings.pubMQTT), 0, 1, 0);
         #endif
         #endif
        
         #ifdef EXTERNAL_TIMETRAVEL_OUT
-        wd |= CopyCheckValidNumParm(json["useETTO"], settings.useETTO, sizeof(settings.useETTO), 0, 1, DEF_USE_ETTO);
-        wd |= CopyCheckValidNumParm(json["noETTOLead"], settings.noETTOLead, sizeof(settings.noETTOLead), 0, 1, DEF_NO_ETTO_LEAD);
+        wd |= CopyCheckValidNumParm(json["uETTO"], json["useETTO"], settings.useETTO, sizeof(settings.useETTO), 0, 1, DEF_USE_ETTO);
+        wd |= CopyCheckValidNumParm(json["nETTOL"], json["noETTOLead"], settings.noETTOLead, sizeof(settings.noETTOLead), 0, 1, DEF_NO_ETTO_LEAD);
         #endif
 
-        wd |= CopyCheckValidNumParm(json["CfgOnSD"], settings.CfgOnSD, sizeof(settings.CfgOnSD), 0, 1, DEF_CFG_ON_SD);
-        //wd |= CopyCheckValidNumParm(json["sdFreq"], settings.sdFreq, sizeof(settings.sdFreq), 0, 1, DEF_SD_FREQ);
-        wd |= CopyCheckValidNumParm(json["timeTrPers"], settings.timesPers, sizeof(settings.timesPers), 0, 1, DEF_TIMES_PERS);
+        wd |= CopyCheckValidNumParm(json["CoSD"], json["CfgOnSD"], settings.CfgOnSD, sizeof(settings.CfgOnSD), 0, 1, DEF_CFG_ON_SD);
+        //wd |= CopyCheckValidNumParm(json["sdFreq"], NULL, settings.sdFreq, sizeof(settings.sdFreq), 0, 1, DEF_SD_FREQ);
+        wd |= CopyCheckValidNumParm(json["ttps"], json["timeTrPers"], settings.timesPers, sizeof(settings.timesPers), 0, 1, DEF_TIMES_PERS);
         
-        wd |= CopyCheckValidNumParm(json["rAPM"], settings.revAmPm, sizeof(settings.revAmPm), 0, 1, DEF_REVAMPM);
+        wd |= CopyCheckValidNumParm(json["rAPM"], NULL, settings.revAmPm, sizeof(settings.revAmPm), 0, 1, DEF_REVAMPM);
         
     } else {
 
@@ -655,103 +633,104 @@ void write_settings()
         json["ssid"] = (const char *)settings.ssid;
         json["pass"] = (const char *)settings.pass;
     }
-    
-    json["hostName"] = (const char *)settings.hostName;
-    json["wifiConRetries"] = (const char *)settings.wifiConRetries;
-    json["wifiConTimeout"] = (const char *)settings.wifiConTimeout;
-    json["wifiPRetry"] = (const char *)settings.wifiPRetry;
-    json["wifiOffDelay"] = (const char *)settings.wifiOffDelay;
-    
-    json["systemID"] = (const char *)settings.systemID;
+
+    json["hn"] = (const char *)settings.hostName;
+    json["wCR"] = (const char *)settings.wifiConRetries;
+    json["wCT"] = (const char *)settings.wifiConTimeout;
+    json["wPR"] = (const char *)settings.wifiPRetry;
+    json["wOD"] = (const char *)settings.wifiOffDelay;
+
+    json["sID"] = (const char *)settings.systemID;
     json["appw"] = (const char *)settings.appw;
     json["apch"] = (const char *)settings.apChnl;
-    json["wifiAPOffDelay"] = (const char *)settings.wifiAPOffDelay;
-    
-    json["playIntro"] = (const char *)settings.playIntro;
-    json["beep"] = (const char *)settings.beep;
+    json["wAOD"] = (const char *)settings.wifiAPOffDelay;
+
+    json["pI"] = (const char *)settings.playIntro;
+    json["bep"] = (const char *)settings.beep;
     json["skpTTA"] = (const char *)settings.skipTTAnim;
     #ifndef IS_ACAR_DISPLAY
     json["p3an"] = (const char *)settings.p3anim;
     #endif
-    json["playTTsnds"] = (const char *)settings.playTTsnds;
-    json["alarmRTC"] = (const char *)settings.alarmRTC;
-    json["mode24"] = (const char *)settings.mode24;
+    json["pTTs"] = (const char *)settings.playTTsnds;
+    json["alRTC"] = (const char *)settings.alarmRTC;
+    json["md24"] = (const char *)settings.mode24;
 
-    json["timeZone"] = (const char *)settings.timeZone;
-    json["ntpServer"] = (const char *)settings.ntpServer;
+    json["tZ"] = (const char *)settings.timeZone;
+    json["ntpS"] = (const char *)settings.ntpServer;
 
-    json["timeZoneDest"] = (const char *)settings.timeZoneDest;
-    json["timeZoneDep"] = (const char *)settings.timeZoneDep;
-    json["timeZoneNDest"] = (const char *)settings.timeZoneNDest;
-    json["timeZoneNDep"] = (const char *)settings.timeZoneNDep;
+    json["tZDest"] = (const char *)settings.timeZoneDest;
+    json["tZDep"] = (const char *)settings.timeZoneDep;
+    json["tZNDest"] = (const char *)settings.timeZoneNDest;
+    json["tZNDep"] = (const char *)settings.timeZoneNDep;
     
-    json["shuffle"] = (const char *)settings.shuffle;
+    json["shuf"] = (const char *)settings.shuffle;
 
     json["dtNmOff"] = (const char *)settings.dtNmOff;
     json["ptNmOff"] = (const char *)settings.ptNmOff;
     json["ltNmOff"] = (const char *)settings.ltNmOff;
-    json["autoNMPreset"] = (const char *)settings.autoNMPreset;
-    json["autoNMOn"] = (const char *)settings.autoNMOn;
-    json["autoNMOff"] = (const char *)settings.autoNMOff;
+    json["aNMPre"] = (const char *)settings.autoNMPreset;
+    json["aNMOn"] = (const char *)settings.autoNMOn;
+    json["aNMOff"] = (const char *)settings.autoNMOff;
     #ifdef TC_HAVELIGHT
-    json["useLight"] = (const char *)settings.useLight;
-    json["luxLimit"] = (const char *)settings.luxLimit;
+    json["uLgt"] = (const char *)settings.useLight;
+    json["lxLim"] = (const char *)settings.luxLimit;
     #endif
-
+    
     #ifdef TC_HAVETEMP
-    json["tempUnit"] = (const char *)settings.tempUnit;
-    json["tempOffs"] = (const char *)settings.tempOffs;
+    json["tmpU"] = (const char *)settings.tempUnit;
+    json["tmpOf"] = (const char *)settings.tempOffs;
     #endif
     
     #ifdef TC_HAVESPEEDO    
-    json["speedoType"] = (const char *)settings.speedoType;
-    json["speedoBright"] = (const char *)settings.speedoBright;
+    json["spT"] = (const char *)settings.speedoType;
+    json["spB"] = (const char *)settings.speedoBright;
     json["spAO"] = (const char *)settings.speedoAO;
-    json["speedoAF"] = (const char *)settings.speedoAF;
-    json["speedoFact"] = (const char *)settings.speedoFact;
-    json["speedoL0Spd"] = (const char *)settings.speedoL0Spd;
+    json["spAF"] = (const char *)settings.speedoAF;
+    json["spFc"] = (const char *)settings.speedoFact;
+    json["spP3"] = (const char *)settings.speedoP3;
+    json["spd3rd"] = (const char *)settings.speedo3rdD;
     #ifdef TC_HAVEGPS
-    json["useGPSSpeed"] = (const char *)settings.useGPSSpeed;
-    json["spdUpdRate"] = (const char *)settings.spdUpdRate;
+    json["uGPSS"] = (const char *)settings.useGPSSpeed;
+    json["spUR"] = (const char *)settings.spdUpdRate;
     #endif
     #ifdef TC_HAVETEMP
-    json["dispTemp"] = (const char *)settings.dispTemp;
-    json["tempBright"] = (const char *)settings.tempBright;
-    json["tempOffNM"] = (const char *)settings.tempOffNM;
+    json["dTmp"] = (const char *)settings.dispTemp;
+    json["tmpB"] = (const char *)settings.tempBright;
+    json["tmpONM"] = (const char *)settings.tempOffNM;
     #endif
-    #endif // HAVESPEEDO
+    #endif // HAVESPEEDO    
 
     #ifdef FAKE_POWER_ON
-    json["fakePwrOn"] = (const char *)settings.fakePwrOn;
+    json["fPwr"] = (const char *)settings.fakePwrOn;
     #endif
 
     #ifdef EXTERNAL_TIMETRAVEL_IN
-    json["ettDelay"] = (const char *)settings.ettDelay;
+    json["ettDl"] = (const char *)settings.ettDelay;
     //json["ettLong"] = (const char *)settings.ettLong;
     #endif
     
     #ifdef TC_HAVEGPS
-    json["quickGPS"] = (const char *)settings.quickGPS;
+    json["qGPS"] = (const char *)settings.quickGPS;
     #endif
-    
+
     #ifdef TC_HAVEMQTT
-    json["useMQTT"] = (const char *)settings.useMQTT;
-    json["mqttServer"] = (const char *)settings.mqttServer;
-    json["mqttUser"] = (const char *)settings.mqttUser;
-    json["mqttTopic"] = (const char *)settings.mqttTopic;
+    json["uMQTT"] = (const char *)settings.useMQTT;
+    json["mqttS"] = (const char *)settings.mqttServer;
+    json["mqttU"] = (const char *)settings.mqttUser;
+    json["mqttT"] = (const char *)settings.mqttTopic;
     #ifdef EXTERNAL_TIMETRAVEL_OUT
-    json["pubMQTT"] = (const char *)settings.pubMQTT;
+    json["pMQTT"] = (const char *)settings.pubMQTT;
     #endif
     #endif
 
     #ifdef EXTERNAL_TIMETRAVEL_OUT
-    json["useETTO"] = (const char *)settings.useETTO;
-    json["noETTOLead"] = (const char *)settings.noETTOLead;
+    json["uETTO"] = (const char *)settings.useETTO;
+    json["nETTOL"] = (const char *)settings.noETTOLead;
     #endif
     
-    json["CfgOnSD"] = (const char *)settings.CfgOnSD;
+    json["CoSD"] = (const char *)settings.CfgOnSD;
     //json["sdFreq"] = (const char *)settings.sdFreq;
-    json["timeTrPers"] = (const char *)settings.timesPers;
+    json["ttps"] = (const char *)settings.timesPers;
     
     json["rAPM"] = (const char *)settings.revAmPm;
 
@@ -767,28 +746,51 @@ bool checkConfigExists()
  *  Helpers for parm copying & checking
  */
 
-static void CopyTextParm(char *setting, const char *json, int setSize)
+static bool CopyTextParm(char *setting, const char *json, const char *json2, int setSize)
 {
-    memset(setting, 0, setSize);
-    strncpy(setting, json, setSize - 1);
+    if(json || json2) {
+        memset(setting, 0, setSize);
+        if(json) {
+            strncpy(setting, json, setSize - 1);
+            return false;
+        } else {
+            strncpy(setting, json2, setSize - 1);
+        }
+    }
+
+    return true;
 }
 
-static bool CopyCheckValidNumParm(const char *json, char *text, uint8_t psize, int lowerLim, int upperLim, int setDefault)
+static bool CopyCheckValidNumParm(const char *json, const char *json2, char *text, uint8_t psize, int lowerLim, int upperLim, int setDefault)
 {
-    if(!json) return true;
+    if(json || json2) {
+        memset(text, 0, psize);
+        if(json) {
+            strncpy(text, json, psize-1);
+        } else {
+            strncpy(text, json2, psize-1);
+        }
 
-    memset(text, 0, psize);
-    strncpy(text, json, psize-1);
-    return checkValidNumParm(text, lowerLim, upperLim, setDefault);
+        return checkValidNumParm(text, lowerLim, upperLim, setDefault);
+    } 
+       
+    return true;
 }
 
-static bool CopyCheckValidNumParmF(const char *json, char *text, uint8_t psize, float lowerLim, float upperLim, float setDefault)
+static bool CopyCheckValidNumParmF(const char *json, const char *json2, char *text, uint8_t psize, float lowerLim, float upperLim, float setDefault)
 {
-    if(!json) return true;
+    if(json || json2) {
+        memset(text, 0, psize);
+        if(json) {
+            strncpy(text, json, psize-1);
+        } else {
+            strncpy(text, json2, psize-1);
+        }
 
-    memset(text, 0, psize);
-    strncpy(text, json, psize-1);
-    return checkValidNumParmF(text, lowerLim, upperLim, setDefault);
+        return checkValidNumParm(text, lowerLim, upperLim, setDefault);
+    } 
+       
+    return true;
 }
 
 static bool checkValidNumParm(char *text, int lowerLim, int upperLim, int setDefault)
@@ -906,9 +908,9 @@ static bool loadBrightness()
         DECLARE_S_JSON(512,json);
 
         if(!readJSONCfgFile(json, configFile)) {
-            wd =  CopyCheckValidNumParm(json["dBri"], settings.destTimeBright, sizeof(settings.destTimeBright), 0, 15, DEF_BRIGHT_DEST);
-            wd |= CopyCheckValidNumParm(json["pBri"], settings.presTimeBright, sizeof(settings.presTimeBright), 0, 15, DEF_BRIGHT_PRES);
-            wd |= CopyCheckValidNumParm(json["lBri"], settings.lastTimeBright, sizeof(settings.lastTimeBright), 0, 15, DEF_BRIGHT_DEPA);
+            wd =  CopyCheckValidNumParm(json["dBri"], NULL, settings.destTimeBright, sizeof(settings.destTimeBright), 0, 15, DEF_BRIGHT_DEST);
+            wd |= CopyCheckValidNumParm(json["pBri"], NULL, settings.presTimeBright, sizeof(settings.presTimeBright), 0, 15, DEF_BRIGHT_PRES);
+            wd |= CopyCheckValidNumParm(json["lBri"], NULL, settings.lastTimeBright, sizeof(settings.lastTimeBright), 0, 15, DEF_BRIGHT_DEPA);
         } 
         configFile.close();
     }
@@ -972,7 +974,7 @@ static bool loadAutoInterval()
         DECLARE_S_JSON(512,json);
 
         if(!readJSONCfgFile(json, configFile)) {
-            wd = CopyCheckValidNumParm(json["ai"], settings.autoRotateTimes, sizeof(settings.autoRotateTimes), 0, 5, DEF_AUTOROTTIMES);
+            wd = CopyCheckValidNumParm(json["ai"], NULL, settings.autoRotateTimes, sizeof(settings.autoRotateTimes), 0, 5, DEF_AUTOROTTIMES);
         }
         configFile.close();
     }
@@ -1035,7 +1037,7 @@ bool loadCurVolume()
     if(openCfgFileRead(volCfgName, configFile)) {
         DECLARE_S_JSON(512,json);
         if(!readJSONCfgFile(json, configFile)) {
-            if(!CopyCheckValidNumParm(json["volume"], temp, sizeof(temp), 0, 255, 255)) {
+            if(!CopyCheckValidNumParm(json["volume"], NULL, temp, sizeof(temp), 0, 255, 255)) {
                 int ncv = atoi(temp);
                 if((ncv >= 0 && ncv <= 19) || ncv == 255) {
                     curVolume = ncv;
@@ -1446,7 +1448,7 @@ bool loadMusFoldNum()
         if(configFile) {
             DECLARE_S_JSON(512,json);
             if(!readJSONCfgFile(json, configFile)) {
-                if(!CopyCheckValidNumParm(json["folder"], temp, sizeof(temp), 0, 9, 0)) {
+                if(!CopyCheckValidNumParm(json["folder"], NULL, temp, sizeof(temp), 0, 9, 0)) {
                     musFolderNum = atoi(temp);
                     writedefault = false;
                 }

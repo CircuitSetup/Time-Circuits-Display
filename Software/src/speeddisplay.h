@@ -135,6 +135,7 @@ class speedDisplay {
         bool getColon()   { return _colon; }
 
         bool dispL0Spd = true;
+        bool thirdDig = false;
 
     private:
 

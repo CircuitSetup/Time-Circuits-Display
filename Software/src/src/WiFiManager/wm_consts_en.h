@@ -2,13 +2,10 @@
  * wm_consts.h
  *
  * Based on:
- *
  * WiFiManager, a library for the ESP32/Arduino platform
- *
- * @author Creator tzapu
- * @author tablatronix
- * @version 2.0.15+A10001986
- * @license MIT
+ * Creator tzapu (tablatronix)
+ * Version 2.0.15
+ * License MIT
  *
  * Adapted by Thomas Winischhofer (A10001986)
  */
@@ -19,11 +16,9 @@
 // Routes
 const char R_root[]               PROGMEM = "/";
 const char R_wifi[]               PROGMEM = "/wifi";
-const char R_wifinoscan[]         PROGMEM = "/0wifi";
 const char R_wifisave[]           PROGMEM = "/wifisave";
 const char R_param[]              PROGMEM = "/param";
 const char R_paramsave[]          PROGMEM = "/paramsave";
-const char R_erase[]              PROGMEM = "/erase";
 const char R_update[]             PROGMEM = "/update";
 const char R_updatedone[]         PROGMEM = "/u";
 
@@ -56,23 +51,8 @@ const char HTTP_HEAD_CT2[]        PROGMEM = "text/plain";
 const char HTTP_HEAD_CORS[]       PROGMEM = "Access-Control-Allow-Origin";
 const char HTTP_HEAD_CORS_ALLOW_ALL[]  PROGMEM = "*";
 
-// Country
-#ifndef _A10001986_NO_COUNTRY
-// as 2.5.2
-// typedef struct {
-//     char                  cc[3];   /**< country code string */
-//     uint8_t               schan;   /**< start channel */
-//     uint8_t               nchan;   /**< total channel number */
-//     int8_t                max_tx_power;   /**< This field is used for getting WiFi maximum transmitting power, call esp_wifi_set_max_tx_power to set the maximum transmitting power. */
-//     wifi_country_policy_t policy;  /**< country policy */
-// } wifi_country_t;
-const wifi_country_t WM_COUNTRY_US{"US",1,11,CONFIG_ESP32_PHY_MAX_WIFI_TX_POWER,WIFI_COUNTRY_POLICY_AUTO};
-const wifi_country_t WM_COUNTRY_CN{"CN",1,13,CONFIG_ESP32_PHY_MAX_WIFI_TX_POWER,WIFI_COUNTRY_POLICY_AUTO};
-const wifi_country_t WM_COUNTRY_JP{"JP",1,14,CONFIG_ESP32_PHY_MAX_WIFI_TX_POWER,WIFI_COUNTRY_POLICY_AUTO};
-#endif // _A10001986_NO_COUNTRY
-
 // Debug
-#ifdef WM_DEBUG_LEVEL
+#ifdef _A10001986_DBG
 const char * const WIFI_STA_STATUS[] PROGMEM =
 {
     "WL_IDLE_STATUS",     // 0 STATION_IDLE
@@ -84,9 +64,6 @@ const char * const WIFI_STA_STATUS[] PROGMEM =
     "WL_DISCONNECTED",    // 6
     "WL_STATION_WRONG_PASSWORD" // 7 KLUDGE
 };
-#endif
-
-#ifdef WM_DEBUG_LEVEL
 const char* const WIFI_MODES[] PROGMEM = { "NULL", "STA", "AP", "STA+AP" };
 #endif
 

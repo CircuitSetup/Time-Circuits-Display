@@ -42,6 +42,30 @@
  */
 
 /*  Changelog
+ *
+ *  2025/10/15 (A10001986) [3.6]
+ *    - Speedo: Extend option of displaying leading-0 into "speedo display like in
+ *      part 3", where the speedo displays 2 digits all the way, but without the dot.
+ *    - Speedo: Add option to enable post-point zero on CircuitSetup speedo; it only
+ *      ever displays 0. Ignored if "speedo display like in part 3" is enabled.
+ *    - Some more WM changes. Number of scanned networks listed is now restricted in 
+ *      order not to run out of memory.
+ *    - Internal: new json tags to make json file smaller
+ *  2025/10/14 (A10001986) [3.5.4]
+ *    - WM: Do not garble UTF8 SSID; skip SSIDs with non-printable characters
+ *    - Fix regression in CP ("show password")
+ *  2025/10/13 (A10001986) [3.5.3]
+ *    - Config Portal: Minor restyling (message boxes)
+ *  2025/10/11 (A10001986) [3.5.2]
+ *    - More WM changes: Simplify "Forget" using a checkbox; redo signal quality
+ *      assessment; remove over-engineered WM debug stuff.
+ *    - Slightly increase transmit power in AP mode on CB 1.4+.
+ *  2025/10/08-10 (A10001986) [3.5.1]
+ *    - Increase max BTTFN clients from 5 to 6
+ *    - WM: Set "world safe" country info, limiting choices to 11 channels
+ *    - WM: Add "show all", add channel info (when all are shown) and proposed
+ *      AP WiFi channel on WiFi Configuration page.
+ *    - WM: Use events when connecting, instead of delays
  *  2025/10/07 (A10001986) [3.5.0]
  *    - Add emergency firmware update via SD (for dev purposes)
  *    - WM fixes (Upload, etc)

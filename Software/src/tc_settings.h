@@ -106,7 +106,8 @@ extern uint8_t musFolderNum;
 #endif
 #define DEF_SPEEDO_ACCELFIG 0     // Accel figures: 0: Movie (approximated), 1: Real-life
 #define DEF_SPEEDO_FACT     2.0   // Real-life acceleration factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
-#define DEF_SPEEDO_L0SPD    0     // Speedo: Display leading 0 for speeds < 10 (1: yes, 0: no)
+#define DEF_SPEEDO_P3       0     // Speedo: 1: Like part 3 (leading 0 < 10, no dot) / 0: like parts 1/2 (single digit < 10, dot)
+#define DEF_SPEEDO_3RDD     0     // Speedo: 1: Enable third digit (always 0) on CircuitSetup speedo, 0: Do not
 #define DEF_USE_GPS_SPEED   0     // 0: Do not show GPS speed on speedo display; 1: Do
 #define DEF_SPD_UPD_RATE    1     // 0: 1Hz, 1: 2Hz (default), 2: 4Hz, 3: 5Hz
 #define DEF_DISP_TEMP       1     // 1: Display temperature (if available) on speedo; 0: do not (speedo off)
@@ -174,10 +175,11 @@ struct Settings {
 #ifdef TC_HAVESPEEDO
     char speedoType[4]      = MS(DEF_SPEEDO_TYPE);
     char speedoBright[4]    = MS(DEF_BRIGHT_SPEEDO);
-    char speedoAO[6]        = MS(DEF_SPEEDO_AO);
+    char speedoAO[4]        = MS(DEF_SPEEDO_AO);
     char speedoAF[4]        = MS(DEF_SPEEDO_ACCELFIG);
     char speedoFact[6]      = MS(DEF_SPEEDO_FACT);
-    char speedoL0Spd[6]     = MS(DEF_SPEEDO_L0SPD);
+    char speedoP3[4]        = MS(DEF_SPEEDO_P3);
+    char speedo3rdD[4]      = MS(DEF_SPEEDO_3RDD);
 #ifdef TC_HAVEGPS
     char useGPSSpeed[4]     = MS(DEF_USE_GPS_SPEED);
     char spdUpdRate[4]      = MS(DEF_SPD_UPD_RATE);
@@ -201,8 +203,8 @@ struct Settings {
 #ifdef TC_HAVEMQTT  
     char useMQTT[4]         = "0";
     char mqttServer[80]     = "";  // ip or domain [:port]  
-    char mqttUser[128]      = "";  // user[:pass] (UTF8)
-    char mqttTopic[512]     = "";  // topic (UTF8)
+    char mqttUser[64]       = "";  // user[:pass] (UTF8) [limited to 63 bytes through WM]
+    char mqttTopic[128]     = "";  // topic (UTF8)       [limited to 127 bytes through WM]
     char pubMQTT[4]         = "0"; // publish to broker (timetravel)
 #endif
 #ifdef EXTERNAL_TIMETRAVEL_OUT

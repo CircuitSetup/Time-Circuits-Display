@@ -90,9 +90,8 @@ static const char R_updateacdone[] = "/uac";
 static const char acul_part3[]  = "</head><body><div class='wrap'><h1>";
 static const char acul_part5[]  = "</h1><h3>";
 static const char acul_part6[]  = "</h3><div class='msg";
-static const char acul_part7[]  = " S'><strong>Upload successful.</strong>";
+static const char acul_part7[]  = " S'><strong>Upload successful.</strong><br/>Device rebooting.";
 static const char acul_part7a[] = "<br>Installation will proceed after reboot.";
-static const char acul_part7b[] = " S'><strong>File deleted.</strong>";
 static const char acul_part71[] = " D'><strong>Upload failed.</strong><br>";
 static const char acul_part8[]  = "</div></div></body></html>";
 static const char *acul_errs[]  = { 
@@ -173,7 +172,7 @@ static const char *spdRateCustHTMLSrc[6] =
 #endif
 #endif  //TC_HAVESPEEDO
 
-static const char *apChannelCustHTMLSrc[16] = {
+static const char *apChannelCustHTMLSrc[14] = {
     "<div class='cmp0'><label for='apchnl'>WiFi channel</label><select class='sel0' value='",
     "apchnl",
     ">Random%s1'",
@@ -187,9 +186,7 @@ static const char *apChannelCustHTMLSrc[16] = {
     ">8%s9'",
     ">9%s10'",
     ">10%s11'",
-    ">11%s12'",
-    ">12%s13'",
-    ">13%s"
+    ">11%s"
 };
 
 static const char *wmBuildbeepaint(const char *dest);
@@ -201,6 +198,7 @@ static const char *wmBuildUpdateRate(const char *dest);
 #endif
 #endif
 static const char *wmBuildApChnl(const char *dest);
+static const char *wmBuildBestApChnl(const char *dest);
 static const char *wmBuildHaveSD(const char *dest);
 
 static const char *osde = "</option></select></div>";
@@ -209,6 +207,10 @@ static const char custHTMLSel[] = " selected";
 
 static const char *aco = "autocomplete='off'";
 static const char *tznp1 = "City/location name [a-z/0-9/-/ ]";
+
+// double-% since this goes through sprintf!
+static const char bestAP[]   = "<div class='c' style='background-color:#%s;color:#fff;font-size:80%%;border-radius:5px'>Proposed channel at current location: %d<br>%s(Non-WiFi devices not taken into account)</div>";
+static const char badWiFi[]  = "<br><i>Operating in AP mode not recommended</i>";
 
 static const char haveNoSD[] = "<div class='c' style='background-color:#dc3630;color:#fff;font-size:80%;border-radius:5px'><i>No SD card present</i></div>";
 
@@ -222,12 +224,13 @@ static const char haveNoSD[] = "<div class='c' style='background-color:#dc3630;c
 WiFiManagerParameter custom_hostName("hostname", HNTEXT, settings.hostName, 31, "pattern='[A-Za-z0-9\\-]+' placeholder='Example: timecircuits'");
 WiFiManagerParameter custom_wifiConRetries("wifiret", "Connection attempts (1-10)", settings.wifiConRetries, 2, "type='number' min='1' max='10' autocomplete='off'", WFM_LABEL_BEFORE);
 WiFiManagerParameter custom_wifiConTimeout("wificon", "Connection timeout (7-25[seconds])", settings.wifiConTimeout, 2, "type='number' min='7' max='25'");
-WiFiManagerParameter custom_wifiPRe("wifiPRet", "Periodic reconnection attempts ", settings.wifiPRetry, 1, "autocomplete='off' type='checkbox' style='margin:5px 0 10px 0'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_wifiPRe("wifiPRet", "Periodic reconnection attempts ", settings.wifiPRetry, 1, "autocomplete='off' type='checkbox' class='mt5 mb10'", WFM_LABEL_AFTER);
 WiFiManagerParameter custom_wifiOffDelay("wifioff", "Power save timer<br><span style='font-size:80%'>(10-99[minutes]; 0=off)</span>", settings.wifiOffDelay, 2, "type='number' min='0' max='99' title='WiFi will be shut down after chosen number of minutes after power-on. 0 means never.'");
 
 WiFiManagerParameter custom_sysID("sysID", "Network name (SSID) appendix<br><span style='font-size:80%'>Will be appended to \"TCD-AP\" [a-z/0-9/-]</span>", settings.systemID, 7, "pattern='[A-Za-z0-9\\-]+'");
 WiFiManagerParameter custom_appw("appw", "Password<br><span style='font-size:80%'>Password to protect TCD-AP. Empty or 8 characters [a-z/0-9/-]<br><b>Write this down, you might lock yourself out!</b></span>", settings.appw, 8, "minlength='8' pattern='[A-Za-z0-9\\-]+'");
 WiFiManagerParameter custom_apch(wmBuildApChnl);
+WiFiManagerParameter custom_bapch(wmBuildBestApChnl);
 WiFiManagerParameter custom_wifiAPOffDelay("wifiAPoff", "Power save timer<br><span style='font-size:80%'>(10-99[minutes]; 0=off)</span>", settings.wifiAPOffDelay, 2, "type='number' min='0' max='99' title='WiFi-AP will be shut down after chosen number of minutes after power-on. 0 means never.'");
 
 // Settings
@@ -281,7 +284,8 @@ WiFiManagerParameter custom_speedoBright("speBri", "Speed brightness (0-15)", se
 WiFiManagerParameter custom_spAO("spAO", "Switch speedo off when idle", settings.speedoAO, 1, "autocomplete='off' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
 WiFiManagerParameter custom_sAF("sAF", "Real-life acceleration figures", settings.speedoAF, 1, "autocomplete='off' title='If unchecked, movie-like times are used' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
 WiFiManagerParameter custom_speedoFact("speFac", "Factor for real-life figures (0.5-5.0)", settings.speedoFact, 3, "type='number' min='0.5' max='5.0' step='0.5' title='1.0 means real-world DMC-12 acceleration time.' autocomplete='off'");
-WiFiManagerParameter custom_sL0("sL0", "Display speed with leading 0", settings.speedoL0Spd, 1, "autocomplete='off' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_sL0("sL0", "Speedo display like in part 3", settings.speedoP3, 1, "autocomplete='off' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
+WiFiManagerParameter custom_s3rd("s3rd", "Display post-point 0 like A-car", settings.speedo3rdD, 1, "autocomplete='off' type='checkbox' style='margin-top:12px' title='CircuitSetup speedo only. The digit is always 0.'", WFM_LABEL_AFTER);
 #ifdef TC_HAVEGPS
 WiFiManagerParameter custom_useGPSS("uGPSS", "Display GPS speed", settings.useGPSSpeed, 1, "autocomplete='off' title='Check to display actual GPS speed on speedo' type='checkbox' style='margin-top:12px'", WFM_LABEL_AFTER);
 WiFiManagerParameter custom_updrt(wmBuildUpdateRate);  // speed update rate
@@ -348,18 +352,19 @@ WiFiManagerParameter custom_sectstart_bt("</div><div class='sects'><div class='h
 
 WiFiManagerParameter custom_sectend_foot("</div><p></p>");
 
-#define TC_MENUSIZE 6
+#define TC_MENUSIZE 7
 static const int8_t wifiMenu[TC_MENUSIZE] = { 
     WM_MENU_WIFI,
     WM_MENU_PARAM,
     WM_MENU_SEP,
     WM_MENU_UPDATE,
     WM_MENU_SEP,
-    WM_MENU_CUSTOM
+    WM_MENU_CUSTOM,
+    WM_MENU_END
 };
 
 #define AA_TITLE "Time Circuits"
-#define AA_ICON "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAA9QTFRFjpCRzMvH9tgx8iU9Q7YkHP8yywAAAC1JREFUeNpiYEQDDIwMKAAkwIwEiBTAMIMFCRApgGEGExIgUgDDDHQBNAAQYADhYgGBZLgAtAAAAABJRU5ErkJggg=="
+#define AA_ICON "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAD1BMVEWOkJHMy8fyJT322DFDtiSDPmFqAAAAKklEQVQI12MQhAIGAQYwYGQQUAIDbAyEGhcwwGQgqzEGA0wGXA2CAXcGAJ79DMHwFaKYAAAAAElFTkSuQmCC"
 #define AA_CONTAINER "TCDA"
 #define UNI_VERSION TC_VERSION 
 #define UNI_VERSION_EXTRA TC_VERSION_EXTRA
@@ -367,27 +372,27 @@ static const int8_t wifiMenu[TC_MENUSIZE] = {
 
 static const char myTitle[] = AA_TITLE;
 static const char apName[]  = "TCD-AP";
-static const char myHead[]  = "<link rel='shortcut icon' type='image/png' href='data:image/png;base64," AA_ICON "'><script>window.onload=function(){xx=false;document.title=xxx='" AA_TITLE "';id=-1;ar=['/u','/uac','/wifisave','/paramsave','/erase'];ti=['Firmware upload','','WiFi Configuration','Settings','WiFi Configuration'];if(ge('s')&&ge('dns')){xx=true;yyy=ti[2]}if(ge('uploadbin')||(id=ar.indexOf(wlp()))>=0){xx=true;if(id>=2){yyy=ti[id]}else{yyy=ti[0]};aa=gecl('wrap');if(aa.length>0){if(ge('uploadbin')){aa[0].style.textAlign='center';}aa=getn('H3');if(aa.length>0){aa[0].remove()}aa=getn('H1');if(aa.length>0){aa[0].remove()}}}if(ge('ttrp')||wlp()=='/param'){xx=true;yyy=ti[3];}if(ge('ebnew')){xx=true;bb=getn('H3');aa=getn('H1');yyy=bb[0].innerHTML;ff=aa[0].parentNode;ff.style.position='relative';}if(xx){zz=(Math.random()>0.8);dd=document.createElement('div');dd.classList.add('tpm0');dd.innerHTML='<div class=\"tpm\" onClick=\"window.location=\\'/\\'\"><div class=\"tpm2\"><img src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAZQTFRFSp1tAAAA635cugAAAAJ0Uk5T/wDltzBKAAAA'+(zz?'bUlEQVR42tzXwRGAQAwDMdF/09QQQ24MLkDj77oeTiPA1wFGQiHATOgDGAp1AFOhDWAslAHMhS6AQKgCSIQmgEgoAsiEHoBQqAFIhRaAWCgByIVXAMuAdcA6YBlwALAKePzgd71QAByP71uAAQC+xwvdcFg7UwAAAABJRU5ErkJggg==':'gElEQVR42tzXQQqDABAEwcr/P50P2BBUdMhee6j7+lw8i4BCD8MiQAjHYRAghAh7ADWMMAcQww5jADHMsAYQwwxrADHMsAYQwwxrADHMsAYQwwxrgLgOPwKeAjgrrACcFkYAzgu3AN4C3AV4D3AP4E3AHcDF+8d/YQB4/Pn+CjAAMaIIJuYVQ04AAAAASUVORK5CYII=')+'\" class=\"tpm3\"></div><H1 class=\"tpmh1\"'+(zz?' style=\"margin-left:1.4em\"':'')+'>'+xxx+'</H1>'+'<H3 class=\"tpmh3\"'+(zz?' style=\"padding-left:5em\"':'')+'>'+yyy+'</div></div>';}if(ge('ebnew')){bb[0].remove();aa[0].replaceWith(dd);}else if(xx){aa=gecl('wrap');if(aa.length>0){aa[0].insertBefore(dd,aa[0].firstChild);aa[0].style.position='relative';}}}</script><style type='text/css'>H1,H2{margin-top:0px;margin-bottom:0px;text-align:center;}H3{margin-top:0px;margin-bottom:5px;text-align:center;}button{transition-delay:250ms;margin-top:10px;margin-bottom:10px;font-variant-caps:all-small-caps;border-bottom:0.2em solid #225a98}br{display:block;font-size:1px;content:''}input[type='checkbox']{display:inline-block;margin-top:10px}input{border:thin inset}small{display:none}em > small{display:inline}form{margin-block-end:0;}.tpm{cursor:pointer;border:1px solid black;border-radius:5px;padding:0 0 0 0px;min-width:18em;}.tpm2{position:absolute;top:-0.7em;z-index:130;left:0.7em;}.tpm3{width:4em;height:4em;}.tpmh1{font-variant-caps:all-small-caps;font-weight:normal;margin-left:2.2em;overflow:clip;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI Semibold',Roboto,'Helvetica Neue',Verdana,Helvetica}.tpmh3{background:#000;font-size:0.6em;color:#ffa;padding-left:7.2em;margin-left:0.5em;margin-right:0.5em;border-radius:5px}.tpm0{position:relative;width:20em;padding:5px 0px 5px 0px;margin:0 auto 0 auto;}.cmp0{margin:0;padding:0;}.sel0{font-size:90%;width:auto;margin-left:10px;vertical-align:baseline;}.mt5{margin-top:5px!important}.mb10{margin-bottom:10px!important}.mb0{margin-bottom:0px!important}.mb15{margin-bottom:15px!important}</style>";
-static const char* myCustMenu = "<img id='ebnew' style='display:block;margin:10px auto 10px auto;' src='data:image/png;base64,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'><div style='font-size:11px;margin-left:auto;margin-right:auto;text-align:center;'>Version " UNI_VERSION " (" UNI_VERSION_EXTRA ")<br>Powered by A10001986 <a href='https://" WEBHOME ".out-a-ti.me' target=_blank>[Home]</a></div>";
+static const char myHead[]  = "<link rel='shortcut icon' type='image/png' href='data:image/png;base64," AA_ICON "'><script>window.onload=function(){xx=false;document.title=xxx='" AA_TITLE "';id=-1;ar=['/u','/uac','/wifisave','/paramsave'];ti=['Firmware upload','','WiFi Configuration','Settings'];if(ge('s')&&ge('dns')){xx=true;yyy=ti[2]}if(ge('uploadbin')||(id=ar.indexOf(wlp()))>=0){xx=true;if(id>=2){yyy=ti[id]}else{yyy=ti[0]};aa=gecl('wrap');if(aa.length>0){if(ge('uploadbin')){aa[0].style.textAlign='center';}aa=getn('H3');if(aa.length>0){aa[0].remove()}aa=getn('H1');if(aa.length>0){aa[0].remove()}}}if(ge('ttrp')||wlp()=='/param'){xx=true;yyy=ti[3];}if(ge('ebnew')){xx=true;bb=getn('H3');aa=getn('H1');yyy=bb[0].innerHTML;ff=aa[0].parentNode;ff.style.position='relative';}if(xx){zz=(Math.random()>0.8);dd=document.createElement('div');dd.classList.add('tpm0');dd.innerHTML='<div class=\"tpm\" onClick=\"window.location=\\'/\\'\"><div class=\"tpm2\"><img src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABAAQMAAACQp+OdAAAABlBMVEUAAABKnW0vhlhrAAAAAXRSTlMAQObYZgAAA'+(zz?'GBJREFUKM990aEVgCAABmF9BiIjsIIbsJYNRmMURiASePwSDPD0vPT12347GRejIfaOOIQwigSrRHDKBK9CCKoEqQF2qQMOSQAzEL9hB9ICNyMv8DPKgjCjLtAD+AV4dQM7O4VX9m1RYAAAAABJRU5ErkJggg==':'HtJREFUKM990bENwyAUBuFnuXDpNh0rZIBIrJUqMBqjMAIlBeIihQIF/fZVX39229PscYG32esCzeyjsXUzNHZsI0ocxJ0kcZIOsoQjnxQJT3FUiUD1NAloga6wQQd+4B/7QBQ4BpLAOZAn3IIy4RfUibCgTTDq+peG6AvsL/jPTu1L9wAAAABJRU5ErkJggg==')+'\" class=\"tpm3\"></div><H1 class=\"tpmh1\"'+(zz?' style=\"margin-left:1.4em\"':'')+'>'+xxx+'</H1>'+'<H3 class=\"tpmh3\"'+(zz?' style=\"padding-left:5em\"':'')+'>'+yyy+'</div></div>';}if(ge('ebnew')){bb[0].remove();aa[0].replaceWith(dd);}else if(xx){aa=gecl('wrap');if(aa.length>0){aa[0].insertBefore(dd,aa[0].firstChild);aa[0].style.position='relative';}}}</script><style type='text/css'>H1,H2{margin-top:0px;margin-bottom:0px;text-align:center;}H3{margin-top:0px;margin-bottom:5px;text-align:center;}button{transition-delay:250ms;margin-top:10px;margin-bottom:10px;font-variant-caps:all-small-caps;border-bottom:0.2em solid #225a98}input{border:thin inset}em > small{display:inline}form{margin-block-end:0;}.tpm{cursor:pointer;border:1px solid black;border-radius:5px;padding:0 0 0 0px;min-width:18em;}.tpm2{position:absolute;top:-0.7em;z-index:130;left:0.7em;}.tpm3{width:4em;height:4em;}.tpmh1{font-variant-caps:all-small-caps;font-weight:normal;margin-left:2.2em;overflow:clip;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI Semibold',Roboto,'Helvetica Neue',Verdana,Helvetica}.tpmh3{background:#000;font-size:0.6em;color:#ffa;padding-left:7.2em;margin-left:0.5em;margin-right:0.5em;border-radius:5px}.tpm0{position:relative;width:20em;padding:5px 0px 5px 0px;margin:0 auto 0 auto;}.cmp0{margin:0;padding:0;}.sel0{font-size:90%;width:auto;margin-left:10px;vertical-align:baseline;}.mt5{margin-top:5px!important}.mb10{margin-bottom:10px!important}.mb0{margin-bottom:0px!important}.mb15{margin-bottom:15px!important}</style>";
+static const char* myCustMenu = "<img id='ebnew' style='display:block;margin:10px auto 5px auto;' src='data:image/png;base64,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'><div style='font-size:0.9em;line-height:0.9em;font-weight:bold;margin:5px auto 0px auto;text-align:center;font-variant:all-small-caps'>" UNI_VERSION " (" UNI_VERSION_EXTRA ")<br>Powered by A10001986 <a href='https://" WEBHOME ".out-a-ti.me' style='text-decoration:underline' target=_blank>[Home]</a></div>";
 
 static const char* cliImages[] = {
     /* fc */
-    "AxQTFRFSUpKk491zszD/PGzYuH5fAAAAD5JREFUeNpiYEIDDEwMKACHACOEwwgTYGQGK2NiZoSpYAKJgAmYGUBJmDKooYwwg3Bby8xMuQA+v6ABgAADAGYRALv2zDkbAAAAAElFTkSuQmCC",
+    "AgMAAABinRfyAAAADFBMVEVJSkrOzMP88bOTj3X+RyUkAAAAL0lEQVQI12MIBQIGBwYGRihxgJmRwXkC20EGhxRJIFf6CZDgMYDJMjWgEwi9YKMA/v8ME3vY03UAAAAASUVORK5CYII=",
     /* sid */
-    "A9QTFRFjpCRzMvHQ7Yk9tgx8iU9dfM6hQAAADJJREFUeNpiYEQDDIwMKAAhwMKCJsDMTIQASAwkAJEjIABHYAEmJgSimgC659AAQIABAHNsAOmY7Q19AAAAAElFTkSuQmCC",
+    "BAMAAADt3eJSAAAAD1BMVEWOkJHMy8dDtiT22DHyJT118zqFAAAALUlEQVQI12MQhAIGAQYwYAQzXGAMY0wGswGQYYzBAJIQhhKTAhARxYBbCncGAAUkB7Vkqvl1AAAAAElFTkSuQmCC",
     /* dg */
-    "A9QTFRFAAAAjpCRzMvH////4wAAGgJHgAAAADhJREFUeNpiYEIDDEyMKACrAAMSgAgwAwELC4jEKQAWQlHBgC4AE0EygwFZAMNa0gXQ/YIGAAIMAM86AWWJwuU9AAAAAElFTkSuQmCC",
+    "BAMAAADt3eJSAAAAD1BMVEUAAACOkJHMy8f////jAAAaAkeAAAAANUlEQVQI12NQggIGRUEwEEJiMIABkMFsbOJsbIDCYDY2hjAMYAxjZhjDAMiAa8fDQNgFdwYAnxgL08XYZH4AAAAASUVORK5CYII=",
     /* vsr */
-    "BVQTFRFSUpKzMvHtr+92uXj9tM0AAAA8iU97nyh3QAAADFJREFUeNpiYEQDDIwMYMDMDKFxCTCBAYoAGxuaACsrmgCGFnQBFnqoQACgABoACDAAelsA4ckPlX4AAAAASUVORK5CYII=",
+    "BAMAAADt3eJSAAAAFVBMVEVJSkrMy8e2v73a5eP20zTyJT0AAAC7naKPAAAALklEQVQI12MQhAIGAQYGZgMGBkZkBpOSkgKEoRoEZaglKcCk0BlO5IiAASPcGQArMAeen41yugAAAABJRU5ErkJggg==",
     /* aux */
-    "AZQTFRFSUpKzMvH3mEsaAAAADdJREFUeNpiYEQDDIwMKAAmAJZDEoCqhguAORARHAJIpsAFUM3AtIUBxmfA5zBSBZDNQAMAAQYAPGgAaz1olJkAAAAASUVORK5CYII=",
+    "AQMAAAAlPW0iAAAABlBMVEVJSkrMy8feYSxoAAAAKklEQVQI12P4/5+hgZGh+SBD+0OGvkIQavjI0PgQJNLcCJZqBCIIG6gYAMbFElHyhQBTAAAAAElFTkSuQmCC",
     /* remote */
-    "BVQTFRFSUpKzMvHtr+9AAAA8iU92uXj9tM0iFgDpgAAAEFJREFUeNp8z0sKACAIRVF/uf8ll30QX9EdODgoETFETKWE9gMZVXCvoNkGOU0wA4gNDRtjgT3gOkHAZ+FzUBdgAJ/RAVPNkrSUAAAAAElFTkSuQmCC"
+    "BAMAAADt3eJSAAAAFVBMVEVJSkrMy8e2v70AAADa5ePyJT320zT0Sr0YAAAAQElEQVQI12MQhAIGAQYwYAQzHFAZTEoKUEYalMFsDAIghhIQKDMyiAaDGSARZSMlYxAjGMZASIEZCO1wS+HOAADWkAscxWroAQAAAABJRU5ErkJggg=="
 };
 const char *menu_tp[] = { "Flux Capacitor", "SID", "Dash Gauges", "VSR", "AUX", "Remote" };
 const char menu_myDiv[] = "<div style='margin-left:auto;margin-right:auto;text-align:center;'>";
 const char menu_isp[] = "Please <a href='/update'>install</a> sound pack</div><hr>";
-const char menu_item[] = "<a href='http://%s' target=_blank title='%s'><img style='zoom:2;padding:0 5px 0 5px;' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA%s' alt='%s'></a>";
+const char menu_item[] = "<a href='http://%s' target=_blank title='%s'><img style='zoom:2;padding:0 5px 0 5px;' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQ%s' alt='%s'></a>";
 
 static int  shouldSaveConfig = 0;
 static bool shouldSaveIPConfig = false;
@@ -451,7 +456,6 @@ static void saveParamsCallback();
 static void saveWiFiCallback(const char *ssid, const char *pass);
 static void preUpdateCallback();
 static void postUpdateCallback(bool);
-static void eraseCallback(bool);
 static void preSaveWiFiCallback();
 static int  menuOutLenCallback();
 static void menuOutCallback(String& page);
@@ -511,6 +515,7 @@ void wifi_setup()
       &custom_sysID,
       &custom_appw,
       &custom_apch,
+      &custom_bapch,
       &custom_wifiAPOffDelay,
       &custom_wifihint,
 
@@ -573,6 +578,7 @@ void wifi_setup()
       &custom_sAF,
       &custom_speedoFact,
       &custom_sL0,
+      &custom_s3rd,
     #ifdef TC_HAVEGPS
       &custom_useGPSS,
       &custom_updrt,
@@ -633,10 +639,6 @@ void wifi_setup()
       NULL
     };
 
-    #ifndef TC_DBG
-    wm.setDebugOutput(false);
-    #endif
-
     // Transition from NVS-saved data to own management:
     if(!settings.ssid[0] && settings.ssid[1] == 'X') {
         
@@ -660,7 +662,6 @@ void wifi_setup()
     wm.setPreOtaUpdateCallback(preUpdateCallback);
     wm.setPostOtaUpdateCallback(postUpdateCallback);
     wm.setWebServerCallback(setupWebServerCallback);
-    wm.setEraseCallback(eraseCallback);
     wm.setMenuOutLenCallback(menuOutLenCallback);
     wm.setMenuOutCallback(menuOutCallback);
     wm.setDelayReplacement(wifiDelayReplacement);
@@ -674,18 +675,13 @@ void wifi_setup()
     // Hack some stuff into WiFiManager main page
     wm.setCustomMenuHTML(myCustMenu);
 
-    // Static IP info is not saved by WiFiManager,
-    // have to do this "manually". Hence ipsettings.
-    wm.setShowStaticFields(true);
-    wm.setShowDnsFields(true);
-
     wm.setCarMode(carMode);
     wm.setWiFiAPMaxClients(6);
 
     temp = atoi(settings.apChnl);
     if(temp < 0) temp = 0;
-    if(temp > 13) temp = 13;
-    if(!temp) temp = random(1, 13);
+    if(temp > 11) temp = 11;
+    if(!temp) temp = random(1, 11);
     wm.setWiFiAPChannel(temp);
 
     temp = atoi(settings.wifiConTimeout);
@@ -698,10 +694,7 @@ void wifi_setup()
     if(temp > 10) temp = 10;
     wm.setConnectRetries(temp);
 
-    wm.setCleanConnect(true);
-    //wm.setRemoveDuplicateAPs(false);
-
-    wm.setMenu(wifiMenu, TC_MENUSIZE);
+    wm.setMenu(wifiMenu, TC_MENUSIZE, false);
 
     wm.allocParms((sizeof(parmArray) / sizeof(WiFiManagerParameter *)) - 1);
 
@@ -1027,7 +1020,8 @@ void wifi_loop()
             strcpyCB(settings.speedoAO, &custom_spAO);
             strcpyCB(settings.speedoAF, &custom_sAF);
             mystrcpy(settings.speedoFact, &custom_speedoFact);
-            strcpyCB(settings.speedoL0Spd, &custom_sL0);
+            strcpyCB(settings.speedoP3, &custom_sL0);
+            strcpyCB(settings.speedo3rdD, &custom_s3rd);
             #ifdef TC_HAVEGPS
             strcpyCB(settings.useGPSSpeed, &custom_useGPSS);
             getParam("spdrt", settings.spdUpdRate, 1, DEF_SPD_UPD_RATE);
@@ -1220,6 +1214,9 @@ static void wifiConnect(bool deferConfigPortal)
             // Try to avoid "burning" the ESP when the WiFi mode
             // is "AP" and the vol knob is fully up by reducing
             // the max. transmit power.
+            // This has been fixed with CB 1.4 but much more is
+            // simply not needed. The props are close together,
+            // and we don't want to burn power needlessly.
             // The choices are:
             // WIFI_POWER_19_5dBm    = 19.5dBm
             // WIFI_POWER_19dBm      = 19dBm
@@ -1229,11 +1226,12 @@ static void wifiConnect(bool deferConfigPortal)
             // WIFI_POWER_13dBm      = 13dBm
             // WIFI_POWER_11dBm      = 11dBm
             // WIFI_POWER_8_5dBm     = 8.5dBm
-            // WIFI_POWER_7dBm       = 7dBm     <-- proven to avoid the issues
+            // WIFI_POWER_7dBm       = 7dBm     <-- proven to avoid the issues on CB < 1.4
             // WIFI_POWER_5dBm       = 5dBm
             // WIFI_POWER_2dBm       = 2dBm
             // WIFI_POWER_MINUS_1dBm = -1dBm
-            WiFi.setTxPower(WIFI_POWER_7dBm);
+
+            WiFi.setTxPower(haveLineOut ? WIFI_POWER_8_5dBm : WIFI_POWER_7dBm);
 
             #ifdef TC_DBG
             esp_wifi_get_max_tx_power(&power);
@@ -1470,15 +1468,17 @@ static void saveWiFiCallback(const char *ssid, const char *pass)
     // ssid is the (new?) ssid to connect to, pass the password.
     // (We don't need to compare to the old ones since the
     // settings are saved in any case)
+    // This is also used to "forget" a saved WiFi network, in
+    // which case ssid and pass are empty strings.
     memset(settings.ssid, 0, sizeof(settings.ssid));
-    strncpy(settings.ssid, ssid, sizeof(settings.ssid) - 1);
+    memset(settings.pass, 0, sizeof(settings.pass));
+    if(*ssid) {
+        strncpy(settings.ssid, ssid, sizeof(settings.ssid) - 1);
+        strncpy(settings.pass, pass, sizeof(settings.pass) - 1);
+    }
+
     #ifdef TC_DBG
     Serial.printf("saveWiFiCallback: New ssid '%s'\n", settings.ssid);
-    #endif
-    
-    memset(settings.pass, 0, sizeof(settings.pass));
-    strncpy(settings.pass, pass, sizeof(settings.pass) - 1);
-    #ifdef TC_DBG
     Serial.printf("saveWiFiCallback: New pass '%s'\n", settings.pass);
     #endif
     
@@ -1534,40 +1534,6 @@ static void postUpdateCallback(bool res)
     if(!res) {
         delay(1000);
         esp_restart();
-    }
-}
-
-// This is called upon "Forget wifi network".
-static void eraseCallback(bool isPre)
-{
-    if(isPre) {
-
-        // Pre-Erase: Stop sound, we write to NVS
-        mp_stop();
-        stopAudio();
-
-    } else {
-
-        // Actual Erase: Delete ssid and pass, as well
-        // as static IP config, save, and reboot
-
-        #ifdef TC_DBG
-        Serial.println("forgetting stored network");
-        #endif
-
-        if(settings.ssid[0] || settings.pass[0]) {
-            memset(settings.ssid, 0, sizeof(settings.ssid));
-            memset(settings.pass, 0, sizeof(settings.pass));
-            write_settings();
-        }
-
-        deleteIpSettings();
-        
-        Serial.flush();
-        prepareReboot();
-        delay(1000);
-        esp_restart();
-        
     }
 }
 
@@ -1919,7 +1885,8 @@ void updateConfigPortalValues()
     setCBVal(&custom_spAO, settings.speedoAO);
     setCBVal(&custom_sAF, settings.speedoAF);
     custom_speedoFact.setValue(settings.speedoFact, 3);
-    setCBVal(&custom_sL0, settings.speedoL0Spd);
+    setCBVal(&custom_sL0, settings.speedoP3);
+    setCBVal(&custom_s3rd, settings.speedo3rdD);
     #ifdef TC_HAVEGPS
     setCBVal(&custom_useGPSS, settings.useGPSSpeed);
     // Update rate done on-the-fly
@@ -2062,9 +2029,28 @@ static const char *wmBuildApChnl(const char *dest)
     char *str = (char *)malloc(600);    // actual length 563
 
     str[0] = 0;
-    buildSelectMenu(str, apChannelCustHTMLSrc, 16, settings.apChnl);
+    buildSelectMenu(str, apChannelCustHTMLSrc, 14, settings.apChnl);
     
     return str;
+}
+
+static const char *wmBuildBestApChnl(const char *dest)
+{
+    if(dest) {
+      free((void *)dest);
+      return NULL;
+    }
+
+    int32_t mychan = 0;
+    int qual = 0;
+
+    if(wm.getBestAPChannel(mychan, qual)) {
+        char *str = (char *)malloc(STRLEN(bestAP) + 4 + 7 + STRLEN(badWiFi) + 1);
+        sprintf(str, bestAP, qual < 0 ? "dc3630" : (qual > 0 ? "609b71" : "777"), mychan, qual < 0 ? badWiFi : "");
+        return str;
+    }
+
+    return NULL;
 }
 
 static const char *wmBuildHaveSD(const char *dest)
@@ -2099,7 +2085,7 @@ static void allocUplArrays()
 
 static void setupWebServerCallback()
 {
-    wm.server->on(WM_G(R_updateacdone), HTTP_POST, &handleUploadDone, &handleUploading);
+    wm.server->on(R_updateacdone, HTTP_POST, &handleUploadDone, &handleUploading);
 }
 
 static void doCloseACFile(int idx, bool doRemove)
@@ -2274,6 +2260,7 @@ static void handleUploadDone()
                 }
             }
         } else {
+            buflen += strlen(wm.getHTTPSTYLEOK());
             buflen += STRLEN(acul_part7);
         }
         if(haveAC) {
@@ -2289,10 +2276,13 @@ static void handleUploadDone()
         strcpy(buf, wm.getHTTPSTART(titStart));
         if(titStart >= 0) {
             strcpy(buf + titStart, myTitle);
+            strcat(buf, "</title>");
         }
-        strcat(buf, "</title>");
         strcat(buf, wm.getHTTPSCRIPT());
         strcat(buf, wm.getHTTPSTYLE());
+        if(!haveErrs) {
+            strcat(buf, wm.getHTTPSTYLEOK());
+        }
         strcat(buf, myHead);
         strcat(buf, acul_part3);
         strcat(buf, myTitle);
@@ -2401,7 +2391,7 @@ static bool isIp(char *str)
     int digcnt = 0;
     int num = 0;
 
-    while(*str != '\0') {
+    while(*str) {
 
         if(*str == '.') {
 
@@ -2456,7 +2446,7 @@ static void getParam(String name, char *destBuf, size_t length, int defaultVal)
     if(wm.server->hasArg(name)) {
         strncpy(destBuf, wm.server->arg(name).c_str(), length);
     }
-    if(strlen(destBuf) == 0) {
+    if(!*destBuf) {
         sprintf(destBuf, "%d", defaultVal);
     }
 }

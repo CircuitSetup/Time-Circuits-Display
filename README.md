@@ -30,7 +30,7 @@ Features include
   - [Exhibition mode](#exhibition-mode): Show a fixed time in *Present Time* display instead of a running clock. Helpful for filming or museums.
 - Network capabilities:
   - Advanced network-accessible [Config Portal](#the-config-portal) for setup (http://timecircuits.local, hostname configurable)
-  - [Wireless communication](#bttf-network-bttfn) with compatible other props such as CircuitSetup's [Flux Capacitor](https://fc.out-a-ti.me) and [SID](https://sid.out-a-ti.me), as well as the [Dash Gauges](https://dg.out-a-ti.me), [VSR](https://vsr.out-a-ti.me) and modified [Futaba Remote Control](https://remote.out-a-ti.me)
+  - [Wireless communication](#connecting-props-wirelessly-bttf-network-bttfn) with compatible other props such as CircuitSetup's [Flux Capacitor](https://fc.out-a-ti.me) and [SID](https://sid.out-a-ti.me), as well as the [Dash Gauges](https://dg.out-a-ti.me), [VSR](https://vsr.out-a-ti.me) and modified [Futaba Remote Control](https://remote.out-a-ti.me)
   - [Home Assistant](#home-assistant--mqtt) (MQTT 3.1.1) support
 - [Night mode](#night-mode): Dim or switch off displays on schedule, manually or sensor-controlled.
 - [Music player](#the-music-player): Play mp3 files located on an SD card
@@ -64,10 +64,10 @@ The first step is to download "install/sound-pack-xxxxxxxx.zip" and extract it. 
 
 Then there are two alternative ways to proceed. Note that both methods *require an SD card*.
 
-1) Through the [Config Portal](#the-config-portal). Click on *Update*, select the "TCDA.bin" file in the bottom file selector and click on *Upload*. Note that an SD card must be in the slot during this operation.
+1) Through the [Config Portal](#the-config-portal). Click on *Update*, select the "TCDA.bin" file in the bottom file selector and click on *Upload*.
 
 2) Via SD card:
-- Copy "TCDA.bin" to the root directory of of a FAT32 formatted SD card;
+- Copy "TCDA.bin" to the root directory of a FAT32 formatted SD card;
 - power down the TCD,
 - insert this SD card into the slot and 
 - power up the TCD; the sound-pack will be installed automatically.
@@ -88,7 +88,7 @@ The first step is to establish access to the TCD's configuration web site ("Conf
 
 The next step in initial configuration is to set the TCD's time zone. If the time zone isn't properly configured, the TCD will show a wrong time, and DST (daylight saving) will not be switched on/off correctly.
 
-Click on "Setup" on the Config Portal's main page, and specify your [time zone](#-time-zone). Then click "SAVE"; the TCD will reboot.
+Click on "Settings" on the Config Portal's main page, and specify your [time zone](#-time-zone). Then click "SAVE"; the TCD will reboot.
 
 Setting actual time:
 - If the TCD is going to be connected to a WiFi network with internet access as described in the following section, it will receive time information through NTP (network time protocol). No user interaction is required.
@@ -98,15 +98,25 @@ Setting actual time:
 
 The TCD knows two ways of WiFi operation: Either it creates its own WiFi network, or it connects to a pre-existing WiFi network.
 
-As long as the device is unconfigured, it creates a WiFi network of its own named "TCD-AP". This is called **"Access point mode"**, or "AP-mode". In this mode, other WiFi devices can connect to the TCD, but the TCD can't access the internet (and therefore not synchronize time).
+As long as the device is unconfigured, it creates a WiFi network of its own named "TCD-AP". This is called **"Access point mode"**, or **"AP-mode"**. In this mode, other WiFi devices - such as other props or a computer - can connect to the TCD, but the TCD can't access the internet (and therefore not synchronize time through NTP). Also, [HA/MQTT](#home-assistant--mqtt) is not possible.
 
-It is ok to leave the TCD in this mode, especially if it is mounted in a car or places with no WiFi networks available. In a typical home setup, however, you might want to connect the TCD to your local WiFi network. To do so, click on "Connect to WiFi". The bare minimum is to select an WiFi network name (SSID) and a WiFi password.
+![APmode](img/apmode.png)
 
->Note that the TCD requests an IP address via DHCP, unless you entered valid data in the fields for static IP addresses (IP, gateway, netmask, DNS). If the device is inaccessible as a result of incorrect static IPs, hold ENTER when powering it up until the white LED lights up; static IP data will be deleted and the device will return to DHCP.
+It is ok to leave the TCD in this mode, especially if it is mounted in a car or places with no WiFi networks available. 
 
->In order to use BTTFN, all props must be connected to the same network; this can be your local (WiFi) network, or the TCD's own WiFi network in AP mode. In order to use MQTT, your TCD must be connected to the same network your broker is connected to.
+>Please do not leave computers/handhelds permanently connected to the TCD's AP. These devices might think they are connected to the internet and therefore hammer the TCD with DNS and HTTP requests which might lead to packet loss and disruptions.
 
-After saving the WiFi network settings, the TCD reboots and tries to connect to your selected WiFi network. If that fails, it will again start in access point mode.
+>If you want your device to remain in AP-mode, please choose a suitable WiFi channel on the Config Portal's "WiFi Configuration" page. See [here](#-wifi-channel).
+
+In a typical home setup, however, you might want to connect the TCD to your local WiFi network. This allows for for time synchronization (NTP) and [HA/MQTT](#home-assistant--mqtt):
+
+![STAmode](img/stamode.png)
+
+To connect your TCD to your WiFI network, navigate to the Config Portal and click on "WiFi Configuration". The bare minimum is to select an WiFi network name (SSID) and a WiFi password.
+
+>The TCD requests an IP address via DHCP, unless you entered valid data in the fields for static IP addresses (IP, gateway, netmask, DNS). If the device is inaccessible as a result of incorrect static IPs, hold ENTER when powering it up until the white LED lights up; static IP data will be deleted and the device will return to DHCP.
+
+After saving the WiFi configuration settings, the TCD reboots and tries to connect to your selected WiFi network. If that fails, it will again start in access point mode.
 
 After completing these steps, your TCD is ready for use; you can also continue configuring it to your personal preferences through the Config Portal.
 
@@ -124,17 +134,18 @@ It can be accessed as follows:
 
 - Connect your computer or handheld device to the WiFi network "TCD-AP".
 - Navigate your browser to http://timecircuits.local or http://192.168.4.1 to enter the Config Portal.
+- (For proper operation, please disconnect your computer or handheld from TCD-AP when you are done with configuring your TCD. These devices can cause high network traffic, resulting in severe performance penalties.)
 
 #### If TCD is connected to WiFi network
 
-- Connect your hand-held/computer to the same WiFi network to which the TCD is connected, and
+- Connect your handheld/computer to the same WiFi network to which the TCD is connected, and
 - navigate your browser to http://timecircuits.local
 
-  Accessing the Config Portal through this address requires the operating system of your hand-held/computer to support Bonjour/mDNS: Windows 10 version TH2     (1511) [other sources say 1703] and later, Android 13 and later; MacOS and iOS since the dawn of time.
+  >Accessing the Config Portal through this address requires the operating system of your handheld/computer to support Bonjour/mDNS: Windows 10 version TH2     (1511) [other sources say 1703] and later, Android 13 and later; MacOS and iOS since the dawn of time.
 
-  If connecting to http://timecircuits.local fails due to a name resolution error, you need to find out the TCD's IP address: Hold ENTER on the TCD's keypad for 2 seconds, then repeatedly  press ENTER until "NET-WORK" is shown, then hold ENTER for 2 seconds. The device will then show its current IP address. Then, on your handheld or computer, navigate to http://a.b.c.d (a.b.c.d being the IP address as shown on the display) in order to enter the Config Portal.
+  >If connecting to http://timecircuits.local fails due to a name resolution error, you need to find out the TCD's IP address: Hold ENTER on the TCD's keypad for 2 seconds, then repeatedly  press ENTER until "NET-WORK" is shown, then hold ENTER for 2 seconds. The device will then show its current IP address. Then, on your handheld or computer, navigate to http://a.b.c.d (a.b.c.d being the IP address as shown on the display) in order to enter the Config Portal.
 
-In the main menu, click on "SETUP" to configure your TCD. 
+In the main menu, click on "SETTINGS" to configure your TCD. 
 
 | [<img src="img/cps-frag.png">](img/cp_setup.png) |
 |:--:| 
@@ -146,7 +157,7 @@ A full reference of the Config Portal is [here](#appendix-a-the-config-portal).
 
 *Present time* is a clock and normally shows the actual local present time, as received from the network or set up through the [keypad menu](#how-to-set-the-real-time-clock-rtc).
 
-*Destination time* and *Last time departed* are stale. These, by default, work like in the movie: Upon a time travel, *present time* becomes *last time departed*, and *destination time* becomes *present time*.
+*Destination time* and *Last time departed* are stale. These, by default, work like in the movie: Upon a time travel, *present time* becomes *last time departed*, and *destination time* becomes *present time*. Or in Doc's words: The red one tells you where you're going. The green one tells you where you are. The yellow one tells you where you were.
 
 >If "REPLACE BATTERY" is shown upon boot, the onboard CR2032 battery is depleted and needs to be replaced. Note that, for technical reasons, "REPLACE BATTERY" will also show up the very first time you power-up the TCD *after* changing the battery. You can, of course, disregard that message in this case.
 
@@ -161,7 +172,7 @@ In general, it is safe to power-down the TCD when it is idle or after it has bee
 
 ### Calendar system
 
-The TCD firmware uses the [Julian Calendar](https://en.wikipedia.org/wiki/Julian_calendar) calendar from Jan 1, 1, until Sep 2, 1752, and for later dates the [Gregorian](https://en.wikipedia.org/wiki/Gregorian_calendar) one. Sep 2, 1752, was the last day the Julian calendar was used in the ["First" British Empire](https://en.wikipedia.org/wiki/British_Empire#%22First%22_British_Empire_(1707%E2%80%931783)) (Great Britain and its colonies, including eastern parts of North America, Canada). Other countries stopped using this calendar system way earlier; most of Europe, including Spain plus its colonies worldwide, had switched in 1582 already. DK/NO/NL (except Holland and Zeeland) switched in 1700, Japan in 1872, China in 1912, Russia in 1918.
+The TCD firmware uses the [Julian Calendar](https://en.wikipedia.org/wiki/Julian_calendar) from Jan 1, 1, until Sep 2, 1752, and for later dates the [Gregorian](https://en.wikipedia.org/wiki/Gregorian_calendar) one. Sep 2, 1752, was the last day the Julian calendar was used in the ["First" British Empire](https://en.wikipedia.org/wiki/British_Empire#%22First%22_British_Empire_(1707%E2%80%931783)) (Great Britain and its colonies, including eastern parts of North America, Canada). Other countries stopped using this calendar system way earlier; most of Europe, including Spain plus its colonies worldwide, had switched in 1582 already. DK/NO/NL (except Holland and Zeeland) switched in 1700, Japan in 1872, China in 1912, Russia in 1918.
 
 Since the time machine was built in the USA, using 1752 for the TCD seems appropriate.
 
@@ -466,7 +477,7 @@ To travel back to actual present time, hold "9" for 2 seconds.
 
 ### Persistent / Non-persistent time travels
 
-On the Config Portal's "Setup" page, there is an option item named **_Make time travels persistent_**. The default is off. 
+On the Config Portal's "Settings" page, there is an option item named **_Make time travels persistent_**. The default is off. 
 
 >Note that in order to enable this feature, an SD card is required and the option **_Save secondary settings on SD_** must be checked as well.
 
@@ -512,7 +523,7 @@ To toggle night-mode on/off manually, hold "4".
 
 #### Scheduled night-mode
 
-In the Config Portal, a schedule for night-mode can be programmed. You can choose from currently four time schedule presets, or a daily schedule with selectable start and end hours.
+In the Config Portal, a schedule for night-mode can be programmed. You can choose from currently four time-schedule presets, or a daily schedule with selectable start and end hours.
 
 The presets are for (hopefully) typical home, office and shop setups, and they assume the TCD to be in use (ie night-mode off) at the following times:
 - Home: Mon-Thu 5pm-11pm, Fri 1pm-1am, Sat 9am-1am, Sun 9am-11pm
@@ -562,7 +573,7 @@ At the time the reminder is due, the TCD plays a sound. If a file named "reminde
 
 ## SD card
 
-Preface note on SD cards: For unknown reasons, some SD cards simply do not work with this device. For instance, I had no luck with Sandisk Ultra 32GB and  "Intenso" cards. If your SD card is not recognized, check if it is formatted in FAT32 format (not exFAT!). Also, the size must not exceed 32GB (as larger cards cannot be formatted with FAT32). Transcend SDHC cards work fine in my experience.
+Preface note on SD cards: For unknown reasons, some SD cards simply do not work with this device. For instance, I had no luck with Sandisk Ultra 32GB and  "Intenso" cards. If your SD card is not recognized, check if it is formatted in FAT32 format (not exFAT!). Also, the size must not exceed 32GB (as larger cards cannot be formatted with FAT32). Transcend, Sandisk Industrial, Verbatim Premium and Samsung Pro Endurance SDHC cards work fine in my experience.
 
 The SD card, apart from being required for [installing](#sound-pack-installation) of the built-in sound-pack, can be used for substituting built-in sound effects, some additional custom sound effects, and for music played back by the [Music player](#the-music-player). Also, it is _strongly recommended_ to store [secondary settings](#-save-secondary-settings-on-sd) on the SD card to minimize [Flash Wear](#flash-wear).
 
@@ -607,11 +618,11 @@ Those files are not provided here. You can use any mp3, with a bitrate of 128kpb
 
 ### Installing Custom & Replacement Audio Files
 
-As of version 3.3 of the TCD firmware, above mentioned audio files (both replacements and custom sounds) can either be copied to the SD card using a computer (as before), or uploaded through the Config Portal.
+Replacements and custom sounds can either be copied to the SD card using a computer, or uploaded through the Config Portal.
 
 Uploading through the Config Portal works exactly like [installing the default audio files](#sound-pack-installation); on the main menu, click "UPDATE". Afterwards choose one or more mp3 files to upload using the bottom file selector, and click "UPLOAD". The firmware will store the uploaded mp3 files on the SD card.
 
-In order to delete a file from the SD card, upload a file whose name is prefixed with "delete-". For example: To delete "ttaccel.mp3" from the SD card, either rename your "ttaccel.mp3" into "delete-ttaccel.mp3", or create a new file named "delete-ttaccel.mp3", and upload this file. The firmware detects the "delete-" part and, instead of storing the uploaded file, it throws it away and deletes "ttaccel.mp3" from the SD card.
+In order to delete a file from the SD card, upload a file whose name is prefixed with "delete-". For example: To delete "ttaccel.mp3" from the SD card, upload a file named "delete-ttaccel.mp3"; the file's contents does not matter, so it's easiest to use a newly created empty file. The firmware detects the "delete-" part and, instead of storing the uploaded file, it throws it away and deletes "ttaccel.mp3" from the SD card.
 
 For technical reasons, the TCD must reboot after mp3 files are uploaded in this way.
 
@@ -660,7 +671,7 @@ After invoking the keypad menu, the first step is to choose a menu item. The ava
 - enter dates/times for the *Destination* and *Last Time Departed* displays,
 - show light/temperature/humidity sensor info (if such a sensor is connected) ("SENSORS"),
 - show when time was last sync'd with NTP or GPS ("TIME SYNC"),
-- see a list of [BTTFN-Clients](#bttf-network-bttfn) currently connected ("BTTFN CLIENTS"),
+- see a list of [BTTFN-Clients](#connecting-props-wirelessly-bttf-network-bttfn) currently connected ("BTTFN CLIENTS"),
 - quit the menu ("END").
  
 Pressing ENTER cycles through the list, holding ENTER selects an item.
@@ -794,23 +805,6 @@ Note: Your dates/times will be overwritten in storage after a time travel when *
  - While the menu is active, press ENTER repeatedly until "END" is displayed.
  - Hold ENTER to leave the menu
 
-## Car Mode
-
-If the TCD, perhaps along with other props such as Flux Capacitor or SID, is mounted in a car, there are a few things to be considered:
-
-- There is no point in attempting to connect a WiFi network.
-- If the TCD acts as WiFi access point for Flux Capacitor and/or SID, it should boot quickly so that the other props can connect to it as soon as possible.
-
-This is what *car mode* is for: If enabled, the TCD will always boot in AP mode, regardless of a configured WiFi network. This speeds up booting.
-
-To enable *car mode*, type 991 followed by ENTER. The TCD will reboot in AP mode.
-
-To disable *car mode*, type 990 followed by ENTER. The TCD will reboot and attempt to connect to a previously configured WiFi network.
-
-*Car mode* is persistent, i.e. it remains active (even across reboots and power-downs) until disabled.
-
->Note that the TCD has no internet access while in car mode; this means that, unless a GPS receiver is present, it cannot update its clock automatically. If the time runs off over time, you need to re-adjust it using the [keypad menu](#how-to-set-the-real-time-clock-rtc).
-
 ## Peripherals and connection
 
 ![The BTTF Prop Family](img/family-head.png)
@@ -837,13 +831,11 @@ On earlier Control Boards (1.2 and below), the switch needs connect the pins lab
 
 ![pwr_trigger1_2](img/fakepwr12.jpg)
 
-Note that the switch actually needs to be a switch with a maintained contact; the pins need to remain connected for as long as the device is fake-switched-on.
+Note that the switch needs to be a switch with a maintained contact; the pins need to remain connected for as long as the device is fake-switched-on.
 
 In order to use the Fake Power Switch, check **_Use fake power switch_** in the Config Portal.
 
-CircuitSetup offers a [TFC Drive Switch Terminal PCB](https://circuitsetup.us/product/delorean-time-machine-tfc-drive-switch-terminal-pcb/), which can be hoooked up to the fake power switch to turn things on just like in the movie.
-
-[Here](https://github.com/realA10001986/TFC-Switch) are some hints for building a TFC Switch like this one:
+[Here](https://tfc.out-a-ti.me) are some hints for building a TFC Switch like this one:
 
 ![TFC Switch](img/tfcswitch.jpg)
 
@@ -857,7 +849,7 @@ On Control Boards V1.3 and later, there is a dedicated header for the button lab
 |:--:|
 | TT_IN on TCB 1.3 |
 
-Unfortunately, there is no header and no break out for IO27 on TC control boards V1.2 and below. There is, however, a row of solder pads right next to the socket on the control board, where a pin header or cable can easily be soldered on:
+Unfortunately, there is no header and no breakout for IO27 on TC control boards V1.2 and below. There is, however, a row of solder pads right next to the socket on the control board, where a pin header or cable can easily be soldered on:
 
 | ![tcboard_io27](img/ttin12.jpg) |
 |:--:|
@@ -877,7 +869,7 @@ The firmware supports [CircuitSetups's speedometer display](https://circuitsetup
 
 Full disclosure: The video was shot before the CircuitSetup speedo became available. The speedo shown is a DIY prop and not the - much better looking - CircuitSetup speedo. The video is only meant to demonstrate how the TCD and the speedo inter-operate. (The TFC switch was made by me, see [here](https://tfc.out-a-ti.me), it uses the [Fake Power Switch](#fake-power-switch) feature of the TCD.)
 
-The CircuitSetup [Speedo Kit](https://circuitsetup.us/product/delorean-time-machine-speedometer-kit/) needs to be wired as shown below:
+If your CircuitSetup [Speedo Kit](https://circuitsetup.us/product/delorean-time-machine-speedometer-kit/) came with a cable with 7 wires, it needs to be wired as shown below:
 
 ![speedo_i2c](img/speedo_i2c.jpg)
 
@@ -914,7 +906,7 @@ One nice feature of GPS is that the receiver can deliver current speed of moveme
 
 In order to use the GPS receiver for speed, check **_Display GPS speed_** in the Config Portal.
 
-If other props using GPS speed are connected via [BTTF-Network](#bttf-network-bttfn), check the option **_Provide GPS speed for wireless props_** in the Config Portal.
+If other props using GPS speed are connected via [BTTF-Network](#connecting-props-wirelessly-bttf-network-bttfn), check the option **_Provide GPS speed for wireless props_** in the Config Portal.
 
 ## Rotary Encoder
 
@@ -926,7 +918,7 @@ Up to two rotary encoders can be connected, one for speed, one for volume.
 
 ### Rotary Encoder for Speed 
 
-The rotary encoder, if configured for speed, allows manually selecting a speed to be displayed on the speedo, as well as to be sent to [BTTFN](#bttf-network-bttfn) clients in place of actual (GPS) speed.
+The rotary encoder, if configured for speed, allows manually selecting a speed to be displayed on the speedo, as well as to be sent to [BTTFN](#connecting-props-wirelessly-bttf-network-bttfn) clients in place of actual (GPS) speed.
 
 | [![Watch the video](https://img.youtube.com/vi/Y6uu1SU6YJA/0.jpg)](https://youtu.be/Y6uu1SU6YJA) |
 |:--:|
@@ -934,7 +926,7 @@ The rotary encoder, if configured for speed, allows manually selecting a speed t
 
 Remarks:
 - The encoder is only evaluated if no GPS receiver is connected, or if the **_Display GPS speed_** is unchecked. GPS speed has priority over the encoder.
-- The encoder is also evaluated if no speedo is connected; it can be operated "blindly" to trigger time travels and its movement is send to BTTFN clients like GPS speed (if no GPS receiver is connected, or the option **_Provide GPS speed for wireless props_** is unchecked)
+- The encoder is also evaluated if no speedo is connected; it can be operated "blindly" to trigger time travels and its movement is sent to BTTFN clients like GPS speed (if no GPS receiver is connected, or the option **_Provide GPS speed for wireless props_** is unchecked)
 - The speedo displays "0" as long as the encoder is not moved; if the encoder is turned counter-clockwise a couple of notches, the speedo will be switched off.
 
 ### Rotary Encoder for Audio Volume
@@ -957,13 +949,9 @@ For information on supported sensor models/types and configuration, see [here](A
 
 ## Controlling other props
 
-### Connecting props wirelessly
-
-#### BTTF-Network (BTTFN)
+### Connecting props wirelessly: BTTF-Network (BTTFN)
 
 The TCD can communicate with other compatible props wirelessly, via the built-in "**B**asic-**T**elematics-**T**ransmission-**F**ramework" over WiFi. It can send out information about a time travel and an alarm, and other props can query the TCD for time, speed and some other data.
-
-![bttfn connection](img/family-wifi-bttfn.png)
 
 Here is a demonstration of all the props connected through BTTFN:
 
@@ -971,21 +959,41 @@ Here is a demonstration of all the props connected through BTTFN:
 |:--:|
 | Click to watch the video |
 
-On the TCD, no special configuration is required. 
+BTTFN requires the props to be connected to the same network, such as, for example, your home WiFi network. 
 
-On the other prop, such as CircuitSetup's [Flux Capacitor](https://circuitsetup.us/product/flux-capacitor-light-sound-pcb/), [SID](https://circuitsetup.us/product/delorean-time-machine-status-indicator-display-sid/) or the [Dash Gauges](https://dg.out-a-ti.me), the [VSR](https://vsr.out-a-ti.me) or the [Futaba Remote Control kit](https://remote.out-a-ti.me), the TCD's IP address or hostname must be entered into the *IP address or hostname of TCD* field on the Setup page in their Config Portal - that's all.
+![STAmode](img/stamode-bttfn.png)
 
-The fact that the devices communicate directly with each other makes BTTFN the ideal solution for car setups. Also, while at home, all the devices might be connected to an existing WiFi network, in a car, the TCD can act as access point for the other BTTFN-capable props (ie they are connecting to the *TCD-AP* WiFi network), and those then can talk the TCD wirelessly. The TCD has *car mode* for aiding this, see [here](#car-mode) and the documentation of the respective prop. 
+>In order to use BTTFN, all props must be connected to the same IP subnet; BTTFN does not work over the internet.
 
-To see which BTTFN clients are currently known to the TCD, enter the keypad menu and select "BTTFN CLIENTS".
+On the TCD, no special configuration is required for using BTTFN. 
+
+On the other prop, such as CircuitSetup's [Flux Capacitor](https://circuitsetup.us/product/flux-capacitor-light-sound-pcb/), [SID](https://circuitsetup.us/product/delorean-time-machine-status-indicator-display-sid/), the [Dash Gauges](https://dg.out-a-ti.me), the [VSR](https://vsr.out-a-ti.me) or the [Futaba Remote Control kit](https://remote.out-a-ti.me), the TCD's IP address or hostname must be entered into the *IP address or hostname of TCD* field on the Setup page in their Config Portal - that's all.
+
+To see which BTTFN clients are currently known to the TCD, either check at the Config Portal's main page, or enter the keypad menu and select "BTTFN CLIENTS", 
+
+#### Car Mode
+
+As [discussed](#connecting-to-a-wifi-network), in a car, or other places without a WiFi network, the TCD can act as WiFi access point for other props. The recommended network configuration for this use case is as follows:
+
+![APmode](img/apmode-car.png)
+
+When set in *Car Mode*, the TCD _always boots into AP-mode_, regardless of a configured WiFi network. Not attempting to connect to a network speeds up the boot process and allows other BTTFN-capable props to quickly connect to "TCD-AP".
+
+To enable *Car Mode*, type 991 followed by ENTER. The TCD will reboot in AP mode. If a WiFi network to connect to is configured at that point, it is ignored; no connection attempt is made.
+
+To disable *Car Mode*, type 990 followed by ENTER. The TCD will reboot and attempt to connect to a previously configured WiFi network.
+
+*Car Mode* is persistent, i.e. it remains active (even across reboots and power-downs) until disabled.
+
+>Note that the TCD has no internet access while in Car Mode; this means that, unless a GPS receiver is present, it cannot update its clock automatically. If the time runs off over time, you either need to quit Car Mode once in a while and allow the TCD connect to a internet-connected WiFi network (the iPhone's Personal Hotspot works fine), or to re-adjust time using the [keypad menu](#how-to-set-the-real-time-clock-rtc). 
 
 ### Connecting props by wire
 
 The TCD can also tell other props about a time travel through a wire. This is mainly meant for connecting third party props which are not BTTFN-compatible.
 
-A wired connection only allows for synchronized time travel sequences, no other communication takes place. 
+![Wired connection](img/family-wiredn.png)
 
-![Wired connection](img/family-wired.png)
+A wired connection only allows for synchronized time travel sequences, no other communication takes place. 
 
 CircuitSetup/A10001986 original props also support a wired connection, if for whatever reason BTTFN is not an option. For detailed wiring instructions, please see the documentation for the prop ([Flux capacitor](https://github.com/realA10001986/Flux-Capacitor/tree/main?tab=readme-ov-file#connecting-a-tcd-by-wire), [SID](https://github.com/realA10001986/SID/tree/main?tab=readme-ov-file#connecting-a-tcd-by-wire), [Dash Gauges](https://github.com/realA10001986/Dash-Gauges/blob/main/hardware/README.md#connecting-a-tcd-to-the-dash-gauges-by-wire), [VSR](https://github.com/realA10001986/VSR#connecting-a-tcd-by-wire)); for DIY props, see [here](AddOns.md#other-props).
 
@@ -1007,7 +1015,7 @@ Only ASCII messages are supported, the maximum length is 255 characters.
 
 ### Control the TCD via MQTT
 
-The TCD can - to a limited extent - be controlled through messages sent to topic **bttf/tcd/cmd**. Support commands are
+The TCD can - to a limited extent - be controlled through messages sent to topic **bttf/tcd/cmd**. Supported commands are
 - TIMETRAVEL: Start a time travel
 - RETURN: Return from time travel
 - BEEP_ON: Enables the [beep](#beep-on-the-second)
@@ -1028,8 +1036,6 @@ The TCD can - to a limited extent - be controlled through messages sent to topic
 
 If both the TCD and the other props are connected to the same broker, and the option **_Send event notifications_** is checked on the TCD's side, other compatible props will receive information on time travel and alarm and play their sequences in sync with the TCD. The topic is called  **bttf/tcd/pub**.
 
-![MQTT connection](img/family-wifi-mqtt.png)
-
 The timing is identical to the wired protocol; TIMETRAVEL is sent to **bttf/tcd/pub** with a lead time of 5 seconds. REENTRY is sent when the re-entry sequence starts.
 
 When the [alarm](#how-to-set-up-the-alarm) sounds, the TCD sends "ALARM" to **bttf/tcd/pub**.
@@ -1042,19 +1048,23 @@ If you have other MQTT-aware devices listening to the TCD's public topic (bttf/t
 
 ### Setup
 
-In order to connect to a MQTT network, a "broker" (such as [mosquitto](https://mosquitto.org/), [EMQ X](https://www.emqx.io/), [Cassandana](https://github.com/mtsoleimani/cassandana), [RabbitMQ](https://www.rabbitmq.com/), [Ejjaberd](https://www.ejabberd.im/), [HiveMQ](https://www.hivemq.com/) to name a few) must be present in your network, and its address needs to be configured in the Config Portal. The broker can be specified either by domain or IP (IP preferred, spares us a DNS call). The default port is 1883. If a different port is to be used, append a ":" followed by the port number to the domain/IP, such as "192.168.1.5:1884". 
+MQTT requires a "broker" (such as [mosquitto](https://mosquitto.org/), [EMQ X](https://www.emqx.io/), [Cassandana](https://github.com/mtsoleimani/cassandana), [RabbitMQ](https://www.rabbitmq.com/), [Ejjaberd](https://www.ejabberd.im/), [HiveMQ](https://www.hivemq.com/) to name a few).
+
+![MQTT connection](img/stamode-mqtt.png)
+
+The broker's address needs to be configured in the Config Portal. The broker can be specified either by domain or IP (IP preferred, spares us a DNS call). The default port is 1883. If a different port is to be used, append a ":" followed by the port number to the domain/IP, such as "192.168.1.5:1884". 
 
 If your broker does not allow anonymous logins, a username and password can be specified.
 
-If you want your TCD to display messages as described above, you also need to specify the topic in the respective field.
+In order to display messages on the TCD as described above, you need to specify the topic in the respective field.
 
 If you want your TCD to publish messages to bttf/tcd/pub (ie if you want to notify other devices about a timetravel and/or alarm), check the **_Send event notifications_** option.
 
-Limitations: MQTT Protocol version 3.1.1; TLS/SSL not supported; ".local" domains (MDNS) not supported; maximum message length 255 characters; server/broker must respond to PING (ICMP) echo requests. For proper operation with low latency, it is recommended that the broker is on your local network. Note that using HA/MQTT will disable WiFi power saving (as described below).
+Limitations: MQTT Protocol version 3.1.1; TLS/SSL not supported; ".local" domains (MDNS) not supported; maximum message length 255 characters; server/broker must respond to PING (ICMP) echo requests. For proper operation with low latency, it is recommended that the broker is on your local network. Note that using HA/MQTT will disable [WiFi power saving](#wifi-power-saving-features). MQTT is disabled when the TCD is operated in AP-mode or car mode.
 
 ## Futaba Remote Control
 
-The upcoming kit for modifying a Futaba remote control allows, among many features, to control the TCD's speedo. The Remote can increase/decrease speed, trigger a time travel, and more. 
+CircuitSetup's [kit for modifying a Futaba remote control](https://circuitsetup.us/product/futaba-remote-stanley-display-wireless-control-kit/) allows, among many features, to control the TCD's speedo. The Remote can increase/decrease speed, trigger a time travel, and more. 
 
 In order to permit remote controlling, enter 993 followed by ENTER. No further configuration is required on the TCD's side.
 
@@ -1076,25 +1086,21 @@ Note that if your configured WiFi network was not available when the TCD was try
 
 ## Flash Wear
 
-Flash memory has a somewhat limited life-time. It can be written to only between 10.000 and 100.000 times before becoming unreliable. The firmware writes to the internal flash memory when saving settings and other data. Every time you change settings through the keypad menu or the Config Portal, data is written to flash memory.
+Flash memory has a somewhat limited lifetime. It can be written to only between 10.000 and 100.000 times before becoming unreliable. The firmware writes to the internal flash memory when saving settings and other data. Every time you change settings through the keypad menu or the Config Portal, data is written to flash memory.
 
-In order to reduce the number of write operations and thereby prolong the life of your TCD, it is recommended to use a good-quality SD card and to check **_[Save secondary settings on SD](#-save-secondary-settings-on-sd)_** in the Config Portal; secondary settings (volume, alarm, reminder, carmode state, exhibition mode data and state, time travel data and state) are then stored on the SD card (which also suffers from wear but is easy to replace). See [here](#-save-secondary-settings-on-sd) for more information.
+In order to reduce the number of write operations and thereby prolong the life of your TCD, it is recommended to use a good-quality SD card and to check **_[Save secondary settings on SD](#-save-secondary-settings-on-sd)_** in the Config Portal; secondary settings (volume, alarm, reminder, car-mode state, exhibition mode data and state, time travel data and state) are then stored on the SD card (which also suffers from wear but is easy to replace). See [here](#-save-secondary-settings-on-sd) for more information.
 
 ## Appendix A: The Config Portal
 
 ### Main page
 
-##### &#9654; Connect to WiFi
+##### &#9654; WiFi Configuration
 
-Click this to connect your TCD to your local WiFi network. All you need to do is either to click on one of the networks listed at the top or to enter a WiFi network name (SSID), and optionally a passwort (WPAx).
+This leads to the [WiFi configuration page](#wifi-configuration)
 
->By default, the FC requests an IP address via DHCP. However, you can also configure a static IP for the FC by entering the IP, netmask, gateway and DNS server. All four fields must be filled for a valid static IP configuration. If you want to stick to DHCP, leave those four fields empty.
+##### &#9654; Settings
 
-Note that this page is strictly for connecting your TCD to an existing WiFi network. If your TCD is supposed to operate stand-alone, it runs in "access point mode" (AP-Mode). Settings for AP mode are on the Setup page.
-
-##### &#9654; Setup
-
-This leads to the [Setup page](#setup-page).
+This leads to the [Settings page](#settings).
 
 ##### &#9654; Update
 
@@ -1106,13 +1112,82 @@ You can also install the TCD's sound-pack on this page; download the current sou
 
 Finally, this page is also for uploading [custom or replacement sound files](#installing-custom--replacement-audio-files) to the SD card. Select one or more mp3 file in the bottom file selector and click upload. (Requires firmware 3.3 or later. Maximum 16 files at a time.)
 
-##### &#9654; Erase WiFi Config
+---
 
-Clicking this (and saying "yes" in the confirmation dialog) erases the WiFi connection configuration (as set up through the Connect to WiFi page) and reboots the device; it will restart in "access point" (AP) mode. See [here](#connecting-to-a-wifi-network).
+### WiFi Configuration
+
+Through this page you can either connect your TCD to your local WiFi network, or configure AP mode. 
+
+#### <ins>Connecting to an existing WiFi network</ins>
+
+In order to connect your TCD to your WiFi network, all you need to do is either to click on one of the networks listed at the top or to enter a __WiFi network name (SSID)__, and optionally a __password__ (WPAx). If there is no list of networks displayed, simply click on "WiFi Scan".
+
+>By default, the TCD requests an IP address via DHCP. However, you can also configure a static IP for the TCD by entering the IP, netmask, gateway and DNS server. All four fields must be filled for a valid static IP configuration. If you want to stick to DHCP, leave those four fields empty.
+
+##### &#9654; Forget Saved WiFi Network
+
+Checking this box (and clicking SAVE) deletes the currently saved WiFi network (SSID and password and reboots the device; it will restart in "access point" (AP) mode. See [here](#connecting-to-a-wifi-network).
+
+##### &#9654; Hostname
+
+The device's hostname in the WiFi network. Defaults to 'timecircuits'. This also is the domain name at which the Config Portal is accessible from a browser in the same local network. The URL of the Config Portal then is http://<i>hostname</i>.local (the default is http://timecircuits.local)
+
+If you have more than one TCD in your local network, please give them unique hostnames.
+
+_This setting applies to both AP-mode and when your TCD is connected to a WiFi network._ 
+
+##### &#9654; WiFi connection attempts
+
+Number of times the firmware tries to reconnect to a WiFi network, before falling back to AP-mode. See [here](#connecting-to-a-wifi-network)
+
+##### &#9654; WiFi connection timeout
+
+Number of seconds before a timeout occurs when connecting to a WiFi network. When a timeout happens, another attempt is made (see immediately above), and if all attempts fail, the device falls back to AP-mode. See [here](#connecting-to-a-wifi-network)
+
+##### &#9654; Periodic reconnection attempts
+
+Selects whether periodic re-connection attempts (between 12am and 6am) should be made after a failure to connect to a configured WiFi network.
+
+In typical home setups with 24/7 WiFi, this option hardly matters. However, if you have connected your TCD to your WiFi network, but move it between environments (with and without WiFi access) on a regular basis, uncheck this to keep the TCD from searching for your configured WiFi network unnecessarily.
+
+This option has no effect if the TCD is in [Car Mode](#car-mode).
+
+##### &#9654; WiFi power save timer
+
+See [here](#wifi-power-saving-features)
+
+#### <ins>Settings for AP-mode</ins>
+
+##### &#9654; Network name(SSID) appendix
+
+By default, when your TCD creates a WiFi network of its own ("AP-mode"), this network is named "TCD-AP". In case you have multiple TCDs in your vicinity, you can have a string appended to create a unique network name. If you, for instance, enter "-ABC" here, the WiFi network name will be "TCD-AP-ABC". Characters A-Z, a-z, 0-9 and - are allowed.
+
+##### &#9654; Password
+
+By default, and if this field is empty, the TCD's own WiFi network ("TCD-AP") will be unprotected. If you want to protect your TCD access point, enter your password here. It needs to be 8 characters in length and only characters A-Z, a-z, 0-9 and - are allowed.
+
+If you forget this password and are thereby locked out of your TCD, power-down, hold the ENTER key, power-up and wait until the white LED flashes, then release the ENTER key. The TCD will boot and start the access point temporarily without a password. Then connect to the TCD's AP with your computer or handheld, enter the Config Portal ( http://192.168.4.1 ) and either look up or change your AP WiFi password. Note that this ENTER-key-procedure is not persistent: When you reboot or re-power the TCD, the AP will be password protected again.
+
+##### &#9654; WiFi channel
+
+Here you can select one out of 11 channels, or have the TCD choose a random channel for you. The default channel is 1. Preferred are channels 1, 6 and 11.
+
+WiFI channel selection is key for a trouble-free operation. Disturbed WiFi communication can lead to disrupted sequences, packet loss, hanging or freezing props, and other problems. A good article on WiFi channel selection is [here](https://community.ui.com/questions/Choosing-the-right-Wifi-Channel-on-2-4Ghz-Why-Conventional-Wisdom-is-Wrong/ea2ffae0-8028-45fb-8fbf-60569c6d026d).
+
+If a WiFi Scan was done (which can be triggered by clicking "WiFI Scan"), 
+
+- a list of networks is displayed at the top of the page; click "Show All" to list all networks including their channel;
+- a "proposed channel" is displayed near the "WiFi channel" drop-down, based on a rather simple heuristic. The banner is green when a channel is excellent, grey when it is impeded by overlapping channels, and when that banner is red operation in AP mode is not recommended due to channels all being used.
+
+The channel proposition is based on all WiFi networks found; it does not take non-WiFi equipment (baby monitors, cordless phones, Bluetooth devices, microwave ovens, etc) into account.
+
+##### &#9654; WiFi power save timer
+
+See [here](#wifi-power-saving-features)
 
 ---
 
-### Setup page
+### Settings
 
 #### <ins>Basic settings</ins>
 
@@ -1172,7 +1247,7 @@ The time zone for the yellow display in [World Clock mode](#world-clock-mode). D
 
 ##### &#9654; City/location name
 
-For each World Clock time zones, a city or location name can be configured. For example "SYDNEY" or "LORD HOWE". This name will be shown every few seconds alternately with time.
+For each World Clock time zone, a city or location name can be configured. For example "SYDNEY" or "LORD HOWE". This name will be shown every few seconds alternately with time.
 
 #### <ins>Music Player settings</ins>
 
@@ -1186,15 +1261,15 @@ Shuffle mode can be changed at any time through the keypad (222 / 555); however,
 
 ##### &#9654; Destination time off in night mode
 
-Selects whether the *destination time* display is dimmed or switched of in night mode.
+Selects whether the *destination time* display is dimmed or switched off in night mode.
 
 ##### &#9654; Present time off in night mode
 
-Selects whether the *present time* display is dimmed or switched of in night mode.
+Selects whether the *present time* display is dimmed or switched off in night mode.
 
 ##### &#9654; Last time dep. off in night mode
 
-Selects whether the *last time departed* display is dimmed or switched of in night mode.
+Selects whether the *last time departed* display is dimmed or switched off in night mode.
 
 ##### &#9654; Schedule
 
@@ -1254,11 +1329,21 @@ If you are using your TCD together with a Futaba Remote Control prop, leave this
 
 Since the DMC-12 wasn't the world's fastest car, its (real-life) acceleration might soon cause boredom if played in real-time as part of the time travel sequence with a speedo. This factor speeds up the acceleration. 2.0 means twice as fast as the real car.
 
-This settings has no effect if the **_Real-life acceleration figures_** option is unchecked.
+This setting has no effect if the **_Real-life acceleration figures_** option is unchecked.
 
-##### &#9654; Display speed with leading 0
+##### &#9654; Speedo display like in part 3
 
-If this is checked, speed on the Speedo is displayed with a leading 0 for speeds from 0 to 9. Default is off, in accordance with part 1 of the series.
+If this is unchecked, speed is display like in parts 1 and 2: Single digit speeds below 10, and a dot. This is the default.
+
+In part 3 of the series, the speedo displays two digits (even for speeds below 10), but no dot. Check this option to use this style. 
+
+This option is mutually exclusive to "Display post-point 0 like A-car".
+
+##### &#9654; Display post-point 0 like A-car
+
+The CircuitSetup speedo features a third digit behind the gaffer tape. This digit is usually dark, in accordance with the speedo close-ups in all three parts of the series.
+
+The A-Car, shown very briefly in part 1 of the series when Doc sends Einstein a minute into the future, had a speedo which showed "0.0". Check this option to display a "0" after the dot using the hidden digit. Please note that only "0" is ever displayed, fractions are not supported.
 
 ##### &#9654; Display GPS speed
 
@@ -1282,7 +1367,7 @@ Brightness of speedo display when displaying temperature.
 
 ##### &#9654; Temperature off in night mode
 
-Selects whether the temperature display is dimmed or switched of in night mode.
+Selects whether the temperature display is dimmed or switched off in night mode.
 
 #### <ins>External switches/buttons</ins>
 
@@ -1294,55 +1379,11 @@ Check this if you want to use a fake power switch. See [here](#fake-power-switch
 
 Selects a delay (in milliseconds) from when pressing the external time travel button until the time travel sequence starts. See [here](#external-time-travel-trigger).
 
-#### <ins>Network settings</ins>
-
-##### &#9654; Hostname
-
-The device's hostname in the WiFi network. Defaults to 'timecircuits'. This also is the domain name at which the Config Portal is accessible from a browser in the same local network. The URL of the Config Portal then is http://<i>hostname</i>.local (the default is http://timecircuits.local)
-
-This setting applies to both AP-mode and when your TCD is connected to a WiFi network. If you have more than one TCD in your local network, please give them unique hostnames.
-
-##### &#9654; WiFi connection attempts
-
-Number of times the firmware tries to reconnect to a WiFi network, before falling back to AP-mode. See [here](#connecting-to-a-wifi-network)
-
-##### &#9654; WiFi connection timeout
-
-Number of seconds before a timeout occurs when connecting to a WiFi network. When a timeout happens, another attempt is made (see immediately above), and if all attempts fail, the device falls back to AP-mode. See [here](#connecting-to-a-wifi-network)
-
-##### &#9654; Periodic reconnection attempts
-
-Selects whether periodic re-connection attempts (between 12am and 6am) should be made after a failure to connect to a configured WiFi network.
-
-In typical home setups with 24/7 WiFi, this option hardly matters. However, if you have connected your TCD to your WiFi network, but move it between environments (with and without WiFi access) on a regular basis, uncheck this to keep the TCD from searching for your configured WiFi network unnecessarily.
-
-This option has no effect if the TCD is in [Car Mode](#car-mode).
-
-##### &#9654; WiFi power save timer
-
-See [here](#wifi-power-saving-features)
-
-#### <ins>Network settings for AP-mode</ins>
-
-##### &#9654; Network name(SSID) appendix
-
-By default, when your TCD creates a WiFi network of its own ("AP-mode"), this network is named "TCD-AP". In case you have multiple TCDs in your vicinity, you can have a string appended to create a unique network name. If you, for instance, enter "-ABC" here, the WiFi network name will be "TCD-AP-ABC". Characters A-Z, a-z, 0-9 and - are allowed.
-
-##### &#9654; Password
-
-By default, and if this field is empty, the TCD's own WiFi network ("AP-mode") will be unprotected. If you want to protect your TCD access point, enter your password here. It needs to be 8 characters in length and only characters A-Z, a-z, 0-9 and - are allowed.
-
-If you forget this password and are thereby locked out of your TCD, power-down, hold the ENTER key, power-up and wait until the white LED flashes, then release the ENTER key. The TCD will boot and start the access point temporarily without a password. Then connect to the TCD's AP with your computer or handheld, enter the Config Portal ( http://192.168.4.1 ) and either look up or change your AP WiFi password. Note that this ENTER-key-procedure is not persistent: When you reboot or re-power the TCD, the AP will be password protected again.
-
-##### &#9654; WiFi power save timer
-
-See [here](#wifi-power-saving-features)
-
 #### <ins>Settings for BTTFN communication</ins>
 
 ##### &#9654; Provide GPS speed for wireless props
 
-Many [BTTF-Network](#bttf-network-bttfn) clients can query the TCD for speed. "Speed" can come from various sources: GPS, [rotary encoder](#rotary-encoder), Remote Control.
+Many [BTTF-Network](#connecting-props-wirelessly-bttf-network-bttfn) clients can query the TCD for speed. "Speed" can come from various sources: GPS, [rotary encoder](#rotary-encoder), Remote Control.
 
 This option selects whether actual GPS speed is to be transmitted to BTTFN clients. If this option is checked, speed from GPS (if available) takes precedence over speed from a rotary encoder.
 
@@ -1370,7 +1411,7 @@ An optional topic the TCD subscribes to in order to display messages on the *Des
 
 Check this if you want the TCD to send notifications on time travel and alarm via [MQTT](#home-assistant--mqtt).
 
-Note that if this option is checked, the TCD will not send out such notifications via [BTTF-Network](#bttf-network-bttfn).
+Note that if this option is checked, the TCD will not send out such notifications via [BTTF-Network](#connecting-props-wirelessly-bttf-network-bttfn).
 
 #### <ins>Settings for wired peripherals</ins>
 
@@ -1386,7 +1427,7 @@ For CircuitSetup original props, if they are connected by wire, this option shou
 
 For wirelessly connected props this option has no effect. Also see [here](#controlling-other-props).
 
-Note that time travels triggered by a rotary encoder or when GPS speed hits 88mph are always signalled without lead. The lead time is only appicable for time travels where the TCD controls the acceleration.
+Note that time travels triggered by a rotary encoder or when GPS speed hits 88mph are always signaled without lead. The lead time is only applicable for time travels where the TCD controls the acceleration.
 
 #### <ins>Other settings</ins>
 
@@ -1394,7 +1435,7 @@ Note that time travels triggered by a rotary encoder or when GPS speed hits 88mp
 
 If this is checked, secondary settings (brightness, time cycling interval, volume, alarm, reminder, car mode state, exhibition mode data and state, time travel state and data) are stored on the SD card (if one is present). This helps to minimize write operations to the internal flash memory and to prolong the lifetime of your TCD. See [Flash Wear](#flash-wear).
 
-Apart from Flash Wear, there is another reason for using an SD card for settings: Writing data to internal flash memory can cause delays of up to 1.5 seconds, which interrupt sound playback and have other undesired effects. The TCD needs to save data from time to time, so in order for a smooth experience without unexpected and unwanted delays, please use an SD card and check this option.
+Apart from Flash Wear, there is another reason for using an SD card for settings: Writing data to internal flash memory can cause delays of up to 1.5 seconds, which interrupt sound playback and have other undesired effects. The TCD needs to save data from time to time, so for a smooth experience without unexpected and unwanted delays, please use an SD card and check this option.
 
 It is safe to have this option checked even with no SD card present.
 
@@ -1432,6 +1473,6 @@ Europe:
 
 A full list is [here](https://tz.out-a-ti.me).
 
-
+---
 _Text & images: (C) Thomas Winischhofer ("A10001986"). See LICENSE._ Source: https://tcd.out-a-ti.me  
 _Other props: [Flux Capacitor](https://fc.out-a-ti.me) ... [SID](https://sid.out-a-ti.me) ... [Dash Gauges](https://dg.out-a-ti.me) ... [VSR](https://vsr.out-a-ti.me) ... [Remote Control](https://remote.out-a-ti.me) ... [TFC](https://tfc.out-a-ti.me)_

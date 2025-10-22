@@ -388,6 +388,8 @@ bool speedDisplay::begin(int dispType)
     clearDisplay();      // clear display RAM
     on();                // turn it on
 
+    thirdDig = (_dispType == SP_CIRCSETUP);
+
     return true;
 }
 
@@ -594,12 +596,13 @@ void speedDisplay::setSpeed(int8_t speedNum)
     }
     b1 = *(_fontXSeg + b1);
     b2 = *(_fontXSeg + b2);
-    #ifdef SP_CS_0ON
-    if(_dispType == SP_CIRCSETUP) {
+
+    // CircuitSetup Speedo: Enable/disable third digit
+    if(thirdDig) {
         // Hack to display "0" after dot
         _displayBuffer[2] = b3;
     }
-    #endif
+
 
     if(dispL0Spd || speedNum > 9 /*|| b1 == 37*/) _displayBuffer[_speed_pos10] |= (b1 << _dig10_shift);
     _displayBuffer[_speed_pos01] |= (b2 << _dig01_shift);

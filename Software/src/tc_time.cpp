@@ -844,7 +844,7 @@ bool bttfnHaveClients = false;
 #define BTTFN_VERSION              1
 #define BTTF_PACKET_SIZE          48
 #define BTTF_DEFAULT_LOCAL_PORT 1338
-#define BTTFN_MAX_CLIENTS          5
+#define BTTFN_MAX_CLIENTS          6
 static const uint8_t BTTFUDPHD[4] = { 'B', 'T', 'T', 'F'};
 static WiFiUDP       bttfUDP;
 static UDP*          tcdUDP;
@@ -1621,12 +1621,20 @@ void time_setup()
     #ifdef TC_HAVESPEEDO
     if(useSpeedo) {
         speedo.setBrightness(atoi(settings.speedoBright), true);
-        speedo.setDot(true);
-
+        
         // Negate this flag, option is "Switch off", not "Keep on"
         speedoAlwaysOn = !(atoi(settings.speedoAO) > 0);
 
-        speedo.dispL0Spd = (atoi(settings.speedoL0Spd) > 0);
+        // P1/P2 vs P3 speedo style
+        if(atoi(settings.speedoP3) > 0) {
+            speedo.dispL0Spd = true;
+            speedo.thirdDig = false;
+            speedo.setDot(false);
+        } else {
+            speedo.dispL0Spd = false;
+            speedo.thirdDig &= (atoi(settings.speedo3rdD) > 0);
+            speedo.setDot(true);
+        }
 
         // No TT sounds to play -> no user-provided sound.
         if(!playTTsounds) havePreTTSound = false;
