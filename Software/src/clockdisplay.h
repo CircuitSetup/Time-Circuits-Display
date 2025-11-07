@@ -15,7 +15,7 @@ private:
     static constexpr uint8_t kStaticDay = 7;
     static constexpr uint16_t kStaticYear = 1885;
     static constexpr uint8_t kStaticHour = 9;    // 09:06 PM
-    static constexpr uint8_t kStaticMinute = 6;
+    static constexpr uint8_t kStaticMinute = 0;
 
     static constexpr uint8_t kCommandSystemSetup = 0x20;
     static constexpr uint8_t kCommandDisplaySetup = 0x80;
