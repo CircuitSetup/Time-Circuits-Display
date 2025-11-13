@@ -32,6 +32,11 @@ void clockDisplay::update()
     }
 }
 
+void clockDisplay::setBrightnessLevel(uint8_t level)
+{
+    setBrightness(level & 0x0F);
+}
+
 void clockDisplay::clearBuffer()
 {
     for(uint8_t i = 0; i < kBufferSize; ++i) {

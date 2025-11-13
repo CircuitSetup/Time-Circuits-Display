@@ -8,6 +8,7 @@ public:
 
     void begin();
     void update();
+    void setBrightnessLevel(uint8_t level);
 
 private:
     static constexpr uint8_t kBufferSize = 8;
