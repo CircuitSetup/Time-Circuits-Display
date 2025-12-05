@@ -96,8 +96,8 @@ class tempSensor : tcSensor {
 
     public:
 
-        tempSensor(int numTypes, const uint8_t addrArr[]);
-        bool begin(unsigned long powerupTime, void (*myDelay)(unsigned long));
+        tempSensor(int numTypes, const uint8_t *addrArr);
+        bool begin(void (*myDelay)(unsigned long));
 
         float readTemp(bool celsius = true);
         float readLastTemp() { return _lastTemp; };
@@ -111,7 +111,7 @@ class tempSensor : tcSensor {
     private:
 
         int     _numTypes = 0;
-        uint8_t _addrArr[9*2];    // up to 9 sensor types fit here
+        const uint8_t *_addrArr;
         int8_t  _st = -1;
         int8_t  _hum = -1;
         bool    _haveHum = false;
@@ -160,8 +160,8 @@ class lightSensor : tcSensor {
 
     public:
 
-        lightSensor(int numTypes, const uint8_t addrArr[]);
-        bool begin(bool skipLast, unsigned long powerupTime, void (*myDelay)(unsigned long));
+        lightSensor(int numTypes, const uint8_t *addrArr);
+        bool begin(bool skipLast, void (*myDelay)(unsigned long));
 
         int32_t readLux() { return _lux; }
         
@@ -173,7 +173,7 @@ class lightSensor : tcSensor {
         void VEML7700OnOff(bool enable, bool doWait = true);
 
         int     _numTypes = 0;
-        uint8_t _addrArr[8*2];    // up to 8 sensor types fit here
+        const uint8_t *_addrArr;
         int8_t  _st = -1;
 
         unsigned long _lastAccess;

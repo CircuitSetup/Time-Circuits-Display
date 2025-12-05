@@ -309,17 +309,14 @@ void tcSensor::write8(uint16_t regno, uint8_t value)
 #define HDC302x_CRC_POLY  0x31
 
 // Store i2c address
-tempSensor::tempSensor(int numTypes, const uint8_t addrArr[])
+tempSensor::tempSensor(int numTypes, const uint8_t *addrArr)
 {
     _numTypes = min(9, numTypes);
-
-    for(int i = 0; i < _numTypes * 2; i++) {
-        _addrArr[i] = addrArr[i];
-    }
+    _addrArr = addrArr;
 }
 
 // Start the display
-bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long))
+bool tempSensor::begin(void (*myDelay)(unsigned long))
 {
     bool foundSt = false;
     uint8_t temp, timeOut = 20;
@@ -332,8 +329,8 @@ bool tempSensor::begin(unsigned long powerupTime, void (*myDelay)(unsigned long)
     _st = -1;
 
     // Give the sensor some time to boot
-    if(millisNow - powerupTime < 50) {
-        delay(50 - (millisNow - powerupTime));
+    if(millisNow < 100) {
+        delay(100 - millisNow);
     }
 
     for(int i = 0; i < _numTypes * 2; i += 2) {
@@ -975,16 +972,13 @@ static uint32_t TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32
 static int32_t TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32_t ch1);
 
 // Store i2c address
-lightSensor::lightSensor(int numTypes, const uint8_t addrArr[])
+lightSensor::lightSensor(int numTypes, const uint8_t *addrArr)
 {
     _numTypes = min(8, numTypes);
-
-    for(int i = 0; i < _numTypes * 2; i++) {
-        _addrArr[i] = addrArr[i];
-    }
+    _addrArr = addrArr;
 }
 
-bool lightSensor::begin(bool skipLast, unsigned long powerupTime, void (*myDelay)(unsigned long))
+bool lightSensor::begin(bool skipLast, void (*myDelay)(unsigned long))
 {
     bool foundSt = false;
     unsigned long millisNow = millis();
@@ -996,8 +990,8 @@ bool lightSensor::begin(bool skipLast, unsigned long powerupTime, void (*myDelay
     if(skipLast) _numTypes--;
 
     // Give the sensor some time to boot
-    if(millisNow - powerupTime < 100) {
-        delay(100 - (millisNow - powerupTime));
+    if(millisNow < 100) {
+        delay(100 - millisNow);
     }
     
     for(int i = 0; i < _numTypes * 2; i += 2) {

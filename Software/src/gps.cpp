@@ -177,7 +177,7 @@ tcGPS::tcGPS(uint8_t address)
 }
 
 // Start and init the GPS module
-bool tcGPS::begin(unsigned long powerupTime, int quickUpdates, int speedRate, void (*myDelay)(unsigned long))
+bool tcGPS::begin(int quickUpdates, int speedRate, void (*myDelay)(unsigned long))
 {
     uint8_t testBuf;
     int i2clen;
@@ -196,8 +196,8 @@ bool tcGPS::begin(unsigned long powerupTime, int quickUpdates, int speedRate, vo
 
     // Give the receiver some time to boot
     unsigned long millisNow = millis();
-    if(millisNow - powerupTime < 1000) {
-        delay(1000 - (millisNow - powerupTime));
+    if(millisNow < 1000) {
+        delay(1000 - millisNow);
     }
 
     // Check for GPS module on i2c bus

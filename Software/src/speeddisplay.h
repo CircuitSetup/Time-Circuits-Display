@@ -90,6 +90,7 @@ enum dispTypes : uint8_t {
     SP_GROVE_4DIG14L, // " " " (left aligned)
     SP_ADAF1911_L,    // Like SP_ADAF_14x4L, but with only left hand side tube soldered on
     SP_ADAF878L,      // Like SP_ADAF_7x4L, but only left 2 digits soldered on
+    SP_BTTFN,         // BTTFN-connected speedo, or "blind-speedo-simulation"
 // ----- do not use the ones below ----
     SP_TCD_TEST7,     // TimeCircuits Display 7 (for testing)
     SP_TCD_TEST14,    // TimeCircuits Display 14 (for testing)
@@ -104,14 +105,16 @@ class speedDisplay {
 
         speedDisplay(uint8_t address);
         bool begin(int dispType);
+        bool haveSpeedoDisplay();
+        #ifdef TC_HAVETEMP
+        bool supportsTemperature();
+        #endif
         void on();
         void off();
         bool getOnOff() { return !!_onCache; }
         #if 0
         void lampTest();
         #endif
-
-        void clearBuf();
 
         uint8_t setBrightness(uint8_t level, bool isInitial = false);
         uint8_t setBrightnessDirect(uint8_t level) ;
@@ -127,10 +130,12 @@ class speedDisplay {
         #ifdef TC_HAVETEMP
         void setTemperature(float temp);
         #endif
+
         void setDot(bool dot01 = true) { _dot01 = dot01; }
         void setColon(bool colon)      { _colon = colon; }
 
         int8_t getSpeed() { return _speed; }
+
         bool getDot()     { return _dot01; }
         bool getColon()   { return _colon; }
 
@@ -139,6 +144,8 @@ class speedDisplay {
 
     private:
 
+        void clearBuf();
+
         void handleColon();
         uint16_t getLEDChar(uint8_t value);
         #if 0
@@ -146,6 +153,20 @@ class speedDisplay {
         #endif
         void clearDisplay();                    // clears display RAM
         void directCmd(uint8_t val);
+
+        #ifdef EXPS
+        void setExSpeed(int8_t speed);
+        #endif
+        
+        uint8_t _speedoType;
+        bool _i2c;
+
+        #ifdef EXPS
+        bool _haveSec = false;
+        bool _secOff = true;
+        int8_t _secSpeed = -2;
+        int8_t _secSpeedOld = -3;
+        #endif
 
         uint8_t _address;
         uint16_t _displayBuffer[8];

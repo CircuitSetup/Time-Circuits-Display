@@ -25,11 +25,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION_REV   "V3.6"       // 13 chars max
+#define TC_VERSION_REV   "V3.10"      // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "OCT152025"  // 13 chars max
+#define TC_VERSION_EXTRA "DEC012025"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "10152025"   // 12 chars max
+#define TC_VERSION_EXTRA "12012025"   // 12 chars max
 #endif
 #define TC_VERSION TC_VERSION_REV
 
@@ -44,14 +44,6 @@
 // speedometer display. Also needs to be #defined for using CircuitSetup's
 // speedo with integrated GPS receiver.
 //#define TC_HAVEGPS
-
-// Uncomment for support of speedo-display connected via i2c (0x70).
-// See speeddisplay.h for details
-//#define TC_HAVESPEEDO
-#define SP_NUM_TYPES    12  // Number of speedo display types supported
-#define SP_MIN_TYPE     0
-#ifdef TC_HAVESPEEDO
-#endif
 
 // Uncomment for rotary encoder support
 // Currently Adafruit 4991/5880, DFRobot Gravity 360 and DuPPA I2CEncoder 2.1
@@ -88,45 +80,8 @@
 // See sensors.cpp for supported i2c slave addresses.
 //#define TC_HAVELIGHT
 
-// Fake Power Switch (TFC drive switch):
-// Attach an active-low switch to io13; firmware will start network and
-// sync time, but not enable displays until the switch is activated.
-// The white led will flash for 0.5 seconds when the unit is ready to be 
-// "fake" powered on. De-activating the switch "fake" powers down the device
-// (ie the displays are switched off, and no keypad input is accepted)
-// GPS speed will be shown on speedo display regardless of this switch.
-// DIY instructions to build a TFC Switch: https://tfc.out-a-ti.me
-// Uncomment to include support for a Fake Power Switch.
-#define FAKE_POWER_ON
-
-// External time travel (input) ("ETT")
-// If the pin goes low (by connecting it to GND using a button), a time
-// travel is triggered.
-// Uncomment to include support for ETT, see below for pin number
-// This is also needed to receive commands via MQTT and BTTFN-wide TTs.
-#define EXTERNAL_TIMETRAVEL_IN
-
-// External time travel (output) ("ETTO")
-// The defined pin is set HIGH on a time travel, and LOW upon re-entry from 
-// a time travel. See tc_time.c for a timing diagram.
-// Uncomment to include support for ETTO, see below for pin number
-// This is also needed if MQTT or BTTFN is used to trigger other props.
-#define EXTERNAL_TIMETRAVEL_OUT
-
 // Uncomment for HomeAssistant MQTT protocol support
 #define TC_HAVEMQTT
-
-// Uncomment for bttfn discover (multicast) and notification broadcast.
-// This is REQUIRED for operating a Futaba remote control, and very
-// useful for other props' quicker speed updates. Supported by the 
-// following firmwares: 
-// Flux >= 1.60, SID >= 1.40, DG >= 1.10, VSR >= 1.10, Remote >= 0.90
-#define TC_BTTFN_MC
-
-// Uncomment to include Exhibition mode
-// 99mmddyyyyhhMM sets (and enables) EM with fixed present time as given; 
-// 999 toggles between EM and normal operation
-//#define HAVE_STALE_PRESENT
 
 // Uncomment to allow "persistent time travels" only if an SD card is
 // present and option "Save secondary setting to SD" is checked. 
@@ -138,11 +93,6 @@
 /*************************************************************************
  ***                           Miscellaneous                           ***
  *************************************************************************/
-
-// If this is uncommented, support for line-out audio (CB 1.4.5) is included.
-// If enabled (350/351 on keypad), Time travel sounds as well as music from 
-// the Music Player will be played over line-out, and not the built-in speaker.
-//#define TC_HAVELINEOUT
 
 // If this is commented, the TCD uses the Gregorian calendar all the way,
 // ie since year 1. If this is uncommented, the Julian calendar is used
@@ -165,12 +115,17 @@
 #define HAVE_DS3231
 //#define HAVE_PCF2129
 
+// Speedo types
+#define SP_NUM_TYPES 13  // Number of speedo display types supported
+
 /*************************************************************************
  ***                           Customization                           ***
  *************************************************************************/
 
 //#define TWSOUND         // Use A10001986's sound files
 //#define TWPRIVATE     // A10001986's private customizations
+
+//#define EXPS
 
 /*************************************************************************
  ***                             Sanitation                            ***
@@ -235,6 +190,9 @@
 #define FAKE_POWER_BUTTON_PIN       13  // Fake "power" switch
 #define EXTERNAL_TIMETRAVEL_IN_PIN  27  // Externally triggered TT (input)
 #define EXTERNAL_TIMETRAVEL_OUT_PIN 14  // TT trigger output
+
+#define EXPS_PIN EXTERNAL_TIMETRAVEL_IN_PIN
+#define EXPT_PIN EXTERNAL_TIMETRAVEL_OUT_PIN
 
 /*************************************************************************
  ***             Display IDs (Do not change, used as index)            ***

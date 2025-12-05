@@ -70,6 +70,11 @@
 #define PCF2129_ALARM     0x0A // Alarm
 #define PCF2129_CLKCTRL   0x0F // CLK Control
 
+#ifdef HAVE_PCF2129
+#define PUD 2000
+#else
+#define PUD 500
+#endif
 
 /*****************************************************************
  * DateTime Class
@@ -85,13 +90,10 @@
  * tcRTC Class for DS3231/PCF2129
  ****************************************************************/
 
-tcRTC::tcRTC(int numTypes, const uint8_t addrArr[])
+tcRTC::tcRTC(int numTypes, const uint8_t *addrArr)
 {
     _numTypes = min(2, numTypes);
-
-    for(int i = 0; i < _numTypes * 2; i++) {
-        _addrArr[i] = addrArr[i];
-    }
+    _addrArr = addrArr;
 
     _address = addrArr[0];
     _rtcType = addrArr[1];
@@ -100,13 +102,14 @@ tcRTC::tcRTC(int numTypes, const uint8_t addrArr[])
 /*
  *  Test i2c connection and detect chip type
  */
-bool tcRTC::begin(unsigned long powerupTime)
-{
 
+bool tcRTC::begin()
+{
     // Give the RTC some time to boot
     unsigned long millisNow = millis();
-    if(millisNow - powerupTime < 2000) {
-        delay(2000 - (millisNow - powerupTime));
+
+    if(millisNow  < PUD) {
+        delay(PUD - millisNow);
     }
     
     for(int i = 0; i < _numTypes * 2; i += 2) {
@@ -140,9 +143,12 @@ bool tcRTC::begin(unsigned long powerupTime)
  */
 void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year)
 {
-    uint8_t buffer[8];
-    uint8_t statreg;
+    prepareAdjust(second, minute, hour, dayOfWeek, dayOfMonth, month, year);
+    finishAdjust();
+}
 
+void tcRTC::prepareAdjust(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year)
+{
     buffer[1] = bin2bcd(second);
     buffer[2] = bin2bcd(minute);
     buffer[3] = bin2bcd(hour);
@@ -156,9 +162,6 @@ void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte day
         buffer[0] = PCF2129_TIME;
         buffer[4] = bin2bcd(dayOfMonth);
         buffer[5] = bin2bcd(dayOfWeek);
-        write_bytes(buffer, 8); 
-
-        // OSF bit cleared by writing seconds
         #endif
         break;
 
@@ -168,8 +171,47 @@ void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte day
         buffer[0] = DS3231_TIME;
         buffer[4] = bin2bcd(dowToDS3231(dayOfWeek));
         buffer[5] = bin2bcd(dayOfMonth);
-        write_bytes(buffer, 8);  
+        #endif
+        break;
+    }
 
+    _buffervalid = true;
+    _buffNow = millis();
+
+    #ifdef TC_DBG
+    Serial.printf("RTC: Prepared to adjust to %d-%02d-%02d %02d:%02d:%02d DOW %d\n",
+          year+2000, month, dayOfMonth, hour, minute, second, dayOfWeek);
+    #endif
+}
+
+void tcRTC::finishAdjust()
+{
+    unsigned long now = millis();
+    uint8_t statreg;
+
+    if(!_buffervalid) return;
+
+    if(now - _buffNow > 100) {
+        _buffervalid = false;
+        #ifdef TC_DBG
+        Serial.printf("RTC finishAdjust() too late (%ums)\n", now - _buffNow);
+        #endif
+        return;
+    }
+
+    switch(_rtcType) {
+
+    case RTCT_PCF2129:
+        #ifdef HAVE_PCF2129
+        write_bytes(buffer, 8); 
+        // OSF bit cleared by writing seconds
+        #endif
+        break;
+
+    case RTCT_DS3231:
+    default:
+        #ifdef HAVE_DS3231
+        write_bytes(buffer, 8);
         // clear OSF bit
         statreg = read_register(DS3231_STATUS);
         statreg &= ~0x80;
@@ -178,9 +220,10 @@ void tcRTC::adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte day
         break;
     }
 
+    _buffervalid = false;
+
     #ifdef TC_DBG
-    Serial.printf("RTC: Adjusted to %d-%02d-%02d %02d:%02d:%02d DOW %d\n",
-          year+2000, month, dayOfMonth, hour, minute, second, dayOfWeek);
+    Serial.printf("RTC updated (delay %ums, took %ums)\n", now - _buffNow, millis() - now);
     #endif
 }
 

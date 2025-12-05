@@ -43,6 +43,130 @@
 
 /*  Changelog
  *
+  *  2025/11/29 (A10001986) [3.10] [requires Remote 1.14 for proper operation]
+ *    - Play user-provided "ttcancel.mp3" if TT is cancelled through brake on
+ *      Remote
+ *    - Make TCD<->Remote communication more robust
+ *  2025/11/28 (A10001986)
+ *    - P0: Fix speed-jumps on Remote when hitting brake (Remote and TCD firmware)
+ *  2025/11/27 (A10001986)
+ *    - Speedo-less operation with Remote: Set TCD speed to 0 as long as brake 
+ *      is on. This prevents a time travel at 88 on the Remote with brake on.
+ *  2025/11/25 (A10001986)
+ *    - Modify speedo-less time travel sequence if bttf clients are present or
+ *      mqtt "publish" (regardless of enhanced TIMETRAVEL message) is enabled,
+ *      and the tt is triggered by '0', BTTFN or MQTT (NOT: button): 
+ *      Now the sequence takes 5 seconds (as opposed to 1.4 seconds in prior 
+ *      versions) to give the props enough time for a proper acceleration sequence, 
+ *      and in case there is a ttaccel sound, it is played. 
+ *      As before, if the time travel is triggered by external button, it starts
+ *      immediately and there is no acceleration-time whatsoever.
+ *  2025/11/24 (A10001986)
+ *    - If a Futaba Remote control is present, it requires proper acceleration/
+ *      deceleration and, in essence, acts like a speedo display; therefore, do
+ *      TCD-triggered TT sequence as if speedo is present even if there is none.
+ *      If the Remote is fake-off, only do that if it wants to display speed 
+ *      while off.
+ *  2025/11/23 (A10001986)
+ *    - Add "Wireless (BTTFN)" speedo type. Allows using a simple BTTFN-listener 
+ *      as speedo.
+ *    - Initialize everything speedo-related independent of speedo presence; if
+ *      Remote is connected (later), it will require proper accel/deceleration 
+ *      sequence. See also changes of 11/24.
+ *  2025/11/22 (A10001986)
+ *    - TCD-controlled TT while Remote is speedMaster: No TT while brake is on.
+ *      If brake is hit while accelerating, TT(P0) is cancelled.
+ *  2025/11/21 (A10001986) [3.9]
+ *    - WM: Minor HTML tweaks; make page width dynamic for better display on
+ *      handheld devices
+ *  2025/11/19 (A10001986)
+ *    - Add support for MQTT v5.0 (tested with mosquitto only). Has no
+ *      advantages over 3.1.1 (but more overhead), only there to use brokers
+ *      that lack support for 3.1.1.
+ *    - Add connection state info on HA/MQTT Settings page
+ *  2025/11/17 (A10001986)
+ *    - Clear keypad input buffer when/after holding a key
+ *  2025/11/16 (A10001986)
+ *    - Delete Remote/KPRemote upon forbidding remote (KP) control 
+ *    - WM: Require HTTP_POST for params save pages. Also, check if request 
+ *      has parameter, do not overwrite current value with null (protects from 
+ *      overwriting settings by errorneous page reloads)
+ *  2025/11/15 (A10001986)
+ *    - Offer three purposes for TT-OUT (IO14): Time travel (as before), alarm,
+ *      and control through keypad command; selectable in Config Portal.
+ *  2025/11/13 (A10001986)
+ *    - Remove various compilation conditionals (FAKE_POWER_ON, TC_HAVELINEOUT,
+ *      EXTERNAL_TIMETRAVEL_IN, EXTERNAL_TIMETRAVEL_OUT, HAVE_STALE_PRESENT,
+ *      TC_HAVESPEEDO, TC_BTTFN_MC)
+ *  2025/11/11 (A10001986)
+ *    - Add "stalled P0" feature for speed notification (used by Remote)
+ *    - MQTT: Make "enhanced TT" default to on, it avoids the "5s lead problem".
+ *  2025/11/10 (A10001986)
+ *    - Add (inter-prop) MQTT-"TIMETRAVEL" command with lead time and time tunnel
+ *      duration attached, eg. "TIMETRAVEL_4950_6600". Only on bttf/tcd/pub.
+ *    - Various fixes to inter-prop MQTT communication
+ *    - Abort a network tt ahead of actions that result in a reboot
+ *  2025/11/09 (A10001986)
+ *    - Add BTTFN_NOT_BUSY notification and status flag to inform BTTFN clients 
+ *      that the TCD is busy (eg keypad menu) and not ready for time travel. This
+ *      is also used to transmit Remote(KP)Allowed stati.
+ *  2025/11/08 (A10001986)
+ *    - Move HA/MQTT settings to separate config portal page
+ *    - Allocate MQTT buffer only if MQTT is actually used
+ *    - Re-order time_loop(): Handle timers in loop iteration following second
+ *      change
+ *    - Minor code cleanups
+ *    - Put beep in flash now that there is space
+ *  2025/11/07 (A10001986)
+ *    - MP3/File-Renamer: Ignore non-mp3 files; display number of files-to-do while 
+ *      renaming
+ *    - Decode ID3 tags and free memory immediately on play-back start
+ *    - Remove hack to skip web handling in on mp3-playback start, remove stopping
+ *      sound in AP mode on CP access.
+ *  2025/11/06 (A10001986)
+ *    - Block newly injected MQTT command while previous one is still being
+ *      worked on.
+ *  2025/11/05 (A10001986)
+ *    - Add MQTT command "INJECT_"
+ *  2025/11/03 (A10001986)
+ *    - Add MQTT commands PLAYKEY_x and STOPKEY
+ *    - Add commands 501-509 to play keyX (X=1-9)
+ *  2025/11/02 (A10001986) [3.8]
+ *    - Add option to disable time-cycling animation
+ *    - WM: Generate HTML for checkboxes on-the-fly
+ *  2025/11/01 (A10001986)
+ *    - Add "POWER_CONTROL_xx" and "POWER_xx" MQTT commands to control Fake-Power 
+ *      through HA. POWER_CONTROL_xx enables/disables power control through HA, 
+ *      and overrule a TFC switch if enabled. POWER_xx enable/disable fake power 
+ *      when HA has control. Command code 996 disables HA power control.
+ *      Fake-Power through Futaba remote has priority over HA/MQTT.
+ *    - Fix logic error in connection with "Remote fake power controls TCD fake 
+ *      power". Remote firmware 1.12+ will not control fake-power with 3.7.
+ *  2025/10/31 (A10001986) [3.7]
+ *    - New sound-pack: Includes sounds for remote on/off, and new night mode
+ *      on/off sounds. (TW04/CS04)
+ *    - [Broken in 3.7] Add "Remote fake power controls TCD fake power" feature. 
+ *      While Remote is Master, TFC switch changes are tracked but ignored. When 
+ *      Remote releases fake power control, TFC switch state becomes immediately
+ *       effective. Configuration of this feature is done solely on the Remote.
+ *      Requires firmware >= 1.12 on Remote. 
+ *    - Save beep mode when changed on-the-fly so it's restored on power-up.
+ *    - Fix deleting a bad .bin file after upload
+ *  2025/10/26 (A10001986) [3.6.1]
+ *    - BTTFN: Fix hostname length issues; code optimizations; minor fix for mc 
+ *      notifications. Recommend to update all props' firmwares for similar
+ *      fixes.
+ *  2025/10/24 (A10001986)
+ *    - Restart WiFi power save timers after last BTTFN client has been expired
+ *    - WM: Fix AP shutdown; handle mDNS
+ *  2025/10/21 (A10001986)
+ *    HAPPY BTTF DAY!
+ *    - Send "REFILL" (009) to DG only, and via BTTFN, not MQTT.
+ *  2025/10/17 (A10001986)
+ *    - Wipe flash FS if alien VER found; in case no VER is present, check
+ *      available space for audio files, and wipe if not enough.
+ *  2025/10/16 (A10001986)
+ *    - WM: More event-based waiting instead of delays
  *  2025/10/15 (A10001986) [3.6]
  *    - Speedo: Extend option of displaying leading-0 into "speedo display like in
  *      part 3", where the speedo displays 2 digits all the way, but without the dot.
@@ -1413,10 +1537,8 @@
 #include "tc_time.h"
 #include "tc_wifi.h"
 
-void setup() 
+void setup()
 {
-    powerupMillis = millis();
-
     Serial.begin(115200);
     Serial.println();
 
@@ -1426,7 +1548,7 @@ void setup()
     // PCF8574 only supports 100kHz, can't go to 400 here.
     // Also, speedo cable is usually quite long, play it safe.
     Wire.begin(-1, -1, 100000);
-    
+
     time_boot();
     settings_setup();
     wifi_setup();
@@ -1434,7 +1556,6 @@ void setup()
     keypad_setup();
     time_setup();
 }
-
 
 void loop()
 {

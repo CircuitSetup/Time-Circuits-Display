@@ -117,12 +117,18 @@ extern uint8_t musFolderNum;
 #define DEF_ETT_DELAY       0     // in ms; Default 0: ETT immediately
 #define DEF_ETT_LONG        1     // [removed] 0: Ext. TT short (reentry), 1: long
 #define DEF_QUICK_GPS       0     // Default: 0: Do not provide GPS speed for BTTF props; 1: Do
-#define DEF_USE_ETTO        0     // Default: 0: No external props (wired); 1: Wired props present
+#define DEF_ETTO_CMD        0     // Default: 0: not controllable by 990/991 commands, 1: controllable by commands
+#define DEF_USE_ETTO        0     // Default: 0: No signal on TT; 1: TT_OUT signals time travel
+#define DEF_ETTO_ALM        0     // Default: 0: No signal on alarm; 1: TT_OUT signals alarm
+#define DEF_ETTO_PUS        0     // Default: 0: TT_OUT by command: 0: Power up state is low; 1: high
 #define DEF_NO_ETTO_LEAD    0     // Default: 0: ETTO with ETTO_LEAD lead time; 1: without
+#define DEF_ETTO_ALM_D      5     // Default: TT_OUT signals alarm for 5 seconds
 #define DEF_CFG_ON_SD       1     // Default: 1: Save secondary settings on SD, 0: Do not (use internal Flash)
 #define DEF_TIMES_PERS      0     // Default: 0: Timetravels not persistent; 1: TT persistent
 #define DEF_SD_FREQ         0     // SD/SPI frequency: Default 16MHz
 #define DEF_REVAMPM         0     // Default: 0: AM/PM like in P1, 1: AM/PM like in P2/P3
+
+#define DEF_MQTT_VTT        1     // 0: MQTT sends TIMETRAVEL, 5 sec lead. 1: sends TIMETRAVEL_xxxx_yyyy with variable lead
 
 struct Settings {
     char ssid[34]           = "";
@@ -141,6 +147,7 @@ struct Settings {
     char playIntro[4]       = MS(DEF_PLAY_INTRO);
     char beep[4]            = MS(DEF_BEEP);
     char autoRotateTimes[4] = MS(DEF_AUTOROTTIMES);
+    char autoRotAnim[4]     = "1";
     char skipTTAnim[4]      = MS(DEF_SKIP_TTANIM);
 #ifndef IS_ACAR_DISPLAY    
     char p3anim[4]          = MS(DEF_P3ANIM);
@@ -172,7 +179,6 @@ struct Settings {
     char tempUnit[4]        = MS(DEF_TEMP_UNIT);
     char tempOffs[6]        = MS(DEF_TEMP_OFFS);
 #endif
-#ifdef TC_HAVESPEEDO
     char speedoType[4]      = MS(DEF_SPEEDO_TYPE);
     char speedoBright[4]    = MS(DEF_BRIGHT_SPEEDO);
     char speedoAO[4]        = MS(DEF_SPEEDO_AO);
@@ -181,7 +187,7 @@ struct Settings {
     char speedoP3[4]        = MS(DEF_SPEEDO_P3);
     char speedo3rdD[4]      = MS(DEF_SPEEDO_3RDD);
 #ifdef TC_HAVEGPS
-    char useGPSSpeed[4]     = MS(DEF_USE_GPS_SPEED);
+    char dispGPSSpeed[4]    = MS(DEF_USE_GPS_SPEED);
     char spdUpdRate[4]      = MS(DEF_SPD_UPD_RATE);
 #endif
 #ifdef TC_HAVETEMP
@@ -189,31 +195,32 @@ struct Settings {
     char tempBright[4]      = MS(DEF_TEMP_BRIGHT);
     char tempOffNM[4]       = MS(DEF_TEMP_OFF_NM);
 #endif
-#endif // HAVESPEEDO 
-#ifdef FAKE_POWER_ON
     char fakePwrOn[4]       = MS(DEF_FAKE_PWR);
-#endif
-#ifdef EXTERNAL_TIMETRAVEL_IN
     char ettDelay[8]        = MS(DEF_ETT_DELAY);
     char ettLong[4]         = MS(DEF_ETT_LONG);
-#endif
 #ifdef TC_HAVEGPS
     char quickGPS[4]        = MS(DEF_QUICK_GPS);
 #endif
 #ifdef TC_HAVEMQTT  
     char useMQTT[4]         = "0";
+    char mqttVers[4]        = "0"; // 0 = 3.1.1, 1 = 5.0
     char mqttServer[80]     = "";  // ip or domain [:port]  
     char mqttUser[64]       = "";  // user[:pass] (UTF8) [limited to 63 bytes through WM]
     char mqttTopic[128]     = "";  // topic (UTF8)       [limited to 127 bytes through WM]
-    char pubMQTT[4]         = "0"; // publish to broker (timetravel)
-#endif
-#ifdef EXTERNAL_TIMETRAVEL_OUT
+    char pubMQTT[4]         = "0";              // publish to broker (timetravel)
+    char MQTTvarLead[4]     = MS(DEF_MQTT_VTT); // publish TIMETRAVEL with lead and P1 duration appended (default to on)
+    char mqttPwr[4]         = "0"; // Do not start with MQTT having control over fake-power
+    char mqttPwrOn[4]       = "0"; // Do not wait for POWER_ON at startup
+#endif // TC_HAVEMQTT
+    char ETTOcmd[4]         = MS(DEF_ETTO_CMD);
     char useETTO[4]         = MS(DEF_USE_ETTO);
+    char ETTOalm[4]         = MS(DEF_ETTO_ALM);
+    char ETTOpus[4]         = MS(DEF_ETTO_PUS);
     char noETTOLead[4]      = MS(DEF_NO_ETTO_LEAD);
-#endif
+    char ETTOAD[6]          = MS(DEF_ETTO_ALM_D);
     char CfgOnSD[4]         = MS(DEF_CFG_ON_SD);
     char timesPers[4]       = MS(DEF_TIMES_PERS);
-    char sdFreq[4]          = MS(DEF_SD_FREQ);
+    //char sdFreq[4]          = MS(DEF_SD_FREQ);
     char revAmPm[4]         = MS(DEF_REVAMPM);    
 };
 
@@ -239,7 +246,7 @@ bool checkConfigExists();
 
 void saveBrightness(bool useCache = true);
 
-void saveAutoInterval(bool useCache = true);
+void saveBeepAutoInterval(bool useCache = true);
 
 bool loadAlarm();
 void saveAlarm();
@@ -255,15 +262,11 @@ void saveCurVolume(bool useCache = true);
 bool loadMusFoldNum();
 void saveMusFoldNum();
 
-#ifdef HAVE_STALE_PRESENT
 void loadStaleTime(void *target, bool& currentOn);
 void saveStaleTime(void *source, bool currentOn);
-#endif
 
-#ifdef TC_HAVELINEOUT
 void loadLineOut();
 void saveLineOut();
-#endif
 
 #ifdef TC_HAVE_REMOTE
 void saveRemoteAllowed();
@@ -284,7 +287,7 @@ void delete_ID_file();
 
 void waitForEnterRelease();
 
-void formatFlashFS();
+bool formatFlashFS(bool userSignal);
 
 void rewriteSecondarySettings();
 

@@ -132,6 +132,7 @@ class clockDisplay {
         void setFromParms(int year, int month, int day, int hour, int minute);
 
         void getToParms(int& year, int& month, int& day, int& hour, int& minute);
+        void getToStruct(dateStruct *s);
 
         void setMonth(int monthNum);
         void setDay(int dayNum);

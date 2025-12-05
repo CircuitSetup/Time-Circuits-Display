@@ -62,7 +62,7 @@ class tcGPS {
     public:
 
         tcGPS(uint8_t address);
-        bool    begin(unsigned long powerupTime, int quickUpdates, int speedRate, void (*myDelay)(unsigned long));
+        bool    begin(int quickUpdates, int speedRate, void (*myDelay)(unsigned long));
 
         void    loop(bool doDelay);
 
@@ -81,6 +81,9 @@ class tcGPS {
 
         bool    parseNMEA(char *nmea, unsigned long nmeaTS);
         bool    checkNMEA(char *nmea);
+
+        // Ptr to custom delay function
+        void (*_customDelayFunc)(unsigned long) = NULL;
 
         uint8_t _address;
 
@@ -118,9 +121,6 @@ class tcGPS {
         unsigned long _curTS2 = 0;
         bool    _haveDateTime = false;
         bool    _haveDateTime2 = false;
-
-        // Ptr to custom delay function
-        void (*_customDelayFunc)(unsigned long) = NULL;
 };
 
 #endif

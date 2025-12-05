@@ -4,6 +4,7 @@
  * Nick O'Leary
  * http://knolleary.net
  * Minimized & adapted by Thomas Winischhofer (A10001986) in 2023
+ * MQTT 5.0 support by Thomas Winischhofer (A10001986) in 2025
  *
  * Copyright (c) 2008-2020 Nicholas O'Leary
  *
@@ -49,6 +50,8 @@
 
 #include "tc_global.h"
 
+//#define MQTT_DBG
+
 #ifdef TC_HAVEMQTT
 
 #include "mqtt.h"
@@ -63,6 +66,13 @@
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
 
+#define MPL 500
+static uint8_t mytt5_connect_props[8] = {
+    0x07,                               // prop length
+    0x27, 0, 0, MPL >> 8, MPL & 0xff,   // maximum packet size: 500 bytes (modified by code)
+    0x17, 0                             // Request Problem Information -> no
+};
+
 static void defLooper()
 {
 }
@@ -72,28 +82,104 @@ PubSubClient::PubSubClient(WiFiClient& client)
     this->_state = MQTT_DISCONNECTED;
     this->_client = &client;
     this->bufferSize = 0;
-    setBufferSize(MQTT_MAX_PACKET_SIZE);
     this->keepAlive = MQTT_KEEPALIVE;
     this->socketTimeout = MQTT_SOCKET_TIMEOUT * 1000;
     setLooper(defLooper);
+    // app MUST call setClientID() before connecting
+    // app MUST call setBufferSize() before setVersion()
+    // app MUST call setVersion() before connecting
 }
 
 PubSubClient::~PubSubClient()
 {
-    free(this->buffer);
+    if(this->bufferSize) 
+        free(this->buffer);
 }
 
-bool PubSubClient::connect(const char *id)
+void PubSubClient::setClientID(const char *src)
 {
-    return connect(id, NULL, NULL, true);
+    int j = 0;
+    uint8_t t;
+
+    for( ; *src && (j < 23); ++src) {
+        t = *src;
+        if( (t >= '0' && t <= '9') ||
+            (t >= 'A' && t <= 'Z') ||
+            (t >= 'a' && t <= 'z') ) {
+            _clientID[j++] = (uint8_t)t;
+        }
+    }
+    _clientID[j] = 0;
+    if(!j) {
+        sprintf(_clientID, "%s%d", "AUTO", esp_random() & 0xffff);
+    }
 }
 
-bool PubSubClient::connect(const char *id, const char *user, const char *pass)
+bool PubSubClient::setBufferSize(uint16_t size)
 {
-    return connect(id, user, pass, true);
+    if(size == 0)
+        return false;
+
+    if(this->bufferSize == 0) {
+        this->buffer = (uint8_t*)malloc(size);
+    } else {
+        uint8_t* newBuffer = (uint8_t*)realloc(this->buffer, size);
+        if(newBuffer) {
+            this->buffer = newBuffer;
+        } else {
+            return false;
+        }
+    }
+    
+    this->bufferSize = size;
+    
+    return (this->buffer != NULL);
 }
 
-bool PubSubClient::connect(const char *id, const char *user, const char *pass, bool cleanSession)
+void PubSubClient::setVersion(int mqtt_version)
+{
+    #ifdef MQTT_DBG
+    if(connected()) {
+        Serial.println("MQTT: setVersion called while connected\n");
+        return;
+    }
+    if(!this->buffer) {
+        Serial.println("MQTT: setVersion called before setBufferSize\n");
+        return;
+    }
+    #endif
+    
+    switch(mqtt_version) {
+    case 3:
+        mqtt_max_header_size = MQTT_MAX_HEADER_SIZE_3_1_1;
+        _phdr[6] = MQTT_VERSION_3_1_1;
+        _v3 = true;
+        break;
+    case 5:
+        mqtt_max_header_size = MQTT_MAX_HEADER_SIZE_5_0;
+        _phdr[6] = MQTT_VERSION_5_0;
+        mytt5_connect_props[4] = (this->bufferSize - 10) >> 8;
+        mytt5_connect_props[5] = (this->bufferSize - 10) & 0xff;
+        _v3 = false;
+        break;
+    #ifdef MQTT_DBG
+    default:
+        Serial.printf("MQTT: setVersion: invalid %d\n", mqtt_version);
+    #endif
+    }
+}
+
+bool PubSubClient::connect()
+{
+    return connect(NULL, NULL, true);
+}
+
+bool PubSubClient::connect(const char *user, const char *pass)
+{
+    return connect(user, pass, true);
+}
+
+bool PubSubClient::connect(const char *user, const char *pass, bool cleanSession)
 {
     if(!connected()) {
 
@@ -114,22 +200,16 @@ bool PubSubClient::connect(const char *id, const char *user, const char *pass, b
             nextMsgId = 1;
             
             // Leave room in the buffer for header and variable length field
-            uint16_t length = MQTT_MAX_HEADER_SIZE;
-            unsigned int j;
+            uint16_t length = mqtt_max_header_size;
+            unsigned int j;            
 
-#if MQTT_VERSION == MQTT_VERSION_3_1
-            uint8_t d[9] = { 0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p', MQTT_VERSION };
-            #define MQTT_HEADER_VERSION_LENGTH 9
-#elif MQTT_VERSION == MQTT_VERSION_3_1_1
-            uint8_t d[7] = { 0x00, 0x04, 'M', 'Q', 'T', 'T', MQTT_VERSION };
-            #define MQTT_HEADER_VERSION_LENGTH 7
-#endif
-            for(j = 0; j < MQTT_HEADER_VERSION_LENGTH; j++) {
-                this->buffer[length++] = d[j];
+            for(j = 0; j < mqtt_version_header_length; j++) {
+                this->buffer[length++] = _phdr[j];
             }
 
             uint8_t v = 0;
-            
+
+            // Clean Session aka Clean Start
             if(cleanSession) v |= 0x02;
 
             if(user) {
@@ -143,8 +223,15 @@ bool PubSubClient::connect(const char *id, const char *user, const char *pass, b
             this->buffer[length++] = (this->keepAlive >> 8);
             this->buffer[length++] = (this->keepAlive & 0xff);
 
-            CHECK_STRING_LENGTH(length, id)
-            length = writeString(id, this->buffer, length);
+            if(!_v3) { 
+                // v5: properties
+                for(j = 0; j < sizeof(mytt5_connect_props); j++) {
+                    this->buffer[length++] = mytt5_connect_props[j];
+                }
+            }
+
+            CHECK_STRING_LENGTH(length, (const char *)_clientID)
+            length = writeString((const char *)_clientID, this->buffer, length);
 
             if(user) {
                 CHECK_STRING_LENGTH(length, user)
@@ -155,7 +242,7 @@ bool PubSubClient::connect(const char *id, const char *user, const char *pass, b
                 }
             }
 
-            write(MQTTCONNECT, this->buffer, length - MQTT_MAX_HEADER_SIZE);
+            write(MQTTCONNECT, this->buffer, length - mqtt_max_header_size);
 
             lastInActivity = lastOutActivity = millis();
 
@@ -174,6 +261,425 @@ bool PubSubClient::connect(const char *id, const char *user, const char *pass, b
     }
     
     return true;
+}
+
+bool PubSubClient::connected()
+{
+    bool rc = false;
+
+    if(_client) {
+      
+        rc = (int)_client->connected();
+        
+        if(!rc) {
+            if(this->_state == MQTT_CONNECTED) {
+                this->_state = MQTT_CONNECTION_LOST;
+                _client->flush();
+                _client->stop();
+            }
+        } else {
+            return (this->_state == MQTT_CONNECTED);
+        }
+    }
+    return rc;
+}
+
+bool PubSubClient::loop()
+{
+    if(_state == MQTT_CONNECTING) {
+
+        if(!_client->available()) {
+
+            if(millis() - lastInActivity >= this->socketTimeout) {
+                _state = MQTT_CONNECTION_TIMEOUT;
+                _client->stop();
+                
+                #ifdef MQTT_DBG
+                Serial.println("MQTT: CONNACK timed-out");
+                #endif
+                
+                return false;
+            }
+
+            return true;
+            
+        } else if(_v3) {
+
+            uint8_t llen;
+            uint32_t len = readPacket(&llen);
+
+            if(len == 4) {
+                if(buffer[3] == 0) {
+                    lastInActivity = millis();
+                    pingOutstanding = false;
+                    _state = MQTT_CONNECTED;
+                    
+                    #ifdef MQTT_DBG
+                    Serial.println("MQTTv3: CONNACK received");
+                    #endif
+                    
+                    return true;
+                } else {
+                    _state = buffer[3];
+                }
+            } else {
+                _state = MQTT_CONNECT_BAD_PROTOCOL;
+            }
+            _client->stop();
+
+            #ifdef MQTT_DBG
+            Serial.printf("MQTTv3: CONNACK failed, state %d\n", _state);
+            #endif
+
+            return false;
+            
+        } else {    // v5.0
+
+            uint8_t llen;
+            uint32_t len = readPacket(&llen);
+
+            #ifdef MQTT_DBG
+            Serial.printf("MQTTv5: packet %d, len %d\n", (buffer[0] & 0xf0) >> 4, len);
+            #endif
+
+            if(len >= 4 && ((buffer[0] & 0xf0) == MQTTCONNACK)) {
+
+                  unsigned int vbl = 0;
+                  int bo = _vbl(&buffer[1], vbl);
+
+                  #ifdef MQTT_DBG
+                  Serial.printf("MQTTv5: CONNACK bo %d vbl %d\n", bo, vbl);
+                  #endif
+
+                  if(bo < 0 || vbl < 2) {
+                    
+                      _state = MQTT_CONNECT_BAD_PROTOCOL;
+                      
+                  } else if(buffer[1+bo+1] == 0) {
+                    
+                      lastInActivity = millis();
+                      pingOutstanding = false;
+                      _state = MQTT_CONNECTED;
+                      
+                      #ifdef MQTT_DBG
+                      Serial.println("MQTTv5: CONNACK received");
+                      #endif
+
+                      // Scan CONNACK properties and check if the
+                      // server mandates stuff we need to obey to
+                      if(vbl > 2) {
+                          unsigned int pl = 0;
+                          int bbo = _vbl(&buffer[1+bo+2], pl);
+                          if(pl > 0) {
+                               // Keep Alive
+                               int idx = _searchProp(&buffer[1+bo+2+bbo], 0x13, pl);
+                               if(idx >= 0) {
+                                    this->keepAlive = (buffer[1+bo+2+bbo+idx] << 8) | buffer[1+bo+2+bbo+idx+1];
+                                    
+                                    #ifdef MQTT_DBG
+                                    Serial.printf("MQTTv5: keepAlive overruled %d\n", this->keepAlive);
+                                    #endif
+                               }
+                          }
+                          
+                      }
+                      
+                      return true;
+                      
+                  } else {
+                    
+                      if(vbl > 1) {
+                          _state = buffer[1+bo+1];
+                      } else {
+                          _state = MQTT_CONNECT_FAILED;
+                      }
+                  }
+              
+            } else {
+                _state = MQTT_CONNECT_BAD_PROTOCOL;
+            }
+            _client->stop();
+
+            #ifdef MQTT_DBG
+            Serial.printf("MQTTv5: CONNACK failed, state %d\n", _state);
+            #endif
+
+            return false;
+          
+        }
+      
+    } else if(connected()) {
+        
+        unsigned long t = millis();
+        unsigned long ka = this->keepAlive * 1000UL;
+        
+        if((t - lastInActivity > ka) || (t - lastOutActivity > ka)) {
+
+            if(pingOutstanding) {
+                this->_state = MQTT_CONNECTION_TIMEOUT;
+                _client->stop();
+                return false;
+            } else {
+                this->buffer[0] = MQTTPINGREQ;
+                this->buffer[1] = 0;
+                _client->write(this->buffer, 2);
+                lastOutActivity = t;
+                lastInActivity = t;
+                pingOutstanding = true;
+            }
+
+        }
+        
+        if(_client->available()) {
+          
+            uint8_t  llen;
+            uint16_t len = readPacket(&llen);
+            uint8_t  msgId1 = 0, msgId2 = 0;
+            uint8_t  *payload;
+            
+            if(len > 0) {
+                
+                lastInActivity = t;
+                uint8_t type = this->buffer[0] & 0xf0;
+
+                switch(type) {
+                case MQTTPUBLISH:
+                    if(callback) {
+                        // topic length in bytes
+                        uint16_t tl = (this->buffer[llen+1] << 8) + this->buffer[llen+2];
+                        
+                        // zero length topics and topic-aliases not supported
+                        if(tl) {
+
+                            int pl = 0;
+                            bool valMsg = true;
+                            
+                            // move topic inside buffer 1 byte to front to make room for 0-terminator
+                            memmove(this->buffer + llen + 2, this->buffer + llen + 3, tl); 
+                            this->buffer[llen + 2 + tl] = 0;
+                         
+                            char *topic = (char *)this->buffer + llen + 2;
+    
+                            if(!_v3) {
+                                // Skip properties
+                                unsigned int temp;
+                                pl = _vbl(&this->buffer[llen + 3 + tl], temp);
+                                if(pl > 0) {
+                                  
+                                    #ifdef MQTT_DBG
+                                    if(temp) {
+                                        // Test property search
+                                        int idx = _searchProp(&this->buffer[llen + 3 + tl + pl], 0x11, temp);
+                                        Serial.printf("MQTTv5: property test: temp %d pl %d; 0x11 at %d; \n", temp, pl, idx);
+                                    }
+                                    #endif
+                                    
+                                    pl += temp;
+                                } else {
+                                    valMsg = false;
+                                }
+                            }
+
+                            if(valMsg) {
+                                if((this->buffer[0] & 0x06) == MQTTQOS1) {
+        
+                                    // msgId only present for QOS>0
+                                    msgId1 = this->buffer[llen + 3 + tl + pl]; 
+                                    msgId2 = this->buffer[llen + 3 + tl + pl + 1];
+                                    
+                                    payload = this->buffer + llen + 3 + tl + pl + 2;
+                                    callback(topic, payload, len - llen - 3 - tl - pl - 2);
+
+                                    // OK for v3 and v5
+                                    this->buffer[0] = MQTTPUBACK;
+                                    this->buffer[1] = 2;
+                                    this->buffer[2] = msgId1;
+                                    this->buffer[3] = msgId2;
+                                    _client->write(this->buffer, 4);
+                                    lastOutActivity = t;
+        
+                                } else {
+                                  
+                                    payload = this->buffer + llen + 3 + tl + pl;
+                                    callback(topic, payload, len - llen - 3 - tl - pl);
+                                    
+                                }
+                            }
+                        }
+                    }
+                    break;
+                    
+                case MQTTPINGREQ:
+                    this->buffer[0] = MQTTPINGRESP;
+                    this->buffer[1] = 0;
+                    _client->write(this->buffer, 2);
+                    break;
+                    
+                case MQTTPINGRESP:
+                    pingOutstanding = false;
+                    break;
+                    
+                case MQTTDISCONNECT:
+                    if(!_v3) {
+                        _state = MQTT_DISCONNECTED;
+                        _client->flush();
+                        _client->stop();
+                        lastInActivity = lastOutActivity = millis();
+                    }
+                    break;
+                
+                case MQTTSUBACK:
+                    // Ignore
+                    #ifdef MQTT_DBG
+                    if(len >= 4) {
+                        unsigned int temp;
+                        int pl = _vbl(&this->buffer[1 + llen + 2], temp);
+                        pl += temp;
+                        for(int i = 0; i < len - (1 + llen + 2 + pl); i++) {
+                            Serial.printf("SUBACK payload %d: %d\n", i, this->buffer[1 + llen + 2 + pl + i]);
+                        }
+                    }
+                    #endif
+                    break;
+
+                #ifdef MQTT_DBG
+                default:
+                    Serial.printf("MQTT: Unhandled packet received: %d\n", type);
+                #endif
+
+                }
+
+            } else if(!connected()) {
+              
+                // readPacket has closed the connection
+                return false;
+                
+            }
+        }
+        
+        return true;
+    }
+    
+    return false;
+}
+
+bool PubSubClient::publish(const char* topic, const uint8_t* payload, unsigned int plength, bool retained)
+{
+    if(connected()) {
+        if(this->bufferSize < mqtt_max_header_size + 2+strnlen(topic, this->bufferSize) + plength) {
+            // Too long
+            return false;
+        }
+        
+        // Leave room in the buffer for header and variable length field
+        uint16_t length = mqtt_max_header_size;
+        length = writeString(topic, this->buffer, length);
+
+        if(!_v3) {
+            // v5: No properties
+            this->buffer[length++] = 0;
+        }
+
+        // Add payload
+        uint16_t i;
+        for(i = 0; i < plength; i++) {
+            this->buffer[length++] = payload[i];
+        }
+
+        // Write the header
+        uint8_t header = MQTTPUBLISH;
+        
+        if(retained) header |= 1;
+        
+        return write(header, this->buffer, length - mqtt_max_header_size);
+    }
+    
+    return false;
+}
+
+bool PubSubClient::subscribe(const char *topic, const char *topic2, uint8_t qos)
+{
+    return subscribe_int(false, topic, topic2, qos);
+}
+
+bool PubSubClient::unsubscribe(const char* topic)
+{
+    return subscribe_int(true, topic, NULL, 0);
+}
+
+void PubSubClient::disconnect()
+{
+    this->buffer[0] = MQTTDISCONNECT;
+
+    if(_v3) {
+        this->buffer[1] = 0;
+        _client->write(this->buffer, 2);
+    } else {
+        this->buffer[1] = 2;
+        this->buffer[2] = 0;
+        this->buffer[3] = 0;
+        _client->write(this->buffer, 4);
+    }
+
+    _state = MQTT_DISCONNECTED;
+
+    _client->flush();
+    _client->stop();
+
+    lastInActivity = lastOutActivity = millis();
+}
+
+
+// Private
+
+
+bool PubSubClient::subscribe_int(bool unsubscribe, const char *topic, const char *topic2, uint8_t qos)
+{
+    size_t  topicLength = strnlen(topic, this->bufferSize);
+    size_t  topicLength2 = topic2 ? strnlen(topic2, this->bufferSize) : 0;
+    uint8_t header = unsubscribe ? MQTTUNSUBSCRIBE : MQTTSUBSCRIBE;
+    
+    if(!topic)
+        return false;
+    
+    if(!unsubscribe) {
+        if(qos > 1)
+            return false;
+        if(this->bufferSize < mqtt_max_header_size+2 + 2+topicLength+1 + (topicLength2 ? 2+topicLength+1 : 0))
+            return false;
+    } else {
+        if(this->bufferSize < mqtt_max_header_size+2 + 2+topicLength)
+            return false;
+    }
+    
+    if(connected()) {
+        // Leave room in the buffer for header and variable length field
+        uint16_t length = mqtt_max_header_size;
+
+        // Packet identifier
+        nextMsgId++;
+        if(!nextMsgId) nextMsgId++;
+        this->buffer[length++] = (nextMsgId >> 8);
+        this->buffer[length++] = (nextMsgId & 0xff);
+
+        // v5 properties
+        if(!_v3) {
+            this->buffer[length++] = 0;     // no properties
+            qos |= 4;                       // "no local" - don't need our message sent back to us
+        }
+        
+        length = writeString((char*)topic, this->buffer, length);
+        if(!unsubscribe) this->buffer[length++] = qos;
+
+        if(topic2 && topicLength2) {
+            length = writeString((char*)topic2, this->buffer, length);
+            this->buffer[length++] = qos;
+        }
+
+        return write(header | 0x02, this->buffer, length - mqtt_max_header_size);
+    }
+    
+    return false;
 }
 
 // reads a byte into result
@@ -226,12 +732,10 @@ uint32_t PubSubClient::readPacket(uint8_t *lengthLength)
     if(!readByte(this->buffer, &len))
         return 0;
     
-    bool isPublish = ((this->buffer[0] & 0xf0) == MQTTPUBLISH);
-    
     uint32_t multiplier = 1;
     uint32_t length = 0;
     uint8_t  digit = 0;
-    uint32_t start = 0;
+    uint32_t idx = 0;
 
     do {
 
@@ -248,22 +752,13 @@ uint32_t PubSubClient::readPacket(uint8_t *lengthLength)
         length += (digit & 0x7f) * multiplier;
         multiplier <<= 7;
         
-    } while((digit & 0x80) != 0);
+    } while(digit & 0x80);
     
     *lengthLength = len - 1;
+       
+    idx = len;
 
-    if(isPublish) {
-      
-        // Read in topic length to calculate bytes to skip over for Stream writing
-        if(!readByte(this->buffer, &len)) return 0;
-        if(!readByte(this->buffer, &len)) return 0;
-        start = 2;
-        
-    }
-    
-    uint32_t idx = len;
-
-    for(uint32_t i = start; i < length; i++) {
+    for(uint32_t i = 0; i < length; i++) {
       
         if(!readByte(&digit)) 
             return 0;
@@ -279,177 +774,6 @@ uint32_t PubSubClient::readPacket(uint8_t *lengthLength)
         len = 0; // This will cause the packet to be ignored.
     
     return len;
-}
-
-bool PubSubClient::loop()
-{
-    if(_state == MQTT_CONNECTING) {
-
-        if(!_client->available()) {
-
-            if(millis() - lastInActivity >= this->socketTimeout) {
-                _state = MQTT_CONNECTION_TIMEOUT;
-                _client->stop();
-                #ifdef TC_DBG
-                Serial.println("MQTT: CONNACK timed-out");
-                #endif
-                return false;
-            }
-
-            return true;
-            
-        } else {
-
-            uint8_t llen;
-            uint32_t len = readPacket(&llen);
-
-            if(len == 4) {
-                if(buffer[3] == 0) {
-                    lastInActivity = millis();
-                    pingOutstanding = false;
-                    _state = MQTT_CONNECTED;
-                    #ifdef TC_DBG
-                    Serial.println("MQTT: CONNACK received");
-                    #endif
-                    return true;
-                } else {
-                    _state = buffer[3];
-                }
-            } else {
-                _state = MQTT_CONNECT_BAD_PROTOCOL;
-            }
-            _client->stop();
-
-            #ifdef TC_DBG
-            Serial.printf("MQTT: CONNACK failed, state %d\n", _state);
-            #endif
-
-            return false;
-        }
-      
-    } else if(connected()) {
-        
-        unsigned long t = millis();
-        unsigned long ka = this->keepAlive * 1000UL;
-        
-        if((t - lastInActivity > ka) || (t - lastOutActivity > ka)) {
-
-            if(pingOutstanding) {
-                this->_state = MQTT_CONNECTION_TIMEOUT;
-                _client->stop();
-                return false;
-            } else {
-                this->buffer[0] = MQTTPINGREQ;
-                this->buffer[1] = 0;
-                _client->write(this->buffer, 2);
-                lastOutActivity = t;
-                lastInActivity = t;
-                pingOutstanding = true;
-            }
-
-        }
-        
-        if(_client->available()) {
-          
-            uint8_t  llen;
-            uint16_t len = readPacket(&llen);
-            uint8_t  msgId1 = 0, msgId2 = 0;
-            uint8_t  *payload;
-            
-            if(len > 0) {
-                
-                lastInActivity = t;
-                uint8_t type = this->buffer[0] & 0xf0;
-                
-                if(type == MQTTPUBLISH) {
-                  
-                    if(callback) {
-                        // topic length in bytes
-                        uint16_t tl = (this->buffer[llen+1] << 8) + this->buffer[llen+2];
-                        
-                        // move topic inside buffer 1 byte to front to make room for 0-terminator
-                        memmove(this->buffer + llen + 2, this->buffer + llen + 3, tl); 
-                        this->buffer[llen + 2 + tl] = 0;
-                         
-                        char *topic = (char *)this->buffer + llen + 2;
-                        
-                        if((this->buffer[0] & 0x06) == MQTTQOS1) {
-
-                            // msgId only present for QOS>0
-                            msgId1 = this->buffer[llen + 3 + tl]; 
-                            msgId2 = this->buffer[llen + 3 + tl + 1];
-                            
-                            payload = this->buffer + llen + 3 + tl + 2;
-                            callback(topic, payload, len - llen - 3 - tl - 2);
-
-                            this->buffer[0] = MQTTPUBACK;
-                            this->buffer[1] = 2;
-                            this->buffer[2] = msgId1;
-                            this->buffer[3] = msgId2;
-                            _client->write(this->buffer, 4);
-                            lastOutActivity = t;
-
-                        } else {
-                          
-                            payload = this->buffer + llen + 3 + tl;
-                            callback(topic, payload, len - llen - 3 - tl);
-                            
-                        }
-                    }
-                    
-                } else if(type == MQTTPINGREQ) {
-                  
-                    this->buffer[0] = MQTTPINGRESP;
-                    this->buffer[1] = 0;
-                    _client->write(this->buffer, 2);
-                    
-                } else if(type == MQTTPINGRESP) {
-                  
-                    pingOutstanding = false;
-                    
-                }
-
-            } else if(!connected()) {
-              
-                // readPacket has closed the connection
-                return false;
-                
-            }
-        }
-        
-        return true;
-    }
-    
-    return false;
-}
-
-bool PubSubClient::publish(const char* topic, const uint8_t* payload, unsigned int plength, bool retained)
-{
-    if(connected()) {
-        if (this->bufferSize < MQTT_MAX_HEADER_SIZE + 2+strnlen(topic, this->bufferSize) + plength) {
-            // Too long
-            return false;
-        }
-        
-        // Leave room in the buffer for header and variable length field
-        uint16_t length = MQTT_MAX_HEADER_SIZE;
-        length = writeString(topic, this->buffer, length);
-
-        // Add payload
-        uint16_t i;
-        for(i = 0; i < plength; i++) {
-            this->buffer[length++] = payload[i];
-        }
-
-        // Write the header
-        uint8_t header = MQTTPUBLISH;
-        
-        if(retained) header |= 1;
-        
-        return write(header, this->buffer, length - MQTT_MAX_HEADER_SIZE);
-    }
-    
-    return false;
 }
 
 size_t PubSubClient::buildHeader(uint8_t header, uint8_t *buf, uint16_t length)
@@ -473,7 +797,7 @@ size_t PubSubClient::buildHeader(uint8_t header, uint8_t *buf, uint16_t length)
     buf[4 - llen] = header;
     
     for(int i = 0; i < llen; i++) {
-        buf[MQTT_MAX_HEADER_SIZE - llen + i] = lenBuf[i];
+        buf[mqtt_max_header_size - llen + i] = lenBuf[i];
     }
     
     return llen + 1; // Full header size is variable length bit plus the 1-byte fixed header
@@ -486,7 +810,7 @@ bool PubSubClient::write(uint8_t header, uint8_t *buf, uint16_t length)
 
 #ifdef MQTT_MAX_TRANSFER_SIZE
 
-    uint8_t* writeBuf = buf + (MQTT_MAX_HEADER_SIZE - hlen);
+    uint8_t* writeBuf = buf + (mqtt_max_header_size - hlen);
     uint16_t bytesRemaining = length + hlen;  // Match the length type
     uint8_t bytesToWrite;
     bool result = true;
@@ -503,77 +827,125 @@ bool PubSubClient::write(uint8_t header, uint8_t *buf, uint16_t length)
     
 #else
 
-    rc = _client->write(buf + (MQTT_MAX_HEADER_SIZE - hlen), length + hlen);
+    rc = _client->write(buf + (mqtt_max_header_size - hlen), length + hlen);
+
+    /*#ifdef MQTT_DBG
+    for(int i = 0; i < length + hlen; i++) {
+        Serial.printf("%02x ", *(buf + (mqtt_max_header_size - hlen) + i));
+    }
+    Serial.println(" ");
+    #endif*/
+    
     lastOutActivity = millis();
     return (rc == hlen + length);
     
 #endif
 }
 
-bool PubSubClient::subscribe(const char *topic, const char *topic2, uint8_t qos)
+// Decode variable length
+// Returns length of length (1-4), 0 on error
+// Parameter 'length' is set to decoded length
+int PubSubClient::_vbl(const uint8_t *buf, unsigned int& length)
 {
-    return subscribe_int(false, topic, topic2, qos);
-}
+    unsigned int lenLen = 0;
+    uint32_t multiplier = 1;
+    uint8_t  digit = 0;
 
-bool PubSubClient::unsubscribe(const char* topic)
-{
-    return subscribe_int(true, topic, NULL, 0);
-}
-
-bool PubSubClient::subscribe_int(bool unsubscribe, const char *topic, const char *topic2, uint8_t qos)
-{
-    size_t  topicLength = strnlen(topic, this->bufferSize);
-    size_t  topicLength2 = topic2 ? strnlen(topic2, this->bufferSize) : 0;
-    uint8_t header = unsubscribe ? MQTTUNSUBSCRIBE : MQTTSUBSCRIBE;
+    length = 0;
     
-    if(!topic)
-        return false;
-    
-    if(!unsubscribe) {
-        if(qos > 1)
-            return false;
-        if(this->bufferSize < MQTT_MAX_HEADER_SIZE+2 + 2+topicLength+1 + (topicLength2 ? 2+topicLength+1 : 0))
-            return false;
-    } else {
-        if(this->bufferSize < MQTT_MAX_HEADER_SIZE+2 + 2+topicLength)
-            return false;
-    }
-    
-    if(connected()) {
-        // Leave room in the buffer for header and variable length field
-        uint16_t length = MQTT_MAX_HEADER_SIZE;
-        nextMsgId++;
-        if(!nextMsgId) nextMsgId++;
-        this->buffer[length++] = (nextMsgId >> 8);
-        this->buffer[length++] = (nextMsgId & 0xff);
+    do {
+        if(lenLen == 5) return 0;  // Invalid length encoding
         
-        length = writeString((char*)topic, this->buffer, length);
-        if(!unsubscribe) this->buffer[length++] = qos;
+        digit = buf[lenLen++];
+        length += (digit & 0x7f) * multiplier;
+        multiplier <<= 7;
+        
+    } while(digit & 0x80);
 
-        if(topic2 && topicLength2) {
-            length = writeString((char*)topic2, this->buffer, length);
-            this->buffer[length++] = qos;
-        }
-
-        return write(header | MQTTQOS1, this->buffer, length - MQTT_MAX_HEADER_SIZE);
-    }
-    
-    return false;
+    return lenLen;
 }
 
-void PubSubClient::disconnect()
+int PubSubClient::_searchProp(uint8_t *buf, uint8_t prop, const int propLength)
 {
-    this->buffer[0] = MQTTDISCONNECT;
-    this->buffer[1] = 0;
+    int idx = 0;
+    int temp;
 
-    _client->write(this->buffer, 2);
+    do {
+      
+        #ifdef MQTT_DBG
+        Serial.printf("MQTTv5: _searchProp: property %d found\n", buf[idx]);
+        #endif
+        
+        if(buf[idx] == prop) {
+             return idx + 1;
+        }
+        
+        switch(buf[idx]) {
+        case 1:
+        case 23:
+        case 25:
+        case 36:
+        case 37:
+        case 40:
+        case 41:
+        case 42:                    // byte
+            idx += 2;
+            break;
+        case 19:
+        case 33:
+        case 34:
+        case 35:                    // two byte integer
+            idx += 3;
+            break;
+        case 2:
+        case 17:
+        case 24:
+        case 39:                    // four byte integer
+            idx += 5;
+            break;
+        case 3:
+        case 8:
+        case 18:
+        case 21:
+        case 26:
+        case 28:
+        case 31:                    // UTF8 string
+        case 9:
+        case 22:                    // binary data
+            idx++;
+            temp = (buf[idx] << 8) | buf[idx + 1];
+            idx += 2 + temp;
+            break;
+        case 38:                    // UTF8 string pair
+            idx++;
+            temp = (buf[idx] << 8) | buf[idx + 1];
+            idx += 2 + temp;
+            if(idx >= propLength) return -1;
+            temp = (buf[idx] << 8) | buf[idx + 1];
+            idx += 2 + temp;
+            break;
+        case 11:                    // variable byte integer
+            idx++;
+            if(buf[idx] & 0x80) {
+                idx++;
+                if(buf[idx] & 0x80) {
+                    idx++;
+                    if(buf[idx] & 0x80) {
+                        idx++;
+                    }
+                }
+            }
+            idx++;
+            break;
+        default:
+            #ifdef MQTT_DBG
+            Serial.printf("MQTTv5: _searchProp: property %d unknown\n", buf[idx]);
+            #endif
+            return -1;
+        }
+    } while(idx < propLength);
 
-    _state = MQTT_DISCONNECTED;
-
-    _client->flush();
-    _client->stop();
-
-    lastInActivity = lastOutActivity = millis();
+    return -1;
 }
 
 uint16_t PubSubClient::writeString(const char *string, uint8_t *buf, uint16_t pos)
@@ -590,48 +962,6 @@ uint16_t PubSubClient::writeString(const char *string, uint8_t *buf, uint16_t po
     buf[oldPos]   = (i & 0xff);
     
     return pos;
-}
-
-bool PubSubClient::connected()
-{
-    bool rc = false;
-
-    if(_client) {
-      
-        rc = (int)_client->connected();
-        
-        if(!rc) {
-            if(this->_state == MQTT_CONNECTED) {
-                this->_state = MQTT_CONNECTION_LOST;
-                _client->flush();
-                _client->stop();
-            }
-        } else {
-            return (this->_state == MQTT_CONNECTED);
-        }
-    }
-    return rc;
-}
-
-bool PubSubClient::setBufferSize(uint16_t size)
-{
-    if(size == 0)
-        return false;
-
-    if(this->bufferSize == 0) {
-        this->buffer = (uint8_t*)malloc(size);
-    } else {
-        uint8_t* newBuffer = (uint8_t*)realloc(this->buffer, size);
-        if(newBuffer) {
-            this->buffer = newBuffer;
-        } else {
-            return false;
-        }
-    }
-    
-    this->bufferSize = size;
-    
-    return (this->buffer != NULL);
 }
 
 /*
@@ -654,7 +984,7 @@ bool PubSubClient::sendPing()
     size_t data_len   =   ping_size - sizeof(struct icmp_echo_hdr);
     int    err;
 
-    #ifdef TC_DBG
+    #ifdef MQTT_DBG
     Serial.printf("MQTT: Sending ping\n");
     #endif
 

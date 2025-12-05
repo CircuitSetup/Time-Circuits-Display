@@ -70,21 +70,19 @@
 void  audio_setup();
 void  audio_loop();
 
-void      play_file(const char *audio_file, uint16_t flags, float volumeFactor = 1.0);
-uint16_t  play_keypad_sound(char key);
+void      play_file(const char *audio_file, uint32_t flags, float volumeFactor = 1.0);
+uint32_t  play_keypad_sound(char key);
 void      play_hour_sound(int hour);
 void      play_beep();
-void      play_key(int k, uint16_t preDTMFkp);
+void      play_key(int k, uint32_t preDTMFkp);
 
 bool  check_file_SD(const char *audio_file);
 int   getSWVolFromHWVol();
 bool  checkAudioDone();
 bool  checkMP3Done();
 bool  checkMP3Running();
-bool  checkAudioStarted();
 void  stopAudio();
-void  decodeID3(char *artist, char *track);
-void  freeID3();
+void  stop_key();
 
 void  mp_init(bool isSetup = false);
 void  mp_play(bool forcePlay = true);
@@ -104,7 +102,9 @@ extern bool muteBeep;
 
 extern bool haveMusic;
 extern bool mpActive;
-extern bool haveId3;
+
+extern char id3artist[];
+extern char id3track[]; 
 
 extern bool haveLineOut;
 extern bool useLineOut;

@@ -124,7 +124,7 @@ static void defaultDelay(unsigned long mydelay)
 
 Keypad_I2C::Keypad_I2C(char *userKeymap, const uint8_t *row, const uint8_t *col,
                        uint8_t numRows, uint8_t numCols,
-                       int address, TwoWire *awire)
+                       int address)
 {
     _keymap = userKeymap;
 
@@ -138,7 +138,6 @@ Keypad_I2C::Keypad_I2C(char *userKeymap, const uint8_t *row, const uint8_t *col,
     if(_columns > MAX_COLS) _columns = MAX_COLS;
 
     _i2caddr = address;
-    _wire = awire;
 
     _scanInterval = 10;
     _holdTime = 500;
@@ -163,8 +162,8 @@ void Keypad_I2C::begin(unsigned int scanInterval, unsigned int holdTime, void (*
     port_write(0xff);
 
     // Read initial value for shadow output pin state
-    _wire->requestFrom(_i2caddr, (int)1);
-    _pinState = _wire->read();
+    Wire.requestFrom(_i2caddr, (int)1);
+    _pinState = Wire.read();
 
     // Build rowMask for quick scanning
     _rowMask = 0;
@@ -211,8 +210,8 @@ bool Keypad_I2C::scanKeys()
 
                 pin_write(_columnPins[c], LOW);
 
-                _wire->requestFrom(_i2caddr, (int)1);
-                if((pinVals[d][c] = _wire->read() & _rowMask) != _rowMask) 
+                Wire.requestFrom(_i2caddr, (int)1);
+                if((pinVals[d][c] = Wire.read() & _rowMask) != _rowMask) 
                     haveKey = true;
 
                 pin_write(_columnPins[c], HIGH);
@@ -324,9 +323,9 @@ void Keypad_I2C::pin_write(uint8_t pinNum, bool level)
 
 void Keypad_I2C::port_write(uint8_t val)
 {
-    _wire->beginTransmission(_i2caddr);
-    _wire->write(val);
-    _wire->endTransmission();
+    Wire.beginTransmission(_i2caddr);
+    Wire.write(val);
+    Wire.endTransmission();
     _pinState = val;
 }
 
@@ -525,15 +524,10 @@ enum DUV2_CONF2_PARAM {
 #define DFR_GAIN_VOL  (1023 / 20)
 
 
-TCRotEnc::TCRotEnc(int numTypes, const uint8_t addrArr[], TwoWire *awire)
+TCRotEnc::TCRotEnc(int numTypes, const uint8_t *addrArr)
 {
     _numTypes = min(6, numTypes);
-
-    for(int i = 0; i < _numTypes * 2; i++) {
-        _addrArr[i] = addrArr[i];
-    }
-
-    _wire = awire;
+    _addrArr = addrArr;
 }
 
 bool TCRotEnc::begin(bool forSpeed)
@@ -550,8 +544,8 @@ bool TCRotEnc::begin(bool forSpeed)
 
         _i2caddr = _addrArr[i];
 
-        _wire->beginTransmission(_i2caddr);
-        if(!_wire->endTransmission(true)) {
+        Wire.beginTransmission(_i2caddr);
+        if(!Wire.endTransmission(true)) {
 
             switch(_addrArr[i+1]) {
             case TC_RE_TYPE_ADA4991:
@@ -835,26 +829,26 @@ int TCRotEnc::read(uint16_t base, uint8_t reg, uint8_t *buf, uint8_t num)
 {
     int i2clen;
     
-    _wire->beginTransmission(_i2caddr);
-    if(base <= 0xff) _wire->write((uint8_t)base);
-    _wire->write(reg);
-    _wire->endTransmission(true);
+    Wire.beginTransmission(_i2caddr);
+    if(base <= 0xff) Wire.write((uint8_t)base);
+    Wire.write(reg);
+    Wire.endTransmission(true);
     delay(1);
-    i2clen = _wire->requestFrom(_i2caddr, (int)num);
+    i2clen = Wire.requestFrom(_i2caddr, (int)num);
     for(int i = 0; i < i2clen; i++) {
-        buf[i] = _wire->read();
+        buf[i] = Wire.read();
     }
     return i2clen;
 }
 
 void TCRotEnc::write(uint16_t base, uint8_t reg, uint8_t *buf, uint8_t num)
 {
-    _wire->beginTransmission(_i2caddr);
-    if(base <= 0xff) _wire->write((uint8_t)base);
-    _wire->write(reg);
+    Wire.beginTransmission(_i2caddr);
+    if(base <= 0xff) Wire.write((uint8_t)base);
+    Wire.write(reg);
     for(int i = 0; i < num; i++) {
-        _wire->write(buf[i]);
+        Wire.write(buf[i]);
     }
-    _wire->endTransmission();
+    Wire.endTransmission();
 }
 #endif 

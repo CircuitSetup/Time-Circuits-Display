@@ -97,8 +97,6 @@ bool audioMute     = false;
 bool muteBeep      = true;
 static bool beepRunning = false;
 
-unsigned long audioplaystart = 0;
-
 bool            haveMusic = false;
 bool            mpActive = false;
 static uint16_t maxMusic = 0;
@@ -107,9 +105,6 @@ static int      mpCurrIdx = 0;
 static bool     mpShuffle = false;
 static uint16_t currPlaying = 0;
 #define         MAXID3LEN 2048
-bool            haveId3 = false;
-int             Id3Size;
-static char     *id3 = NULL;
 
 static const float volTable[20] = {
     0.00, 0.02, 0.04, 0.06,
@@ -133,7 +128,7 @@ static bool   curChkNM   = true;
 static bool   dynVol     = true;
 static int    sampleCnt  = 0;
 
-uint16_t      key_playing = 0;
+static uint32_t key_playing = 0;
 
 bool          haveLineOut = false;
 bool          useLineOut  = false;
@@ -153,10 +148,11 @@ static char       shsnd[]   = "/hour-00.mp3";   // Not const
 static bool       haveHrSnd = false;
 static uint32_t   haveSpHrSnd = 0;
 
+char id3artist[16] = { 0 };
+char id3track[16] = { 0 };
+
 static float  getVolume();
-#ifdef TC_HAVELINEOUT
 static void   setLineOut(bool doLineOut);
-#endif
 
 static int    mp_findMaxNum();
 static void   mp_nextprev(bool forcePlay, bool next);
@@ -164,6 +160,8 @@ static bool   mp_play_int(bool force);
 static void   mp_buildFileName(char *fnbuf, int num);
 static bool   mp_renameFilesInDir(bool isSetup);
 static void   mpren_quickSort(char **a, int s, int e);
+
+static void   decodeID3(char *artist, char *track, char *id3, int id3size);
 
 #include "tc_beep.h"
 
@@ -215,11 +213,9 @@ void audio_setup()
     loadMusFoldNum();
     mpShuffle = (settings.shuffle[0] != '0');
 
-    #ifdef TC_HAVELINEOUT
     if(haveLineOut) {
         loadLineOut();
     }
-    #endif
 
     // MusicPlayer init
     mp_init(true);
@@ -227,7 +223,6 @@ void audio_setup()
     // Check for sound files to avoid unsuccessful file-lookups later
     
     for(int i = 1; i < 10; i++) {
-        if(i == 8) continue;
         keySnd[4] = '0' + i;
         if(check_file_SD(keySnd)) {
             haveKeySnd |= (1 << i);
@@ -248,7 +243,7 @@ void audio_setup()
 
     #ifdef TC_DBG
     Serial.printf("haveKeySnd 0x%x, haveSPHrSnd 0x%x\n", haveKeySnd, haveSpHrSnd);
-    #endif
+    #endif    
 }
 
 /*
@@ -261,13 +256,11 @@ void audio_loop()
         if(!wav->loop()) {
             wav->stop();
             beepRunning = false;
-            audioplaystart = 0;
         }
     } else if(mp3->isRunning()) {
         if(!mp3->loop()) {
             mp3->stop();
             key_playing = 0;
-            audioplaystart = 0;
             if(mpActive) {
                 mp_next(true);
             }
@@ -301,7 +294,7 @@ static int skipID3(char *buf)
     return 0;
 }
 
-void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
+void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
 {
     char buf[10];
     int pos;
@@ -324,17 +317,13 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
     stopAudio();
     beepRunning = false;
 
-    #ifdef TC_HAVELINEOUT
     playLineOut = (haveLineOut && useLineOut && (flags & PA_LINEOUT)) ? true : false;
     setLineOut(playLineOut);
     if(playLineOut) flags &= ~(PA_DYNVOL|PA_CHECKNM);
-    #else
-    playLineOut = false;
-    #endif
     
     curChkNM    = (flags & PA_CHECKNM) ? true : false;
     dynVol      = (flags & PA_DYNVOL) ? true : false;
-    key_playing = flags & 0xff00;
+    key_playing = flags & 0x1ff00;
 
     curVolFact = volumeFactor;
 
@@ -343,22 +332,22 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
     rawVolIdx = 0;
     anaReadCount = 0;
 
-    haveId3 = false;
-    if(!(flags & PA_DOID3TS)) freeID3();
+    id3artist[0] = id3track[0] = 0;
 
     out->SetGain(getVolume());
 
     if(haveSD && ((flags & PA_ALLOWSD) || FlashROMode) && mySD0->open(audio_file)) {
         if(flags & PA_DOID3TS) {
-            if(!id3) id3 = (char *)malloc(MAXID3LEN);
+            char *id3 = (char *)malloc(MAXID3LEN);
             if(id3) {
                 id3[0] = 0;
                 mySD0->read((void *)id3, 10);
                 if((pos = skipID3(id3))) {
-                    Id3Size = pos <= MAXID3LEN ? pos : MAXID3LEN;
+                    int Id3Size = pos <= MAXID3LEN ? pos : MAXID3LEN;
                     mySD0->read((void *)((char *)id3 + 10), Id3Size - 10);
-                    haveId3 = true;
+                    decodeID3(id3artist, id3track, id3, Id3Size);
                 }
+                free(id3);
                 mySD0->seek(pos, SEEK_SET);
             }
         } else {
@@ -367,7 +356,6 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
             mySD0->seek(skipID3(buf), SEEK_SET);
         }
         mp3->begin(mySD0, out);
-        audioplaystart = millis();
         #ifdef TC_DBG
         Serial.println("Playing from SD");
         #endif
@@ -383,10 +371,8 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
             myFS0->read((void *)buf, 10);
             myFS0->seek(skipID3(buf), SEEK_SET);
             mp3->begin(myFS0, out);
-            audioplaystart = millis();
         } else {
             wav->begin(myFS0, out);
-            //audioplaystart = 0; // is cleared by stop(), used only for mp3 playback
         }
         #ifdef TC_DBG
         Serial.println("Playing from flash FS");
@@ -404,9 +390,9 @@ void play_file(const char *audio_file, uint16_t flags, float volumeFactor)
  * 
  */
 
-uint16_t play_keypad_sound(char key)
+uint32_t play_keypad_sound(char key)
 {
-    uint16_t kp = key_playing;
+    uint32_t kp = key_playing;
     dtmfBuf[6] = key;
     play_file(dtmfBuf, PA_ISWAV|PA_INTSPKR|PA_CHECKNM, 0.6);
     return kp;
@@ -444,9 +430,7 @@ void play_beep()
         wav->stop();
     }
 
-    #ifdef TC_HAVELINEOUT
     setLineOut(false);
-    #endif
     playLineOut = false;
 
     curVolFact = 0.3;
@@ -457,23 +441,26 @@ void play_beep()
     anaReadCount = 0;
     out->SetGain(getVolume());
 
+    key_playing = 0;
+    id3artist[0] = id3track[0] = 0;
+
     myPM->open(data_beep_wav, data_beep_wav_len);
     wav->begin(myPM, out);
     beepRunning = true;
-    key_playing = 0;
-    audioplaystart = 0;
 }
 
-void play_key(int k, uint16_t preDTMFkp)
+void play_key(int k, uint32_t preDTMFkp)
 {
-    uint16_t pa_key;
+    uint32_t pa_key;
     
     if(!(haveKeySnd & (1 << k)))
         return;
 
-    pa_key = (k == 9) ? 0x8000 : (1 << (7+k));
+    pa_key = (1 << (7+k));
 
     if(pa_key == preDTMFkp) {
+        // Logic for keypad sound having interrupted
+        // us already; no need to stop().
         return;
     }
     if(pa_key == key_playing) {
@@ -580,7 +567,6 @@ static float getVolume()
     return vol_val;
 }
 
-#ifdef TC_HAVELINEOUT
 static void setLineOut(bool doLineOut)
 {
     if(haveLineOut) {
@@ -597,7 +583,6 @@ static void setLineOut(bool doLineOut)
         }
     }
 }
-#endif
 
 /*
  * Helpers
@@ -648,20 +633,16 @@ void stopAudio()
         wav->stop();
     }
     key_playing = 0;
-    audioplaystart = 0;
-    haveId3 = false;
+    id3artist[0] = id3track[0] = 0;
 }
 
-bool checkAudioStarted()
+void stop_key()
 {
-    if(!audioplaystart)
-        return false;
-
-    if(millis() - audioplaystart < 3000) {
-        return true;
+    if(key_playing) {
+        mp3->stop();
+        key_playing = 0;
+        id3artist[0] = id3track[0] = 0;
     }
-
-    return false;
 }
 
 /*
@@ -670,57 +651,57 @@ bool checkAudioStarted()
 
 static void copyId3String(char *src, char *dst, int tagSz, int maxChrs)
 {
-   uint16_t chr;
-   char c;
-   char *send = src + tagSz;
-   char *tend = dst + maxChrs;
-   char enc = *src++;
+    uint16_t chr;
+    char c;
+    char *send = src + tagSz;
+    char *tend = dst + maxChrs;
+    char enc = *src++;
 
-   dst[0] = 0;
+    dst[0] = 0;
 
-   if(enc == 1) {
-      uint16_t be = *src++ << 8;
-      be |= *src++;
-      if(be == 0xfeff) enc = 2;
-      else if(be != 0xfffe) src -= 2;
-   }
+    if(enc == 1) {
+        uint16_t be = *src++ << 8;
+        be |= *src++;
+        if(be == 0xfeff) enc = 2;
+        else if(be != 0xfffe) src -= 2;
+    }
 
-   switch(enc) {
-   case 0:        // ISO-8859-1
-      while(dst < tend && src < send) {
-          if(!*src) return;
-          c = *src++;
-          if(c >= ' ' && c <= 126)  {
-              if(c >= 'a' && c <= 'z') c &= ~0x20;
-              else if(c == 126) c = '-';  // 126 = ~ but displayed as °, so make it '-'
-              *dst++ = c;
-              *dst = 0;
-          }
-      }
-      break;
-   case 1:        // UTF-16LE
-   case 2:        // UTF-16BE
-      while(dst < tend && src < send) {
-          if(enc == 1) { chr = *src++; chr |= (*src++ << 8); }
-          else         { chr = *src++ << 8; chr |= *src++;   }
-          if(!chr) return;
-          if(chr >= 0xd800 && chr <= 0xdbff) {
-              src += 2;
-          } else if(chr >= ' ' && chr <= 126) {   
-              if(chr >= 'a' && chr <= 'z') chr &= ~0x20;
-              else if(chr == 126) chr = '-';  // 126 = ~ but displayed as °, so make it '-'
-              *dst++ = chr & 0xff;
-              *dst = 0;
-          }
-      }
-      break;
-   case 3:        // UTF-8
-      filterOutUTF8(src, dst, tagSz, maxChrs);
-      break;
-   }
+    switch(enc) {
+    case 0:        // ISO-8859-1
+        while(dst < tend && src < send) {
+            if(!*src) return;
+            c = *src++;
+            if(c >= ' ' && c <= 126)  {
+                if(c >= 'a' && c <= 'z') c &= ~0x20;
+                else if(c == 126) c = '-';  // 126 = ~ but displayed as °, so make it '-'
+                *dst++ = c;
+                *dst = 0;
+            }
+        }
+        break;
+    case 1:        // UTF-16LE
+    case 2:        // UTF-16BE
+        while(dst < tend && src < send) {
+            if(enc == 1) { chr = *src++; chr |= (*src++ << 8); }
+            else         { chr = *src++ << 8; chr |= *src++;   }
+            if(!chr) return;
+            if(chr >= 0xd800 && chr <= 0xdbff) {
+                src += 2;
+            } else if(chr >= ' ' && chr <= 126) {   
+                if(chr >= 'a' && chr <= 'z') chr &= ~0x20;
+                else if(chr == 126) chr = '-';  // 126 = ~ but displayed as °, so make it '-'
+                *dst++ = chr & 0xff;
+                *dst = 0;
+            }
+        }
+        break;
+    case 3:        // UTF-8
+        filterOutUTF8(src, dst, tagSz, maxChrs);
+        break;
+    }
 }
 
-void decodeID3(char *artist, char *track)
+static void decodeID3(char *artist, char *track, char *id3, int Id3Size)
 {
     uint8_t rev = id3[3];
     char *ptr  = id3 + 10;
@@ -732,8 +713,6 @@ void decodeID3(char *artist, char *track)
     char tFlags[2] = { 0, 0 };
 
     *artist = *track = 0;
-    
-    if(!haveId3) return;
 
     // Unsynchronizing not supported
     if(id3[5] & 0x80) return;
@@ -806,7 +785,7 @@ void decodeID3(char *artist, char *track)
         if(!(tFlags[1] & badFlags) && (tag0 == 'T')) {
             // Check for data length indicator despite no other flags
             // Should not happen; we ignore it if it is there
-            offSet =  (rev == 4 && tFlags[1] & 0x01) ? 4 : 0;
+            offSet = (rev == 4 && tFlags[1] & 0x01) ? 4 : 0;
             if((rev == 2 && tag1 == 'T' && tag2 == '2') ||
                (rev != 2 && tag1 == 'I' && tag2 == 'T' && tag3 == '2')) {
                 // Copy song title
@@ -821,14 +800,6 @@ void decodeID3(char *artist, char *track)
         }
 
         ptr += tagSz;
-    }
-}
-
-void freeID3()
-{
-    if(id3) {
-        free((void *)id3);
-        id3 = NULL;
     }
 }
 
@@ -976,8 +947,7 @@ bool mp_stop()
     if(mpActive) {
         mp3->stop();
         mpActive = false;
-        audioplaystart = 0;
-        freeID3();
+        id3artist[0] = id3track[0] = 0;
     }
     
     return ret;
@@ -1114,28 +1084,42 @@ int mp_checkForFolder(int num)
  * Auto-renamer
  */
 
-// Check file is eligable for renaming:
+// Check file is eligible for renaming:
 // - not a hidden/exAtt file,
+// - file name ends with ".mp3"
 // - filename not already "/musicX/ddd.mp3"
 static bool mpren_checkFN(const char *buf)
 {
-    // Hidden or macOS exAttr file, ignore
+    // Hidden or macOS exAttr file? Ignore.
     if(buf[0] == '.') return true;
 
-    if(strlen(buf) != 7) return false;
+    size_t s = strlen(buf);
 
-    if(buf[3+0] != '.' || buf[3+3] != '3')
-        return false;
-    if(buf[3+1] != 'm' && buf[3+1] != 'M')
-        return false;
-    if(buf[3+2] != 'p' && buf[3+2] != 'P')
+    // Filename shorter than ".mp3"? Ignore.
+    if(s < 4) return true;
+
+    s -= 4;
+    // Not an mp3? Ignore.
+    if(buf[s] != '.' || buf[s+3] != '3')
+        return true;
+    if(buf[s+1] != 'm' && buf[s+1] != 'M')
+        return true;
+    if(buf[s+2] != 'p' && buf[s+2] != 'P')
+        return true;
+
+    // Now check for xxx.mp3 (xxx=000-999)
+
+    // Filename shorter or longer? Do it.
+    if(s != 3)
         return false;
 
+    // Filename not a 3-digit number? Do it.
     if(buf[0] < '0' || buf[0] > '9' ||
        buf[1] < '0' || buf[1] > '9' ||
        buf[2] < '0' || buf[2] > '9')
         return false;
 
+    // Otherwise ignore.
     return true;
 }
 
@@ -1145,27 +1129,44 @@ static void mpren_showHeadLine(bool checking)
     presentTime.showTextDirect("MUSIC FILES");
 }
 
-static void mpren_showBlinker(bool blinker)
+static void mpren_showBlinker(bool blinker, int fileNum)
 {
-    departedTime.showTextDirect(blinker ? "PLEASE" : "WAIT");
+    if(!fileNum) {
+        departedTime.showTextDirect(blinker ? "PLEASE" : "WAIT");
+    } else {
+        char buf[16];
+        #ifdef IS_ACAR_DISPLAY
+        sprintf(buf, "%-9s%3d", blinker ? "PLEASE" : "WAIT", fileNum);
+        #else
+        sprintf(buf, "%-10s%3d", blinker ? "PLEASE" : "WAIT", fileNum);
+        #endif
+        departedTime.showTextDirect(buf);
+    }
 }
 
-static void mpren_looper(bool isSetup, bool checking)
-{       
-    if(millis() - renNow1 > 250) {
+static void mpren_looper(bool isSetup, bool checking, int fileNum)
+{
+    unsigned long now = millis();
+
+    // We are only ever called from keypad menu.
+    // So gps_loop(true) is allowed.
+
+    if(now - renNow1 > 250) {
         wifi_loop();
         if(!isSetup) {
             ntp_loop();
             #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE)
-            gps_loop();
+            gps_loop(true);
             #endif
+            bttfn_loop();
             // audio_loop not required, never
             // called when audio is active
         }
-        renNow1 = millis();
+        delay(10);
+        renNow1 = now;
     }
-    if(millis() - renNow2 > 2000) {
-        mpren_showBlinker(blinker);
+    if(now - renNow2 > 2000) {
+        mpren_showBlinker(blinker, fileNum);
         if(!headLineShown) {
             mpren_showHeadLine(checking);
             destinationTime.on();
@@ -1174,7 +1175,7 @@ static void mpren_looper(bool isSetup, bool checking)
             headLineShown = true;
         }
         blinker = !blinker;
-        renNow2 = millis();
+        renNow2 = now;
     }
 }
 
@@ -1270,7 +1271,7 @@ static bool mp_renameFilesInDir(bool isSetup)
 #endif
     {
 
-        mpren_looper(isSetup, true);
+        mpren_looper(isSetup, true, 0);
 
 #ifdef HAVE_GETNEXTFILENAME
 
@@ -1394,7 +1395,7 @@ static bool mp_renameFilesInDir(bool isSetup)
 
         for(int i = 0; i < fileNum && count <= 999; i++) {
             
-            mpren_looper(isSetup, false);
+            mpren_looper(isSetup, false, fileNum - i);
 
             sprintf(fnbuf + 8, "%03d.mp3", count);
             strcpy(fnbuf2 + 8, a[i]);

@@ -285,6 +285,15 @@ void clockDisplay::getToParms(int& year, int& month, int& day, int& hour, int& m
     minute = getMinute();
 }
 
+void clockDisplay::getToStruct(dateStruct *s)
+{
+    s->year = getYear();
+    s->month = getMonth();
+    s->day = getDay();
+    s->hour = getHour();
+    s->minute = getMinute();
+}
+
 
 // Show data in display --------------------------------------------------------
 

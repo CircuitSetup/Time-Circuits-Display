@@ -57,11 +57,9 @@ extern bool p3anim;
 
 extern bool isEnterKeyPressed;
 extern bool isEnterKeyHeld;
-#ifdef EXTERNAL_TIMETRAVEL_IN
 extern bool isEttKeyPressed;
 extern bool isEttKeyHeld;
 extern bool isEttKeyImmediate;
-#endif
 extern bool menuActive;
 
 extern char timeBuffer[];
@@ -71,6 +69,10 @@ bool scanKeypad();
 
 void resetKeypadState();
 void discardKeypadInput();
+
+#ifdef TC_HAVEMQTT
+bool injectInput(const char *src);
+#endif
 
 #ifdef TC_HAVE_REMOTE
 void injectKeypadKey(char key, int kaction);

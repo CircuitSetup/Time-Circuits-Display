@@ -127,11 +127,14 @@ class tcRTC
 {
     public:
 
-        tcRTC(int numTypes, const uint8_t addrArr[]);
+        tcRTC(int numTypes, const uint8_t *addrArr);
 
-        bool begin(unsigned long powerupTime);
+        bool begin();
 
         void adjust(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year);
+
+        void prepareAdjust(byte second, byte minute, byte hour, byte dayOfWeek, byte dayOfMonth, byte month, byte year);
+        void finishAdjust();
 
         void now(DateTime& dt);
 
@@ -159,9 +162,13 @@ class tcRTC
         static uint8_t bin2bcd(uint8_t val) { return val + 6 * (val / 10); }
         
         int     _numTypes = 0;
-        uint8_t _addrArr[2*2];
+        const uint8_t *_addrArr;
         uint8_t _address;
         uint8_t _rtcType = RTCT_DS3231;
+
+        uint8_t buffer[8];
+        bool    _buffervalid = false;
+        unsigned long _buffNow;
 };
 
 #endif

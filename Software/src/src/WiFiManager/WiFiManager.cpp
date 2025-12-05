@@ -13,8 +13,16 @@
 #include "WiFiManager.h"
 #include "wm_strings_en.h"
 
-uint8_t WiFiManager::_eventlastconxresult = WL_IDLE_STATUS;
-bool    WiFiManager::_gotip = false;
+uint8_t   WiFiManager::_eventlastconxresult = WL_IDLE_STATUS;
+uint16_t  WiFiManager::_WiFiEventMask = 0;
+
+#define WM_EVB_APSTART      (1<<0)
+#define WM_EVB_APSTOP       (1<<1)
+#define WM_EVB_STASTART     (1<<2)
+#define WM_EVB_STASTOP      (1<<3)
+#define WM_EVB_GOTIP        (1<<4)
+#define WM_EVB_DISCONNECTED (1<<5)
+#define WM_EVB_SCAN_DONE    (1<<6)
 
 #define STRLEN(x) (sizeof(x)-1)
 
@@ -30,7 +38,7 @@ WiFiManagerParameter::WiFiManagerParameter(const char *custom)
     _label          = NULL;
     _length         = 0;
     _value          = NULL;
-    _labelPlacement = WFM_LABEL_DEFAULT;
+    _flags          = WFM_LABEL_DEFAULT;
     _customHTML     = custom;
 }
 
@@ -40,15 +48,17 @@ WiFiManagerParameter::WiFiManagerParameter(const char *(*CustomHTMLGenerator)(co
     _label          = NULL;
     _length         = 0;
     //_value is union with Generator
-    _labelPlacement = WFM_LABEL_DEFAULT;
+    _flags          = WFM_LABEL_DEFAULT;
     _customHTML     = NULL;
     _customHTMLGenerator = CustomHTMLGenerator;
 }
 
+/*
 WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label)
 {
     init(id, label, NULL, 0, NULL, WFM_LABEL_DEFAULT);
 }
+*/
 
 WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length)
 {
@@ -60,16 +70,16 @@ WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label, co
     init(id, label, defaultValue, length, custom, WFM_LABEL_DEFAULT);
 }
 
-WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, const char *custom, int labelPlacement)
+WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags)
 {
-    init(id, label, defaultValue, length, custom, labelPlacement);
+    init(id, label, defaultValue, length, custom, flags);
 }
 
-void WiFiManagerParameter::init(const char *id, const char *label, const char *defaultValue, int length, const char *custom, int labelPlacement)
+void WiFiManagerParameter::init(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags)
 {
     _id             = id;
     _label          = label;
-    _labelPlacement = labelPlacement;
+    _flags          = flags;
     _customHTML     = custom;
     _length         = 0;
     _value          = NULL;
@@ -122,9 +132,9 @@ int WiFiManagerParameter::getValueLength() const
 {
     return _length;
 }
-int WiFiManagerParameter::getLabelPlacement() const
+uint8_t WiFiManagerParameter::getFlags() const
 {
-    return _labelPlacement;
+    return _flags;
 }
 const char* WiFiManagerParameter::getCustomHTML() const
 {
@@ -139,7 +149,7 @@ const char* WiFiManagerParameter::getCustomHTML() const
 
 bool WiFiManager::CheckParmID(const char *id)
 {
-    for(size_t i = 0; i < strlen(id); i++) {
+    for(int i = 0; i < strlen(id); i++) {
         if(!(isAlphaNumeric(id[i])) && !(id[i] == '_')) {
             return false;
         }
@@ -148,9 +158,9 @@ bool WiFiManager::CheckParmID(const char *id)
     return true;
 }
 
-// Settings page params
+// Params handling
 
-bool WiFiManager::addParameter(WiFiManagerParameter *p)
+bool WiFiManager::_addParameter(int idx, WiFiManagerParameter *p)
 {
     // check param id is valid, unless null
     if(p->getID()) {
@@ -158,92 +168,92 @@ bool WiFiManager::addParameter(WiFiManagerParameter *p)
     }
 
     // init params if never malloc
-    if(!_params) {
-        _params = (WiFiManagerParameter**)malloc(_max_params * sizeof(WiFiManagerParameter*));
+    if(!_params[idx]) {
+        _params[idx] = (WiFiManagerParameter**)malloc(_max_params[idx] * sizeof(WiFiManagerParameter*));
     }
 
     // resize the params array by increment of WIFI_MANAGER_MAX_PARAMS
-    if(_paramsCount == _max_params) {
+    if(_paramsCount[idx] == _max_params[idx]) {
 
-        _max_params += WIFI_MANAGER_MAX_PARAMS;
+        _max_params[idx] += WIFI_MANAGER_MAX_PARAMS;
 
-        WiFiManagerParameter** new_params = (WiFiManagerParameter**)realloc(_params, _max_params * sizeof(WiFiManagerParameter*));
+        WiFiManagerParameter** new_params = (WiFiManagerParameter**)realloc(_params[idx], _max_params[idx] * sizeof(WiFiManagerParameter*));
 
-        if(new_params != NULL) {
-            _params = new_params;
-        } else {
+        if(!new_params)
             return false;
-        }
+
+        _params[idx] = new_params;
     }
 
-    _params[_paramsCount] = p;
-    _paramsCount++;
+    _params[idx][_paramsCount[idx]] = p;
+    _paramsCount[idx]++;
 
     return true;
+}
+
+// Params page
+bool WiFiManager::addParameter(WiFiManagerParameter *p)
+{
+    return _addParameter(1, p);
 }
 
 WiFiManagerParameter** WiFiManager::getParameters()
 {
-    return _params;
+    return _params[1];
 }
 
 int WiFiManager::getParametersCount()
 {
-    return _paramsCount;
+    return _paramsCount[1];
 }
 
 void WiFiManager::allocParms(int numParms)
 {
-    _max_params = numParms;
+    _max_params[1] = numParms;
 }
 
-// Params
+// Params2 page
+#ifdef WM_PARAM2
+bool WiFiManager::addParameter2(WiFiManagerParameter *p)
+{
+    return _addParameter(2, p);
+}
 
+WiFiManagerParameter** WiFiManager::getParameters2()
+{
+    return _params[2];
+}
+
+int WiFiManager::getParameters2Count()
+{
+    return _paramsCount[2];
+}
+
+void WiFiManager::allocParms2(int numParms)
+{
+    _max_params[2] = numParms;
+}
+#endif
+
+// WiFi Page
 bool WiFiManager::addWiFiParameter(WiFiManagerParameter *p)
 {
-    // check param id is valid, unless null
-    if(p->getID()) {
-        if(!CheckParmID(p->getID())) return false;
-    }
-
-    // init params if never malloc
-    if(!_wifiparams) {
-        _wifiparams = (WiFiManagerParameter**)malloc(_max_wifi_params * sizeof(WiFiManagerParameter*));
-    }
-
-    // resize the params array by increment of WIFI_MANAGER_MAX_PARAMS
-    if(_wifiparamsCount == _max_wifi_params) {
-
-        _max_wifi_params += WIFI_MANAGER_MAX_PARAMS;
-
-        WiFiManagerParameter** new_params = (WiFiManagerParameter**)realloc(_wifiparams, _max_wifi_params * sizeof(WiFiManagerParameter*));
-
-        if(new_params) {
-            _wifiparams = new_params;
-        } else {
-            return false;
-        }
-    }
-
-    _wifiparams[_wifiparamsCount] = p;
-    _wifiparamsCount++;
-
-    return true;
+    return _addParameter(0, p);
 }
 
 WiFiManagerParameter** WiFiManager::getWiFiParameters()
 {
-    return _wifiparams;
+    return _params[0];
 }
 
 int WiFiManager::getWiFiParametersCount()
 {
-    return _wifiparamsCount;
+    return _paramsCount[0];
 }
 
 void WiFiManager::allocWiFiParms(int numParms)
 {
-    _max_wifi_params = numParms;
+    _max_params[0] = numParms;
 }
 
 // Constructors
@@ -255,16 +265,15 @@ WiFiManager::WiFiManager()
 
 void WiFiManager::WiFiManagerInit()
 {
-    const int8_t defMenu[3] = { WM_MENU_WIFI, WM_MENU_SEP, WM_MENU_UPDATE };
-
-    setMenu(defMenu, 3);
-
-    _max_params = _max_wifi_params = WIFI_MANAGER_MAX_PARAMS;
+    for(int i = 0; i < WM_PARAM_ARRS; i++) {
+        _max_params[i] = WIFI_MANAGER_MAX_PARAMS;
+    }
 
     memset(_ssid, 0, sizeof(_ssid));
     memset(_pass, 0, sizeof(_pass));
     memset(_apName, 0, sizeof(_apName));
     memset(_apPassword, 0, sizeof(_apPassword));
+    _title = S_brand;
 }
 
 // destructor
@@ -273,15 +282,13 @@ WiFiManager::~WiFiManager()
     _end();
 
     // free parameter arrays
-    if(_params) {
-        free(_params);
-        _params = NULL;
+    for(int i = 0; i < WM_PARAM_ARRS; i++) {
+        if(_params[i]) {
+            free(_params[i]);
+            _params[i] = NULL;
+        }
+        _paramsCount[i] = 0;
     }
-    if(_wifiparams) {
-        free(_wifiparams);
-        _wifiparams = NULL;
-    }
-    _paramsCount = _wifiparamsCount = 0;
 
     // remove event
     if(wm_event_id) {
@@ -317,13 +324,15 @@ void WiFiManager::_delay(unsigned int mydel)
 // connect, it simply connects to the given ssid, and falls back to
 // AP-mode in case connecting fails.
 //
-// public; return: bool connected = true if STA connected, false it softAP started
+// public; return: bool = true if STA connected, false it softAP started
 
 bool WiFiManager::autoConnect(const char *ssid, const char *pass, const char *apName, const char *apPassword)
 {
     #ifdef _A10001986_DBG
     Serial.println("AutoConnect");
     #endif
+
+    _begin();
 
     // Store given ssid/pass
 
@@ -336,8 +345,13 @@ bool WiFiManager::autoConnect(const char *ssid, const char *pass, const char *ap
         strncpy(_pass, pass, sizeof(_pass) - 1);
     }
 
+    _wifiOffFlag = false;
+
     // We do never ever use NVS saved data, nor do we save data to NVS
     WiFi.persistent(false);
+
+    // Install WiFi event handler
+    WiFi_installEventHandler();
 
     // Set hostname (if given)
 
@@ -347,31 +361,28 @@ bool WiFiManager::autoConnect(const char *ssid, const char *pass, const char *ap
     // with WiFi.setHostname(...) and restart WiFi from scratch.
 
     if(*_hostname) {
-        if(WiFi.getMode() & WIFI_STA) {
+        if(WiFi.getMode() & (WIFI_STA|WIFI_AP)) {
+            _WiFiEventMask &= ~(WM_EVB_STASTOP|WM_EVB_APSTOP);
             WiFi.mode(WIFI_OFF);
-            unsigned int timeout = millis() + 1200;
-            while((WiFi.getMode() != WIFI_OFF) && (millis() < timeout)) {
-                _delay(50);
-            }
+            waitEvent(WM_EVB_STASTOP|WM_EVB_APSTOP, 1200);
+            //unsigned int timeout = millis() + 1200;
+            //while((WiFi.getMode() != WIFI_OFF) && (millis() < timeout)) {
+            //    _delay(50);
+            //}
         }
         WiFi.setHostname(_hostname);
     }
-
-    _begin();
 
     // Attempt to connect to given network, on fail fallback to AP config portal
 
     // Set STA mode (not strictly required, WiFi.begin will do that as well)
     // This does not actually connect, it just sets (current mode|STA)
-    if(!WiFi.enableSTA(true)) {
+    if(!wifiSTAOn()) {
         #ifdef _A10001986_DBG
         Serial.println("[FATAL] Unable to enable wifi!");
         #endif
         return false;
     }
-
-    // Install WiFi event handler
-    WiFi_installEventHandler();
 
     // Callback: After lowlevelinit
     #if WM_PRECONNECTCB
@@ -426,10 +437,7 @@ bool WiFiManager::autoConnect(const char *ssid, const char *pass, const char *ap
     #endif
 
     // Disable STA if enabled
-    if(WiFi.getMode() & WIFI_STA) {
-        WiFi.enableSTA(false);
-        delay(500);
-    }
+    wifiSTAOff();
 
     // Start softAP and config portal
 
@@ -462,14 +470,10 @@ bool WiFiManager::startAP()
     // AP_STOP, AP_START events, difficult to follow.
     // In order to wait orderly, we do it here first.
 
-    _gotip = false;
     if(!(WiFi.getMode() & WIFI_AP)) {
+        _WiFiEventMask &= ~WM_EVB_APSTART;
         if(WiFi.enableAP(true)) {
-            unsigned long timeoutmillis = millis() + 3000;
-            while(millis() < timeoutmillis) {
-                if(_gotip) break;
-                _delay(100);
-            }
+            waitEvent(WM_EVB_APSTART, 3000);
         } else {
             #ifdef _A10001986_DBG
             Serial.println("Error enabling AP mode");
@@ -498,7 +502,7 @@ bool WiFiManager::startAP()
     // config and restart the AP, and comparing the then current
     // AP config to the desired one.
 
-    _gotip = false;
+    _WiFiEventMask &= ~WM_EVB_APSTART;
 
     // start soft AP; default channel is 1 here and in esp library
     ret = WiFi.softAP(_apName,
@@ -509,11 +513,7 @@ bool WiFiManager::startAP()
 
     // Wait for AP_START event to make sure we can fully use the AP
     if(ret) {
-        unsigned long timeoutmillis = millis() + 1000;
-        while(millis() < timeoutmillis) {
-            if(_gotip) break;
-            _delay(100);
-        }
+        waitEvent(WM_EVB_APSTART, 1000);
     }
 
     #ifdef WM_DODEBUG
@@ -586,9 +586,13 @@ void WiFiManager::setupHTTPServer()
 
     server->on(R_root,       std::bind(&WiFiManager::handleRoot, this));
     server->on(R_wifi,       std::bind(&WiFiManager::handleWifi, this, true));
-    server->on(R_wifisave,   std::bind(&WiFiManager::handleWifiSave, this));
+    server->on(R_wifisave,   HTTP_POST, std::bind(&WiFiManager::handleWifiSave, this));
     server->on(R_param,      std::bind(&WiFiManager::handleParam, this));
-    server->on(R_paramsave,  std::bind(&WiFiManager::handleParamSave, this));
+    server->on(R_paramsave,  HTTP_POST, std::bind(&WiFiManager::handleParamSave, this));
+    #ifdef WM_PARAM2
+    server->on(R_param2,     std::bind(&WiFiManager::handleParam2, this));
+    server->on(R_param2save, HTTP_POST, std::bind(&WiFiManager::handleParam2Save, this));
+    #endif
     server->on(R_update,     std::bind(&WiFiManager::handleUpdate, this));
     server->on(R_updatedone, HTTP_POST, std::bind(&WiFiManager::handleUpdateDone, this), std::bind(&WiFiManager::handleUpdating, this));
 
@@ -654,6 +658,8 @@ bool WiFiManager::startConfigPortal(char const *apName, char const *apPassword, 
         return false;
     }
 
+    _wifiOffFlag = false;
+
     // We never ever use NVS saved data, not do we write to NVS
     WiFi.persistent(false);
 
@@ -683,7 +689,15 @@ bool WiFiManager::startConfigPortal(char const *apName, char const *apPassword, 
 
     if(!*_apName) getDefaultAPName(_apName);
 
-    if(!validApPassword()) return false;
+    if(*_apPassword) {
+        size_t t = strlen(_apPassword);
+        if(t < 8 || t > 63) {
+            return false;
+        }
+    }
+
+    // Install WiFi event handler
+    WiFi_installEventHandler();
 
     // Shutdown sta if not connected, or else this will hang
     // channel scanning, and softap will not respond
@@ -706,20 +720,16 @@ bool WiFiManager::startConfigPortal(char const *apName, char const *apPassword, 
     }
     #endif
 
-    // Disconnect if connected and disable STA if enabled
+    // Disconnect if connected
     if(WiFi.isConnected()) {
         WiFi.disconnect();
-        delay(50);
+        _delay(50);
     }
-    if(WiFi.getMode() & WIFI_STA) {
-        WiFi.enableSTA(false);
-        delay(500);
-    }
+
+    // Disable STA if enabled
+    wifiSTAOff();
 
     configPortalActive = true;
-
-    // Install WiFi event handler
-    WiFi_installEventHandler();
 
     // start access point
     #ifdef _A10001986_V_DBG
@@ -764,6 +774,11 @@ void WiFiManager::process(bool handleWeb)
 {
     if(webPortalActive || configPortalActive) {
         processConfigPortal(handleWeb);
+    } else if(_wifiOffFlag) {
+        if(_WiFiEventMask & WM_EVB_APSTOP) {
+            WiFi.mode(WIFI_OFF);
+            _wifiOffFlag = false;
+        }
     }
 }
 
@@ -825,14 +840,25 @@ bool WiFiManager::shutdownConfigPortal()
     // free wifi scan results
     WiFi.scanDelete();
 
+    #ifdef WM_MDNS
+    MDNS.end();
+    #endif
+
     if(!configPortalActive)
         return false;
 
     dnsServer->stop();
     dnsServer.reset();
 
-    // turn off AP, (true = set mode WIFI_OFF)
-    bool ret = WiFi.softAPdisconnect(true);
+    // Turn off AP (true = set mode WIFI_OFF)
+    // softAPdisconnect(true) causes run-time errors:
+    // E (611610) wifi_netif: esp_wifi_internal_reg_rxcb for if=1 failed with 12289
+    // E (611611) wifi_init_default: esp_wifi_register_if_rWxcb for if=0x3ffb582c failed with 259
+
+    _wifiOffFlag = true;
+    _WiFiEventMask &= ~WM_EVB_APSTOP;
+    bool ret = WiFi.softAPdisconnect(false);
+    // WiFi will be switched off in process() after AP_STOP event
 
     configPortalActive = false;
 
@@ -840,7 +866,6 @@ bool WiFiManager::shutdownConfigPortal()
     Serial.println("configportal closed");
     #endif
 
-    _end();
     return ret;
 }
 
@@ -851,7 +876,7 @@ bool WiFiManager::shutdownConfigPortal()
 uint8_t WiFiManager::connectWifi(const char *ssid, const char *pass)
 {
     #ifdef _A10001986_V_DBG
-    Serial.println("Connecting as wifi client...");
+    Serial.println("ConnectWifi");
     #endif
 
     uint8_t retry = 1;
@@ -873,14 +898,14 @@ uint8_t WiFiManager::connectWifi(const char *ssid, const char *pass)
     while(retry <= _connectRetries && (connRes != WL_CONNECTED)) {
 
         if(_connectRetries > 1) {
-            if(_aggresiveReconn) _delay(1000); // add idle time before recon
+            _delay(1000); // add idle time before new attempt. Need this.
 
             #ifdef _A10001986_DBG
             Serial.printf("Connecting Wifi, attempt %d of %d\n", retry, _connectRetries);
             #endif
         }
 
-        _gotip = false;
+        _WiFiEventMask &= ~WM_EVB_GOTIP;
 
         wifiConnectNew(ssid, pass);
 
@@ -894,11 +919,11 @@ uint8_t WiFiManager::connectWifi(const char *ssid, const char *pass)
     }
 
     if(connRes != WL_SCAN_COMPLETED) {
+        // See if the eventhandler knows more than we here
         _lastconxresult = connRes;
         if(_lastconxresult == WL_CONNECT_FAILED || _lastconxresult == WL_DISCONNECTED) {
             if(_eventlastconxresult != WL_IDLE_STATUS) {
-                _lastconxresult    = _eventlastconxresult;
-                // _eventlastconxresult = WL_IDLE_STATUS;
+                _lastconxresult = _eventlastconxresult;
             }
         }
     }
@@ -916,14 +941,12 @@ uint8_t WiFiManager::connectWifi(const char *ssid, const char *pass)
 
 bool WiFiManager::wifiConnectNew(const char *ssid, const char *pass)
 {
-    bool ret = false;
-
     #ifdef _A10001986_V_DBG
     Serial.printf("Connecting to WiFi network: %s\n", ssid);
     Serial.printf("Using Password: %s\n", pass);
     #endif
 
-    ret = WiFi.begin(ssid, pass, 0, NULL, true);
+    bool ret = WiFi.begin(ssid, pass, 0, NULL, true);
 
     #ifdef _A10001986_DBG
     if(!ret) Serial.println("[ERROR] wifi begin failed");
@@ -938,15 +961,11 @@ bool WiFiManager::wifiConnectNew(const char *ssid, const char *pass)
 
 bool WiFiManager::setStaticConfig()
 {
-    #ifdef _A10001986_DBG
-    Serial.printf("STA static IP: %s\n", _sta_static_ip.toString().c_str());
-    #endif
-
     if(_sta_static_ip) {
         bool ret;
 
-        #ifdef _A10001986_V_DBG
-        Serial.println("Custom static IP/GW/Subnet/DNS");
+        #ifdef _A10001986_DBG
+        Serial.printf("STA static IP: %s\n", _sta_static_ip.toString().c_str());
         #endif
 
         if(_sta_static_dns) {
@@ -957,10 +976,18 @@ bool WiFiManager::setStaticConfig()
 
         #ifdef _A10001986_DBG
         if(!ret) Serial.println("[ERROR] wifi config failed");
+        #ifdef _A10001986_V_DBG
         else Serial.printf("STA IP set: %s\n", WiFi.localIP().toString().c_str());
+        #endif
         #endif
 
         return ret;
+
+    } else {
+
+        #ifdef _A10001986_DBG
+        Serial.println("No static IP configured");
+        #endif
     }
 
     return false;
@@ -992,25 +1019,22 @@ uint8_t WiFiManager::waitForConnectResult(bool haveStatic, uint32_t timeout)
 
         status = WiFi.waitForConnectResult();
 
-        if(status == WL_CONNECTED) {
-            if(!haveStatic) {
-                timeoutmillis = millis() + 5000;
-                while(millis() < timeoutmillis) {
-                    if(_gotip) break;
-                    _delay(100);
-                }
-            }
-        }
+        // WL_CONNECTED means "connected to AP, IP address obtained"
+        // No point in waiting for the event
+        //if(status == WL_CONNECTED) {
+        //    if(!haveStatic) {
+        //        waitEvent(WM_EVB_GOTIP, 5000);
+        //    }
+        //}
 
         return status;
     }
-
-    timeoutmillis = millis() + timeout;
 
     #ifdef _A10001986_V_DBG
     Serial.printf("%s ms timeout, waiting for connect...\n", timeout);
     #endif
 
+    timeoutmillis = millis() + timeout;
     status = WiFi.status();
 
     while(millis() < timeoutmillis) {
@@ -1023,19 +1047,17 @@ uint8_t WiFiManager::waitForConnectResult(bool haveStatic, uint32_t timeout)
 
         } else if(status == WL_CONNECTED) {
 
-            if(!haveStatic) {
-                timeoutmillis = millis() + 5000;
-                while(millis() < timeoutmillis) {
-                    if(_gotip) break;
-                    _delay(100);
-                }
-            }
+            // WL_CONNECTED means "connected to AP, IP address obtained"
+            // No point in waiting for the event
+            //if(!haveStatic) {
+            //    waitEvent(WM_EVB_GOTIP, 5000);
+            //}
 
             return status;
         }
 
         #ifdef _A10001986_DBG
-        Serial.println(".");
+        Serial.printf("%d.\n", status);  // 0 while connecting
         #endif
 
         _delay(100);
@@ -1044,6 +1066,69 @@ uint8_t WiFiManager::waitForConnectResult(bool haveStatic, uint32_t timeout)
     return status;
 }
 
+bool WiFiManager::wifiSTAOn()
+{
+    if(WiFi.getMode() & WIFI_STA)
+        return true;
+
+    _WiFiEventMask &= ~WM_EVB_STASTART;
+
+    if(!WiFi.enableSTA(true))
+        return false;
+
+    waitEvent(WM_EVB_STASTART, 500);
+
+    return true;
+}
+
+bool WiFiManager::wifiSTAOff()
+{
+    if(!(WiFi.getMode() & WIFI_STA))
+        return true;
+
+    _WiFiEventMask &= ~WM_EVB_STASTOP;
+
+    if(!WiFi.enableSTA(false))
+        return false;
+
+    waitEvent(WM_EVB_STASTOP, 500);
+
+    return true;
+}
+
+bool WiFiManager::waitEvent(uint16_t mask, unsigned long timeout)
+{
+    unsigned long timeoutmillis = millis() + timeout;
+
+    while(millis() < timeoutmillis) {
+        if(_WiFiEventMask & mask) {
+            #ifdef _A10001986_DBG
+            Serial.printf("Event 0x%x occured (evmask 0x%x)\n", mask, _WiFiEventMask);
+            #endif
+            return true;
+        }
+        _delay(100);
+    }
+
+    #ifdef _A10001986_DBG
+    Serial.printf("Waiting for event 0x%x timed-out\n", mask);
+    #endif
+
+    return false;
+}
+
+void WiFiManager::disableWiFi()
+{
+    if(WiFi.getMode() == WIFI_OFF)
+        return;
+
+    if(WiFi.getMode() & WIFI_AP) {
+        shutdownConfigPortal();
+    } else if(WiFi.getMode() & WIFI_STA) {
+        stopWebPortal();
+        WiFi.mode(WIFI_OFF);
+    }
+}
 
 /****************************************************************************
  *
@@ -1226,17 +1311,18 @@ unsigned int WiFiManager::getParamOutSize(WiFiManagerParameter** params,
 
             if(params[i]->getID()) {
 
-                switch (params[i]->getLabelPlacement()) {
+                switch(params[i]->getFlags() & WFM_LABEL_MASK) {
                 case WFM_LABEL_BEFORE:
+                    if(!(params[i]->getFlags() & WFM_NO_BR)) mysize += STRLEN(HTTP_BR);
                 case WFM_LABEL_AFTER:
                     mysize += STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM);
                     mysize += STRLEN(HTTP_BR);
-                    mysize -= (7*3);  // tokens
+                    mysize -= (8*3);  // tokens
                     break;
                 default:
                     // WFM_NO_LABEL
                     mysize += STRLEN(HTTP_FORM_PARAM);
-                    mysize -= (5*3);  // tokens
+                    mysize -= (6*3);  // tokens
                     break;
                 }
 
@@ -1245,15 +1331,18 @@ unsigned int WiFiManager::getParamOutSize(WiFiManagerParameter** params,
                 mysize += (strlen(params[i]->getID()) * 3);    // 2x{i}, 1x{n}
                 mysize += strlen(params[i]->getLabel());
                 {
-                  int vl = params[i]->getValueLength();
-                  if     (vl <   10) mysize += 1;
-                  else if(vl <  100) mysize += 2;
-                  else if(vl < 1000) mysize += 3;
-                  else               mysize += 5;
+                    int vl = params[i]->getValueLength();
+                    if     (vl <   10) mysize += 1;
+                    else if(vl <  100) mysize += 2;
+                    else if(vl < 1000) mysize += 3;
+                    else               mysize += 5;
                 }
                 mysize += strlen(params[i]->getValue());
                 if(params[i]->getCustomHTML()) {
                     mysize += strlen(params[i]->getCustomHTML());
+                }
+                if(params[i]->getFlags() & WFM_IS_CHKBOX) {
+                    mysize += STRLEN(HTML_CHKBOX);
                 }
 
             } else if(params[i]->_customHTMLGenerator) {
@@ -1319,11 +1408,12 @@ void WiFiManager::getParamOut(String &page, WiFiManagerParameter** params,
 
             if(params[i]->getID()) {
 
-                switch (params[i]->getLabelPlacement()) {
+                switch (params[i]->getFlags() & WFM_LABEL_MASK) {
                 case WFM_LABEL_BEFORE:
                     pitem = FPSTR(HTTP_FORM_LABEL);
-                    pitem += FPSTR(HTTP_BR);
+                    if(!(params[i]->getFlags() & WFM_NO_BR)) pitem += FPSTR(HTTP_BR);
                     pitem += FPSTR(HTTP_FORM_PARAM);
+                    pitem += FPSTR(HTTP_BR);
                     break;
                 case WFM_LABEL_AFTER:
                     pitem = FPSTR(HTTP_FORM_PARAM);
@@ -1346,6 +1436,11 @@ void WiFiManager::getParamOut(String &page, WiFiManagerParameter** params,
                     pitem.replace(FPSTR(T_c), params[i]->getCustomHTML());
                 } else {
                     pitem.replace(FPSTR(T_c), "");
+                }
+                if(params[i]->getFlags() & WFM_IS_CHKBOX) {
+                    pitem.replace(FPSTR(T_f), HTML_CHKBOX);
+                } else {
+                    pitem.replace(FPSTR(T_f), "");
                 }
 
             } else if(params[i]->_customHTMLGenerator) {
@@ -1397,17 +1492,23 @@ void WiFiManager::doParamSave(WiFiManagerParameter** params, int paramsCount)
                 Serial.printf("doSaveParms: skipped parm %d\n", i);
                 #endif
                 continue;
-            } else {
-                #ifdef _A10001986_DBG
-                Serial.printf("doSaveParms: doing parm %s\n", params[i]->getID());
-                #endif
             }
 
             // read parameter from server
             String value = server->arg(params[i]->getID());
 
-            // store it in params array; +1 for null termination
-            value.toCharArray(params[i]->_value, params[i]->_length + 1);
+            if(value == "" && (params[i]->getFlags() & WFM_IS_CHKBOX)) {
+                strcpy(params[i]->_value, "0");
+                #ifdef _A10001986_DBG
+                Serial.printf("doSaveParms: checkbox '%s' set to 0\n", params[i]->getID());
+                #endif
+            } else {
+                // store it in params array; +1 for null termination
+                value.toCharArray(params[i]->_value, params[i]->_length + 1);
+                #ifdef _A10001986_DBG
+                Serial.printf("doSaveParms: '%s' set to '%s'\n", params[i]->getID(), params[i]->_value);
+                #endif
+            }
 
             if(!(i % 30) && _gpcallback) {
                 _gpcallback(WM_LP_NONE);
@@ -1426,6 +1527,15 @@ void WiFiManager::HTTPSend(const String& content)
 
     #ifdef _A10001986_DBG
     Serial.printf("HTTPSend: Heap before %d\n", ESP.getFreeHeap());
+    #endif
+
+    #if 0
+    if(server->client()) {
+        #ifdef _A10001986_DBG
+        Serial.printf("TCP_NODELAY is %d\n", server->client().getNoDelay());
+        #endif
+        server->client().setNoDelay(true);
+    }
     #endif
 
     server->send(200, HTTP_HEAD_CT, content);
@@ -1456,13 +1566,19 @@ int WiFiManager::getMenuOutLength()
         int menuId = 0;
         int8_t t;
         while((t = _menuIdArr[menuId++]) != WM_MENU_END) {
-            if(t == WM_MENU_PARAM && !_paramsCount) continue;
+            if(t == WM_MENU_PARAM && !_paramsCount[1]) continue;
+            #ifdef WM_PARAM2
+            if(t == WM_MENU_PARAM2 && !_paramsCount[2]) continue;
+            #endif
             if(t == WM_MENU_CUSTOM && _customMenuHTML) {
                 bufSize += strlen(_customMenuHTML);
                 continue;
             }
             bufSize += strlen(HTTP_PORTAL_MENU[t]);
         }
+    } else {
+        bufSize += strlen(HTTP_PORTAL_MENU[WM_MENU_WIFI]);
+        bufSize += strlen(HTTP_PORTAL_MENU[WM_MENU_UPDATE]);
     }
 
     if(_menuoutlencallback) {
@@ -1479,13 +1595,19 @@ void WiFiManager::getMenuOut(String& page)
         int menuId = 0;
         int8_t t;
         while((t = _menuIdArr[menuId++]) != WM_MENU_END) {
-            if(t == WM_MENU_PARAM && !_paramsCount) continue;
+            if(t == WM_MENU_PARAM && !_paramsCount[1]) continue;
+            #ifdef WM_PARAM2
+            if(t == WM_MENU_PARAM2 && !_paramsCount[2]) continue;
+            #endif
             if(t == WM_MENU_CUSTOM && _customMenuHTML) {
                 page += _customMenuHTML;
                 continue;
             }
             page += HTTP_PORTAL_MENU[t];
         }
+    } else {
+        page += HTTP_PORTAL_MENU[WM_MENU_WIFI];
+        page += HTTP_PORTAL_MENU[WM_MENU_UPDATE];
     }
 
     if(_menuoutcallback) {
@@ -1601,18 +1723,18 @@ int16_t WiFiManager::WiFi_waitForScan()
         Serial.println(".");
         #endif
 
-        _delay(250);
+        _delay(100);
     }
 
     // Sometimes above returns an error (timeout?)
     // so we now wait for the scanComplete event
     now = millis();
     while(millis() - now < 5000) {
-        if(_numNetworksAsync != WM_WIFI_SCAN_BUSY) {
+        if(_WiFiEventMask & WM_EVB_SCAN_DONE) {
             asyncdone = true;
             break;
         }
-        _delay(500);
+        _delay(100);
     }
 
     // If first loop fails, use event-callback result (if not error)
@@ -1648,7 +1770,7 @@ int16_t WiFiManager::WiFi_scanNetworks(bool force, bool async)
 
         _numNetworks = 0;
 
-        if(async && _asyncScan) {
+        if(async) {
 
             #ifdef _A10001986_V_DBG
             Serial.println("WiFi Scan ASYNC started");
@@ -1656,6 +1778,7 @@ int16_t WiFiManager::WiFi_scanNetworks(bool force, bool async)
 
             // Reset marker for event callback
             _numNetworksAsync = WM_WIFI_SCAN_BUSY;
+            _WiFiEventMask &= ~WM_EVB_SCAN_DONE;
 
             // Start scan
             return WiFi.scanNetworks(true);
@@ -1772,11 +1895,7 @@ unsigned int WiFiManager::getScanItemsLen(int n, bool scanErr, int *indices, uns
 
                 String SSID = WiFi.SSID(indices[i]);
                 if(SSID == "") {
-                    if(showall) {
-                        SSID = S_hidden;
-                    } else {
-                        continue;
-                    }
+                    continue;
                 } else if(!checkSSID(SSID)) {
                     if(showall) {
                         SSID = S_nonprintable;
@@ -1852,12 +1971,7 @@ void WiFiManager::getScanItemsOut(String& page, int n, bool scanErr, int *indice
                 String func = "c";
 
                 if(SSID == "") {
-                    if(showall) {
-                        SSID = S_hidden;
-                        func = "d";
-                    } else {
-                        continue;
-                    }
+                    continue;
                 } else if(!checkSSID(SSID)) {
                     if(showall) {
                         SSID = S_nonprintable;
@@ -1901,7 +2015,7 @@ void WiFiManager::getIpForm(String& page, const char *id, const char *title, IPA
     // <label for='{i}'>{t}</label>
     // <input id='{i}' name='{n}' maxlength='{l}' value='{v}' {c}>
 
-    unsigned int s = STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (7*3);
+    unsigned int s = STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3);
     s += (3*strlen(id)) + strlen(title);
     s += 2 + 15;
     if(placeholder) s += strlen(placeholder);
@@ -1910,13 +2024,16 @@ void WiFiManager::getIpForm(String& page, const char *id, const char *title, IPA
     item.reserve(s + 8);
 
     item = FPSTR(HTTP_FORM_LABEL);
+    item += FPSTR(HTTP_BR);
     item += FPSTR(HTTP_FORM_PARAM);
+    item += FPSTR(HTTP_BR);
     item.replace(FPSTR(T_i), id);
     item.replace(FPSTR(T_n), id);
     item.replace(FPSTR(T_t), title);
     item.replace(FPSTR(T_l), F("15"));
     item.replace(FPSTR(T_v), value ? value.toString() : "");
     item.replace(FPSTR(T_c), placeholder ? placeholder : "");
+    item.replace(FPSTR(T_f), "");
 
     page += item;
 }
@@ -1928,20 +2045,20 @@ unsigned int WiFiManager::getStaticLen()
     bool showDns = (_staShowDns || _sta_static_dns);
 
     // "<label for='{i}'>{t}</label>"
-    // "<input id='{i}' name='{n}' maxlength='{l}' value='{v}' {c}>\n"
+    // "<input id='{i}' name='{n}' maxlength='{l}' value='{v}' {c} {f}>\n"
 
     if(showSta || showDns) {
         mySize += STRLEN(HTTP_FORM_SECT_HEAD);
     }
     if(showSta) {
-        mySize += (3 * (STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (7*3)));
+        mySize += (3 * (STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3) + (2*STRLEN(HTTP_BR))));
         mySize += (3*STRLEN(S_ip)) + STRLEN(S_staticip) + 2 + 15;
         mySize += STRLEN(HTTP_FORM_WIFI_PH);
         mySize += (3*STRLEN(S_sn)) + STRLEN(S_subnet) + 2 + 15;
         mySize += (3*STRLEN(S_gw)) + STRLEN(S_staticgw) + 2 + 15;
     }
     if(showDns) {
-        mySize += STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (7*3);
+        mySize += STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3) + (2*STRLEN(HTTP_BR));
         mySize += (3*STRLEN(S_dns)) + STRLEN(S_staticdns) + 2 + 15;
     }
     if(showSta || showDns) {
@@ -2060,7 +2177,7 @@ void WiFiManager::buildWifiPage(String& page, bool scan)
     }
     bufSize += STRLEN(HTTP_FORM_WIFI_END);
     bufSize += getStaticLen();
-    bufSize += getParamOutSize(_wifiparams, _wifiparamsCount, maxItemSize);
+    bufSize += getParamOutSize(_params[0], _paramsCount[0], maxItemSize);
     bufSize += STRLEN(HTTP_FORM_END);
     bufSize += STRLEN(HTTP_SCAN_LINK);
     if(haveShowAll) {
@@ -2111,7 +2228,7 @@ void WiFiManager::buildWifiPage(String& page, bool scan)
     }
     page += FPSTR(HTTP_FORM_WIFI_END);
     getStaticOut(page);
-    getParamOut(page, _wifiparams, _wifiparamsCount, maxItemSize);
+    getParamOut(page, _params[0], _paramsCount[0], maxItemSize);
     page += FPSTR(HTTP_FORM_END);
     page += FPSTR(HTTP_SCAN_LINK);
     if(haveShowAll) {
@@ -2233,7 +2350,7 @@ void WiFiManager::handleWifiSave()
     }
 
     // Copy server parms to wifi params array
-    doParamSave(_wifiparams, _wifiparamsCount);
+    doParamSave(_params[0], _paramsCount[0]);
 
     // callback for saving
     if(_savewificallback) {
@@ -2287,17 +2404,17 @@ void WiFiManager::handleWifiSave()
 /*--------------------------------------------------------------------------*/
 
 // Calc size of params ("Settings") page
-int WiFiManager::calcParmPageSize(unsigned int& maxItemSize)
+int WiFiManager::calcParmPageSize(int aidx, unsigned int& maxItemSize, const char *title, const char *action)
 {
-    int mySize = getHTTPHeadLength(S_titleparam);
+    int mySize = getHTTPHeadLength(title);
 
     #ifdef _A10001986_DBG
     Serial.printf("calcParmSize: head %d\n", mySize);
     #endif
 
-    mySize += (STRLEN(HTTP_FORM_START) - 3 + STRLEN(A_paramsave));
+    mySize += (STRLEN(HTTP_FORM_START) - 3 + strlen(action));
 
-    mySize += getParamOutSize(_params, _paramsCount, maxItemSize);
+    mySize += getParamOutSize(_params[aidx], _paramsCount[aidx], maxItemSize);
 
     mySize += STRLEN(HTTP_FORM_END);
     mySize += STRLEN(HTTP_END);
@@ -2312,7 +2429,7 @@ int WiFiManager::calcParmPageSize(unsigned int& maxItemSize)
 /*
  * HTTPD CALLBACK Settings page handler
  */
-void WiFiManager::handleParam()
+void WiFiManager::_handleParam(int aidx, const char *title, const char *action)
 {
     unsigned int maxItemSize = 0;
 
@@ -2321,19 +2438,19 @@ void WiFiManager::handleParam()
     #endif
 
     String page;
-    page.reserve(calcParmPageSize(maxItemSize) + 16);
+    page.reserve(calcParmPageSize(aidx, maxItemSize, title, action) + 16);
 
-    getHTTPHeadNew(page, S_titleparam);
+    getHTTPHeadNew(page, title);
 
     {
         String pitem;
-        pitem.reserve(STRLEN(HTTP_FORM_START) - 3 + STRLEN(A_paramsave) + 2);
+        pitem.reserve(STRLEN(HTTP_FORM_START) - 3 + strlen(action) + 2);
         pitem = FPSTR(HTTP_FORM_START);
-        pitem.replace(FPSTR(T_v), FPSTR(A_paramsave));
+        pitem.replace(FPSTR(T_v), action);
         page += pitem;
     }
 
-    getParamOut(page, _params, _paramsCount, maxItemSize);
+    getParamOut(page, _params[aidx], _paramsCount[aidx], maxItemSize);
 
     page += FPSTR(HTTP_FORM_END);
     page += FPSTR(HTTP_END);
@@ -2349,33 +2466,47 @@ void WiFiManager::handleParam()
     }
 }
 
+void WiFiManager::handleParam()
+{
+    _handleParam(1, S_titleparam, A_paramsave);
+}
+
+#ifdef WM_PARAM2
+void WiFiManager::handleParam2()
+{
+    _handleParam(2, S_titleparam2, A_param2save);
+}
+#endif
+
 /*
  * HTTPD CALLBACK Settings->SAVE page handler
  */
-void WiFiManager::handleParamSave()
+void WiFiManager::_handleParamSave(int aidx, const char *title)
 {
     unsigned int mySize = 0;
     unsigned int headSize = 0;
 
     #ifdef _A10001986_V_DBG
-    Serial.println("<- HTTP Param save");
+    Serial.printf("<- HTTP Param save %d\n", aidx);
     #endif
 
+    #ifdef WM_PRESAVECB
     if(_presaveparamscallback) {
-        _presaveparamscallback();
+        _presaveparamscallback(aidx);
     }
+    #endif
 
-    doParamSave(_params, _paramsCount);
+    doParamSave(_params[aidx], _paramsCount[aidx]);
 
     if(_saveparamscallback) {
-        _saveparamscallback();
+        _saveparamscallback(aidx);
     }
 
-    mySize = getHTTPHeadLength(S_titleparam, true);
+    mySize = getHTTPHeadLength(title, true);
 
     headSize = STRLEN(HTTP_ROOT_MAIN) - (2*3);
     headSize += strlen(_title);
-    headSize += STRLEN(S_titleparam);
+    headSize += strlen(title);
     mySize += headSize;
 
     mySize += STRLEN(HTTP_PARAMSAVED) + STRLEN(HTTP_PARAMSAVED_END);
@@ -2385,17 +2516,17 @@ void WiFiManager::handleParamSave()
     page.reserve(mySize + 16);
 
     #ifdef _A10001986_DBG
-    Serial.printf("handleParamSave: calced content size %d\n", mySize);
+    Serial.printf("handleParamSave %d: calced content size %d\n", aidx, mySize);
     #endif
 
-    getHTTPHeadNew(page, S_titleparam, true);
+    getHTTPHeadNew(page, title, true);
 
     {
         String str;
         str.reserve(headSize + 8);
         str = FPSTR(HTTP_ROOT_MAIN);
         str.replace(FPSTR(T_t), _title);
-        str.replace(FPSTR(T_v), S_titleparam);
+        str.replace(FPSTR(T_v), title);
         page += str;
     }
 
@@ -2413,6 +2544,19 @@ void WiFiManager::handleParamSave()
         _gpcallback(WM_LP_POSTHTTPSEND);
     }
 }
+
+void WiFiManager::handleParamSave()
+{
+    _handleParamSave(1, S_titleparam);
+}
+
+#ifdef WM_PARAM2
+void WiFiManager::handleParam2Save()
+{
+    _handleParamSave(2, S_titleparam2);
+}
+#endif
+
 
 /*--------------------------------------------------------------------------*/
 /********************************* UPDATE ***********************************/
@@ -2794,17 +2938,19 @@ void WiFiManager::setPreSaveWiFiCallback(void(*func)())
 }
 
 // setSaveParamsCallback(): Set a save params callback on params page
-void WiFiManager::setSaveParamsCallback(void(*func)())
+void WiFiManager::setSaveParamsCallback(void(*func)(int))
 {
     _saveparamscallback = func;
 }
 
 // setPreSaveParamsCallback(): Set a pre save params callback on params
 // save prior to anything else
-void WiFiManager::setPreSaveParamsCallback(void(*func)())
+#ifdef WM_PRESAVECB
+void WiFiManager::setPreSaveParamsCallback(void(*func)(int))
 {
     _presaveparamscallback = func;
 }
+#endif
 
 // setxxxOtaUpdateCallback(): Set a callback to fire before OTA update
 // or after, respectively.
@@ -2882,8 +3028,7 @@ void WiFiManager::setShowDnsFields(bool doShow)
 // setTitle(): Set page title
 void WiFiManager::setTitle(const char *title)
 {
-    memset(_title, 0, sizeof(_title));
-    strncpy(_title, title, sizeof(_title) - 1);
+    _title = title;
 }
 
 // showUploadContainer(): Toggle displaying the sound-pack upload fields
@@ -2902,7 +3047,8 @@ void WiFiManager::showUploadContainer(bool enable, const char *contName, bool sh
 //       WiFiManager.setMenu(menu, size);
 void WiFiManager::setMenu(const int8_t *menu, uint8_t size, bool doCopy)
 {
-    if(_menuIdArr) free((void *)_menuIdArr);
+    if(_menuIdArr && !_menuArrConst)
+        free((void *)_menuIdArr);
 
     _menuIdArr = NULL;
 
@@ -2910,9 +3056,11 @@ void WiFiManager::setMenu(const int8_t *menu, uint8_t size, bool doCopy)
 
     if(!doCopy) {
         _menuIdArr = (int8_t *)menu;
+        _menuArrConst = true;
         return;
     }
 
+    _menuArrConst = false;
     _menuIdArr = (int8_t *)malloc(size + 1);
     memset(_menuIdArr, WM_MENU_END, size + 1);
 
@@ -2932,11 +3080,9 @@ void WiFiManager::setCarMode(bool enable)
 // NETWORK-RELATED
 
 // setHostname(): Set the hostname (dhcp client id)
-bool WiFiManager::setHostname(const char * hostname)
+void WiFiManager::setHostname(const char * hostname)
 {
-    memset(_hostname, 0, sizeof(_hostname));
-    strncpy(_hostname, hostname, sizeof(_hostname) - 1);
-    return true;
+    _hostname = hostname;
 }
 
 // setWiFiAPChannel(): Set the softAP channel
@@ -3233,19 +3379,6 @@ void WiFiManager::reboot()
     ESP.restart();
 }
 
-bool WiFiManager::validApPassword()
-{
-    // check that ap password has valid length
-    if(*_apPassword) {
-        size_t t = strlen(_apPassword);
-        if(t < 8 || t > 63) {
-            *_apPassword = 0;
-            return false;
-        }
-    }
-    return true;
-}
-
 // htmlEntities(): Encode for HTML, but do not garble UTF8 characters
 String WiFiManager::htmlEntities(String& str, bool forprint)
 {
@@ -3401,19 +3534,36 @@ void WiFiManager::WiFiEvent(WiFiEvent_t event, arduino_event_info_t info)
         // Unless: Wrong or missing password. Yes, this
         // is also reported through DISCONNECTED.
 
+        _WiFiEventMask |= WM_EVB_DISCONNECTED;
         _eventlastconxresult = WiFi.status();
 
         //WiFi.reconnect();   // No
 
-    } else if(event == ARDUINO_EVENT_WIFI_SCAN_DONE && _asyncScan) {
+    }
 
+    if(event == ARDUINO_EVENT_WIFI_SCAN_DONE) {
+
+        _WiFiEventMask |= WM_EVB_SCAN_DONE;
         WiFi_scanComplete(WiFi.scanComplete());
 
     } else {
 
-        if(event == ARDUINO_EVENT_WIFI_STA_GOT_IP ||
-           event == ARDUINO_EVENT_WIFI_AP_START) {
-            _gotip = true;
+        switch(event) {
+        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+            _WiFiEventMask |= WM_EVB_GOTIP;
+            break;
+        case ARDUINO_EVENT_WIFI_AP_START:
+            _WiFiEventMask |= WM_EVB_APSTART;
+            break;
+        case ARDUINO_EVENT_WIFI_AP_STOP:
+            _WiFiEventMask |= WM_EVB_APSTOP;
+            break;
+        case ARDUINO_EVENT_WIFI_STA_START:
+            _WiFiEventMask |= WM_EVB_STASTART;
+            break;
+        case ARDUINO_EVENT_WIFI_STA_STOP:
+            _WiFiEventMask |= WM_EVB_STASTOP;
+            break;
         }
 
         #ifdef _A10001986_DBG

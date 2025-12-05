@@ -60,8 +60,6 @@
 
 #include "tc_global.h"
 
-#ifdef TC_HAVESPEEDO
-
 #include <Arduino.h>
 #include <math.h>
 #include "speeddisplay.h"
@@ -303,8 +301,15 @@ static const uint16_t font144segGrove[38] = {
     S14GR4_ML|S14GR4_MR
 };
 
+enum speedoTypes : uint8_t {
+    SPT_NONE = 0,
+    SPT_I2C_14S,
+    SPT_I2C_7S,
+    SPT_BTTFN
+};
+
 static const struct dispConf {
-    bool     is7seg;         //   7- or 14-segment-display?
+    uint8_t  speedoType;     //   i2c-7, i2c-14, bttfn, ...
     uint8_t  speed_pos10;    //   Speed's 10s position in 16bit buffer
     uint8_t  speed_pos01;    //   Speed's 1s position in 16bit buffer
     uint8_t  dig10_shift;    //   Shift 10s to align in buffer
@@ -318,22 +323,23 @@ static const struct dispConf {
     uint8_t  bufShftArr[4];  //   Shift-value for each digit from left to right
     const uint16_t *fontSeg; //   Pointer to font
 } displays[SP_NUM_TYPES] = {
-  { true,  0, 1, 0, 8, 1, 8, 255,      0, 2, { 0, 1 },       { 0, 8 },       font7segGeneric },  // CircuitSetup Speedo+GPS add-on
-  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right) (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)  (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
-  { true,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)  (ADA-1270/1271;1269)
-  { true,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)   (ADA-1270/1271;1269)
-  { false, 2, 3, 0, 0, 3, 0, 255,      0, 4, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right) (ADA-1911/1910;1912/2157/2158/2160)
-  { false, 0, 1, 0, 0, 1, 0, 255,      0, 4, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)  (ADA-1911/1910;1912/2157/2158/2160)
-  { false, 2, 1, 0, 0, 1, 0, 255,      0, 2, { 2, 1 },       { 0, 0, 0, 0 }, font14segGrove },   // SP_GROVE_2DIG14
-  { false, 3, 4, 0, 0, 4, 0,   5, 0x2080, 4, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
-  { false, 1, 2, 0, 0, 2, 0,   5, 0x2080, 4, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
-  { false, 0, 1, 0, 0, 1, 0, 255,      0, 2, { 0, 1 },       { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L(ADA-1911), but left tube only (TW wall clock)
-  { true,  0, 1, 0, 0, 1, 0, 255,      0, 2, { 0, 1 },       { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L(ADA-878), but left tube only (TW speedo replica) - needs rewiring
+  { SPT_I2C_7S,  0, 1, 0, 8, 1, 8, 255,      0, 2, { 0, 1 },       { 0, 8 },       font7segGeneric },  // CircuitSetup Speedo+GPS add-on
+  { SPT_I2C_7S,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right) (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
+  { SPT_I2C_7S,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)  (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
+  { SPT_I2C_7S,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)  (ADA-1270/1271;1269)
+  { SPT_I2C_7S,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)   (ADA-1270/1271;1269)
+  { SPT_I2C_14S, 2, 3, 0, 0, 3, 0, 255,      0, 4, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right) (ADA-1911/1910;1912/2157/2158/2160)
+  { SPT_I2C_14S, 0, 1, 0, 0, 1, 0, 255,      0, 4, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)  (ADA-1911/1910;1912/2157/2158/2160)
+  { SPT_I2C_14S, 2, 1, 0, 0, 1, 0, 255,      0, 2, { 2, 1 },       { 0, 0, 0, 0 }, font14segGrove },   // SP_GROVE_2DIG14
+  { SPT_I2C_14S, 3, 4, 0, 0, 4, 0,   5, 0x2080, 4, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
+  { SPT_I2C_14S, 1, 2, 0, 0, 2, 0,   5, 0x2080, 4, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
+  { SPT_I2C_14S, 0, 1, 0, 0, 1, 0, 255,      0, 2, { 0, 1 },       { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L(ADA-1911), but left tube only (TW wall clock)
+  { SPT_I2C_7S,  0, 1, 0, 0, 1, 0, 255,      0, 2, { 0, 1 },       { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L(ADA-878), but left tube only (TW speedo replica) - needs rewiring
+  { SP_BTTFN,    0, 0, 0, 0, 0, 0,   0,      0, 0, { 0 },          { 0, 0, 0, 0 }, NULL            },  // BTTFN
 // .... for testing only:
-//{ true,  7, 7, 0, 8, 7, 8, 255,      0, 2, { 7, 7 },       { 0, 8 },       font7segGeneric },  // SP_TCD_TEST7
-//{ false, 1, 2, 0, 0, 2, 0, 255,      0, 3, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }, // SP_TCD_TEST14 right
-//{ false, 0, 1, 0, 0, 1, 0, 255,      0, 3, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }  // SP_TCD_TEST14 left
+//{ SPT_I2C_7S,  7, 7, 0, 8, 7, 8, 255,      0, 2, { 7, 7 },       { 0, 8 },       font7segGeneric },  // SP_TCD_TEST7
+//{ SPT_I2C_14S, 1, 2, 0, 0, 2, 0, 255,      0, 3, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }, // SP_TCD_TEST14 right
+//{ SPT_I2C_14S, 0, 1, 0, 0, 1, 0, 255,      0, 3, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }  // SP_TCD_TEST14 left
 };
 
 // Grove 4-digit special handling
@@ -353,51 +359,115 @@ speedDisplay::speedDisplay(uint8_t address)
 // Start the display
 bool speedDisplay::begin(int dispType)
 {
-    if(dispType < SP_MIN_TYPE || dispType >= SP_NUM_TYPES) {
+    if(dispType < 0 || dispType >= SP_NUM_TYPES) {
         #ifdef TC_DBG
         Serial.printf("Bad speedo display type: %d\n", dispType);
         #endif
-        dispType = SP_MIN_TYPE;
+        dispType = 0;
     }
 
-    // Check for speedo on i2c bus
-    Wire.beginTransmission(_address);
-    if(Wire.endTransmission(true))
-        return false;
-
     _dispType = dispType;
-    _is7seg = displays[dispType].is7seg;
-    _speed_pos10 = displays[dispType].speed_pos10;
-    _speed_pos01 = displays[dispType].speed_pos01;
-    _dig10_shift = displays[dispType].dig10_shift;
-    _dig01_shift = displays[dispType].dig01_shift;
-    _dot_pos01 = displays[dispType].dot_pos01;
-    _dot01_shift = displays[dispType].dot01_shift;
-    _colon_pos = displays[dispType].colon_pos;
-    _colon_bm = displays[dispType].colon_bit;
-    _num_digs = displays[dispType].num_digs;
-    _bufPosArr = displays[dispType].bufPosArr;
-    _bufShftArr = displays[dispType].bufShftArr;
+    _speedoType = displays[dispType].speedoType;
+
+    // [Add detection of secondary speedo here]
+    // if(secondary found) _haveSec = true;
+
+    #ifdef EXPS
+    if(1) {
+        pinMode(EXPS_PIN, OUTPUT);
+        ledcSetup(0, 50, 16);
+        ledcAttachPin(EXPS_PIN, 0);
+        pinMode(EXPT_PIN, OUTPUT);
+        ledcSetup(1, 50, 16);
+        ledcAttachPin(EXPT_PIN, 1);
+        _secOff = true;
+        setExSpeed(-1);
+        _haveSec = true;
+    }
+    #endif
+
+    switch(_speedoType) {
+
+    case SPT_I2C_7S:
+    case SPT_I2C_14S:
+        // Check for speedo on i2c bus
+        Wire.beginTransmission(_address);
+        if(Wire.endTransmission(true)) {
+            _speedoType = SPT_NONE;
+            return false; //_haveSec;
+        }
+
+        _i2c = true;
+        break;
+
+    case SPT_BTTFN:
+        _i2c = false;
+        break;
+    }
+
+    if(_i2c) {
+        _is7seg = (_speedoType == SPT_I2C_7S);
+        _speed_pos10 = displays[dispType].speed_pos10;
+        _speed_pos01 = displays[dispType].speed_pos01;
+        _dig10_shift = displays[dispType].dig10_shift;
+        _dig01_shift = displays[dispType].dig01_shift;
+        _dot_pos01 = displays[dispType].dot_pos01;
+        _dot01_shift = displays[dispType].dot01_shift;
+        _colon_pos = displays[dispType].colon_pos;
+        _colon_bm = displays[dispType].colon_bit;
+        _num_digs = displays[dispType].num_digs;
+        _bufPosArr = displays[dispType].bufPosArr;
+        _bufShftArr = displays[dispType].bufShftArr;
+        
+        _fontXSeg = displays[dispType].fontSeg;
     
-    _fontXSeg = displays[dispType].fontSeg;
-
-    directCmd(0x20 | 1); // turn on oscillator
-
-    clearBuf();          // clear buffer
-    setBrightness(15);   // setup initial brightness
-    clearDisplay();      // clear display RAM
-    on();                // turn it on
-
-    thirdDig = (_dispType == SP_CIRCSETUP);
+        directCmd(0x20 | 1); // turn on oscillator
+    
+        clearBuf();          // clear buffer
+        setBrightness(15);   // setup initial brightness
+        clearDisplay();      // clear display RAM
+        on();                // turn it on
+    
+        thirdDig = (_dispType == SP_CIRCSETUP);
+    }
 
     return true;
 }
+
+bool speedDisplay::haveSpeedoDisplay()
+{
+    #ifdef EXPS
+    return _i2c || _haveSec;
+    #else
+    return _i2c;
+    #endif
+}
+
+#ifdef TC_HAVETEMP
+bool speedDisplay::supportsTemperature()
+{
+    if(_i2c)
+        return true;
+        
+    // BTTFN and secondary don't support temperature
+
+    return false;
+}
+#endif
 
 // Turn on the display
 void speedDisplay::on()
 {
     if(_onCache > 0) return;
-    directCmd(0x80 | 1);
+    if(_i2c) {
+        directCmd(0x80 | 1);
+    }
+    #ifdef EXPS
+    if(_haveSec) {
+        _secOff = false;
+        setExSpeed(_secSpeed);
+    }
+    #endif
     _onCache = 1;
     _briCache = 0xfe;
 }
@@ -406,7 +476,15 @@ void speedDisplay::on()
 void speedDisplay::off()
 {
     if(!_onCache) return;
-    directCmd(0x80);
+    if(_i2c) {
+        directCmd(0x80);
+    }
+    #ifdef EXPS
+    if(_haveSec) {
+        _secOff = true;
+        setExSpeed(-1);
+    }
+    #endif
     _onCache = 0;
 }
 
@@ -414,27 +492,19 @@ void speedDisplay::off()
 #if 0
 void speedDisplay::lampTest()
 {
-    Wire.beginTransmission(_address);
-    Wire.write(0x00);  // start address
-
-    for(int i = 0; i < 8*2; i++) {
-        Wire.write(0xFF);
+    if(_i2c) {
+        Wire.beginTransmission(_address);
+        Wire.write(0x00);  // start address
+    
+        for(int i = 0; i < 8*2; i++) {
+            Wire.write(0xFF);
+        }
+        Wire.endTransmission();
+    
+        _lastBufPosCol = 0xffff;
     }
-    Wire.endTransmission();
-
-    _lastBufPosCol = 0xffff;
 }
 #endif
-
-// Clear the buffer
-void speedDisplay::clearBuf()
-{
-    // must call show() to actually clear display
-
-    for(int i = 0; i < 8; i++) {
-        _displayBuffer[i] = 0;
-    }
-}
 
 // Set display brightness
 // Valid brighness levels are 0 to 15. Default is 15.
@@ -458,7 +528,8 @@ uint8_t speedDisplay::setBrightnessDirect(uint8_t level)
         level = 15;
 
     if(level != _briCache) {
-        directCmd(0xE0 | level);  // Dimming command
+        if(_i2c) directCmd(0xE0 | level);  // Dimming command
+        //if(_haveSec) {}
         _briCache = level;
     }
 
@@ -486,37 +557,47 @@ void speedDisplay::show()
         }
     }
 
-    switch(_dispType) {
-    case SP_ADAF_B7x4:
-    case SP_ADAF_B7x4L:
-        _displayBuffer[_colon_pos] &= ~(0x10);
-        if(_displayBuffer[*(_bufPosArr + 2)] & S7G_DOT) {
-            _displayBuffer[_colon_pos] |= 0x10;
+    if(_i2c) {
+
+        switch(_dispType) {
+        case SP_ADAF_B7x4:
+        case SP_ADAF_B7x4L:
+            _displayBuffer[_colon_pos] &= ~(0x10);
+            if(_displayBuffer[*(_bufPosArr + 2)] & S7G_DOT) {
+                _displayBuffer[_colon_pos] |= 0x10;
+            }
+            break;
+        case SP_GROVE_4DIG14:
+        case SP_GROVE_4DIG14L:
+            _displayBuffer[_colon_pos] &= ~(0x4778);
+            for(int i = 0; i < 4; i++) {
+                _displayBuffer[_colon_pos] |= ((_displayBuffer[*(_bufPosArr + i)] & 0x02) ? gr4_sh1[i] : 0);
+                _displayBuffer[_colon_pos] |= ((_displayBuffer[*(_bufPosArr + i)] & 0x04) ? gr4_sh2[i] : 0);
+            }
         }
-        break;
-    case SP_GROVE_4DIG14:
-    case SP_GROVE_4DIG14L:
-        _displayBuffer[_colon_pos] &= ~(0x4778);
-        for(int i = 0; i < 4; i++) {
-            _displayBuffer[_colon_pos] |= ((_displayBuffer[*(_bufPosArr + i)] & 0x02) ? gr4_sh1[i] : 0);
-            _displayBuffer[_colon_pos] |= ((_displayBuffer[*(_bufPosArr + i)] & 0x04) ? gr4_sh2[i] : 0);
+    
+        Wire.beginTransmission(_address);
+        Wire.write(0x00);  // start address
+    
+        for(i = 0; i < 8; i++) {
+            Wire.write(_displayBuffer[i] & 0xFF);
+            Wire.write(_displayBuffer[i] >> 8);
         }
+    
+        Wire.endTransmission();
+    
+        // Save last value written to _colon_pos
+        if(_colon_pos < 255) {
+            _lastBufPosCol = _displayBuffer[_colon_pos];
+        }
+
     }
-
-    Wire.beginTransmission(_address);
-    Wire.write(0x00);  // start address
-
-    for(i = 0; i < 8; i++) {
-        Wire.write(_displayBuffer[i] & 0xFF);
-        Wire.write(_displayBuffer[i] >> 8);
+    
+    #ifdef EXPS
+    if(_haveSec) {
+        setExSpeed(_secSpeed);
     }
-
-    Wire.endTransmission();
-
-    // Save last value written to _colon_pos
-    if(_colon_pos < 255) {
-        _lastBufPosCol = _displayBuffer[_colon_pos];
-    }
+    #endif
 }
 
 
@@ -532,142 +613,172 @@ void speedDisplay::setText(const char *text)
     int idx = 0, pos = 0;
     int temp = 0;
 
-    clearBuf();
+    if(_i2c) {
 
-    if(_is7seg) {
-        while(text[idx] && (pos < _num_digs)) {
-            temp = getLEDChar(text[idx]) << (*(_bufShftArr + pos));
-            idx++;
-            if(text[idx] == '.') {
-                temp |= (getLEDChar('.') << (*(_bufShftArr + pos)));
+        clearBuf();
+    
+        if(_is7seg) {
+            while(text[idx] && (pos < _num_digs)) {
+                temp = getLEDChar(text[idx]) << (*(_bufShftArr + pos));
                 idx++;
+                if(text[idx] == '.') {
+                    temp |= (getLEDChar('.') << (*(_bufShftArr + pos)));
+                    idx++;
+                }
+                _displayBuffer[*(_bufPosArr + pos)] |= temp;
+                pos++;
             }
-            _displayBuffer[*(_bufPosArr + pos)] |= temp;
-            pos++;
-        }
-    } else {
-        while(text[idx] && pos < _num_digs) {
-            _displayBuffer[*(_bufPosArr + pos)] = getLEDChar(text[idx]);
-            idx++;
-            if(text[idx] == '.') {
-                _displayBuffer[*(_bufPosArr + pos)] |= getLEDChar('.');
+        } else {
+            while(text[idx] && pos < _num_digs) {
+                _displayBuffer[*(_bufPosArr + pos)] = getLEDChar(text[idx]);
                 idx++;
+                if(text[idx] == '.') {
+                    _displayBuffer[*(_bufPosArr + pos)] |= getLEDChar('.');
+                    idx++;
+                }
+                pos++;
             }
-            pos++;
         }
+    
+        handleColon();
     }
-
-    handleColon();
 }
 
 // Write given speed to buffer
 // (including current dot01 setting; colon is cleared and ignored)
 void speedDisplay::setSpeed(int8_t speedNum)
 {
-    unsigned long b1 = 0, b2 = 0; 
-    uint8_t b3 = 0b00111111;
-    unsigned long now = millis();
-    
-    clearBuf();
-
     _speed = speedNum;
 
-    if(speedNum < 0) {
-        if(_lastPosSpd > 3) {
-            if(!_posSpdNow) _posSpdNow = now;
-            if(now - _posSpdNow < NO_FIX_DASHES) {
-                b1 = b2 = 37;
+    if(_i2c) {
+        unsigned long b1 = 0, b2 = 0; 
+        uint8_t b3 = 0b00111111;
+        unsigned long now = millis();
+    
+        clearBuf();
+    
+        if(speedNum < 0) {
+            if(_lastPosSpd > 3) {
+                if(!_posSpdNow) _posSpdNow = now;
+                if(now - _posSpdNow < NO_FIX_DASHES) {
+                    b1 = b2 = 37;
+                    b3 = 0;
+                } else {
+                    _lastPosSpd = 0;
+                }
+            }
+        } else {
+            _posSpdNow = now;
+            _lastPosSpd = speedNum;
+            if(speedNum > 99) {
+                b1 = 'H' - 'A' + 10;
+                b2 = 'I' - 'A' + 10;
                 b3 = 0;
             } else {
-                _lastPosSpd = 0;
+                b1 = speedNum / 10;
+                b2 = speedNum % 10;
             }
         }
-    } else {
-        _posSpdNow = now;
-        _lastPosSpd = speedNum;
-        if(speedNum > 99) {
-            b1 = 'H' - 'A' + 10;
-            b2 = 'I' - 'A' + 10;
-            b3 = 0;
-        } else {
-            b1 = speedNum / 10;
-            b2 = speedNum % 10;
-        }
-    }
-    b1 = *(_fontXSeg + b1);
-    b2 = *(_fontXSeg + b2);
-
-    // CircuitSetup Speedo: Enable/disable third digit
-    if(thirdDig) {
-        // Hack to display "0" after dot
-        _displayBuffer[2] = b3;
-    }
-
-
-    if(dispL0Spd || speedNum > 9 /*|| b1 == 37*/) _displayBuffer[_speed_pos10] |= (b1 << _dig10_shift);
-    _displayBuffer[_speed_pos01] |= (b2 << _dig01_shift);
+        b1 = *(_fontXSeg + b1);
+        b2 = *(_fontXSeg + b2);
     
-    if(_dot01) _displayBuffer[_dot_pos01] |= (*(_fontXSeg + 36) << _dot01_shift);
+        // CircuitSetup Speedo: Enable/disable third digit
+        if(thirdDig) {
+            // Hack to display "0" after dot
+            _displayBuffer[2] = b3;
+        }
+
+        if(dispL0Spd || speedNum > 9 /*|| b1 == 37*/) _displayBuffer[_speed_pos10] |= (b1 << _dig10_shift);
+        _displayBuffer[_speed_pos01] |= (b2 << _dig01_shift);
+        
+        if(_dot01) _displayBuffer[_dot_pos01] |= (*(_fontXSeg + 36) << _dot01_shift);
+    }
+
+    #ifdef EXPS
+    if(_haveSec) {
+        _secSpeed = speedNum;
+    }
+    #endif
 }
 
 #ifdef TC_HAVETEMP
 void speedDisplay::setTemperature(float temp)
 {
-    char buf[8];
-    char alignBuf[20];
-    int t, strlenBuf = 0;
-    const char *myNan = "----";
+    if(_i2c) {
 
-    bool tempNan = isnan(temp);
-
-    switch(_num_digs) {
-    case 2:
-        if(tempNan)            setText(myNan);
-        else if(temp <= -10.0) setText("Lo");
-        else if(temp >= 100.0) setText("Hi");
-        else if(temp >= 10.0 || temp < 0.0) {
-            t = (int)roundf(temp);
-            sprintf(buf, "%d", t);
-            setText(buf);
-        } else {
-            sprintf(buf, "%.1f", temp);
-            setText(buf);
-        }
-        break;
-    case 3:
-        if(tempNan)             setText(myNan);
-        else if(temp <= -100.0) setText("Low");
-        else if(temp >= 1000.0) setText("Hi");
-        else if(temp >= 100.0 || temp <= -10.0) {
-            t = (int)roundf(temp);
-            sprintf(buf, "%d", t);
-            setText(buf);
-        } else {
-            sprintf(buf, "%.1f", temp);
-            setText(buf);
-        }
-        break;
-    default:
-        sprintf(buf, tempNan ? myNan : "%.1f", temp);
-        for(int i = 0; i < strlen(buf); i++) {
-            if(buf[i] != '.') strlenBuf++;
-        }
-        if(strlenBuf < _num_digs) {
-            for(int i = 0; i < 15 && i < (_num_digs - strlenBuf); i++) {
-                alignBuf[i] = ' ';
-                alignBuf[i+1] = 0;
+        char buf[8];
+        char alignBuf[20];
+        int t, strlenBuf = 0;
+        const char *myNan = "----";
+    
+        bool tempNan = isnan(temp);
+    
+        switch(_num_digs) {
+        case 2:
+            if(tempNan)            setText(myNan);
+            else if(temp <= -10.0) setText("Lo");
+            else if(temp >= 100.0) setText("Hi");
+            else if(temp >= 10.0 || temp < 0.0) {
+                t = (int)roundf(temp);
+                sprintf(buf, "%d", t);
+                setText(buf);
+            } else {
+                sprintf(buf, "%.1f", temp);
+                setText(buf);
             }
-            strcat(alignBuf, buf);
-            setText(alignBuf);
-        } else {
-            setText(buf);
+            break;
+        case 3:
+            if(tempNan)             setText(myNan);
+            else if(temp <= -100.0) setText("Low");
+            else if(temp >= 1000.0) setText("Hi");
+            else if(temp >= 100.0 || temp <= -10.0) {
+                t = (int)roundf(temp);
+                sprintf(buf, "%d", t);
+                setText(buf);
+            } else {
+                sprintf(buf, "%.1f", temp);
+                setText(buf);
+            }
+            break;
+        default:
+            sprintf(buf, tempNan ? myNan : "%.1f", temp);
+            for(int i = 0; i < strlen(buf); i++) {
+                if(buf[i] != '.') strlenBuf++;
+            }
+            if(strlenBuf < _num_digs) {
+                for(int i = 0; i < 15 && i < (_num_digs - strlenBuf); i++) {
+                    alignBuf[i] = ' ';
+                    alignBuf[i+1] = 0;
+                }
+                strcat(alignBuf, buf);
+                setText(alignBuf);
+            } else {
+                setText(buf);
+            }
         }
+
     }
+
+    #ifdef EXPS
+    if(_haveSec) {
+        // secondary does not support temperature
+        _secSpeed = -1;
+    }
+    #endif
 }
 #endif
 
 // Private functions ###########################################################
 
+// Clear the buffer
+void speedDisplay::clearBuf()
+{
+    // must call show() to actually clear display
+
+    for(int i = 0; i < 8; i++) {
+        _displayBuffer[i] = 0;
+    }
+}
 
 void speedDisplay::handleColon()
 {
@@ -732,4 +843,40 @@ void speedDisplay::directCmd(uint8_t val)
     Wire.endTransmission();
 }
 
+#ifdef EXPS
+
+// 1 second = 1000000 us
+// 50Hz = 0.02 seconds period = 20000 uS = 65535
+// 500 uS  = duty cycle 1638 (1634?)
+// 2500 uS = duty cycle 8192
+
+void speedDisplay::setExSpeed(int8_t speed)
+{
+    #define DUTY_MIN 1638   // FIXME
+    #define SPD_MAX 95
+
+    if(_secOff) speed = -1;
+
+    if(_secSpeedOld == speed) return;
+
+    _secSpeedOld = speed;
+
+    uint32_t dutyS = 0, dutyT = 0;
+    float pos = 0;
+
+    if(speed > SPD_MAX) speed = SPD_MAX;
+    
+    if(speed >= 0) {
+        pos = (float)speed * 270.0 / (float)SPD_MAX;
+        dutyS = ((uint32_t)(((pos * 2000.0) / 270.0) * 65536.0 / 20000.0)) + DUTY_MIN;
+    } else {
+        dutyS = DUTY_MIN;
+    }
+
+    pos = 20.0; // TODO
+    dutyT = ((uint32_t)(((pos * 2000.0) / 270.0) * 65536.0 / 20000.0)) + DUTY_MIN;
+
+    ledcWrite(0, dutyS);
+    ledcWrite(1, dutyT);
+}
 #endif

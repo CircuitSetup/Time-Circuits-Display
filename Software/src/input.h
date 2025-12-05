@@ -119,11 +119,11 @@ typedef enum {
 
 
 struct KeyStruct {
+    unsigned long startTime;
     int       kCode;
-    KeyState  kState;
     char      kChar;
     bool      stateChanged;
-    unsigned long startTime;
+    KeyState  kState;
 };
 
 class Keypad_I2C {
@@ -132,7 +132,7 @@ class Keypad_I2C {
 
         Keypad_I2C(char *userKeymap, const uint8_t *row, const uint8_t *col, 
                    uint8_t numRows, uint8_t numCols,
-                   int address, TwoWire *awire = &Wire);
+                   int address);
 
         void begin(unsigned int scanInterval, unsigned int holdTime, void (*myDelay)(unsigned long));
 
@@ -166,8 +166,6 @@ class Keypad_I2C {
         uint8_t       _pinState;  // shadow for output pins
 
         KeyStruct     _key;
-
-        TwoWire       *_wire;
 
         // Ptr to custom delay function
         void (*_customDelayFunc)(unsigned long) = NULL;
@@ -234,7 +232,7 @@ class TCButton {
 class TCRotEnc {
   
     public:
-        TCRotEnc(int numTypes, const uint8_t addrArr[], TwoWire *awire = &Wire);
+        TCRotEnc(int numTypes, const uint8_t addrArr[]);
         bool    begin(bool forSpeed);
         void    zeroPos(int offs = 0);
         void    disabledPos();
@@ -252,14 +250,11 @@ class TCRotEnc {
         bool    zeroEnc(int offs = 0);
 
         int           _numTypes = 0;
-        uint8_t       _addrArr[6*2];    // up to 6 types fit here
+        const uint8_t *_addrArr;
         int8_t        _st = -1;
         int8_t        _type = 0;        // 0=speed; 1=vol
         
         int           _i2caddr;
-        TwoWire       *_wire;
-
-        //uint8_t       _hwtype;
 
         int16_t       fakeSpeed = 0;
         int16_t       targetSpeed = 0;

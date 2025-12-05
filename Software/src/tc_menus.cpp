@@ -262,7 +262,7 @@
 #define FIELD_HOUR    3
 #define FIELD_MINUTE  4
 
-uint8_t autoInterval = 1;
+uint8_t autoInterval = DEF_AUTOROTTIMES;
 const uint8_t autoTimeIntervals[6] = {0, 5, 10, 15, 30, 60};  // first must be 0 (=off)
 
 bool    alarmOnOff = false;
@@ -522,8 +522,7 @@ void enter_menu()
 
             if(autoInterval) {
                 autoInterval = 0;
-                saveAutoInterval();
-                updateConfigPortalValues();
+                saveBeepAutoInterval();
             }
 
             nonRTCdisplayChanged = true;
@@ -691,11 +690,9 @@ quitMenu:
     myrtcnow(dtu);
     UTCtoLocal(dtu, dtl, 0);
     
-    #ifdef HAVE_STALE_PRESENT
     if(stalePresent)
         presentTime.setFromStruct(&stalePresentTime[1]);
     else
-    #endif
         updatePresentTime(dtu, dtl);
 
     if(isWcMode()) {
@@ -1695,8 +1692,7 @@ static void doSetAutoInterval()
         // Save it (if changed)
         if(autoInterval != newAutoInterval) {
             autoInterval = newAutoInterval;
-            saveAutoInterval();
-            updateConfigPortalValues();
+            saveBeepAutoInterval();
         }
 
         // End pause if current setting != off
@@ -2088,8 +2084,8 @@ static void displayClient(int numCli, int number)
         if(!*id) {
             badName = true;
         } else {
-            for(int j = 0; j < 12; j++) {
-                if(!id[j]) break;
+            for(int j = 0; j < 13; j++) {
+                if(!id[j] || id[j] == '.') break;
                 if(!bttfnValChar(id, j)) {
                     badName = true;
                     break;
@@ -2098,14 +2094,14 @@ static void displayClient(int numCli, int number)
         }
 
         if(badName) {
-            if(type >= 1 && type <= 6) {
+            if(type >= BTTFN_TYPE__MIN && type <= BTTFN_TYPE__MAX) {
                 strcpy(idbuf, tpArr[type-1]);
             } else {
                 strcpy(idbuf, "[UNKNOWN]");
             }
         } else {
-            strncpy(idbuf, id, 12);
-            idbuf[12] = 0;
+            strncpy(idbuf, id, 13);
+            idbuf[13] = 0;
         }
       
         dt_showTextDirect(idbuf);
@@ -2188,7 +2184,7 @@ void doCopyAudioFiles()
     if((!copy_audio_files(delIDfile)) && !FlashROMode) {
         // If copy fails because of a write error, re-format flash FS
         lt_showTextDirect("FORMATTING");
-        formatFlashFS();             // Format
+        formatFlashFS(false);        // Format
         rewriteSecondarySettings();  // Re-write secondary settings
         #ifdef TC_DBG 
         Serial.println("Re-writing general settings");

@@ -4,6 +4,7 @@
  * Nick O'Leary
  * http://knolleary.net
  * Minimized & adapted by Thomas Winischhofer (A10001986) in 2023
+ * MQTT 5.0 support by Thomas Winischhofer (A10001986) in 2025
  *
  * Copyright (c) 2008-2020 Nicholas O'Leary
  *
@@ -54,14 +55,8 @@
 #include <IPAddress.h>
 #include <WiFiClient.h>
 
-#define MQTT_VERSION_3_1      3
 #define MQTT_VERSION_3_1_1    4
-
-// MQTT_VERSION : Pick the version
-//#define MQTT_VERSION MQTT_VERSION_3_1
-#ifndef MQTT_VERSION
-#define MQTT_VERSION MQTT_VERSION_3_1_1
-#endif
+#define MQTT_VERSION_5_0      5
 
 // MQTT_MAX_PACKET_SIZE : Maximum packet size. Override with setBufferSize().
 #ifndef MQTT_MAX_PACKET_SIZE
@@ -90,11 +85,11 @@
 #define MQTT_CONNECT_FAILED         -2
 #define MQTT_DISCONNECTED           -1
 #define MQTT_CONNECTED               0
-#define MQTT_CONNECT_BAD_PROTOCOL    1
-#define MQTT_CONNECT_BAD_CLIENT_ID   2
-#define MQTT_CONNECT_UNAVAILABLE     3
-#define MQTT_CONNECT_BAD_CREDENTIALS 4
-#define MQTT_CONNECT_UNAUTHORIZED    5
+#define MQTT_CONNECT_BAD_PROTOCOL    1  // v3
+#define MQTT_CONNECT_BAD_CLIENT_ID   2  // v3
+#define MQTT_CONNECT_UNAVAILABLE     3  // v3
+#define MQTT_CONNECT_BAD_CREDENTIALS 4  // v3
+#define MQTT_CONNECT_UNAUTHORIZED    5  // v3
 
 #define MQTTCONNECT     1 << 4  // Client request to connect to Server
 #define MQTTCONNACK     2 << 4  // Connect Acknowledgment
@@ -116,8 +111,9 @@
 #define MQTTQOS1        (1 << 1)
 #define MQTTQOS2        (2 << 1)
 
-// Maximum size of fixed header and variable length size header
-#define MQTT_MAX_HEADER_SIZE 5
+// Maximum size of fixed header (header byte + variable length field)
+#define MQTT_MAX_HEADER_SIZE_3_1_1  5
+#define MQTT_MAX_HEADER_SIZE_5_0    5
 
 #define PING_ERROR    -1
 #define PING_IDLE     0
@@ -131,29 +127,30 @@ class PubSubClient {
         PubSubClient(WiFiClient& client);
     
         ~PubSubClient();
-    
+
+        void setClientID(const char *src);
+        bool setBufferSize(uint16_t size);
+        void setVersion(int mqtt_version);
+        
         void setServer(IPAddress ip, uint16_t port) { this->ip = ip; this->port = port; this->domain = NULL; }
         void setServer(const char *domain, uint16_t port) { this->domain = domain; this->port = port; }
         void setCallback(void (*callback)(char *, uint8_t *, unsigned int)) { this->callback = callback; }
         void setLooper(void (*looper)()) { this->looper = looper; }
     
-        bool setBufferSize(uint16_t size);
-    
-        bool connect(const char *id);
-        bool connect(const char *id, const char *user, const char *pass);
-        bool connect(const char *id, const char *user, const char *pass, bool cleanSession);
-       
-        void disconnect();
+        bool connect();
+        bool connect(const char *user, const char *pass);
+        bool connect(const char *user, const char *pass, bool cleanSession);
+        bool connected();
+        int  state() { return this->_state; }
+
+        bool loop();
 
         bool publish(const char *topic, const uint8_t *payload, unsigned int plength, bool retained = false);
              
         bool subscribe(const char *topic, const char *topic2 = NULL, uint8_t qos = 0);
         bool unsubscribe(const char *topic);
-        
-        bool loop();
-        
-        bool connected();
-        int  state() { return this->_state; }
+
+        void disconnect();
 
         bool sendPing();
         bool pollPing();
@@ -163,16 +160,18 @@ class PubSubClient {
     private:
 
         bool subscribe_int(bool unsubscribe, const char *topic, const char *topic2L, uint8_t qos);
+        
         uint32_t readPacket(uint8_t *);
         bool readByte(uint8_t *result);
         bool readByte(uint8_t *result, uint16_t *index);
-        bool write(uint8_t header, uint8_t *buf, uint16_t length);
-        uint16_t writeString(const char *string, uint8_t *buf, uint16_t pos);
-        // Build up the header ready to send
-        // Returns the size of the header
-        // Note: the header is built at the end of the first MQTT_MAX_HEADER_SIZE bytes, so will start
-        //       (MQTT_MAX_HEADER_SIZE - <returned size>) bytes into the buffer
+        
         size_t buildHeader(uint8_t header, uint8_t* buf, uint16_t length);
+        bool write(uint8_t header, uint8_t *buf, uint16_t length);
+        
+        int _vbl(const uint8_t *buf, unsigned int& length);
+        int _searchProp(uint8_t *buf, uint8_t prop, const int propLength);
+
+        uint16_t writeString(const char *string, uint8_t *buf, uint16_t pos);
        
         WiFiClient* _client;
         uint8_t* buffer;
@@ -194,6 +193,14 @@ class PubSubClient {
         int _s;
         int _pstate = PING_IDLE;
         uint16_t _pseq_num = 34;
+
+        bool _v3 = true;
+
+        uint16_t mqtt_max_header_size = MQTT_MAX_HEADER_SIZE_3_1_1;
+        int      mqtt_version_header_length = 7;
+        uint8_t  _phdr[7] = { 0x00, 0x04, 'M', 'Q', 'T', 'T', MQTT_VERSION_3_1_1 };
+
+        char     _clientID[24];
 };
 
 #endif
