@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -9,9 +9,9 @@
  * 
  * TCRotEnc: Rotary Encoder handling:
  * Supports Adafruit 4991, DuPPA I2CEncoder 2.1, DFRobot Gravity 360.
- * For Speed, the encoders must be set to their default i2c address
+ * For speed, the encoders must be set to their default i2c address
  * (DuPPA I2CEncoder 2.1 must be set to i2c address 0x01 (A0 closed)).
- * For Volume, the encoders must be configured as follows:
+ * For volume, the encoders must be configured as follows:
  * - Ada4991: A0 closed (i2c address 0x37)
  * - DFRobot Gravity 360: SW1 off, SW2 on (i2c address 0x55)
  * - DuPPA I2CEncoder 2.1: A0 and A1 closed (i2c address 0x03)
@@ -342,12 +342,14 @@ void Keypad_I2C::port_write(uint8_t val)
 TCButton::TCButton(const int pin, const bool activeLow, const bool pullupActive)
 {
     _pin = pin;
-
     _buttonPressed = activeLow ? LOW : HIGH;
-  
-    pinMode(pin, pullupActive ? INPUT_PULLUP : INPUT);
+    _pullupActive = pullupActive;
 }
 
+void TCButton::begin()
+{
+    pinMode(_pin, _pullupActive ? INPUT_PULLUP : INPUT);
+}
 
 // debounce: Number of millisec that have to pass by before a click is assumed stable
 // press:    Number of millisec that have to pass by before a short press is detected
@@ -360,7 +362,7 @@ void TCButton::setTiming(const int debounceDur, const int pressDur, const int lP
 }
 
 // Check input of the pin and advance the state machine
-void TCButton::scan(void)
+void TCButton::scan()
 {
     unsigned long now = millis();
     unsigned long waitTime = now - _startTime;
@@ -421,7 +423,7 @@ void TCButton::scan(void)
  * Private
  */
 
-void TCButton::reset(void)
+void TCButton::reset()
 {
     _state = TCBS_IDLE;
     _lastState = TCBS_IDLE;
@@ -677,7 +679,7 @@ void TCRotEnc::disabledPos()
 }
 
 // Init dec to speed position (speed only)
-void TCRotEnc::speedPos(int16_t speed)
+void TCRotEnc::speedPos(int speed)
 {   
     if(speed < 0) {
         disabledPos();
@@ -690,7 +692,7 @@ void TCRotEnc::speedPos(int16_t speed)
     fakeSpeed = targetSpeed = speed;
 }
 
-int16_t TCRotEnc::updateFakeSpeed(bool force)
+int TCRotEnc::updateFakeSpeed(bool force)
 {
     bool timeout = (millis() - lastUpd > HWUPD_DELAY);
     int32_t updRotPos;

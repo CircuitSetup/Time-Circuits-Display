@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  * 
@@ -92,7 +92,7 @@
 
 tcRTC::tcRTC(int numTypes, const uint8_t *addrArr)
 {
-    _numTypes = min(2, numTypes);
+    _numTypes = numTypes;
     _addrArr = addrArr;
 
     _address = addrArr[0];

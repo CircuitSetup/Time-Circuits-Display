@@ -177,8 +177,8 @@ class WiFiManager
     // disconnect wifi
     bool          disconnect();
 
-    // Disable WiFi all together (result: WiFi mode = WIFI_OFF)
-    void          disableWiFi();
+    // Disable WiFi all together (result: WiFi mode = WIFI_OFF if in STA; in AP mode only if waitForOff = true)
+    void          disableWiFi(bool waitForOFF = true);
 
     // allocate numParms entries in params array (overrules WIFI_MANAGER_MAX_PARAMS)
     void          allocParms(int numParms);

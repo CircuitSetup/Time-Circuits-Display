@@ -1,7 +1,7 @@
 /*
   AudioOutputI2S
   Base class for an I2S output port
-  
+
   Copyright (C) 2017  Earle F. Philhower, III
 
   This program is free software: you can redistribute it and/or modify
@@ -16,6 +16,8 @@
 
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+  Adapted by Thomas Winischhofer, 2023-2025
 */
 
 #pragma once
@@ -38,13 +40,17 @@ class AudioOutputI2S : public AudioOutput
     virtual bool SetBitsPerSample(int bits) override;
     virtual bool SetChannels(int channels) override;
     virtual bool begin() override { return begin(true); }
-    virtual bool ConsumeSample(int16_t sample[2]) override;
+    #ifdef TWESP32
+    virtual size_t ConsumeSample(int16_t sL, int16_t sR) override;
+    #else
+    virtual bool ConsumeSample(int16_t sL, int16_t sR) override;
+    #endif
     virtual void flush() override;
     virtual bool stop() override;
-    
+
     bool begin(bool txDAC);
     bool SetOutputModeMono(bool mono);  // Force mono output no matter the input
-    bool SetLsbJustified(bool lsbJustified);  // Allow supporting non-I2S chips, e.g. PT8211 
+    bool SetLsbJustified(bool lsbJustified);  // Allow supporting non-I2S chips, e.g. PT8211
 
   protected:
     bool SetPinout();
@@ -59,7 +65,7 @@ class AudioOutputI2S : public AudioOutput
     // We can restore the old values and free up these pins when in NoDAC mode
     uint32_t orig_bck;
     uint32_t orig_ws;
-    
+
     uint8_t bclkPin;
     uint8_t wclkPin;
     uint8_t doutPin;

@@ -3,10 +3,10 @@
  * PubSubClient.cpp - A simple client for MQTT.
  * Nick O'Leary
  * http://knolleary.net
- * Minimized & adapted by Thomas Winischhofer (A10001986) in 2023
- * MQTT 5.0 support by Thomas Winischhofer (A10001986) in 2025
  *
  * Copyright (c) 2008-2020 Nicholas O'Leary
+ * Minimized & adapted by Thomas Winischhofer (A10001986) in 2023
+ * MQTT 5.0 support by Thomas Winischhofer (A10001986) in 2025
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -974,14 +974,12 @@ uint16_t PubSubClient::writeString(const char *string, uint8_t *buf, uint16_t po
 
 bool PubSubClient::sendPing()
 {
-    struct sockaddr_in    address;
     ip4_addr_t            ping_target;
     struct icmp_echo_hdr *iecho;
     struct sockaddr_in    to;
     struct timeval        tout;
     int    size       =   32;
     size_t ping_size  =   sizeof(struct icmp_echo_hdr) + size;
-    size_t data_len   =   ping_size - sizeof(struct icmp_echo_hdr);
     int    err;
 
     #ifdef MQTT_DBG
@@ -997,8 +995,7 @@ bool PubSubClient::sendPing()
     if((_s = socket(AF_INET, SOCK_RAW, IP_PROTO_ICMP)) < 0)
         return false;
 
-    address.sin_addr.s_addr = ip;
-    ping_target.addr        = ip;
+    ping_target.addr = ip;
 
     tout.tv_sec  = 0;
     tout.tv_usec = 2000;    // 2ms

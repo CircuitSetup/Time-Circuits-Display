@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -89,13 +89,30 @@ extern bool WcHaveTZ2;
 extern uint8_t destShowAlt, depShowAlt;
 
 extern bool syncTrigger;
+extern unsigned long syncTriggerNow;
 extern bool doAPretry;
+extern bool deferredCP;
 
 extern uint64_t lastAuthTime64;
 
 extern clockDisplay destinationTime;
 extern clockDisplay presentTime;
 extern clockDisplay departedTime;
+
+extern uint32_t ttinpin;
+extern uint32_t ttoutpin;
+
+extern int           doorSnd;
+extern uint32_t      doorFlags;
+extern unsigned long doorSndDelay;
+extern unsigned long doorSndNow;
+extern int           door2Snd;
+extern uint32_t      door2Flags;
+extern unsigned long door2SndDelay;
+extern unsigned long door2SndNow;
+
+extern bool playTTsounds;
+
 extern bool useSpeedo;
 extern bool useSpeedoDisplay;
 extern speedDisplay speedo;
@@ -128,7 +145,7 @@ extern bool          ETTOcommands;
 #define NUM_AUTOTIMES 11
 extern const dateStruct destinationTimes[NUM_AUTOTIMES];
 extern const dateStruct departedTimes[NUM_AUTOTIMES];
-extern int8_t     autoTime;
+extern int8_t           autoTime;
 
 extern bool       stalePresent;
 extern dateStruct stalePresentTime[2];
@@ -136,16 +153,23 @@ extern dateStruct stalePresentTime[2];
 // These block various events
 extern bool FPBUnitIsOn;
 extern bool startup;
-extern bool timeTravelRE;
-extern int timeTravelP0;
-extern int timeTravelP1;
-extern int timeTravelP2;
-extern int specDisp;
-extern int autoIntAnimRunning;
+extern int  specDisp;
+extern int  autoIntAnimRunning;
 
-extern uint8_t  mqttDisp;
+extern uint32_t csf;
+#define CSF_P0  0x01    // Time Travel sequence stages
+#define CSF_P1  0x02
+#define CSF_RE  0x04
+#define CSF_P2  0x08
+#define CSF_ST  0x10    // "startup" sequence running
+#define CSF_OFF 0x20    // We are fake-off (if bit set)
+#define CSF_MA  0x40    // Menu active = busy
+#define CSF_NS  0x80    // No scan: Suppress WiFi Scan (so we don't have to abuse any other flag)
+#define CSF_NM 0x100    // Night mode
+
+extern uint32_t  mqttDisp;
 #ifdef TC_HAVEMQTT
-extern uint8_t  mqttOldDisp;
+extern uint32_t  mqttOldDisp;
 extern char *mqttMsg;
 extern uint16_t mqttIdx;
 extern int16_t  mqttMaxIdx;
@@ -237,12 +261,11 @@ void      allOff();
 #ifdef TC_HAVEGPS
 bool      gpsHaveFix();
 #endif
-#if defined(TC_HAVEGPS) || defined(TC_HAVE_RE)
-void      gps_loop(bool withRotEnc);
+#if defined(TC_HAVEGPS) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
+void      speedoUpdate_loop(bool async);
 #endif
 
 void      mydelay(unsigned long mydel);
-void      waitAudioDone();
 
 uint8_t   dayOfWeek(int d, int m, int y);
 int       daysInMonth(int month, int year);
@@ -259,13 +282,15 @@ int       timeIsDST(int index, int year, int month, int day, int hour, int mins,
 void      UTCtoLocal(DateTime &dtu, DateTime& dtl, int index);
 void      LocalToUTC(int& ny, int& nm, int& nd, int& nh, int& nmm, int index);
 
+void      ntp_setup(bool doUseNTP, IPAddress& ntpServer, bool couldHaveNTP, bool ntpLUF);
 void      ntp_loop();
 void      ntp_short_loop();
+int       ntp_status();
 
 int       bttfnNumClients();
 bool      bttfnGetClientInfo(int c, char **id, uint8_t **ip, uint8_t *type);
 bool      bttfn_loop();
-void      bttfn_tcd_busy(bool isBusy);
+void      bttfn_notify_info();
 
 #ifdef TC_HAVE_REMOTE
 void      removeRemote();

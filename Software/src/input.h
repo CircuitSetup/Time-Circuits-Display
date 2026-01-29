@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -9,9 +9,9 @@
  * 
  * TCRotEnc: Rotary Encoder handling:
  * Supports Adafruit 4991, DuPPA I2CEncoder 2.1, DFRobot Gravity 360.
- * For Speed, the encoders must be set to their default i2c address
+ * For speed, the encoders must be set to their default i2c address
  * (DuPPA I2CEncoder 2.1 must be set to i2c address 0x01 (A0 closed)).
- * For Volume, the encoders must be configured as follows:
+ * For volume, the encoders must be configured as follows:
  * - Ada4991: A0 closed (i2c address 0x37)
  * - DFRobot Gravity 360: SW1 off, SW2 on (i2c address 0x55)
  * - DuPPA I2CEncoder 2.1: A0 and A1 closed (i2c address 0x03)
@@ -187,6 +187,7 @@ class TCButton {
   
     public:
         TCButton(const int pin, const bool activeLow = true, const bool pullupActive = true);
+        void begin();
       
         void setTiming(const int debounceDur, const int pressDur, const int lPressDur);
       
@@ -194,11 +195,11 @@ class TCButton {
         void attachLongPressStart(void (*newFunction)(void)) { _longPressStartFunc = newFunction; }
         void attachLongPressStop(void (*newFunction)(void))  { _longPressStopFunc = newFunction; }
 
-        void scan(void);
+        void scan();
 
     private:
 
-        void reset(void);
+        void reset();
         void transitionTo(ButtonState nextState);
 
         void (*_pressFunc)(void) = NULL;
@@ -206,6 +207,7 @@ class TCButton {
         void (*_longPressStopFunc)(void) = NULL;
 
         int _pin;
+        bool _pullupActive;
         
         unsigned int _debounceDur = 50;
         unsigned int _pressDur = 400;
@@ -236,8 +238,8 @@ class TCRotEnc {
         bool    begin(bool forSpeed);
         void    zeroPos(int offs = 0);
         void    disabledPos();
-        void    speedPos(int16_t speed);
-        int16_t updateFakeSpeed(bool force = false);
+        void    speedPos(int speed);
+        int     updateFakeSpeed(bool force = false);
         int     updateVolume(int curVol, bool force = false);
 
         bool    IsOff();
@@ -256,8 +258,8 @@ class TCRotEnc {
         
         int           _i2caddr;
 
-        int16_t       fakeSpeed = 0;
-        int16_t       targetSpeed = 0;
+        int           fakeSpeed = 0;
+        int           targetSpeed = 0;
         int32_t       rotEncPos = 0;
         unsigned long lastUpd = 0;
         unsigned long lastFUpd = 0;

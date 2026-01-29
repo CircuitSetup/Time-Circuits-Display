@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -32,8 +32,8 @@
  * VEML7700:      0x10
  * 
  * If a GPS receiver is connected at the same time, 
- * - the VEML7700 cannot be used;
- * - the VEML6030 needs to be set to address 0x48.
+ * - VEML7700 cannot be used;
+ * - VEML6030 needs to be set to address 0x48.
  * -------------------------------------------------------------------
  * License: MIT NON-AI
  * 
@@ -96,7 +96,7 @@ static uint8_t crc8(uint8_t initVal, uint8_t poly, uint8_t len, uint8_t *buf)
     while(len--) {
         crc ^= *buf++;
  
-        for(uint8_t i = 0; i < 8; i++) {
+        for(int i = 0; i < 8; i++) {
             crc = (crc & 0x80) ? (crc << 1) ^ poly : (crc << 1);
         }
     }
@@ -194,9 +194,6 @@ void tcSensor::write8(uint16_t regno, uint8_t value)
 
 /*****************************************************************
  * tempSensor Class
- * 
- * Supports MCP9808 and BMx280 temperature sensors
- * 
  ****************************************************************/
 
 #ifdef TC_HAVETEMP
@@ -311,7 +308,7 @@ void tcSensor::write8(uint16_t regno, uint8_t value)
 // Store i2c address
 tempSensor::tempSensor(int numTypes, const uint8_t *addrArr)
 {
-    _numTypes = min(9, numTypes);
+    _numTypes = numTypes;
     _addrArr = addrArr;
 }
 
@@ -321,7 +318,6 @@ bool tempSensor::begin(void (*myDelay)(unsigned long))
     bool foundSt = false;
     uint8_t temp, timeOut = 20;
     uint16_t t16 = 0;
-    size_t i2clen;
     uint8_t buf[8];
     unsigned long millisNow = millis();
     
@@ -543,8 +539,8 @@ bool tempSensor::begin(void (*myDelay)(unsigned long))
         (*_customDelayFunc)(15);
         // Read t prom data
         _address = MS8607_ADDR_T;
-        _MS8607_C5 = (int32_t)((uint16_t)read16(0xaa) << 8);
-        _MS8607_FA = (float)((uint16_t)read16(0xac)) / 8388608.0F;
+        _MS8607_C5 = (uint16_t)read16(0xaa) << 8;
+        _MS8607_C6 = (uint32_t)read16(0xac);
         // Trigger conversion t
         write8(MS8607_DUMMY, 0x54); // OSR 1024  (0x50=256..0x52..0x54..0x5a=8192)
         // Set rH user register
@@ -602,8 +598,8 @@ float tempSensor::readTemp(bool celsius)
     case MCP9808:
         t = read16(MCP9808_REG_AMBIENT_TEMP);
         if(t != 0xffff) {
-            temp = ((float)(t & 0x0fff)) / 16.0;
-            if(t & 0x1000) temp = 256.0 - temp;
+            temp = ((float)(t & 0x0fff)) / 16.0f;
+            if(t & 0x1000) temp = 256.0f - temp;
         }
         break;
 
@@ -622,8 +618,8 @@ float tempSensor::readTemp(bool celsius)
 
     case SHT40:
         if(readAndCheck6(buf, t, h, SHT40_CRC_INIT, SHT40_CRC_POLY)) {
-            temp = ((175.0 * (float)t) / 65535.0) - 45.0;
-            _hum = (int8_t)(((125.0 * (float)h) / 65535.0) - 6.0);
+            temp = (((float)(175 * t)) / 65535.0f) - 45.0f;
+            _hum = (int8_t)((int32_t)(125 * h) / 65535) - 6;
            if(_hum < 0) _hum = 0;
         }
         write8(SHT40_DUMMY, SHT40_CMD_RTEMPM);    // Trigger new measurement
@@ -634,7 +630,7 @@ float tempSensor::readTemp(bool celsius)
             for(uint8_t i = 0; i < 3; i++) buf[i] = Wire.read();
             if(crc8(SI7021_CRC_INIT, SI7021_CRC_POLY, 2, buf) == buf[2]) {
                 t = (buf[0] << 8) | buf[1];
-                _hum = (int8_t)(((125.0 * (float)t) / 65536.0) - 6.0);
+                _hum = (int8_t)((int32_t)((125 * t) >> 16)) - 6;
                 if(_hum < 0) _hum = 0;
             }
         }
@@ -642,7 +638,7 @@ float tempSensor::readTemp(bool celsius)
         if(Wire.requestFrom(_address, (uint8_t)2) == 2) {
             for(uint8_t i = 0; i < 2; i++) buf[i] = Wire.read();
             t = (buf[0] << 8) | buf[1];
-            temp = ((175.72 * (float)t) / 65536.0) - 46.85;
+            temp = ((175.72f * (float)t) / 65536.0f) - 46.85f;
         }
         write8(SI7021_DUMMY, SI7021_CMD_RHUM);    // Trigger new measurement
         break;
@@ -650,7 +646,7 @@ float tempSensor::readTemp(bool celsius)
     case TMP117:
         t = read16(TMP117_REG_TEMP);
         if(t != 0x8000) {
-            temp = (float)((int16_t)t) / 128.0;
+            temp = (float)((int16_t)t) / 128.0f;
         }
         break;
 
@@ -658,8 +654,8 @@ float tempSensor::readTemp(bool celsius)
         if(Wire.requestFrom(_address, (uint8_t)7) == 7) {
             for(uint8_t i = 0; i < 7; i++) buf[i] = Wire.read();
             if(crc8(AHT20_CRC_INIT, AHT20_CRC_POLY, 6, buf) == buf[6]) {
-                _hum = ((uint32_t)((buf[1] << 12) | (buf[2] << 4) | (buf[3] >> 4))) * 100 >> 20; // / 1048576;
-                temp = ((float)((uint32_t)(((buf[3] & 0x0f) << 16) | (buf[4] << 8) | buf[5]))) * 200.0 / 1048576.0 - 50.0;
+                _hum = (((uint32_t)((buf[1] << 12) | (buf[2] << 4) | (buf[3] >> 4))) * 100) >> 20;
+                temp = ((((float)((uint32_t)(((buf[3] & 0x0f) << 16) | (buf[4] << 8) | buf[5]))) * 200.0f) / 1048576.0f) - 50.0f;
             }
         }
         write16(0xac, 0x3300);    // Trigger new measurement
@@ -668,9 +664,8 @@ float tempSensor::readTemp(bool celsius)
     case HTU31:
         write8(HTU31_DUMMY, HTU31_READTRH);  // Read t+rh
         if(readAndCheck6(buf, t, h, HTU31_CRC_INIT, HTU31_CRC_POLY)) {
-            temp = ((165.0 * (float)t) / 65535.0) - 40.0;
-            _hum = (int8_t)((100.0 * (float)h) / 65535.0);
-            if(_hum < 0) _hum = 0;
+            temp = (((float)(165 * t)) / 65535.0f) - 40.0f;
+            _hum = (int8_t)(((float)(100 * h)) / 65535.0f);
         }
         write8(HTU31_DUMMY, HTU31_CONV);  // Trigger new conversion
         break;
@@ -680,9 +675,9 @@ float tempSensor::readTemp(bool celsius)
         write8(MS8607_DUMMY, 0x00);
         if(Wire.requestFrom(_address, (uint8_t)3) == 3) {
             int32_t dT = 0;
-            for(uint8_t i = 0; i < 3; i++) { dT<<=8; dT |= Wire.read(); }
+            for(int i = 0; i < 3; i++) { dT<<=8; dT |= Wire.read(); }
             dT -= _MS8607_C5;
-            temp = (2000.0F + ((float)dT * _MS8607_FA)) / 100.0F;
+            temp = (2000.0f + (((float)(dT * _MS8607_C6)) / 8388608.0f)) / 100.0f;
         }
         // Trigger new conversion t
         write8(MS8607_DUMMY, 0x54);
@@ -692,9 +687,9 @@ float tempSensor::readTemp(bool celsius)
             t |= Wire.read();
             t &= ~0x03;
             Wire.read();
-            _hum = (int8_t)(((((float)t * (12500.0 / 65536.0))) - 600.0F) / 100.0F);
-            //if(temp > 0.0F && temp <= 85.0F) {
-            //    _hum += ((int8_t)((float)(20.0F - temp) * -0.18F));   // rh compensated; not worth the computing time
+            _hum = (int8_t)(((int32_t)(t * 12500 / 65536) - 600) / 100);
+            //if(temp > 0.0f && temp <= 85.0f) {
+            //    _hum += ((int8_t)((float)(20.0f - temp) * -0.18f));   // rh compensated; not worth the computing time
             //}
             if(_hum < 0) _hum = 0;
         }
@@ -704,9 +699,8 @@ float tempSensor::readTemp(bool celsius)
 
     case HDC302X:
         if(readAndCheck6(buf, t, h, HDC302x_CRC_INIT, HDC302x_CRC_POLY)) {
-            temp = ((175.0 * (float)t) / 65535.0) - 45.0;
-            _hum = (int8_t)((100.0 * (float)h) / 65535.0);
-            if(_hum < 0) _hum = 0;
+            temp = (((float)(175 * t)) / 65535.0f) - 45.0f;
+            _hum = (int8_t)((uint32_t)(100 * h) / 65535);
         }
         write16(HDC302x_DUMMY, HDC302x_TRIGGER);  // Trigger new conversion
         break;
@@ -715,7 +709,7 @@ float tempSensor::readTemp(bool celsius)
     _tempReadNow = millis();
 
     if(!isnan(temp)) {
-        if(!celsius) temp = temp * 9.0 / 5.0 + 32.0;
+        if(!celsius) temp = temp * 9.0f / 5.0f + 32.0f;
         temp += _userOffset;
         _lastTempNan = false;
     } else {
@@ -765,7 +759,7 @@ float tempSensor::BMx280_CalcTemp(uint32_t ival, uint32_t hval)
         _hum = temp >> 22;
     }
     
-    return (float)((fine_t * 5 + 128) / 256) / 100.0;
+    return (float)((fine_t * 5 + 128) / 256) / 100.0f;
 }
 
 void tempSensor::HDC302x_setDefault(uint16_t reg, uint8_t val1, uint8_t val2)
@@ -832,8 +826,6 @@ bool tempSensor::readAndCheck6(uint8_t *buf, uint16_t& t, uint16_t& h, uint8_t c
 /*****************************************************************
  * lightSensor Class
  * 
- * Supports TSL25[6/9]1, LTR3xx, BH1750, VEML7700/6030 light sensors
- * 
  * Sensors are set for indoor conditions and might overflow (in 
  * which case -1 is returned) or report bad lux values outdoors
  * or if subject to intensive IR light (from eg cameras).
@@ -884,7 +876,7 @@ bool tempSensor::readAndCheck6(uint8_t *buf, uint16_t& t, uint16_t& h, uint8_t c
 #define TLS9_USE_IT     TSL2591_IT_200  // to be adjusted (TSL2591_IT_xxx)
 
 static const float TLS2591GainFacts[4] = {
-      1.0, 25.0, 400.0, 9500.0
+      1.0f, 25.0f, 400.0f, 9500.0f
 };
 
 #define LTR303_DUMMY    0x100
@@ -959,12 +951,12 @@ static const uint8_t AITArr[6][2] = {
 };
 
 static const float resFact[6][4] = {
-    { 1.8432, 0.9216, 0.2304, 0.1152 },
-    { 0.9216, 0.4608, 0.1152, 0.0576 },
-    { 0.4608, 0.2304, 0.0576, 0.0288 },
-    { 0.2304, 0.1152, 0.0288, 0.0144 },
-    { 0.1152, 0.0576, 0.0144, 0.0072 },
-    { 0.0576, 0.0288, 0.0072, 0.0036 }    
+    { 1.8432f, 0.9216f, 0.2304f, 0.1152f },
+    { 0.9216f, 0.4608f, 0.1152f, 0.0576f },
+    { 0.4608f, 0.2304f, 0.0576f, 0.0288f },
+    { 0.2304f, 0.1152f, 0.0288f, 0.0144f },
+    { 0.1152f, 0.0576f, 0.0144f, 0.0072f },
+    { 0.0576f, 0.0288f, 0.0072f, 0.0036f }    
 };
 
 static int32_t LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1);
@@ -974,7 +966,7 @@ static int32_t TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32
 // Store i2c address
 lightSensor::lightSensor(int numTypes, const uint8_t *addrArr)
 {
-    _numTypes = min(8, numTypes);
+    _numTypes = numTypes;
     _addrArr = addrArr;
 }
 
@@ -1206,7 +1198,7 @@ void lightSensor::loop()
 
             if(_gainIdx < 2 && _lux > 1000) {
                 float lux = (float)_lux;
-                _lux = (int32_t)((((6.0135e-13 * lux - 9.3924e-9) * lux + 8.1488e-5) * lux + 1.0023) * lux);
+                _lux = (int32_t)((((6.0135e-13f * lux - 9.3924e-9f) * lux + 8.1488e-5f) * lux + 1.0023f) * lux);
             }
             
         } else {
@@ -1258,22 +1250,22 @@ void lightSensor::VEML7700OnOff(bool enable, bool doWait)
 
 static int32_t LTR3xxCalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32_t ch1)
 {
-    const float gains[]   = {   1.0,   2.0,   4.0,  8.0, 48.0, 96.0 };
+    const float gains[]    = { 1.0f,  2.0f,  4.0f,  8.0f, 48.0f, 96.0f };
     const int32_t maxLux[] = { 64000, 32000, 16000, 8000, 1300, 600 };
-    const float its[]     = { 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0 };
-    //                        50   100  150  200  250  300  350  400
+    const float its[]      = { 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f, 3.5f, 4.0f };
+    //                          50   100   150   200   250   300   350   400
     int32_t lux = -1;
     float dch0 = (float)ch0;
     float dch1 = (float)ch1;
 
     float ratio = dch1 / (dch0 + dch1);
 
-    if(ratio < 0.45)
-        lux = (int32_t)((1.7743 * dch0 + 1.1059 * dch1) / gains[iGain] / its[tInt]);
-    else if (ratio < 0.64)
-        lux = (int32_t)((4.2785 * dch0 - 1.9548 * dch1) / gains[iGain] / its[tInt]);
-    else if (ratio < 0.85)
-        lux = (int32_t)((0.5926 * dch0 + 0.1185 * dch1) / gains[iGain] / its[tInt]);
+    if(ratio < 0.45f)
+        lux = (int32_t)((1.7743f * dch0 + 1.1059f * dch1) / gains[iGain] / its[tInt]);
+    else if (ratio < 0.64f)
+        lux = (int32_t)((4.2785f * dch0 - 1.9548f * dch1) / gains[iGain] / its[tInt]);
+    else if (ratio < 0.85f)
+        lux = (int32_t)((0.5926f * dch0 + 0.1185f * dch1) / gains[iGain] / its[tInt]);
     else {
         // IR-overload, human eye light level not determinable
         return -1;
@@ -1385,10 +1377,10 @@ static uint32_t TSL2561CalcLux(uint8_t iGain, uint8_t tInt, uint32_t ch0, uint32
 #define TSL2591_MAX_COUNT_100MS 36863
 #define TSL2591_MAX_COUNT       65535
 
-#define TSL2591_LUX_DGF     408.0F   //  Device/Glass factor (GA 7.7, DF 53] ...or rather 1032.9 ?
-#define TSL2591_LUX_COEFB   1.64F
-#define TSL2591_LUX_COEFC   0.59F
-#define TSL2591_LUX_COEFD   0.86F
+#define TSL2591_LUX_DGF     408.0f   //  Device/Glass factor (GA 7.7, DF 53] ...or rather 1032.9 ?
+#define TSL2591_LUX_COEFB   1.64f
+#define TSL2591_LUX_COEFC   0.59f
+#define TSL2591_LUX_COEFD   0.86f
 
 #define TLS2691_USE_LEGACY           // Use TAOS/AMS generic lux calculation (written for 2671)
 
@@ -1403,7 +1395,7 @@ static int32_t TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32
     // Check done above
     //if(ch0 == 0) return 0;
 
-    float tme = (iTime * 100.0F) + 100.0F;
+    float tme = (iTime * 100.0f) + 100.0f;
     float gain = TLS2591GainFacts[iGain >> 4];    
     float cpl = (tme * gain) / TSL2591_LUX_DGF;
 
@@ -1418,8 +1410,8 @@ static int32_t TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32
     float lux2 = ((TSL2591_LUX_COEFC * ch0f) - (TSL2591_LUX_COEFD * ch1f)) / cpl;
     #else
     if(temp == 0) return 0;
-    float lux1 = ((ch0f - ch1f)) * (1.0F - (ch1f / ch0f)) / cpl;
-    float lux2 = 0.0;
+    float lux1 = ((ch0f - ch1f)) * (1.0f - (ch1f / ch0f)) / cpl;
+    float lux2 = 0.0f;
     #endif
 
     #ifdef LSENS_DBG
@@ -1429,9 +1421,11 @@ static int32_t TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32
 
     // One of the cases where lux is negative is a bad IR vs 
     // white light ratio.
-    if(lux1 < 0.0F || lux2 < 0.0F) return -1;
-    
-    return (int32_t)max(lux1, lux2);
+    if(lux1 < 0.0f || lux2 < 0.0f) return -1;
+
+    if(lux1 > lux2) return (int32_t)lux1;
+    return (int32_t)lux2;
+    //return (int32_t)max(lux1, lux2);
 }
 
 #endif // TC_HAVELIGHT

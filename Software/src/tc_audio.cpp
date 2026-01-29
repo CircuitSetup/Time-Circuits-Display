@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -53,6 +53,7 @@
 #include "tc_global.h"
 
 //#define TC_DBG_AUDIO      // debug audio library
+//#define TC_DBG_MP
 
 #include <Arduino.h>
 #include <SD.h>
@@ -78,8 +79,53 @@
 #include "tc_keypad.h"
 #include "tc_wifi.h"
 
+class AudioGeneratorWAVP : public AudioGeneratorWAV
+{
+  public:
+    bool beginQuick(AudioFileSource *source, AudioOutput *output, int chnls, uint32_t sr, uint32_t stPos, uint32_t slen)
+    {
+        file = source;
+        this->output = output;
+        
+        bitsPerSample = 16;
+        channels = chnls;
+        sampleRate = sr;
+        availBytes = slen;
+        
+        file->seek(stPos, SEEK_SET);
+      
+        // Now set up the buffer or fail
+        buff = reinterpret_cast<uint8_t *>(malloc(buffSize));
+        if(!buff) {
+          return false;
+        };
+        buffPtr = 0;
+        buffLen = 0;
+
+        sL = sR = 0;
+      
+        if(!output->SetRate(sampleRate)) {
+          return false;
+        }
+        if(!output->SetBitsPerSample(bitsPerSample)) {
+          return false;
+        }
+        if(!output->SetChannels(channels)) {
+          return false;
+        }
+      
+        if(!output->begin()) {
+          return false;
+        }
+      
+        running = true;
+      
+        return true;
+    };
+};
+
 static AudioGeneratorMP3 *mp3;
-static AudioGeneratorWAV *wav;
+static AudioGeneratorWAVP *wav;
 
 #ifdef USE_SPIFFS
 static AudioFileSourceSPIFFS *myFS0;
@@ -92,7 +138,6 @@ static AudioFileSourcePROGMEM *myPM;
 static AudioOutputI2S *out;
 
 bool audioInitDone = false;
-bool audioMute     = false;
 
 bool muteBeep      = true;
 static bool beepRunning = false;
@@ -107,11 +152,11 @@ static uint16_t currPlaying = 0;
 #define         MAXID3LEN 2048
 
 static const float volTable[20] = {
-    0.00, 0.02, 0.04, 0.06,
-    0.08, 0.10, 0.13, 0.16,
-    0.19, 0.22, 0.26, 0.30,
-    0.35, 0.40, 0.50, 0.60,
-    0.70, 0.80, 0.90, 1.00
+    0.00f, 0.02f, 0.04f, 0.06f,
+    0.08f, 0.10f, 0.13f, 0.16f,
+    0.19f, 0.22f, 0.26f, 0.30f,
+    0.35f, 0.40f, 0.50f, 0.60f,
+    0.70f, 0.80f, 0.90f, 1.00f
 };
 int           volumePin = VOLUME_PIN;
 // Resolution for pot, 9-12 allowed
@@ -123,12 +168,16 @@ static int    rawVolIdx = 0;
 static int    anaReadCount = 0;
 static long   prev_avg, prev_raw, prev_raw2;
 
-static float  curVolFact = 1.0;
-static bool   curChkNM   = true;
-static bool   dynVol     = true;
-static int    sampleCnt  = 0;
+static float   curVolFact = 1.0f;
+static bool    curChkNM   = true;
+static bool    dynVol     = true;
+static int     sampleCnt  = 0;
+static int     mutechannels = 0;
 
 static uint32_t key_playing = 0;
+
+static int      lastDoorNum = 0;
+static unsigned long lastDoorSoundNow = 0;
 
 bool          haveLineOut = false;
 bool          useLineOut  = false;
@@ -190,11 +239,13 @@ void audio_setup()
     analogSetWidth(POT_RESOLUTION);
 
     out = new AudioOutputI2S(0, AudioOutputI2S::EXTERNAL_I2S, 32, AudioOutputI2S::APLL_DISABLE);
-    out->SetOutputModeMono(true);
+    // Hardware does auto-mono, no need to ever call this later
+    // (Also, the mono code is commented out in the audio lib)
+    out->SetOutputModeMono(false); 
     out->SetPinout(I2S_BCLK_PIN, I2S_LRCLK_PIN, I2S_DIN_PIN);
 
     mp3 = new AudioGeneratorMP3();
-    wav = new AudioGeneratorWAV();
+    wav = new AudioGeneratorWAVP();
 
     #ifdef USE_SPIFFS
     myFS0 = new AudioFileSourceSPIFFS();
@@ -211,7 +262,7 @@ void audio_setup()
     loadCurVolume();
 
     loadMusFoldNum();
-    mpShuffle = (settings.shuffle[0] != '0');
+    mpShuffle = evalBool(settings.shuffle);
 
     if(haveLineOut) {
         loadLineOut();
@@ -267,7 +318,7 @@ void audio_loop()
         } else if(dynVol) {
             sampleCnt++;
             if(sampleCnt > 1) {
-                out->SetGain(getVolume());
+                out->SetGain(getVolume(), mutechannels);
                 sampleCnt = 0;
             }
         }
@@ -298,8 +349,6 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
 {
     char buf[10];
     int pos;
-    
-    if(audioMute) return;
 
     if(flags & PA_INTRMUS) {
         mpActive = false;
@@ -317,13 +366,25 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
     stopAudio();
     beepRunning = false;
 
+    mutechannels = 0;
+
     playLineOut = (haveLineOut && useLineOut && (flags & PA_LINEOUT)) ? true : false;
     setLineOut(playLineOut);
-    if(playLineOut) flags &= ~(PA_DYNVOL|PA_CHECKNM);
-    
-    curChkNM    = (flags & PA_CHECKNM) ? true : false;
-    dynVol      = (flags & PA_DYNVOL) ? true : false;
-    key_playing = flags & 0x1ff00;
+    if(playLineOut) {
+        curChkNM = dynVol = false;
+        if(flags & PA_DOOR) {
+            if(flags & PA_DOORL) mutechannels = -1;
+            else if(flags & PA_DOORR) mutechannels = 1;
+            flags &= ~PA_KEYMASK;
+        }
+    } else {
+        curChkNM = (flags & PA_CHECKNM) ? true : false;
+        dynVol   = (flags & PA_DYNVOL) ? true : false;
+        if(flags & PA_DOOR) {
+            flags &= ~PA_KEYMASK;
+        }
+    }
+    key_playing = flags & PA_KEYMASK;
 
     curVolFact = volumeFactor;
 
@@ -334,28 +395,32 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
 
     id3artist[0] = id3track[0] = 0;
 
-    out->SetGain(getVolume());
+    out->SetGain(getVolume(), mutechannels);
 
     if(haveSD && ((flags & PA_ALLOWSD) || FlashROMode) && mySD0->open(audio_file)) {
-        if(flags & PA_DOID3TS) {
-            char *id3 = (char *)malloc(MAXID3LEN);
-            if(id3) {
-                id3[0] = 0;
-                mySD0->read((void *)id3, 10);
-                if((pos = skipID3(id3))) {
-                    int Id3Size = pos <= MAXID3LEN ? pos : MAXID3LEN;
-                    mySD0->read((void *)((char *)id3 + 10), Id3Size - 10);
-                    decodeID3(id3artist, id3track, id3, Id3Size);
-                }
-                free(id3);
-                mySD0->seek(pos, SEEK_SET);
-            }
+        if(flags & PA_ISWAV) {
+            wav->begin(mySD0, out);
         } else {
-            buf[0] = 0;
-            mySD0->read((void *)buf, 10);
-            mySD0->seek(skipID3(buf), SEEK_SET);
+            if(flags & PA_DOID3TS) {
+                char *id3 = (char *)malloc(MAXID3LEN);
+                if(id3) {
+                    id3[0] = 0;
+                    mySD0->read((void *)id3, 10);
+                    if((pos = skipID3(id3))) {
+                        int Id3Size = pos <= MAXID3LEN ? pos : MAXID3LEN;
+                        mySD0->read((void *)((char *)id3 + 10), Id3Size - 10);
+                        decodeID3(id3artist, id3track, id3, Id3Size);
+                    }
+                    free(id3);
+                    mySD0->seek(pos, SEEK_SET);
+                }
+            } else {
+                buf[0] = 0;
+                mySD0->read((void *)buf, 10);
+                mySD0->seek(skipID3(buf), SEEK_SET);
+            }
+            mp3->begin(mySD0, out);
         }
-        mp3->begin(mySD0, out);
         #ifdef TC_DBG
         Serial.println("Playing from SD");
         #endif
@@ -366,13 +431,13 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
       else if(haveFS && myFS0->open(audio_file))
     #endif
     {
-        if(!(flags & PA_ISWAV)) {
+        if(flags & PA_ISWAV) {
+            wav->begin(myFS0, out);
+        } else {
             buf[0] = 0;
             myFS0->read((void *)buf, 10);
             myFS0->seek(skipID3(buf), SEEK_SET);
             mp3->begin(myFS0, out);
-        } else {
-            wav->begin(myFS0, out);
         }
         #ifdef TC_DBG
         Serial.println("Playing from flash FS");
@@ -392,9 +457,45 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
 
 uint32_t play_keypad_sound(char key)
 {
+    const uint16_t klens[10] = {
+        11780-44, 11772-44, 11776-44, 11818-44, 11804-44,
+        11804-44, 11744-44, 11698-44, 11790-44, 11818-44
+    };
     uint32_t kp = key_playing;
+    AudioFileSource *src = NULL;
+    
     dtmfBuf[6] = key;
-    play_file(dtmfBuf, PA_ISWAV|PA_INTSPKR|PA_CHECKNM, 0.6);
+    
+    //play_file(dtmfBuf, PA_ISWAV|PA_INTSPKR|PA_CHECKNM, 0.6f);
+    
+    if(mpActive) return kp;
+
+    pwrNeedFullNow();
+
+    stopAudio();
+    beepRunning = playLineOut = false;
+    setLineOut(playLineOut);
+    mutechannels = key_playing = 0;
+    curChkNM = true;
+    curVolFact = 0.6f;
+    rawVolIdx = 0;
+    anaReadCount = 0;
+
+    id3artist[0] = id3track[0] = 0;
+
+    out->SetGain(getVolume(), 0);
+
+    if(FlashROMode && mySD0->open(dtmfBuf)) src = mySD0;
+    #ifdef USE_SPIFFS
+    else if(haveFS && SPIFFS.exists(dtmfBuf) && myFS0->open(dtmfBuf))
+    #else    
+    else if(haveFS && myFS0->open(dtmfBuf))
+    #endif
+        src = myFS0;
+
+    if(src) {
+        wav->beginQuick(src, out, 1, 32000, 44, (uint32_t)klens[key-'0']);
+    }
     return kp;
 }
 
@@ -414,27 +515,27 @@ void play_hour_sound(int hour)
 
 void play_beep()
 {
-    if(!FPBUnitIsOn     || 
-       muteBeep         || 
-       mpActive         || 
-       mp3->isRunning() || 
-       (wav->isRunning() && !beepRunning) || 
-       presentTime.getNightMode() ||
-       audioMute) {
+    bool wavRunning = wav->isRunning();
+    
+    if((csf & (CSF_NM|CSF_OFF)) ||
+       muteBeep         ||
+       mpActive         ||
+       mp3->isRunning() ||
+       (wavRunning && !beepRunning)) {
         return;
     }
 
     pwrNeedFullNow();
 
-    if(wav->isRunning()) {
+    if(wavRunning) {
         wav->stop();
     }
 
     setLineOut(false);
     playLineOut = false;
 
-    curVolFact = 0.3;
-    curChkNM   = true;
+    curVolFact = 0.3f;
+    curChkNM   = false;
     // Reset vol smoothing
     // (user might have turned the pot while no sound was played)
     rawVolIdx = 0;
@@ -445,7 +546,7 @@ void play_beep()
     id3artist[0] = id3track[0] = 0;
 
     myPM->open(data_beep_wav, data_beep_wav_len);
-    wav->begin(myPM, out);
+    wav->beginQuick(myPM, out, 1, 32000, 44, data_beep_wav_len - 44);
     beepRunning = true;
 }
 
@@ -471,6 +572,22 @@ void play_key(int k, uint32_t preDTMFkp)
     keySnd[4] = '0' + k;
     
     play_file(keySnd, pa_key|PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
+}
+
+void play_door_snd(int doorNum, int state, uint32_t doorFlags)
+{
+    // Sounds for same door may interrupt themselves; if sound for
+    // other door is to be played while first door's is running, we 
+    // only interrupt if reasonable part of the first door's sound
+    // is already played back.
+    unsigned long now = millis();
+    if(!startup && ((!(csf & (CSF_P0|CSF_P1|CSF_RE))) || !playTTsounds || checkAudioFree())) {
+        if((lastDoorNum == doorNum) || !lastDoorNum || (now - lastDoorSoundNow > 750)) {
+            play_file((state < 0) ? "/doorclose.mp3" : "/dooropen.mp3", doorFlags|PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD);
+            lastDoorSoundNow = now;
+            lastDoorNum = doorNum;
+        }
+    }
 }
 
 // Returns value for volume based on the position of the pot
@@ -528,7 +645,7 @@ static float getRawVolume()
 
     vol_val = (float)avg / (float)((1<<POT_RESOLUTION)-1);
 
-    if((raw + prev_raw + prev_raw2 > 0) && vol_val < 0.01) vol_val = 0.01;
+    if((raw + prev_raw + prev_raw2 > 0) && vol_val < 0.01f) vol_val = 0.01f;
 
     prev_raw2 = prev_raw;
     prev_raw = raw;
@@ -540,7 +657,7 @@ static float getRawVolume()
 
 static float getVolume()
 {
-    float vol_val = 1.0;
+    float vol_val = 1.0f;
 
     if(!playLineOut) {
         if(curVolume == 255) {
@@ -550,19 +667,20 @@ static float getVolume()
         }
 
         // If user muted, return 0
-        if(vol_val == 0.0) return vol_val;
+        if(vol_val == 0.0f) return vol_val;
     }
 
     vol_val *= curVolFact;
 
     // Reduce volume in night mode, if requested
-    if(curChkNM && presentTime.getNightMode()) {
-        vol_val *= 0.3;
+    if(curChkNM && (csf & CSF_NM)) {
+        vol_val *= 0.3f;
     }
 
     // Do not totally mute
     // 0.02 is the lowest audible gain
-    if(vol_val < 0.02) vol_val = 0.02;
+    if(vol_val < 0.02f) vol_val = 0.02f;
+    //else if(vol_val > 1.0f) vol_val = 1.0f;
 
     return vol_val;
 }
@@ -573,11 +691,9 @@ static void setLineOut(bool doLineOut)
         if(useLineOut && doLineOut) {
             // Mute/un-mute secondary DAC? No, for now.
             //digitalWrite(MUTE_LINEOUT_PIN, doLineOut ? HIGH : LOW);
-            out->SetOutputModeMono(false);
             // Switch off MAX98357, switch on PCM510x
             digitalWrite(SWITCH_LINEOUT_PIN, HIGH);
         } else {
-            out->SetOutputModeMono(true);
             // Switch on MAX98357, switch off PCM510x
             digitalWrite(SWITCH_LINEOUT_PIN, LOW);
         }
@@ -608,13 +724,15 @@ int getSWVolFromHWVol()
     return i;
 }
 
+// Audio is really done (beep included)
 bool checkAudioDone()
 {
     if(mp3->isRunning() || wav->isRunning()) return false;
     return true;
 }
 
-bool checkMP3Done()
+// Audio is free for use; beep is low prio and ignored
+bool checkAudioFree()
 {
     if(mp3->isRunning() || (wav->isRunning() && !beepRunning)) return false;
     return true;
@@ -632,7 +750,7 @@ void stopAudio()
     } else if(wav->isRunning()) {
         wav->stop();
     }
-    key_playing = 0;
+    key_playing = 0;    
     id3artist[0] = id3track[0] = 0;
 }
 
@@ -821,8 +939,6 @@ void mp_init(bool isSetup)
     mpCurrIdx = 0;
     
     if(haveSD) {
-        int i, j;
-
         #ifdef TC_DBG_MP
         Serial.println("MusicPlayer: Checking for music files");
         #endif
@@ -1041,8 +1157,8 @@ int mp_checkForFolder(int num)
     // returns 
     // 1 if folder is ready (contains 000.mp3 and DONE)
     // 0 if folder does not exist
-    // -1 if folder exists but needs processing
-    // -2 if musicX contains no audio files
+    // -1 if folder exists but needs processing (no DONE)
+    // -2 if musicX contains no audio files (DONE but no 000.mp3)
     // -3 if musicX is not a folder
 
     if(num < 0 || num > 9)
@@ -1052,6 +1168,15 @@ int mp_checkForFolder(int num)
     sprintf(fnbuf, "/music%1d", num);
     if(!SD.exists(fnbuf))
         return 0;
+
+    File origin = SD.open(fnbuf);
+    if(!origin) return 0;
+    if(!origin.isDirectory()) {
+        // If musicX is not a folder, return -3
+        origin.close();
+        return -3;
+    }
+    origin.close();
 
     // Check if DONE exists
     sprintf(fnbuf, "/music%1d%s", num, tcdrdone);
@@ -1065,19 +1190,8 @@ int mp_checkForFolder(int num)
         return -2;
     }
       
-    // Check if folder is folder
-    sprintf(fnbuf, "/music%1d", num);
-    File origin = SD.open(fnbuf);
-    if(!origin) return 0;
-    if(!origin.isDirectory()) {
-        // If musicX is not a folder, return -3
-        ret = -3;
-    } else {
-        // If it is a folder, it needs processing
-        ret = -1;
-    }
-    origin.close();
-    return ret;
+    // DONE not present: Needs processing
+    return -1;
 }
 
 /*
@@ -1148,17 +1262,20 @@ static void mpren_looper(bool isSetup, bool checking, int fileNum)
 {
     unsigned long now = millis();
 
-    // We are only ever called from keypad menu.
-    // So gps_loop(true) is allowed.
+    // We are only ever called from keypad menu (or from audio_setup,
+    // but in that case the loop calls are skipped)
+    // So speedoUpdate_loop(true) is appropriate.
 
     if(now - renNow1 > 250) {
         wifi_loop();
         if(!isSetup) {
             ntp_loop();
-            #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE)
-            gps_loop(true);
+            #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
+            speedoUpdate_loop(true);
             #endif
-            bttfn_loop();
+            int i = 0;
+            while(bttfn_loop()) { i++; }
+            Serial.printf("%d BTTFN packets\n", i);
             // audio_loop not required, never
             // called when audio is active
         }
@@ -1191,7 +1308,6 @@ static bool mp_renameFilesInDir(bool isSetup)
     int fileNum = 0;
     int strLength;
     int nameOffs = 8;
-    int allocBufs = 1;
     int allocBufIdx = 0;
     const unsigned long bufSizes[8] = {
         16384, 16384, 8192, 8192, 8192, 8192, 8192, 4096 
@@ -1465,7 +1581,7 @@ static bool mpren_strLT(const char *a, const char *b)
         unsigned char bbb = mpren_toUpper(*b);
         if(aaa < bbb) return true;
         if(aaa > bbb) return false;
-        *a++; *b++;
+        a++; b++;
     }
 
     return false;

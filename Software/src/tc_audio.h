@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -61,25 +61,29 @@
 #define PA_ALLOWSD 0x0004
 #define PA_DYNVOL  0x0008
 #define PA_DOID3TS 0x0010
-#define PA_LOOPNOW 0x0020
+#define PA_DOOR    0x0020
 #define PA_LINEOUT 0x0040
 #define PA_INTSPKR 0x0000
 #define PA_ISWAV   0x0080
-// upper 8 bits all taken
+// upper 8 bits all taken for key ID
+#define PA_KEYMASK 0x1ff00
+#define PA_DOORL   0x0100
+#define PA_DOORR   0x0200
 
 void  audio_setup();
 void  audio_loop();
 
-void      play_file(const char *audio_file, uint32_t flags, float volumeFactor = 1.0);
+void      play_file(const char *audio_file, uint32_t flags, float volumeFactor = 1.0f);
 uint32_t  play_keypad_sound(char key);
 void      play_hour_sound(int hour);
 void      play_beep();
 void      play_key(int k, uint32_t preDTMFkp);
+void      play_door_snd(int doorNum, int state, uint32_t doorFlags);
 
 bool  check_file_SD(const char *audio_file);
 int   getSWVolFromHWVol();
 bool  checkAudioDone();
-bool  checkMP3Done();
+bool  checkAudioFree();
 bool  checkMP3Running();
 void  stopAudio();
 void  stop_key();
@@ -97,7 +101,6 @@ int   mp_get_currently_playing();
 extern int  volumePin;
 
 extern bool audioInitDone;
-extern bool audioMute;
 extern bool muteBeep;
 
 extern bool haveMusic;

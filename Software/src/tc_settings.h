@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -61,6 +61,9 @@ extern bool haveAudioFiles;
 
 extern uint8_t musFolderNum;
 
+extern int sspeedopin;
+extern int stachopin;
+
 #define MS(s) XMS(s)
 #define XMS(s) #s
 
@@ -96,7 +99,7 @@ extern uint8_t musFolderNum;
 #define DEF_USE_LIGHT       0     // Default: No i2c light sensor
 #define DEF_LUX_LIMIT       3     // Default Lux threshold for night mode
 #define DEF_TEMP_UNIT       0     // Default: 0: temperature unit Fahrenheit; 1: Celsius
-#define DEF_TEMP_OFFS       0.0   // Default: temperature offset 0.0
+#define DEF_TEMP_OFFS       0.0f  // Default: temperature offset 0.0
 #define DEF_SPEEDO_TYPE     99    // Default display type: None
 #define DEF_BRIGHT_SPEEDO   15    // Default: Max. brightness for speed
 #ifdef SP_ALWAYS_ON
@@ -105,7 +108,7 @@ extern uint8_t musFolderNum;
 #define DEF_SPEEDO_AO       1     // Speedo: 0: Keep on when idle, do not switch off, 1: switch off when idle (=old behavior)
 #endif
 #define DEF_SPEEDO_ACCELFIG 0     // Accel figures: 0: Movie (approximated), 1: Real-life
-#define DEF_SPEEDO_FACT     2.0   // Real-life acceleration factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
+#define DEF_SPEEDO_FACT     2.0f  // Real-life acceleration factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
 #define DEF_SPEEDO_P3       0     // Speedo: 1: Like part 3 (leading 0 < 10, no dot) / 0: like parts 1/2 (single digit < 10, dot)
 #define DEF_SPEEDO_3RDD     0     // Speedo: 1: Enable third digit (always 0) on CircuitSetup speedo, 0: Do not
 #define DEF_USE_GPS_SPEED   0     // 0: Do not show GPS speed on speedo display; 1: Do
@@ -221,7 +224,11 @@ struct Settings {
     char CfgOnSD[4]         = MS(DEF_CFG_ON_SD);
     char timesPers[4]       = MS(DEF_TIMES_PERS);
     //char sdFreq[4]          = MS(DEF_SD_FREQ);
-    char revAmPm[4]         = MS(DEF_REVAMPM);    
+    char revAmPm[4]         = MS(DEF_REVAMPM);
+#ifdef SERVOSPEEDO
+    char ttinpin[4]         = "0";
+    char ttoutpin[4]        = "0";
+#endif    
 };
 
 // Maximum delay for incoming tt trigger
@@ -243,6 +250,8 @@ void unmount_fs();
 
 void write_settings();
 bool checkConfigExists();
+
+bool evalBool(char *s);
 
 void saveBrightness(bool useCache = true);
 
@@ -270,6 +279,11 @@ void saveLineOut();
 
 #ifdef TC_HAVE_REMOTE
 void saveRemoteAllowed();
+#endif
+
+#ifdef SERVOSPEEDO
+void loadServoCorr(int& scorr, int& tcorr);
+void saveServoCorr(int scorr, int tcorr);
 #endif
 
 bool loadIpSettings();

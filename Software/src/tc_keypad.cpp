@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -177,6 +177,7 @@ static unsigned long lastKeyPressed = 0;
 static char dateBuffer[DATELEN_MAX + 2];
 static char binBuf[DATELEN_MAX + 2];
 char        timeBuffer[8];
+char        keypadKeyPressed = 0;
 
 static int dateIndex = 0;
 static int timeIndex = 0;
@@ -199,16 +200,14 @@ static TCButton enterKey = TCButton(ENTER_BUTTON_PIN,
     false     // Disable internal pull-up resistor
 );
 
-#ifndef EXPS
 static TCButton ettKey = TCButton(EXTERNAL_TIMETRAVEL_IN_PIN,
     true,     // Button is active LOW
     true      // Enable internal pull-up resistor
 );
-#endif
 
 static void keypadEvent(char key, KeyState kstate);
 static void recordKey(char key);
-static void recordSetTimeKey(char key, bool isYear);
+static void recordForMenu(char key, bool isYear);
 
 static void enterKeyPressed();
 static void enterKeyHeld();
@@ -220,6 +219,8 @@ static void setupWCMode();
 static void buildRemString(char *buf);
 static void buildRemOffString(char *buf);
 static void buildStalePTStatus(char *buf);
+
+static void waitAudioDone();
 
 static void dt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR)
 {
@@ -241,6 +242,8 @@ static void handleTTrefusal(int reason)
  */
 void keypad_setup()
 {
+    enterKey.begin();
+
     // Set up the keypad
     keypad.begin(20, ENTER_HOLD_TIME, myCustomDelay_KP);
 
@@ -256,16 +259,17 @@ void keypad_setup()
     enterKey.attachLongPressStart(enterKeyHeld);
 
     // Set up External time travel button
-    #ifndef EXPS
-    ettKey.setTiming(ETT_DEBOUNCE, ETT_PRESS_TIME, ETT_HOLD_TIME);
-    ettKey.attachPress(ettKeyPressed);
-    ettKey.attachLongPressStart(ettKeyHeld);
-    #endif
+    if(!ttinpin) {
+        ettKey.begin();
+        ettKey.setTiming(ETT_DEBOUNCE, ETT_PRESS_TIME, ETT_HOLD_TIME);
+        ettKey.attachPress(ettKeyPressed);
+        ettKey.attachLongPressStart(ettKeyHeld);
+    }
 
     ettDelay = atoi(settings.ettDelay);
     if(ettDelay > ETT_MAX_DEL) ettDelay = ETT_MAX_DEL;
 
-    ettLong = (atoi(settings.ettLong) > 0);
+    ettLong = evalBool(settings.ettLong);
 
     dateBuffer[0] = 0;
     timeBuffer[0] = 0;
@@ -287,8 +291,8 @@ static void keypadEvent(char key, KeyState kstate)
     bool mpWasActive = false;
     bool playBad = false;
     int i;
-    
-    if(!FPBUnitIsOn || startup || timeTravelP0 || timeTravelP1 || timeTravelRE)
+
+    if(csf & (CSF_OFF|CSF_ST|CSF_P0|CSF_P1|CSF_RE))
         return;
 
     pwrNeedFullNow();
@@ -296,13 +300,13 @@ static void keypadEvent(char key, KeyState kstate)
     switch(kstate) {
     case TCKS_PRESSED:
         if(key != '#' && key != '*') {
-            preDTMFkeyplayed = play_keypad_sound(key);
+            if(keypadMode != 2) preDTMFkeyplayed = play_keypad_sound(key);
             doKey = true;
         }
         break;
         
     case TCKS_HOLD:
-        if(keypadInMenu) break;    // Don't do anything while in menu
+        if(keypadMode) break;    // Don't do anything while in menu
 
         switch(key) {
         case '0':    // "0" held down -> time travel
@@ -351,6 +355,7 @@ static void keypadEvent(char key, KeyState kstate)
             // Enable WiFi / even if in AP mode / with CP
             wifiOn(0, true, false);
             syncTrigger = true;
+            syncTriggerNow = millis();
             // Restart mp if it was active before
             if(mpWasActive) mp_play();   
             break;
@@ -391,10 +396,16 @@ static void keypadEvent(char key, KeyState kstate)
         
     case TCKS_RELEASED:
         if(doKey) {
-            if(keypadInMenu) {
-                recordSetTimeKey(key, isYearUpdate);
-            } else {
+            switch(keypadMode) {
+            case 0:
                 recordKey(key);
+                break;
+            case 1:
+                recordForMenu(key, isYearUpdate);
+                break;
+            case 2:
+                keypadKeyPressed = key;
+                break;
             }
         }
         break;
@@ -446,7 +457,7 @@ static void recordKey(char key)
     lastKeyPressed = millis();
 }
 
-static void recordSetTimeKey(char key, bool isYear)
+static void recordForMenu(char key, bool isYear)
 {
     timeBuffer[timeIndex++] = key;
     timeBuffer[timeIndex] = 0;
@@ -484,11 +495,14 @@ bool injectInput(const char *s)
 
 void enterkeyScan()
 {
-    enterKey.scan();  // scan the enter button
+    // scan the enter button
+    enterKey.scan(); 
 
-    #ifndef EXPS
-    ettKey.scan();    // scan the ext. time travel button
+    // scan the ext. time travel button
+    #ifdef SERVOSPEEDO
+    if(!ttinpin)
     #endif
+        ettKey.scan();
 }
 
 static uint8_t read2digs(uint8_t idx)
@@ -537,7 +551,7 @@ void keypad_loop()
     char *keyBuffer = dateBuffer;
     char spTxt[16];
     #define EE1_KL2 12
-    char spTxtS2[EE1_KL2] = { 181, 224, 179, 231, 199, 140, 197, 129, 197, 140, 194, 133 };
+    const char spTxtS2[EE1_KL2] = { 181, 224, 179, 231, 199, 140, 197, 129, 197, 140, 194, 133 };
     const char *tmr = "TIMER   ";
 
     if(!inputInjected) {
@@ -552,7 +566,7 @@ void keypad_loop()
     }
 
     // Bail out if sequence played or device is fake-"off"
-    if(!FPBUnitIsOn || startup || timeTravelP0 || timeTravelP1 || timeTravelRE) {
+    if(csf & (CSF_OFF|CSF_ST|CSF_P0|CSF_P1|CSF_RE)) {
 
         isEnterKeyHeld = false;
         isEnterKeyPressed = false;
@@ -608,7 +622,8 @@ void keypad_loop()
         timeBuffer[0] = 0;
 
         menuActive = true;
-        bttfn_tcd_busy(1);
+        csf |= CSF_MA;
+        bttfn_notify_info();
 
         enter_menu();
 
@@ -620,7 +635,8 @@ void keypad_loop()
         isEttKeyPressed = isEttKeyHeld = isEttKeyImmediate = false;
 
         menuActive = false;
-        bttfn_tcd_busy(0);
+        csf &= ~CSF_MA;
+        bttfn_notify_info();
 
     }
 
@@ -992,7 +1008,7 @@ void keypad_loop()
                             saveRemoteAllowed();
                             if(!remoteAllowed) {
                                 removeRemote();
-                                bttfn_tcd_busy(0);
+                                bttfn_notify_info();
                             }
                         }
                         validEntry = true;
@@ -1007,7 +1023,7 @@ void keypad_loop()
                             saveRemoteAllowed();
                             if(!remoteKPAllowed) {
                                 removeKPRemote();
-                                bttfn_tcd_busy(0);
+                                bttfn_notify_info();
                             }
                         }
                         validEntry = true;
@@ -1126,7 +1142,7 @@ void keypad_loop()
                     }
                 } 
 
-                invalidEntry = !validEntry; 
+                invalidEntry = !validEntry;
             
             } else if(haveMusic && !strncmp(keyBuffer, "888", 3)) {
 
@@ -1147,39 +1163,77 @@ void keypad_loop()
 
             }
 
-        } else if(strLen == DATELEN_TIME && read2digs(0) == 44) {
+        } else if(strLen == DATELEN_TIME && binBuf[0] == 4) {
 
             char atxt[16];
             uint8_t mins;
             uint16_t flags = 0;
+            #ifdef SERVOSPEEDO
+            int sfact = 1;
+            #endif
             
-            mins = read2digs(2);
-            if(!mins) {
-                #ifdef IS_ACAR_DISPLAY
-                sprintf(atxt, "%s OFF", tmr);
-                #else
-                sprintf(atxt, "%s  OFF", tmr);
-                #endif
-                ctDown = 0;
-            } else {
-                #ifdef IS_ACAR_DISPLAY
-                sprintf(atxt, "%s%02d00", tmr, mins);
-                #else
-                sprintf(atxt, "%s %02d00", tmr, mins);
-                #endif
-                ctDown = mins * 60 * 1000;
-                ctDownNow = millis();
-                flags = CDT_COLON;
+            switch(binBuf[1]) {
+            case 4:
+                mins = read2digs(2);
+                if(!mins) {
+                    #ifdef IS_ACAR_DISPLAY
+                    sprintf(atxt, "%s OFF", tmr);
+                    #else
+                    sprintf(atxt, "%s  OFF", tmr);
+                    #endif
+                    ctDown = 0;
+                } else {
+                    #ifdef IS_ACAR_DISPLAY
+                    sprintf(atxt, "%s%02d00", tmr, mins);
+                    #else
+                    sprintf(atxt, "%s %02d00", tmr, mins);
+                    #endif
+                    ctDown = mins * 60 * 1000;
+                    ctDownNow = millis();
+                    flags = CDT_COLON;
+                }
+    
+                dt_showTextDirect(atxt, CDT_CLEAR|flags);
+                specDisp = 10;
+                validEntry = true;
+                break;
+            #ifdef SERVOSPEEDO
+            case 5:
+            case 7:
+                sfact = -1;
+                // fall through
+            case 6:
+            case 8:
+                if(useSpeedoDisplay) {
+                    int val = read2digs(2) * sfact;
+                    bool doSave;
+                    if(binBuf[1] <= 6) {
+                        doSave = speedo.setTCorr(val);
+                    } else {
+                        doSave = speedo.setSCorr(val);
+                    }
+                    if(doSave) {
+                        int scorr, tcorr;
+                        speedo.getCorr(scorr, tcorr);
+                        saveServoCorr(scorr, tcorr);
+                        validEntry = true;
+                    }
+                }
+                break;
+            case 9:
+                if(useSpeedoDisplay) {
+                    int val = read2digs(2);
+                    speedo.setCalib((val > 95) ? -1 : val);
+                    validEntry = true;
+                }
+                break;
+            #endif
             }
 
-            dt_showTextDirect(atxt, CDT_CLEAR|flags);
-            specDisp = 10;
-            validEntry = true;
+            invalidEntry = !validEntry;
 
         } else if((strLen == DATELEN_TIME || strLen == DATELEN_ECMD) && 
-                                                      binBuf[0] != 0 &&
-                                                      binBuf[0] != 1 &&
-                                                      binBuf[0] != 2 &&
+                                                      binBuf[0] >= 3 &&
                                                       binBuf[0] != 4) {
                       
             uint32_t cmd;
@@ -1203,8 +1257,9 @@ void keypad_loop()
             case 8:
                 bttfnSendVSRCmd(cmd);
                 break;
-            default:
+            case 9:
                 bttfnSendPCGCmd(cmd);
+                break;
             }
             validEntry = true;
         
@@ -1302,10 +1357,10 @@ void keypad_loop()
             uint32_t spTmp;
             #ifdef IS_ACAR_DISPLAY
             #define EE1_KL1 12
-            char spTxtS1[EE1_KL1] = { 207, 254, 206, 255, 206, 247, 206, 247, 199, 247, 207, 247 };
+            const char spTxtS1[EE1_KL1] = { 207, 254, 206, 255, 206, 247, 206, 247, 199, 247, 207, 247 };
             #else
             #define EE1_KL1 13
-            char spTxtS1[EE1_KL1] = { 181, 244, 186, 138, 187, 138, 179, 138, 179, 131, 179, 139, 179 };
+            const char spTxtS1[EE1_KL1] = { 181, 244, 186, 138, 187, 138, 179, 138, 179, 131, 179, 139, 179 };
             #endif
 
             temp1 = read2digs(0);
@@ -1347,7 +1402,7 @@ void keypad_loop()
                 spTmp = (uint32_t)_setYear << 16 | _setMonth << 8 | _setDay;
                 if((spTmp ^ getHrs1KYrs(7)) == EEXSP1) {
                     special = 1;
-                    spTxt[EE1_KL1] = '\0';
+                    spTxt[EE1_KL1] = 0;
                     for(int i = EE1_KL1-1; i >= 0; i--) {
                         spTxt[i] = spTxtS1[i] ^ (i == 0 ? 0xff : spTxtS1[i-1]);
                     }
@@ -1493,7 +1548,7 @@ void keypad_loop()
             break;
         case 3:
             specDisp++;
-            spTxt[EE1_KL2] = '\0';
+            spTxt[EE1_KL2] = 0;
             for(int i = EE1_KL2-1; i >= 0; i--) {
                 spTxt[i] = spTxtS2[i] ^ (i == 0 ? 0xff : spTxtS2[i-1]);
             }
@@ -1531,6 +1586,9 @@ void keypad_loop()
             #endif
 
             // Animate display
+
+            // Fill audio buffer, avoid a pause in the actual animation
+            audio_loop();
 
             #ifdef TC_HAVETEMP
             if(isRcMode()) {
@@ -1665,7 +1723,7 @@ static void setupWCMode()
         myrtcnow(dtu);
         setDatesTimesWC(dtu);
     } else if(autoTimeIntervals[autoInterval] == 0 || (timetravelPersistent && checkIfAutoPaused())) {
-        // Restore NVM time if either time cycling is off, or
+        // Restore stored time if either time cycling is off, or
         // if paused; latter only if we have the last
         // time stored. Otherwise we have no previous time.
         if(WcHaveTZ1) destinationTime.load();
@@ -1728,6 +1786,20 @@ void prepareReboot()
     delay(500);
     unmount_fs();
     delay(100);
+}
+
+// Wait for audio to finish.
+// This is only used before stuff that blocks.
+// ATM only used before a (blocking) WiFi reconnect.
+static void waitAudioDone()
+{
+    unsigned long startNow = millis();
+
+    while(!checkAudioDone() && (millis() - startNow < 3000)) {
+        mydelay(50);
+        wifi_loop();
+        audio_loop(); // audio after wifi is always a good idea
+    }
 }
 
 /*
@@ -1800,10 +1872,12 @@ static void setNightMode(bool nm)
     presentTime.setNightMode(nm);
     departedTime.setNightMode(nm);
     if(useSpeedoDisplay) speedo.setNightMode(nm);
+    bttfn_notify_info();
 }
 
 void nightModeOn()
 {
+    csf |= CSF_NM;
     setNightMode(true);
     leds_off();
     // Expire beep timer
@@ -1815,13 +1889,14 @@ void nightModeOn()
 
 void nightModeOff()
 {
+    csf &= ~CSF_NM;
     setNightMode(false);
     leds_on();
 }
 
 int toggleNightMode()
 {
-    if(destinationTime.getNightMode()) {
+    if(csf & CSF_NM) {
         nightModeOff();
         return 0;
     }
@@ -1835,7 +1910,7 @@ int toggleNightMode()
  
 void leds_on()
 {
-    if(FPBUnitIsOn && !destinationTime.getNightMode()) {
+    if(!(csf & (CSF_OFF|CSF_NM))) {
         digitalWrite(LEDS_PIN, HIGH);
     }
 }

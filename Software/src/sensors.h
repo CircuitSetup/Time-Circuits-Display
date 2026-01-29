@@ -1,7 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -131,11 +131,11 @@ class tempSensor : tcSensor {
         int32_t  _BMx280_CD_H4;
         union {
             int32_t  _BMx280_CD_H5;
-            int32_t  _MS8607_C5;
+            uint32_t  _MS8607_C5;
         };
         union {
             int32_t  _BMx280_CD_H6;
-            float    _MS8607_FA;
+            uint32_t _MS8607_C6;
         };
 
         unsigned long _tempReadNow = 0;

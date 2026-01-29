@@ -1,7 +1,7 @@
 /*
   AudioGeneratorMP3
   Wrap libmad MP3 library to play audio
-  
+
   Copyright (C) 2017  Earle F. Philhower, III
 
   This program is free software: you can redistribute it and/or modify
@@ -16,6 +16,8 @@
 
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+  Adapted by Thomas Winischhofer, 2023-2025
 */
 
 
@@ -62,7 +64,7 @@ AudioGeneratorMP3::~AudioGeneratorMP3()
     free(synth);
     free(frame);
     free(stream);
-  } 
+  }
 }
 
 
@@ -109,7 +111,6 @@ enum mad_flow AudioGeneratorMP3::ErrorToFlow()
   snprintf_P(errLine, sizeof(errLine), PSTR("Decoding error '%s' at byte offset %d"),
            err, (stream->this_frame - buff) + lastReadPos);
   yield(); // Something bad happened anyway, ensure WiFi gets some time, too
-  cb.st(stream->error, errLine);
   return MAD_FLOW_CONTINUE;
 }
 
@@ -172,35 +173,37 @@ bool AudioGeneratorMP3::DecodeNextFrame()
   return true;
 }
 
-bool AudioGeneratorMP3::GetOneSample(int16_t sample[2])
+bool AudioGeneratorMP3::GetOneSample(int16_t& saL, int16_t& saR)
 {
-  if (synth->pcm.samplerate != lastRate) {
-    output->SetRate(synth->pcm.samplerate);
-    lastRate = synth->pcm.samplerate;
-  }
-  if (synth->pcm.channels != lastChannels) {
-    output->SetChannels(synth->pcm.channels);
-    lastChannels = synth->pcm.channels;
-  }
-    
   // If we're here, we have one decoded frame and sent 0 or more samples out
   if (samplePtr < synth->pcm.length) {
-    sample[AudioOutput::LEFTCHANNEL ] = synth->pcm.samples[0][samplePtr];
-    sample[AudioOutput::RIGHTCHANNEL] = synth->pcm.samples[1][samplePtr];
+    saL = synth->pcm.samples[0][samplePtr];
+    saR = synth->pcm.samples[1][samplePtr];
     samplePtr++;
   } else {
     samplePtr = 0;
-    
+
     switch ( mad_synth_frame_onens(synth, frame, nsCount++) ) {
+        case MAD_FLOW_BREAK:
+          audioLogger->printf_P(PSTR("msf1ns MAD_FLOW_BREAK\n"));
         case MAD_FLOW_STOP:
-        case MAD_FLOW_BREAK: audioLogger->printf_P(PSTR("msf1ns failed\n"));
           return false; // Either way we're done
         default:
           break; // Do nothing
     }
+
+    if (synth->pcm.samplerate != lastRate) {
+        output->SetRate(synth->pcm.samplerate);
+        lastRate = synth->pcm.samplerate;
+    }
+    if (synth->pcm.channels != lastChannels) {
+        output->SetChannels(synth->pcm.channels);
+        lastChannels = synth->pcm.channels;
+    }
+
     // for IGNORE and CONTINUE, just play what we have now
-    sample[AudioOutput::LEFTCHANNEL ] = synth->pcm.samples[0][samplePtr];
-    sample[AudioOutput::RIGHTCHANNEL] = synth->pcm.samples[1][samplePtr];
+    saL = synth->pcm.samples[0][samplePtr];
+    saR = synth->pcm.samples[1][samplePtr];
     samplePtr++;
   }
   return true;
@@ -212,7 +215,7 @@ bool AudioGeneratorMP3::loop()
   if (!running) goto done; // Nothing to do here!
 
   // First, try and push in the stored sample.  If we can't, then punt and try later
-  if (!output->ConsumeSample(lastSample)) goto done; // Can't send, but no error detected
+  if (!output->ConsumeSample(sL, sR)) goto done; // Can't send, but no error detected
 
   // Try and stuff the buffer one sample at a time
   do
@@ -228,8 +231,8 @@ retry:
         if (stream->error == MAD_ERROR_BUFLEN) {
           // randomly seeking can lead to endless
           // and unrecoverable "MAD_ERROR_BUFLEN" loop
-          audioLogger->printf_P(PSTR("MP3:ERROR_BUFLEN %d\n"), unrecoverable);
           if (++unrecoverable >= 3) {
+            audioLogger->printf_P(PSTR("MP3:ERROR_BUFLEN %d\n"), unrecoverable);
             unrecoverable = 0;
             stop();
             return running;
@@ -243,12 +246,12 @@ retry:
       nsCount = 0;
     }
 
-    if (!GetOneSample(lastSample)) {
+    if (!GetOneSample(sL, sR)) {
       audioLogger->printf_P(PSTR("G1S failed\n"));
       running = false;
       goto done;
     }
-  } while (running && output->ConsumeSample(lastSample));
+  } while (running && output->ConsumeSample(sL, sR));
 
 done:
   file->loop();
@@ -256,8 +259,6 @@ done:
 
   return running;
 }
-
-
 
 bool AudioGeneratorMP3::begin(AudioFileSource *source, AudioOutput *output)
 {
@@ -285,6 +286,9 @@ bool AudioGeneratorMP3::begin(AudioFileSource *source, AudioOutput *output)
   lastChannels = 0;
   lastReadPos = 0;
   lastBuffLen = 0;
+
+  // loop starts by pushing out samples, clear them here
+  sL = sR = 0;
 
   // Allocate all large memory chunks
   if (preallocateStreamSize + preallocateFrameSize + preallocateSynthSize) {
@@ -335,14 +339,14 @@ bool AudioGeneratorMP3::begin(AudioFileSource *source, AudioOutput *output)
       return false;
     }
   }
- 
+
   mad_stream_init(stream);
   mad_frame_init(frame);
   mad_synth_init(synth);
   synth->pcm.length = 0;
   mad_stream_options(stream, 0); // TODO - add options support
   madInitted = true;
- 
+
   running = true;
   return true;
 }

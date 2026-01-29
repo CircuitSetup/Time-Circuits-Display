@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -90,17 +90,17 @@
 #define DECLARE_D_JSON(x,n) DynamicJsonDocument n(x);
 #endif 
 
-#define NUM_AUDIOFILES 22
+#define NUM_AUDIOFILES 24
 #define AC_FMTV 2
 #define AC_OHSZ (14 + ((10+NUM_AUDIOFILES+1)*(32+4)))
 #ifdef TWSOUND
 #define SND_NON_ALIEN "CS"
-#define SND_REQ_VERSION "TW04"
-#define AC_TS 1209415
+#define SND_REQ_VERSION "TW05"
+#define AC_TS 1210586
 #else
 #define SND_NON_ALIEN "TW"
-#define SND_REQ_VERSION "CS04"
-#define AC_TS 1214128
+#define SND_REQ_VERSION "CS05"
+#define AC_TS 1215299
 #endif
 
 static const char *CONFN  = "/TCDA.bin";
@@ -125,6 +125,9 @@ static const char *cmCfgName  = "/cmconfig.json";   // Carmode (flash/SD)
 static const char *loCfgName  = "/loconfig.json";   // LineOut (flash/SD)
 #ifdef TC_HAVE_REMOTE
 static const char *raCfgName  = "/raconfig.json";   // RemoteAllowed (flash/SD)
+#endif
+#ifdef SERVOSPEEDO
+static const char *scCfgName  = "/scconfig.json";   // Servo correction
 #endif
 static const char fwfn[]      = "/tcdfw.bin";
 static const char fwfnold[]   = "/tcdfw.old";
@@ -155,6 +158,9 @@ bool haveAudioFiles = false;
 
 /* Music Folder Number */
 uint8_t musFolderNum = 0;
+
+int sspeedopin = 0;
+int stachopin = 0;
 
 /* Cache */
 static uint8_t  preSavedDBri = 20;
@@ -276,6 +282,19 @@ void settings_setup()
     }
 
     if(haveFS) {
+
+        // Remove sound files that no longer should exist
+        char dtmfBuf[] = "/Dtmf-0.mp3";
+        SPIFFS.remove("/beep.mp3");
+        if(SPIFFS.exists(dtmfBuf)) {
+            #ifdef TC_DBG
+            Serial.println("Removing old audio files");
+            #endif
+            for(int i = 0; i < 10; i++) {
+                dtmfBuf[6] = i + '0';
+                SPIFFS.remove(dtmfBuf);
+            }
+        }
       
         #ifdef TC_DBG
         Serial.println("ok, loading settings");
@@ -400,7 +419,7 @@ void settings_setup()
     }
 
     // Determine if secondary settings are to be stored on SD
-    configOnSD = (haveSD && ((settings.CfgOnSD[0] != '0') || FlashROMode));
+    configOnSD = (haveSD && (evalBool(settings.CfgOnSD) || FlashROMode));
 
     // Setup save target for display objects
     setupDisplayConfigOnSD();
@@ -419,6 +438,25 @@ void settings_setup()
     loadRemoteAllowed();
     #endif
 
+    #ifdef SERVOSPEEDO
+    ttinpin = atoi(settings.ttinpin);
+    ttoutpin = atoi(settings.ttoutpin);
+    if(ttinpin == 1) {
+        sspeedopin = EXTERNAL_TIMETRAVEL_IN_PIN;
+    } else if(ttinpin == 2) {
+        stachopin = EXTERNAL_TIMETRAVEL_IN_PIN;
+    } else {
+        ttinpin = 0;
+    }
+    if(ttoutpin == 1 && !sspeedopin) {
+        sspeedopin = EXTERNAL_TIMETRAVEL_OUT_PIN;
+    } else if(ttoutpin == 2 && !stachopin) {
+        stachopin = EXTERNAL_TIMETRAVEL_OUT_PIN;
+    } else {
+        ttoutpin = 0;
+    }
+    #endif
+    
     // Check if SD contains the default sound files
     if((r = e) && haveSD && (FlashROMode || haveFS)) {
         allowCPA = check_if_default_audio_present();
@@ -573,14 +611,14 @@ static bool read_settings(File configFile, int cfgReadCount)
 
         #ifdef TC_HAVETEMP
         wd |= CopyCheckValidNumParm(json["tmpU"], json["tempUnit"], settings.tempUnit, sizeof(settings.tempUnit), 0, 1, DEF_TEMP_UNIT);
-        wd |= CopyCheckValidNumParmF(json["tmpOf"], json["tempOffs"], settings.tempOffs, sizeof(settings.tempOffs), -3.0, 3.0, DEF_TEMP_OFFS);
+        wd |= CopyCheckValidNumParmF(json["tmpOf"], json["tempOffs"], settings.tempOffs, sizeof(settings.tempOffs), -3.0f, 3.0f, DEF_TEMP_OFFS);
         #endif
 
         wd |= CopyCheckValidNumParm(json["spT"], json["speedoType"], settings.speedoType, sizeof(settings.speedoType), 0, 99, DEF_SPEEDO_TYPE);
         wd |= CopyCheckValidNumParm(json["spB"], json["speedoBright"], settings.speedoBright, sizeof(settings.speedoBright), 0, 15, DEF_BRIGHT_SPEEDO);
         wd |= CopyCheckValidNumParm(json["spAO"], NULL, settings.speedoAO, sizeof(settings.speedoAO), 0, 1, DEF_SPEEDO_AO);
         wd |= CopyCheckValidNumParm(json["spAF"], json["speedoAF"], settings.speedoAF, sizeof(settings.speedoAF), 0, 1, DEF_SPEEDO_ACCELFIG);
-        wd |= CopyCheckValidNumParmF(json["spFc"], json["speedoFact"], settings.speedoFact, sizeof(settings.speedoFact), 0.5, 5.0, DEF_SPEEDO_FACT);
+        wd |= CopyCheckValidNumParmF(json["spFc"], json["speedoFact"], settings.speedoFact, sizeof(settings.speedoFact), 0.5f, 5.0f, DEF_SPEEDO_FACT);
         wd |= CopyCheckValidNumParm(json["spP3"], json["speedoL0Spd"], settings.speedoP3, sizeof(settings.speedoP3), 0, 1, DEF_SPEEDO_P3);
         wd |= CopyCheckValidNumParm(json["spd3rd"], NULL, settings.speedo3rdD, sizeof(settings.speedo3rdD), 0, 1, DEF_SPEEDO_3RDD);
         #ifdef TC_HAVEGPS
@@ -624,6 +662,11 @@ static bool read_settings(File configFile, int cfgReadCount)
         wd |= CopyCheckValidNumParm(json["CoSD"], json["CfgOnSD"], settings.CfgOnSD, sizeof(settings.CfgOnSD), 0, 1, DEF_CFG_ON_SD);
         //wd |= CopyCheckValidNumParm(json["sdFreq"], NULL, settings.sdFreq, sizeof(settings.sdFreq), 0, 1, DEF_SD_FREQ);
         wd |= CopyCheckValidNumParm(json["ttps"], json["timeTrPers"], settings.timesPers, sizeof(settings.timesPers), 0, 1, DEF_TIMES_PERS);
+
+        #ifdef SERVOSPEEDO
+        wd |= CopyCheckValidNumParm(json["tin"], NULL, settings.ttinpin, sizeof(settings.ttinpin), 0, 2, 0);
+        wd |= CopyCheckValidNumParm(json["tout"], NULL, settings.ttoutpin, sizeof(settings.ttoutpin), 0, 2, 0);
+        #endif
         
         wd |= CopyCheckValidNumParm(json["rAPM"], NULL, settings.revAmPm, sizeof(settings.revAmPm), 0, 1, DEF_REVAMPM);
         
@@ -753,6 +796,11 @@ void write_settings()
     json["CoSD"] = (const char *)settings.CfgOnSD;
     //json["sdFreq"] = (const char *)settings.sdFreq;
     json["ttps"] = (const char *)settings.timesPers;
+
+    #ifdef SERVOSPEEDO
+    json["tin"] = (const char *)settings.ttinpin;
+    json["tout"] = (const char *)settings.ttoutpin;
+    #endif
     
     json["rAPM"] = (const char *)settings.revAmPm;
 
@@ -809,7 +857,7 @@ static bool CopyCheckValidNumParmF(const char *json, const char *json2, char *te
             strncpy(text, json2, psize-1);
         }
 
-        return checkValidNumParm(text, lowerLim, upperLim, setDefault);
+        return checkValidNumParmF(text, lowerLim, upperLim, setDefault);
     } 
        
     return true;
@@ -884,6 +932,12 @@ static inline void setBoolText(char *buf, const bool& myBool)
 {
     buf[0] = myBool ? '1' : '0';
     buf[1] = 0;
+}
+
+bool evalBool(char *s)
+{
+    if(*s == '0') return false;
+    return true;
 }
 
 static bool openCfgFileRead(const char *fn, File& f)
@@ -1125,7 +1179,6 @@ bool loadAlarm()
     const char *funcName = "lAl";
     #endif
     bool writedefault = true;
-    bool haveConfigFile = false;
     File configFile;
 
     if(!haveFS && !configOnSD)
@@ -1147,8 +1200,8 @@ bool loadAlarm()
                 alarmOnOff = ((aoo & 0x0f) != 0);
                 alarmWeekday = (aoo & 0xf0) >> 4;
                 if(alarmWeekday > 9) alarmWeekday = 0;
-                if(((alarmHour   == 255) || (alarmHour   >= 0 && alarmHour   <= 23)) &&
-                   ((alarmMinute == 255) || (alarmMinute >= 0 && alarmMinute <= 59))) {
+                if(((alarmHour   == 255) || (alarmHour   <= 23)) &&
+                   ((alarmMinute == 255) || (alarmMinute <= 59))) {
                     writedefault = false;
                 }
             }
@@ -1286,7 +1339,6 @@ static void deleteReminder()
 
 static void loadCarMode()
 {
-    bool haveConfigFile = false;
     File configFile;
 
     if(!haveFS && !configOnSD)
@@ -1348,8 +1400,6 @@ void loadStaleTime(void *target, bool& currentOn)
         currentOn = loadBuf[0] ? true : false;
         memcpy(target, (void *)&loadBuf[1], 2*sizeof(dateStruct));
     }
-
-    return;
 }
 
 void saveStaleTime(void *source, bool currentOn)
@@ -1377,7 +1427,6 @@ void saveStaleTime(void *source, bool currentOn)
 
 void loadLineOut()
 {
-    bool haveConfigFile = false;
     File configFile;
 
     if(!haveFS && !configOnSD)
@@ -1422,7 +1471,6 @@ void saveLineOut()
 #ifdef TC_HAVE_REMOTE
 static void loadRemoteAllowed()
 {
-    bool haveConfigFile = false;
     File configFile;
 
     if(!haveFS && !configOnSD)
@@ -1458,6 +1506,43 @@ void saveRemoteAllowed()
     json["RemoteKP"] = (const char *)buf2;
 
     writeJSONCfgFile(json, raCfgName, configOnSD);
+}
+#endif
+
+#ifdef SERVOSPEEDO
+void loadServoCorr(int& scorr, int& tcorr)
+{
+    bool haveConfigFile = false;
+    int8_t loadBuf[3];
+
+    if(configOnSD) {
+        haveConfigFile = readFileFromSD(scCfgName, (uint8_t *)loadBuf, sizeof(loadBuf));
+    }
+    if(!haveConfigFile && haveFS) {
+        haveConfigFile = readFileFromFS(scCfgName, (uint8_t *)loadBuf, sizeof(loadBuf));
+    }
+
+    if(haveConfigFile) {
+        if((loadBuf[0] ^ 0x55) == loadBuf[2]) {
+            scorr = loadBuf[0];
+            tcorr = loadBuf[1];
+        }
+    }
+}
+
+void saveServoCorr(int scorr, int tcorr)
+{
+    int8_t savBuf[3];
+
+    savBuf[0] = scorr;
+    savBuf[1] = tcorr;
+    savBuf[2] = savBuf[0] ^ 0x55;
+    
+    if(configOnSD) {
+        writeFileToSD(scCfgName, (uint8_t *)savBuf, sizeof(savBuf));
+    } else if(haveFS) {
+        writeFileToFS(scCfgName, (uint8_t *)savBuf, sizeof(savBuf));
+    }
 }
 #endif
 
@@ -1648,7 +1733,6 @@ bool check_if_default_audio_present()
     uint8_t dbuf[16]; 
     File file;
     size_t ts;
-    int i;
 
     ic = false;
 
@@ -2074,8 +2158,6 @@ bool writeFileToFS(const char *fn, uint8_t *buf, int len)
 
 static char *allocateUploadFileName(const char *fn, int idx)
 {
-    char *t = NULL;
-
     if(uploadFileNames[idx]) {
         free(uploadFileNames[idx]);
     }

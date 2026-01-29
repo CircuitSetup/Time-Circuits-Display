@@ -1117,13 +1117,30 @@ bool WiFiManager::waitEvent(uint16_t mask, unsigned long timeout)
     return false;
 }
 
-void WiFiManager::disableWiFi()
+void WiFiManager::disableWiFi(bool waitForOFF)
 {
     if(WiFi.getMode() == WIFI_OFF)
         return;
 
     if(WiFi.getMode() & WIFI_AP) {
         shutdownConfigPortal();
+        // If we don't wait, an immediate re-connect
+        // will result in same run-time errors as
+        // described for shutdownConfigPortal(true).
+        if(waitForOFF && _wifiOffFlag) {
+            unsigned long now = millis();
+            while(millis() - now < 2000) {
+                if(_WiFiEventMask & WM_EVB_APSTOP) {
+                    WiFi.mode(WIFI_OFF);
+                    _wifiOffFlag = false;
+                    return;
+                }
+                _delay(100);
+            }
+            #ifdef _A10001986_DBG
+            Serial.println("disableWiFi: Waiting for WM_EVB_APSTOP timed-out");
+            #endif
+        }
     } else if(WiFi.getMode() & WIFI_STA) {
         stopWebPortal();
         WiFi.mode(WIFI_OFF);
@@ -1314,6 +1331,7 @@ unsigned int WiFiManager::getParamOutSize(WiFiManagerParameter** params,
                 switch(params[i]->getFlags() & WFM_LABEL_MASK) {
                 case WFM_LABEL_BEFORE:
                     if(!(params[i]->getFlags() & WFM_NO_BR)) mysize += STRLEN(HTTP_BR);
+                    // fall through
                 case WFM_LABEL_AFTER:
                     mysize += STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM);
                     mysize += STRLEN(HTTP_BR);
@@ -2639,8 +2657,6 @@ void WiFiManager::handleUpdating()
     HTTPUpload& upload = server->upload();
 
     if(upload.status == UPLOAD_FILE_START) {
-
-        uint32_t maxSketchSpace;
 
         _uplError = false;
 

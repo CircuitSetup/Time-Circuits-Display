@@ -3,10 +3,10 @@
  * PubSubClient.h - A simple client for MQTT.
  * Nick O'Leary
  * http://knolleary.net
- * Minimized & adapted by Thomas Winischhofer (A10001986) in 2023
- * MQTT 5.0 support by Thomas Winischhofer (A10001986) in 2025
  *
  * Copyright (c) 2008-2020 Nicholas O'Leary
+ * Minimized & adapted by Thomas Winischhofer (A10001986) in 2023
+ * MQTT 5.0 support by Thomas Winischhofer (A10001986) in 2025
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the

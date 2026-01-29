@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -145,7 +145,7 @@ void clockDisplay::begin()
 
 // Turn on the display
 void clockDisplay::on()
-{
+{   
     directCmd(0x80 | 1);
 }
 
@@ -378,6 +378,7 @@ void clockDisplay::showAnimate3(int mystep)
         if(!_mode24) {
             (_hour < 12) ? AM() : PM();
         }
+        // fall through
     default:
         showAnimate2(lim);
     }
@@ -484,9 +485,7 @@ void clockDisplay::setYear(uint16_t yearNum)
 }
 
 void clockDisplay::setHour(uint16_t hourNum)
-{
-    uint16_t seg = 0;
-    
+{   
     if(hourNum > 23)
         hourNum = 23;
 
@@ -692,7 +691,9 @@ void clockDisplay::showHalfIPDirect(int a, int b, uint16_t flags)
     #endif
 
     if(a > 255) a = 255;    // Avoid buf overflow if numbers too high
+    else if(a < 0) a = 0;
     if(b > 255) b = 255;
+    else if(b < 0) b = 0;
 
     #ifdef IS_ACAR_DISPLAY
     sprintf(buf, (a >= 100) ? fmt1 : fmt2, a, b);
@@ -732,7 +733,7 @@ void clockDisplay::showTempDirect(float temp, bool tempUnit, bool animate)
         sprintf(buf, "%s   ----~%c", ttem, tempUnit ? 'C' : 'F');
         #endif
     } else {
-        t2 = abs((int)(temp * 100.0) - ((int)temp * 100));
+        t2 = abs((int)(temp * 100.0f) - ((int)temp * 100));
         #ifdef IS_ACAR_DISPLAY
         sprintf(buf, "%s%4d%02d~%c", ttem, (int)temp, t2, tempUnit ? 'C' : 'F');
         #else
@@ -744,9 +745,7 @@ void clockDisplay::showTempDirect(float temp, bool tempUnit, bool animate)
     showTextDirect(buf);
     _yearDot = false;
 
-    if(animate || (_NmOff && (_oldnm > 0)) ) on();
-
-    if(_NmOff) _oldnm = 0;
+    showIntTail(animate);
 }
 
 void clockDisplay::showHumDirect(int hum, bool animate)
@@ -773,9 +772,7 @@ void clockDisplay::showHumDirect(int hum, bool animate)
 
     showTextDirect(buf);
 
-    if(animate || (_NmOff && (_oldnm > 0)) ) on();
-
-    if(_NmOff) _oldnm = 0;
+    showIntTail(animate);
 }
 #endif
 
@@ -1220,7 +1217,13 @@ void clockDisplay::showInt(bool animate, bool Alt)
     }
 
     Wire.endTransmission();
+    
+    showIntTail(animate);
+}
 
+void clockDisplay::showIntTail(bool animate)
+{
+    if(animate) directCmd(0x20 | 1);
     if(animate || (_NmOff && (_oldnm > 0)) ) on();
 
     if(_NmOff) _oldnm = 0;

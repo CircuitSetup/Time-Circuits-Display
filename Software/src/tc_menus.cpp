@@ -2,7 +2,7 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -59,6 +59,9 @@
  * keypad.
  *
  * A "press" is shorter than 2 seconds, a "hold" is 2 seconds or longer.
+ * 
+ * Since 3.11, keys 2 (up), 5 (select), 8 (down) and 9 (cancel) are also
+ * a way of navigating the keypad menu (unless numerical input is awaited).
  * 
  * Data entry is done by pressing the keypad's number keys, and works as 
  * follows: 
@@ -277,7 +280,7 @@ uint8_t remMin = 0;
 
 static int menuItemNum;
 
-bool keypadInMenu = false;
+int  keypadMode = 0;
 bool isYearUpdate = false;
 
 static clockDisplay* displaySet;
@@ -286,13 +289,9 @@ static clockDisplay* displaySet;
 static bool fcprog = false;
 static unsigned long fcstart = 0;
 
-// For tracking second changes
-static bool xx;  
-static bool yy;
-
-// Our generic timeout when waiting for buttons, in seconds. max 255.
-#define maxTime 240
-static uint8_t timeout = 0;
+// Our generic timeout when waiting for buttons
+#define MENUTIMEOUT 60000   // 60 seconds
+static unsigned long timeout = 0;
 
 static const char *StrSaving = "SAVING";
 static const char *alarmWD[10] = {
@@ -308,13 +307,13 @@ static bool menuSelect(int& number, int mode_min, DateTime& dtu, DateTime& dtl);
 static void menuShow(int number);
 static void setUpdate(int number, int field, uint16_t dflags = 0);
 static bool setField(int& number, uint8_t field, int year = 0, int month = 0, uint16_t dflags = 0);
-static void showCurVolHWSW();
-static void showCurVol();
+static void showCurVolHWSW(bool blink);
+static void showCurVol(bool blink, bool doComment);
 static void doSetVolume();
-static void displayMSfx(int msfx);
+static void displayMSfx(int msfx, bool blink, bool doFolderChk);
 static void doSetMSfx();
 static void doSetAlarm();
-static void displayAI(int interval);
+static void displayAI(int interval, bool blink, bool doComment);
 static void doSetAutoInterval();
 static bool doSetBrightness(clockDisplay* displaySet);
 #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
@@ -325,13 +324,16 @@ static void doShowNetInfo();
 static void doShowBTTFNInfo();
 static bool menuWaitForRelease();
 static bool checkEnterPress();
+static bool waitForMenuControl(bool &wasEnter, bool& dirDown, bool& wasQuit, bool& wasSelect);
 static void prepareInput(int number);
 
+static void resetTimeOut();
 static bool checkTimeOut();
 
 static void waitAudioDoneMenu();
-static void menudelay(unsigned long mydel);
-static void myssdelay(unsigned long mydel);
+static void menuDelay(unsigned long mydel);
+static void menuLoops();
+//static void menuShortDelay(unsigned long mydel);
 
 static void dt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR)
 {
@@ -351,6 +353,16 @@ static void lt_off() { departedTime.off();    }
 static void dt_on() {  destinationTime.on(); }
 static void pt_on() {  presentTime.on();     }
 static void lt_on() {  departedTime.on();    }
+
+#define D_D 1
+#define D_P 2
+#define D_L 4
+static void sw_sel(int w) {
+    (w & D_D) ? dt_on() : dt_off();
+    (w & D_P) ? pt_on() : pt_off();
+    (w & D_L) ? lt_on() : lt_off();
+}
+
 /*
  * enter_menu()
  *
@@ -378,6 +390,7 @@ void enter_menu()
     destinationTime.resetBrightness();
     presentTime.resetBrightness();
     departedTime.resetBrightness();
+    // Do not propagate through BTTFN, menu is TCD-private
 
     mpActive = mp_stop();
     stopAudio();
@@ -433,14 +446,10 @@ void enter_menu()
         } else {
 
             // Non-RTC, get the time info from the object
-            // Remember: These are the ones saved in NVM
-            // NOT the ones that were possibly shown on the
+            // Remember: These are the ones saved, NOT
+            // the ones that were possibly shown on the
             // display before invoking the menu
-            yearSet = displaySet->getYear();
-            monthSet = displaySet->getMonth();
-            daySet = displaySet->getDay();
-            hourSet = displaySet->getHour();
-            minSet = displaySet->getMinute();
+            displaySet->getToParms(yearSet, monthSet, daySet, hourSet, minSet);
 
         }
 
@@ -530,16 +539,12 @@ void enter_menu()
         }
 
         // update the object
-        displaySet->setYear(yearSet);
-        displaySet->setMonth(monthSet);
-        displaySet->setDay(daySet);
-        displaySet->setHour(hourSet);
-        displaySet->setMinute(minSet);
+        displaySet->setFromParms(yearSet, monthSet, daySet, hourSet, minSet);
 
         // Save to NVM (regardless of persistence mode)
         displaySet->save();
 
-        menudelay(1000);
+        menuDelay(1000);
 
     } else if(menuItemNum == MODE_VOL) {
 
@@ -583,21 +588,25 @@ void enter_menu()
         
         // Set brightness settings
         waitForEnterRelease();
-        if(!doSetBrightness(&destinationTime))
+        if(!doSetBrightness(&destinationTime)) 
             goto quitMenu;
 
         waitForEnterRelease();
-        if(!doSetBrightness(&presentTime))
+        if(!doSetBrightness(&presentTime)) {
+            destinationTime.setBrightness(dtbri);
             goto quitMenu;
+        }
 
         waitForEnterRelease();
-        if(!doSetBrightness(&departedTime))
+        if(!doSetBrightness(&departedTime)) {
+            destinationTime.setBrightness(dtbri);
+            presentTime.setBrightness(ptbri);
             goto quitMenu;
+        }
 
         // Now save
         dt_showTextDirect(StrSaving);
-        pt_off();
-        lt_off();
+        sw_sel(D_D);
 
         uint8_t dtbri2 = destinationTime.getBrightness();
         uint8_t ptbri2 = presentTime.getBrightness();
@@ -621,7 +630,7 @@ void enter_menu()
             
         }
 
-        menudelay(1000);
+        menuDelay(1000);
 
     } else if(menuItemNum == MODE_NET) {   // Show network info
 
@@ -640,7 +649,7 @@ void enter_menu()
         doShowBTTFNInfo();
  
     #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
-    } else if(menuItemNum == MODE_SENS) {   // Show light sensor info
+    } else if(menuItemNum == MODE_SENS) {   // Show sensor info
 
         allOff();
         waitForEnterRelease();
@@ -677,11 +686,12 @@ quitMenu:
     // Done, turn off displays
     allOff();
 
-    menudelay(500);
+    menuDelay(500);
 
     waitForEnterRelease();
 
     // Reset keypad key state and clear input buffer
+    keypadMode = 0;
     resetKeypadState();
     discardKeypadInput();
 
@@ -708,7 +718,7 @@ quitMenu:
     presentTime.setNightMode(preNM);
     departedTime.setNightMode(depNM);
 
-    myloops(true);
+    menuLoops();
 
     // make time_loop immediately re-eval auto-nm
     // unless manual-override
@@ -734,26 +744,48 @@ quitMenu:
  */
 static bool menuSelect(int& number, int mode_min, DateTime& dtu, DateTime& dtl)
 {
-    timeout = 0;
+    bool wasEnter, dirDown, wasQuit, wasSelect;
+
+    keypadKeyPressed = 0;
+    resetKeypadState();
+    keypadMode = 2;
+    
+    resetTimeOut();
 
     // Wait for enter
     while(!checkTimeOut()) {
 
-        // If pressed
-        if(checkEnterPress()) {
+        scanKeypad();
 
-            timeout = 0;  // button pressed, reset timeout
+        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
-            if(menuWaitForRelease()) return true;
+            resetTimeOut();
 
-            number++;
-            if(number == MODE_MSFX && !haveSD) number++;
-            #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
-            if(number == MODE_SENS && !useLight && !useTemp) number++;
-            #else
-            if(number == MODE_SENS) number++;
-            #endif
-            if(number > MODE_MAX) number = mode_min;
+            if(wasQuit) break;
+                
+            if(wasSelect || (wasEnter && menuWaitForRelease())) {
+                keypadMode = 0;
+                return true;
+            }
+
+            if(wasEnter || !dirDown) {
+                number++;
+                if(number == MODE_MSFX && !haveSD) number++;
+                #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+                if(number == MODE_SENS && !useLight && !useTemp) number++;
+                #else
+                if(number == MODE_SENS) number++;
+                #endif
+                if(number > MODE_MAX) number = wasEnter ? mode_min : MODE_MAX;
+            } else {
+                if(number > 0) number--;
+                #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+                if(number == MODE_SENS && !useLight && !useTemp) number--;
+                #else
+                if(number == MODE_SENS) number--;
+                #endif
+                if(number == MODE_MSFX && !haveSD) number--;
+            }
 
             if(number == MODE_PRES) {
                 myrtcnow(dtu);
@@ -766,11 +798,13 @@ static bool menuSelect(int& number, int mode_min, DateTime& dtu, DateTime& dtl)
 
         } else {
 
-            menudelay(50);
+            menuDelay(50);
 
         }
 
     }
+
+    keypadMode = 0;
 
     return false;
 }
@@ -787,149 +821,119 @@ static void menuShow(int number)
     switch (number) {
     case MODE_DEST:  // Destination Time
         displaySet = &destinationTime;
-        pt_off();
-        lt_off();
-        dt_on();
+        sw_sel(D_D);
         displaySet->setColon(true);
         displaySet->show();
         break;
     case MODE_PRES:  // Present Time (RTC)
         displaySet = &presentTime;
-        dt_showTextDirect("SET CLOCK"); //("SET RTC");
-        dt_on();
-        pt_on();
-        lt_off();
+        dt_showTextDirect("SET CLOCK");
+        sw_sel(D_P|D_D);
         displaySet->setColon(true);
         displaySet->show();
         break;
     case MODE_DEPT:  // Last Time Departed
         displaySet = &departedTime;
-        dt_off();
-        pt_off();
-        lt_on();
+        sw_sel(D_L);
         displaySet->setColon(true);
         displaySet->show();
         break;
     case MODE_VOL:   // Software volume
         #ifdef IS_ACAR_DISPLAY
         dt_showTextDirect("VOLUME");
-        pt_off();
+        sw_sel(D_D);
         #else
         dt_showTextDirect("VOL");    // "M" on 7seg no good, 2 lines
         pt_showTextDirect("UME");
-        pt_on();
+        sw_sel(D_P|D_D);
         #endif
-        dt_on();
-        lt_off();
         break;
     case MODE_MSFX:   // Music Folder Number
         dt_showTextDirect("MUSIC");
         pt_showTextDirect("FOLDER");
         lt_showTextDirect("NUMBER");
-        pt_on();
-        dt_on();
-        lt_on();
+        sw_sel(D_L|D_P|D_D);
         break;
     case MODE_ALRM:   // Alarm
         #ifdef IS_ACAR_DISPLAY
         dt_showTextDirect("ALARM");
-        pt_off();
+        sw_sel(D_D);
         #else
         dt_showTextDirect("ALA");    // "M" on 7seg no good, 2 lines
         pt_showTextDirect("RM");
-        pt_on();
+        sw_sel(D_P|D_D);
         #endif
-        dt_on();
-        lt_off();
         displaySet = &destinationTime;
         break;
     case MODE_AINT:  // Time Cycling inverval
         dt_showTextDirect("TIME");
         pt_showTextDirect("CYCLING");
-        dt_on();
-        pt_on();
-        lt_off();
+        sw_sel(D_P|D_D);
         break;
     case MODE_BRI:  // Brightness
         dt_showTextDirect("BRIGHTNESS");
-        pt_off();
-        lt_off();
-        dt_on();
+        sw_sel(D_D);
         break;
     case MODE_NET:  // Network info
         #ifdef IS_ACAR_DISPLAY
         dt_showTextDirect("NETWORK");
-        dt_on();
-        pt_off();
+        sw_sel(D_D);
         #else
         dt_showTextDirect("NET");  // "W" on 7seg no good, 2 lines
         pt_showTextDirect("WORK");
-        dt_on();
-        pt_on();
+        sw_sel(D_P|D_D);
         #endif
-        lt_off();
         break;
     #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
     case MODE_SENS:
         dt_showTextDirect("SENSORS");
-        dt_on();
-        pt_off();
-        lt_off();
+        sw_sel(D_D);
         break;
     #endif
     case MODE_LTS:  // last time sync info
         dt_showTextDirect("TIME SYNC");
-        dt_on();
         if(!lastAuthTime64) {
             pt_showTextDirect("NEVER");
-            pt_on();
-            lt_off();
+            sw_sel(D_P|D_D);
         } else {
             uint64_t ago = (millis64() - lastAuthTime64) / 1000;
             if(ago > 24*60*60) {
-                sprintf(buf, "%d DAYS", ago / (24*60*60));
+                sprintf(buf, "%d DAYS", (uint32_t)(ago / (24*60*60)));
             } else if(ago > 60*60) {
-                sprintf(buf, "%d HOURS", ago / (60*60));
+                sprintf(buf, "%d HOURS", (uint32_t)(ago / (60*60)));
             } else if(ago > 60) {
-                sprintf(buf, "%d MINS", ago / 60);
+                sprintf(buf, "%d MINS", (uint32_t)(ago / 60));
             } else {
-                sprintf(buf, "%d SECS", ago);
+                sprintf(buf, "%d SECS", (uint32_t)ago);
             }
             pt_showTextDirect(buf);
-            pt_on();
             lt_showTextDirect("AGO");
-            lt_on();
+            sw_sel(D_L|D_P|D_D);
         }
         break;
     case MODE_CLI:
         #ifdef IS_ACAR_DISPLAY
         dt_showTextDirect("BTTFN");
         pt_showTextDirect("CLIENTS");
-        pt_on();
+        sw_sel(D_P|D_D);
         #else
         dt_showTextDirect("BTTFN CLIENTS");
-        pt_off();
+        sw_sel(D_D);
         #endif
-        dt_on();
-        lt_off();
         break;
     case MODE_VER:  // Version info
         dt_showTextDirect("VERSION");
-        dt_on();
         pt_showTextDirect(TC_VERSION);
-        pt_on();
         #ifdef TC_VERSION_EXTRA
         lt_showTextDirect(TC_VERSION_EXTRA);
-        lt_on();
+        sw_sel(D_L|D_P|D_D);
         #else
-        lt_off();
+        sw_sel(D_P|D_D);
         #endif
         break;
     case MODE_END:  // end
         dt_showTextDirect("END");
-        dt_on();
-        pt_off();
-        lt_off();
+        sw_sel(D_D);
         break;
     }
 }
@@ -974,6 +978,17 @@ static void prepareInput(int number)
     resetTimebufIndices();
 }
 
+static void prepareForInput()
+{
+    isEnterKeyHeld = false;
+
+    keypadKeyPressed = 0;
+    resetKeypadState();
+    keypadMode = 2;
+
+    resetTimeOut();  // reset timeout
+}
+
 /*
  * Update a field of a display using user input
  *
@@ -994,7 +1009,7 @@ static bool setField(int& number, uint8_t field, int year, int month, uint16_t d
     unsigned long blinkNow = 0;
     bool blinkSwitch = true;
 
-    timeout = 0;  // reset timeout
+    resetTimeOut();  // reset timeout
 
     // Start blinking
     displaySet->onBlink(2);
@@ -1028,7 +1043,7 @@ static bool setField(int& number, uint8_t field, int year, int month, uint16_t d
     }
 
     // Force keypad to send keys to our buffer (and block key holding)
-    keypadInMenu = true;
+    keypadMode = 1;
 
     // Reset key state machine
     resetKeypadState();
@@ -1051,13 +1066,13 @@ static bool setField(int& number, uint8_t field, int year, int month, uint16_t d
             someupddone = true;
             setUpdate(setNum, field, dflags | CDD_NOLEAD0);
             prevNum = setNum;
-            timeout = 0;  // key pressed, reset timeout
+            resetTimeOut();  // key pressed, reset timeout
             displaySet->on();
             blinkNow = millis();
             blinkSwitch = false;
         }
 
-        menudelay(10);
+        menuDelay(50);
 
         if(!blinkSwitch && (millis() - blinkNow > 500)) {
             displaySet->onBlink(2);
@@ -1069,7 +1084,7 @@ static bool setField(int& number, uint8_t field, int year, int month, uint16_t d
     isYearUpdate = false;
     
     // Force keypad to send keys somewhere else but our buffer
-    keypadInMenu = false;
+    keypadMode = 0;
 
     // Stop blinking
     displaySet->on();
@@ -1094,7 +1109,7 @@ static bool setField(int& number, uint8_t field, int year, int month, uint16_t d
     // Display (corrected) number for .5 seconds
     setUpdate(numVal, field, dflags);
 
-    menudelay(500);
+    menuDelay(500);
 
     return true;
 }
@@ -1112,14 +1127,12 @@ static void showCurVolHWSW(bool blink)
             dt_showTextDirect("USE");
             pt_showTextDirect("VOLUME");
             lt_showTextDirect("KNOB");
-            lt_on();
+            sw_sel(D_L|D_P|D_D);
         } else {
             dt_showTextDirect("SELECT");
             pt_showTextDirect("LEVEL");
-            lt_off();
+            sw_sel(D_P|D_D);
         }
-        dt_on();
-        pt_on();
     }
 }
 
@@ -1150,24 +1163,30 @@ static void doSetVolume()
     bool triggerPlay = false;
     bool blinkSwitch = false;
     unsigned long blinkNow = millis();
+    bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
     showCurVolHWSW(false);
 
-    timeout = 0;  // reset timeout
+    prepareForInput();
 
     // Wait for enter
     while(!checkTimeOut() && !volDone) {
 
-        // If pressed
-        if(checkEnterPress()) {
+        scanKeypad();
 
-            timeout = 0;  // button pressed, reset timeout
+        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+
+            if(wasQuit) break;
+
+            resetTimeOut();  // button pressed, reset timeout
 
             if(blinkSwitch) {
                 showCurVolHWSW(false);
             }
 
-            if(!(volDone = menuWaitForRelease())) {
+            volDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+
+            if(!volDone) {
 
                 if(curVolume <= 19)
                     curVolume = 255;
@@ -1191,14 +1210,16 @@ static void doSetVolume()
                 blinkNow = mm;
             }
 
-            menudelay(50);
+            menuDelay(50);
 
         }
 
     }
 
-    if(volDone && curVolume != 255) {
+    keypadMode = 0;
 
+    if((volDone & (!wasQuit)) && curVolume != 255) {
+        
         if(oldVol == 255) {
             curVolume = getSWVolFromHWVol();
             triggerPlay = true;
@@ -1208,8 +1229,6 @@ static void doSetVolume()
         
         showCurVol(false, true);
 
-        timeout = 0;  // reset timeout
-
         blinkSwitch = false;
         blinkNow = millis();
 
@@ -1217,24 +1236,35 @@ static void doSetVolume()
 
         waitForEnterRelease();
 
+        prepareForInput();
+
         playNow = millis();
 
         // Wait for enter
         while(!checkTimeOut() && !volDone) {
 
-            // If pressed
-            if(checkEnterPress()) {
+            scanKeypad();
 
-                timeout = 0;  // button pressed, reset timeout
+            if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+
+                if(wasQuit) break;
+                
+                resetTimeOut();  // button pressed, reset timeout
 
                 if(blinkSwitch) {
                     showCurVol(false, false);
                 }
-                
-                if(!(volDone = menuWaitForRelease())) {
 
-                    curVolume++;
-                    if(curVolume == 20) curVolume = 0;
+                volDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+                
+                if(!volDone) {
+
+                    if(dirDown) {
+                        curVolume++;
+                        if(curVolume == 20) curVolume = 0;
+                    } else {
+                        if(curVolume > 0) curVolume--;
+                    }
 
                     showCurVol(false, true);
 
@@ -1260,7 +1290,7 @@ static void doSetVolume()
                     triggerPlay = false;
                 }
 
-                menudelay(50);
+                menuDelay(50);
 
             }
         }
@@ -1270,18 +1300,18 @@ static void doSetVolume()
     stopAudio();
     allOff();
 
-    if(volDone) {
+    keypadMode = 0;
+
+    if(volDone & (!wasQuit)) {
 
         dt_showTextDirect(StrSaving);
-        dt_on();
-        pt_off();
-        lt_off();
+        sw_sel(D_D);
 
         // Save it (if changed)
         if(oldVol != curVolume) {
             saveCurVolume();
         }
-        menudelay(1000);
+        menuDelay(1000);
 
     } else {
 
@@ -1294,7 +1324,7 @@ static void doSetVolume()
  *   Music Folder Number ########################################
  */
 
-static void displayMSfx(int msfx, bool blink, bool doFolderChk)
+static void displayMSfx(int msfx, bool blink, bool doFolderChk, int& folderState)
 {
     uint16_t flags = CDT_CLEAR;
     if(blink) flags |= CDT_BLINK;
@@ -1303,16 +1333,14 @@ static void displayMSfx(int msfx, bool blink, bool doFolderChk)
     dt_on();
 
     if(doFolderChk) {
-        int folderState = mp_checkForFolder(msfx);
+        folderState = mp_checkForFolder(msfx);
         switch(folderState) {
         case 1:
-            pt_off();
-            lt_off();
+            sw_sel(D_D);
             break;
         case 0:
             pt_showTextDirect("NOT FOUND");
-            pt_on();
-            lt_off();
+            sw_sel(D_P|D_D);
             break;
         case -1:
             pt_showTextDirect("NEEDS");
@@ -1328,8 +1356,7 @@ static void displayMSfx(int msfx, bool blink, bool doFolderChk)
             break;
         }
         if(folderState < 0) {
-            pt_on();
-            lt_on();
+            sw_sel(D_L|D_P|D_D);
         }
     }
 }
@@ -1337,33 +1364,43 @@ static void displayMSfx(int msfx, bool blink, bool doFolderChk)
 static void doSetMSfx()
 {
     bool msfxDone = false;
-    int oldmsfx = musFolderNum;
+    int oldmsfx = musFolderNum, folderState, dummy;
     bool blinkSwitch = false;
     unsigned long blinkNow = millis();
+    bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
-    displayMSfx(musFolderNum, false, true);
+    displayMSfx(musFolderNum, false, true, folderState);
 
-    timeout = 0;  // reset timeout
+    prepareForInput();
 
     // Wait for enter
     while(!checkTimeOut() && !msfxDone) {
 
-        // If pressed
-        if(checkEnterPress()) {
+        scanKeypad();
 
-            timeout = 0;  // button pressed, reset timeout
+        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+
+            if(wasQuit) break;
+
+            resetTimeOut();  // button pressed, reset timeout
 
             if(blinkSwitch) {
-                displayMSfx(musFolderNum, false, false);
+                displayMSfx(musFolderNum, false, false, dummy);
             }
 
-            if(!(msfxDone = menuWaitForRelease())) {
+            msfxDone = (wasSelect || (wasEnter && menuWaitForRelease()));
 
-                musFolderNum++;
-                if(musFolderNum > 9)
-                    musFolderNum = 0;
+            if(!msfxDone) {
 
-                displayMSfx(musFolderNum, false, true);
+                if(dirDown) {
+                    musFolderNum++;
+                    if(musFolderNum > 9)
+                        musFolderNum = wasEnter ? 0 : 9;
+                } else {
+                    if(musFolderNum > 0) musFolderNum--;
+                }
+
+                displayMSfx(musFolderNum, false, true, folderState);
 
                 blinkNow = millis();
                 blinkSwitch = false;
@@ -1376,29 +1413,41 @@ static void doSetMSfx()
                 
             if(mm - blinkNow > 500) {
                 blinkSwitch = !blinkSwitch;
-                displayMSfx(musFolderNum, blinkSwitch, false);
+                displayMSfx(musFolderNum, blinkSwitch, false, dummy);
                 blinkNow = mm;
             }
 
-            menudelay(50);
+            menuDelay(50);
 
         }
 
     }
 
-    if(msfxDone) {
+    keypadMode = 0;
+
+    if(msfxDone & (!wasQuit)) {
 
         dt_showTextDirect(StrSaving);
-        pt_off();
-        lt_off();
+        sw_sel(D_D);
 
         // Save it (if changed)
         if(oldmsfx != musFolderNum) {
             saveMusFoldNum();
-            mp_init();
+            if(folderState == -1) {
+                // We do not do processing (=renaming) here.
+                // This is more or less a blocking activity,
+                // not suitable for our "multitasking" (with
+                // regard to speedo action, especially).
+                menuDelay(1000);
+                prepareReboot();
+                delay(1000);
+                esp_restart();
+            } else {
+                mp_init();
+            }
         }
 
-        menudelay(1000);
+        menuDelay(1000);
 
     } else {
 
@@ -1468,6 +1517,7 @@ static void doSetAlarm()
     #else
     const char *almFmt = "%s      %02d%02d";
     #endif
+    bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
     // On/Off
     sprintf(almBuf2, almFmt, "   " , newAlarmHour, newAlarmMinute);
@@ -1475,21 +1525,26 @@ static void doSetAlarm()
     displaySet->showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
     displaySet->on();
 
-    timeout = 0;  // reset timeout
+    prepareForInput();
 
     // Wait for enter
     while(!checkTimeOut() && !alarmDone) {
 
-        // If pressed
-        if(checkEnterPress()) {
+        scanKeypad();
 
-            timeout = 0;  // button pressed, reset timeout
+        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+
+            if(wasQuit) break;
+
+            resetTimeOut();  // button pressed, reset timeout
 
             if(blinkSwitch) {
                 displaySet->showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
             }
 
-            if(!(alarmDone = menuWaitForRelease())) {
+            alarmDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+
+            if(!alarmDone) {
 
                 newAlarmOnOff = !newAlarmOnOff;
 
@@ -1511,13 +1566,15 @@ static void doSetAlarm()
                 blinkNow = mm;
             }
 
-            menudelay(50);
+            menuDelay(50);
 
         }
 
     }
 
-    if(!alarmDone) return;
+    keypadMode = 0;
+
+    if(!(alarmDone & (!wasQuit))) return;
 
     // Get hour
     setUpdate(newAlarmHour, FIELD_HOUR, CDD_FORCE24);
@@ -1543,23 +1600,33 @@ static void doSetAlarm()
     displaySet->onBlink(2);
     blinkSwitch = true;
 
+    prepareForInput();
+
     alarmDone = false;
-    timeout = 0;
 
     // Wait for enter
     while(!checkTimeOut() && !alarmDone) {
 
-        // If pressed
-        if(checkEnterPress()) {
+        scanKeypad();
 
-            timeout = 0;  // button pressed, reset timeout
+        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+
+            if(wasQuit) break;
+
+            resetTimeOut();  // button pressed, reset timeout
             displaySet->on();
             blinkSwitch = false;
 
-            if(!(alarmDone = menuWaitForRelease())) {
+            alarmDone = (wasSelect || (wasEnter && menuWaitForRelease()));
 
-                newAlarmWeekday++;
-                if(newAlarmWeekday > 9) newAlarmWeekday = 0;
+            if(!alarmDone) {
+
+                if(wasEnter || !dirDown) {
+                    newAlarmWeekday++;
+                    if(newAlarmWeekday > 9) newAlarmWeekday = wasEnter ? 0 : 9;
+                } else {
+                    if(newAlarmWeekday > 0) newAlarmWeekday--;
+                }
 
                 displaySet->showTextDirect(getAlWD(newAlarmWeekday));
 
@@ -1567,7 +1634,7 @@ static void doSetAlarm()
 
         } else {
 
-            menudelay(50);
+            menuDelay(50);
 
             if(!blinkSwitch) {
                 displaySet->onBlink(2);
@@ -1578,10 +1645,12 @@ static void doSetAlarm()
 
     }
 
+    keypadMode = 0;
+
     waitAudioDoneMenu();    // For keypad sounds
     allOff();
 
-    if(alarmDone) {
+    if(alarmDone & (!wasQuit)) {
 
         displaySet->showTextDirect(StrSaving);
         displaySet->on();
@@ -1600,7 +1669,7 @@ static void doSetAlarm()
             saveAlarm();
         }
 
-        menudelay(1000);
+        menuDelay(1000);
     }
 }
 
@@ -1610,7 +1679,7 @@ static void doSetAlarm()
 
 
 static void displayAI(int interval, bool blink, bool doComment)
-{ 
+{
     uint16_t flags = CDT_CLEAR;
     if(blink) flags |= CDT_BLINK;
     
@@ -1634,31 +1703,42 @@ static void doSetAutoInterval()
     int newAutoInterval = autoInterval;
     bool blinkSwitch = false;
     unsigned long blinkNow = millis();
+    bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
     displayAI(autoTimeIntervals[newAutoInterval], false, true);
     dt_on();
     pt_on();
     lt_off();
 
-    timeout = 0;  // reset timeout
+    prepareForInput();
 
     // Wait for enter
     while(!checkTimeOut() && !autoDone) {
 
-        // If pressed
-        if(checkEnterPress()) {
+        scanKeypad();
 
-            timeout = 0;  // button pressed, reset timeout
+        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+
+            if(wasQuit) break;
+
+            resetTimeOut();  // button pressed, reset timeout
 
             if(blinkSwitch) {
                 displayAI(autoTimeIntervals[newAutoInterval], false, false);
             }
 
-            if(!(autoDone = menuWaitForRelease())) {
+            autoDone = (wasSelect || (wasEnter && menuWaitForRelease()));
 
-                newAutoInterval++;
-                if(newAutoInterval > 5)
-                    newAutoInterval = 0;
+            if(!autoDone) {
+
+                if(dirDown) {
+                    newAutoInterval++;
+                    if(newAutoInterval > 5)
+                        newAutoInterval = wasEnter ? 0 : 5;
+                } else {
+                    if(newAutoInterval > 0)
+                        newAutoInterval--;
+                }
 
                 displayAI(autoTimeIntervals[newAutoInterval], false, true);
 
@@ -1677,17 +1757,18 @@ static void doSetAutoInterval()
                 blinkNow = mm;
             }
 
-            menudelay(50);
+            menuDelay(50);
 
         }
 
     }
 
-    if(autoDone) {
+    keypadMode = 0;
+
+    if(autoDone & (!wasQuit)) {
 
         dt_showTextDirect(StrSaving);
-        pt_off();
-        lt_off();
+        sw_sel(D_D);
 
         // Save it (if changed)
         if(autoInterval != newAutoInterval) {
@@ -1699,7 +1780,7 @@ static void doSetAutoInterval()
         if(autoTimeIntervals[autoInterval]) 
             endPauseAuto();
 
-        menudelay(1000);
+        menuDelay(1000);
 
     }
 }
@@ -1723,10 +1804,14 @@ static void displayBri(clockDisplay* displaySet, int8_t number, bool blink)
 
 static bool doSetBrightness(clockDisplay* displaySet)
 {
-    int8_t number = displaySet->getBrightness();
+    int8_t oldBri = displaySet->getBrightness();
+    int8_t number;
     bool briDone = false;
     bool blinkSwitch = false;
     unsigned long blinkNow = millis();
+    bool wasEnter, dirDown, wasQuit = false, wasSelect;
+
+    number = oldBri;
 
     // turn on all the segments
     allLampTest();
@@ -1734,24 +1819,33 @@ static bool doSetBrightness(clockDisplay* displaySet)
     // Display "LVL"
     displayBri(displaySet, number, false);
 
-    timeout = 0;  // reset timeout
+    prepareForInput();
 
     // Wait for enter
     while(!checkTimeOut() && !briDone) {
 
-        // If pressed
-        if(checkEnterPress()) {
+        scanKeypad();
 
-            timeout = 0;  // button pressed, reset timeout
+        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+
+            if(wasQuit) break;
+
+            resetTimeOut();  // button pressed, reset timeout
 
             if(blinkSwitch) {
                 displayBri(displaySet, number, false);
             }
 
-            if(!(briDone = menuWaitForRelease())) {
+            briDone = (wasSelect || (wasEnter && menuWaitForRelease()));
 
-                number++;
-                if(number > 15) number = 0;
+            if(!briDone) {
+
+                if(dirDown) {
+                    number++;
+                    if(number > 15) number = wasEnter ? 0 : 15;
+                } else {
+                    if(number > 0) number--;
+                }
 
                 displaySet->setBrightness(number);
 
@@ -1772,7 +1866,7 @@ static bool doSetBrightness(clockDisplay* displaySet)
                 blinkNow = mm;
             }
 
-            menudelay(50);
+            menuDelay(50);
 
         }
 
@@ -1780,7 +1874,14 @@ static bool doSetBrightness(clockDisplay* displaySet)
 
     allLampTest();  // turn on all the segments
 
-    return briDone;
+    keypadMode = 0;
+
+    if(!(briDone & (!wasQuit))) {
+        displaySet->setBrightness(oldBri);
+        return false;
+    }
+
+    return true;
 }
 
 /*
@@ -1797,6 +1898,7 @@ static void doShowSensors()
     uint8_t numIdx = 0, maxIdx = 0;
     int hum;
     float temp;
+    bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
     #ifdef TC_HAVELIGHT
     if(useLight) numberArr[numIdx++] = 0;
@@ -1816,7 +1918,7 @@ static void doShowSensors()
     pt_on();
     lt_off();
 
-    isEnterKeyHeld = false;
+    prepareForInput();
 
     sensNow = millis();
 
@@ -1826,13 +1928,22 @@ static void doShowSensors()
     // Wait for enter
     while(!luxDone) {
 
-        // If pressed
-        if(checkEnterPress()) {
+        scanKeypad();
 
-            if(!(luxDone = menuWaitForRelease())) {
+        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+
+            if(wasQuit) break;
+
+            luxDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+
+            if(!luxDone) {
                 if(maxIdx > 0) {
-                    numIdx++;
-                    if(numIdx > maxIdx) numIdx = 0;
+                    if(wasEnter || !dirDown) {
+                        numIdx++;
+                        if(numIdx > maxIdx) numIdx = wasEnter ? 0 : maxIdx;
+                    } else {
+                        if(numIdx > 0) numIdx--;
+                    }
                     dt_showTextDirect("WAIT");
                     pt_showTextDirect("");
                 }
@@ -1840,7 +1951,7 @@ static void doShowSensors()
             
         } else {
 
-            menudelay(50);
+            menuDelay(50);
 
             if(millis() - sensNow > 3000) {
                 switch(numberArr[numIdx]) {
@@ -1877,9 +1988,9 @@ static void doShowSensors()
                     hum = tempSens.readHum();
                     if(hum < 0) {
                         #ifdef IS_ACAR_DISPLAY
-                        sprintf(buf, "--\x7f\x80", hum);
+                        sprintf(buf, "--\x7f\x80");
                         #else
-                        sprintf(buf, "-- \x7f\x80", hum);
+                        sprintf(buf, "-- \x7f\x80");
                         #endif
                     } else {
                         #ifdef IS_ACAR_DISPLAY
@@ -1900,6 +2011,8 @@ static void doShowSensors()
         }
 
     }
+
+    keypadMode = 0;
 }
 #endif
 
@@ -1928,6 +2041,7 @@ static void doShowNetInfo()
     bool netDone = false;
     char macBuf[16];
     int maxMI = 2;
+    bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
     #ifdef TC_HAVEMQTT
     maxMI = 3;
@@ -1937,22 +2051,29 @@ static void doShowNetInfo()
 
     displayIP();
 
-    isEnterKeyHeld = false;
-
-    timeout = 0;  // reset timeout
+    prepareForInput();
 
     // Wait for enter
     while(!checkTimeOut() && !netDone) {
 
-        // If pressed
-        if(checkEnterPress()) {
+        scanKeypad();
 
-            timeout = 0;  // button pressed, reset timeout
+        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
-            if(!(netDone = menuWaitForRelease())) {
+            if(wasQuit) break;
 
-                number++;
-                if(number > maxMI) number = 0;
+            resetTimeOut();  // button pressed, reset timeout
+
+            netDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+
+            if(!netDone) {
+
+                if(wasEnter || !dirDown) {
+                    number++;
+                    if(number > maxMI) number = wasEnter ? 0 : maxMI;
+                } else {
+                    if(number > 0) number--;
+                }
                 switch(number) {
                 case 0:
                     displayIP();
@@ -2018,7 +2139,11 @@ static void doShowNetInfo()
                     break;
                 #ifdef TC_HAVEMQTT
                 case 3:
+                    #ifdef IS_ACAR_DISPLAY
+                    dt_showTextDirect("MQTT");
+                    #else
                     dt_showTextDirect("HOMEASSISTANT");
+                    #endif
                     dt_on();
                     if(useMQTT) {
                         pt_showTextDirect(mqttState() ? "CONNECTED" : "DISCONNECTED");
@@ -2035,11 +2160,13 @@ static void doShowNetInfo()
 
         } else {
 
-            menudelay(50);
+            menuDelay(50);
 
         }
 
     }
+
+    keypadMode = 0;
 }
 
 /*
@@ -2126,6 +2253,7 @@ void doShowBTTFNInfo()
     bool netDone = false;
     int numCli = bttfnNumClients();
     int oldNumCli;
+    bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
     oldNumCli = numCli;
 
@@ -2133,12 +2261,12 @@ void doShowBTTFNInfo()
     dt_on();
     displayClient(numCli, number);
 
-    isEnterKeyHeld = false;
-
-    timeout = 0;  // reset timeout
+    prepareForInput();
 
     // Wait for enter
     while(!checkTimeOut() && !netDone) {
+
+        scanKeypad();
 
         if(oldNumCli != numCli) {
             number = 0;
@@ -2146,16 +2274,24 @@ void doShowBTTFNInfo()
             oldNumCli = numCli;
         }
 
-        // If pressed
-        if(checkEnterPress()) {
+        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
-            timeout = 0;  // button pressed, reset timeout
+            if(wasQuit) break;
 
-            if(!(netDone = menuWaitForRelease())) {
+            resetTimeOut();  // button pressed, reset timeout
+
+            netDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+
+            if(!netDone) {
 
                 if(numCli > 1) {
-                    number++;
-                    if(number >= numCli) number = 0;                    
+                    if(wasEnter || !dirDown) {
+                        number++;
+                        if(number >= numCli) number = 0;
+                    } else {
+                        if(number > 0) number--;
+                    }
+                        
                 } else
                     number = 0;
 
@@ -2165,12 +2301,14 @@ void doShowBTTFNInfo()
 
         } else {
 
-            menudelay(50);
+            menuDelay(50);
             numCli = bttfnNumClients();
 
         }
 
     }
+
+    keypadMode = 0;
 }
 
 /*
@@ -2196,10 +2334,10 @@ void doCopyAudioFiles()
     if(delIDfile) {
         delete_ID_file();
     } else {
-        menudelay(3000);
+        menuDelay(3000);
     }
     
-    menudelay(2000);
+    menuDelay(2000);
 
     allOff();
     dt_showTextDirect("REBOOTING");
@@ -2219,7 +2357,7 @@ void start_file_copy()
     stopAudio();
   
     dt_showTextDirect("INSTALLING");
-    pt_showTextDirect("SOUND PACK"); // "AUDIO DATA"
+    pt_showTextDirect("SOUND PACK");
     lt_showTextDirect("PLEASE");
     dt_on();
     pt_on();
@@ -2249,18 +2387,17 @@ void file_copy_done(int err)
 /*
  * Wait for ENTER to be released
  * Returns 
- * - true if ENTER was long enough pressed to be considered HELD
+ * - true if ENTER was pressed long enough to be considered HELD
  * - false if ENTER released before considered "held"
  */
 static bool menuWaitForRelease()
 {
     while(checkEnterPress()) {
-        myloops(true);
+        menuLoops();
         if(isEnterKeyHeld) {
             isEnterKeyHeld = false;
             return true;
         }
-        delay(10);
     }
 
     return false;
@@ -2273,7 +2410,7 @@ static bool menuWaitForRelease()
 static bool checkEnterPress()
 {
     if(digitalRead(ENTER_BUTTON_PIN)) {
-        myssdelay(50);
+        menuDelay(50);
         if(digitalRead(ENTER_BUTTON_PIN)) return true;
         return false;
     }
@@ -2290,9 +2427,9 @@ void waitForEnterRelease()
 {
     while(1) {
         while(digitalRead(ENTER_BUTTON_PIN)) {
-            menudelay(10);
+            menuDelay(50);
         }
-        myssdelay(30);
+        menuDelay(50);
         if(!digitalRead(ENTER_BUTTON_PIN))
             break;
     }
@@ -2303,81 +2440,114 @@ void waitForEnterRelease()
 
 static void waitAudioDoneMenu()
 {
-    int timeout = 200;
+    unsigned long startNow = millis();
 
-    while(!checkAudioDone() && timeout--) {
-        menudelay(10);
+    while(!checkAudioDone() && (millis() - startNow < 3000)) {
+        menuDelay(50);
     }
+}
+
+static bool waitForMenuControl(bool &wasEnter, bool& dirDown, bool& wasQuit, bool& wasSelect)
+{
+    wasEnter = wasQuit = wasSelect = false;
+    
+    if(checkEnterPress()) {
+        wasEnter = dirDown = true;
+        return true;
+    } else if(keypadKeyPressed) {
+        char c = keypadKeyPressed;
+        keypadKeyPressed = 0;
+        switch(c) {
+        case '1':
+        case '2':
+            dirDown = true;
+            return true;
+        case '7':
+        case '8':
+            dirDown = false;
+            return true;
+        case '4':
+        case '5':
+            wasSelect = true;
+            return true;
+        case '9':
+            wasQuit = true;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /*
  * Call this frequently while waiting for button presses,
  * increments timeout each second, returns true when 
- * maxtime reached.
+ * MENUTIMEOUT reached.
  *
  */
+static void resetTimeOut()
+{
+    timeout = millis();
+}
+
 static bool checkTimeOut()
 {
-    yy = digitalRead(SECONDS_IN_PIN);
-    if(xx != yy) {
-        xx = yy;
-        if(yy == 0) {
-            timeout++;
-        }
-    }
-
-    return (timeout >= maxTime);
+    return (millis() - timeout > MENUTIMEOUT);
 }
 
 /*
- * MenuDelay:
+ * MenuDelay: Delay() for keypad menu.
  * Calls myloops() periodically
  */
-static void menudelay(unsigned long mydel)
+static void menuDelay(unsigned long mydel)
 {
     unsigned long startNow = millis();
-    myloops(true);
+
     while(millis() - startNow < mydel) {
+        menuLoops();
         delay(5);
-        myloops(true);
     }
+}
+
+/*
+ *  Call a few loops, meant to be used inside delays.
+ *  This allows other stuff to proceed while we wait.
+ */
+static void menuLoops()
+{
+    audio_loop();
+    enterkeyScan();
+    audio_loop();
+    wifi_loop();
+    audio_loop();
+    ntp_loop();
+    audio_loop();
+    bttfn_loop();
+    audio_loop();
+    #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
+    speedoUpdate_loop(true);  // GPS part: 6-12ms without delay, 8-13ms with delay
+    audio_loop();
+    #endif
 }
 
 /*
  * Special case for very short, non-recurring delays
  * Only calls essential loops while waiting
  */
-static void myssdelay(unsigned long mydel)
+/* 
+static void menuShortDelay(unsigned long mydel)
 {
     unsigned long startNow = millis();
+
     audio_loop();
+
     while(millis() - startNow < mydel) {
         ntp_short_loop();
-        delay(10);
         audio_loop();
+        #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
+        speedoUpdate_loop(true);  // GPS part: 6-12ms without delay, 8-13ms with delay
+        audio_loop();
+        #endif
     }
 }
-
-/*
- *  Do this during enter_menu whenever we are caught in a while() loop
- *  This allows other stuff to proceed
- *  menuMode is true when this is called from the keypad menu
- *  menuMode is false when called from elsewhere
- */
-void myloops(bool menuMode)
-{
-    audio_loop();
-    if(menuMode) {
-        enterkeyScan();   // >= 19ms
-        audio_loop();
-        wifi_loop();
-        audio_loop();
-        ntp_loop();
-        audio_loop();
-    }
-    #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE)
-    gps_loop(menuMode);  // 6-12ms without delay, 8-13ms with delay
-    audio_loop();
-    #endif
-    bttfn_loop();
-}
+*/

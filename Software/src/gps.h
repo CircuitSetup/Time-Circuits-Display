@@ -1,13 +1,13 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
  * GPS Class: GPS receiver handling and data parsing
  *
- * This is designed for MTK3333-based modules.
+ * This is designed for MTK3333-based modules with i2c communication
  *
  * -------------------------------------------------------------------
  * License: MIT NON-AI
@@ -66,7 +66,7 @@ class tcGPS {
 
         void    loop(bool doDelay);
 
-        int16_t getSpeed();
+        int     getSpeed();
         bool    haveTime() { return (_haveDateTime || _haveDateTime2); }
         bool    getDateTime(struct tm *timeInfo, unsigned long *fixAge, unsigned long updInt);
         bool    setDateTime(struct tm *timeinfo);
@@ -79,8 +79,8 @@ class tcGPS {
 
         void    sendCommand(const char *, const char *);
 
-        bool    parseNMEA(char *nmea, unsigned long nmeaTS);
-        bool    checkNMEA(char *nmea);
+        bool     parseNMEA(char *nmea, unsigned int len, unsigned long nmeaTS);
+        uint32_t checkNMEA(char *nmea, unsigned int len, char **pidx, int& maxfields, int& type);
 
         // Ptr to custom delay function
         void (*_customDelayFunc)(unsigned long) = NULL;
@@ -99,7 +99,7 @@ class tcGPS {
 
         char    *_line1 = NULL;
         char    *_currentline;
-        uint8_t _lineidx = 0;
+        unsigned int _lineidx = 0;
         unsigned long _currentTS = 0;
 
         int     _speed = -1;
@@ -107,20 +107,17 @@ class tcGPS {
         unsigned long _curspdTS = 0;
         char     _sbuf[16];
 
-        char    _curTime[8]   = { 0, 0, 0, 0, 0, 0, 0, 0 };
-        unsigned long _curFrac;
-        uint8_t  _curDay;
-        uint8_t  _curMonth;
-        uint16_t _curYear;
-        char    _curTime2[8]  = { 0, 0, 0, 0, 0, 0, 0, 0 };
-        unsigned long _curFrac2;
-        uint8_t  _curDay2;
-        uint8_t  _curMonth2;
-        uint16_t _curYear2;
-        unsigned long _curTS = 0;
-        unsigned long _curTS2 = 0;
         bool    _haveDateTime = false;
         bool    _haveDateTime2 = false;
+        char    _curTime[8]   = { 0 };
+        char    _curDate[12]  = { 0 };
+        char    _curTime2[8]  = { 0 };
+        char    _curDate2[8]  = { 0 };
+        unsigned long _curFrac;
+        unsigned long _curFrac2;
+        unsigned long _curTS = 0;
+        unsigned long _curTS2 = 0;
+
 };
 
 #endif

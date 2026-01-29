@@ -1,7 +1,7 @@
 /*
   AudioOutputI2S
   Base class for I2S interface port
-  
+
   Copyright (C) 2017  Earle F. Philhower, III
 
   This program is free software: you can redistribute it and/or modify
@@ -16,6 +16,8 @@
 
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+  Adapted by Thomas Winischhofer, 2023-2025
 */
 
 #include <Arduino.h>
@@ -181,7 +183,7 @@ bool AudioOutputI2S::begin(bool txDAC)
 #if CONFIG_IDF_TARGET_ESP32
         mode = (i2s_mode_t)(mode | I2S_MODE_DAC_BUILT_IN);
 #else
-        return false;      
+        return false;
 #endif
       }
       else if (output_mode == INTERNAL_PDM)
@@ -189,7 +191,7 @@ bool AudioOutputI2S::begin(bool txDAC)
 #if CONFIG_IDF_TARGET_ESP32
         mode = (i2s_mode_t)(mode | I2S_MODE_PDM);
 #else
-        return false;      
+        return false;
 #endif
       }
 
@@ -208,7 +210,7 @@ bool AudioOutputI2S::begin(bool txDAC)
         comm_fmt = (i2s_comm_format_t) I2S_COMM_FORMAT_STAND_MSB;
 #else
         comm_fmt = (i2s_comm_format_t) (I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_LSB);
-#endif	
+#endif
       }
       else
       {
@@ -283,59 +285,91 @@ bool AudioOutputI2S::begin(bool txDAC)
   return true;
 }
 
-bool AudioOutputI2S::ConsumeSample(int16_t sample[2])
+#ifdef TWESP32
+size_t AudioOutputI2S::ConsumeSample(int16_t msL, int16_t msR)
 {
+    // We don't ever use 8 bit samples or the internal DAC
 
-  //return if we haven't called ::begin yet
-  if (!i2sOn)
-    return false;
+    //return if we haven't called ::begin yet
+    if(!i2sOn)
+        return false;
 
-  int16_t ms[2];
+    uint32_t s32;
 
-  ms[0] = sample[0];
-  ms[1] = sample[1];
-  MakeSampleStereo16( ms );
+    if(channels == 1) msR = msL;
+    #ifndef AUTO_MONO
+    else {
+      #ifndef FORCE_MONO
+      if(this->mono) {
+        int32_t ttl = msL + msR;
+        msL = msR = ttl >> 1;
+      }
+      #else
+      msL >>= 1;
+      msR >>= 1;
+      msR = msL = msL + msR;
+      #endif // FORCE_MONO
+    }
+    #endif // AUTO_MONO
+
+    AmplifyL(msL);
+    s32 = ((uint32_t)AmplifyR(msR)) | (uint16_t)msL;
+
+    size_t i2s_bytes_written;
+    i2s_write((i2s_port_t)portNo, (const char*)&s32, sizeof(uint32_t), &i2s_bytes_written, 0);
+    return i2s_bytes_written;
+}
+#else
+bool AudioOutputI2S::ConsumeSample(int16_t sL, int16_t sR)
+{
+  int16_t mL, mR;
+
+  mL = sL;
+  mR = sR;
+  MakeSampleStereo16( mL, mR );
 
   if (this->mono) {
     // Average the two samples and overwrite
-    int32_t ttl = ms[LEFTCHANNEL] + ms[RIGHTCHANNEL];
-    ms[LEFTCHANNEL] = ms[RIGHTCHANNEL] = (ttl>>1) & 0xffff;
+    int32_t ttl = mL + mR;
+    mL = mR = (ttl>>1) & 0xffff;
   }
   #ifdef ESP32
     uint32_t s32;
-    if (output_mode == INTERNAL_DAC)
+        if (output_mode == INTERNAL_DAC)
     {
-      int16_t l = Amplify(ms[LEFTCHANNEL]) + 0x8000;
-      int16_t r = Amplify(ms[RIGHTCHANNEL]) + 0x8000;
+      int16_t l = Amplify(mL) + 0x8000;
+      int16_t r = Amplify(mR]) + 0x8000;
       s32 = (r << 16) | (l & 0xffff);
     }
     else
     {
-      s32 = ((Amplify(ms[RIGHTCHANNEL])) << 16) | (Amplify(ms[LEFTCHANNEL]) & 0xffff);
+      s32 = ((Amplify(mR)) << 16) | (Amplify(mL) & 0xffff);
     }
-//"i2s_write_bytes" has been removed in the ESP32 Arduino 2.0.0,  use "i2s_write" instead.
-//    return i2s_write_bytes((i2s_port_t)portNo, (const char *)&s32, sizeof(uint32_t), 0);
+
+    //"i2s_write_bytes" has been removed in the ESP32 Arduino 2.0.0,  use "i2s_write" instead.
+    //    return i2s_write_bytes((i2s_port_t)portNo, (const char *)&s32, sizeof(uint32_t), 0);
 
     size_t i2s_bytes_written;
     i2s_write((i2s_port_t)portNo, (const char*)&s32, sizeof(uint32_t), &i2s_bytes_written, 0);
     return i2s_bytes_written;
   #elif defined(ESP8266)
-    uint32_t s32 = ((Amplify(ms[RIGHTCHANNEL])) << 16) | (Amplify(ms[LEFTCHANNEL]) & 0xffff);
+    uint32_t s32 = ((Amplify(mR)) << 16) | (AmplifyL(mL) & 0xffff);
     return i2s_write_sample_nb(s32); // If we can't store it, return false.  OTW true
   #elif defined(ARDUINO_ARCH_RP2040)
-    return !!I2S.write((void*)ms, 4);
+    uint32_t s32 = (mR << 16) | (mL & 0xffff);
+    return !!I2S.write((void*)s32, 4);
   #endif
 }
+#endif // TWESP32
 
 void AudioOutputI2S::flush()
 {
   #ifdef ESP32
     // makes sure that all stored DMA samples are consumed / played
     int buffersize = 64 * this->dma_buf_count;
-    int16_t samples[2] = {0x0, 0x0};
     for (int i = 0; i < buffersize; i++)
     {
-      while (!ConsumeSample(samples))
+      while (!ConsumeSample(0, 0))
       {
         delay(10);
       }

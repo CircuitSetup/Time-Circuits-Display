@@ -1,21 +1,20 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
  * speedDisplay Class: Speedo Display
  *
- * This is designed for CircuitSetup's Speedo display and other 
+ * This is designed for CircuitSetup's Speedo display and other Holtek
  * HT16K33-based displays, like the "Grove - 0.54" Dual/Quad 
- * Alphanumeric Display" or some displays with an Adafruit i2c
- * backpack:
+ * Alphanumeric Display" or some displays with an Adafruit i2c backpack:
  * ADA-878/877/5599 (other colors: 879/880/881/1002/5601/5602/5603/5604)
  * ADA-1270/1271 (other colors: 1269)
  * ADA-1911/1910 (other colors: 1912/2157/2158/2160)
- * 
  * The i2c slave address must be 0x70.
+ * 
  * -------------------------------------------------------------------
  * License: MIT NON-AI
  * 
@@ -336,10 +335,7 @@ static const struct dispConf {
   { SPT_I2C_14S, 0, 1, 0, 0, 1, 0, 255,      0, 2, { 0, 1 },       { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L(ADA-1911), but left tube only (TW wall clock)
   { SPT_I2C_7S,  0, 1, 0, 0, 1, 0, 255,      0, 2, { 0, 1 },       { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L(ADA-878), but left tube only (TW speedo replica) - needs rewiring
   { SP_BTTFN,    0, 0, 0, 0, 0, 0,   0,      0, 0, { 0 },          { 0, 0, 0, 0 }, NULL            },  // BTTFN
-// .... for testing only:
-//{ SPT_I2C_7S,  7, 7, 0, 8, 7, 8, 255,      0, 2, { 7, 7 },       { 0, 8 },       font7segGeneric },  // SP_TCD_TEST7
-//{ SPT_I2C_14S, 1, 2, 0, 0, 2, 0, 255,      0, 3, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }, // SP_TCD_TEST14 right
-//{ SPT_I2C_14S, 0, 1, 0, 0, 1, 0, 255,      0, 3, { 0, 1, 2 },    { 0, 0, 0 },    font14segGeneric }  // SP_TCD_TEST14 left
+//{ SPT_I2C_7S,  1, 2, 8, 0, 3, 0, 255,      0, 2, { 1, 2 },       { 8, 0 },       font7segGeneric },  // CircuitSetup Speedo+GPS, part-3-"wrong"-style (left dgt covered)
 };
 
 // Grove 4-digit special handling
@@ -357,7 +353,7 @@ speedDisplay::speedDisplay(uint8_t address)
 }
 
 // Start the display
-bool speedDisplay::begin(int dispType)
+bool speedDisplay::begin(int dispType, int sSpeedoPin, int sTachopin, int sSpeedoCorr, int sTachoCorr)
 {
     if(dispType < 0 || dispType >= SP_NUM_TYPES) {
         #ifdef TC_DBG
@@ -369,22 +365,31 @@ bool speedDisplay::begin(int dispType)
     _dispType = dispType;
     _speedoType = displays[dispType].speedoType;
 
-    // [Add detection of secondary speedo here]
-    // if(secondary found) _haveSec = true;
-
-    #ifdef EXPS
-    if(1) {
-        pinMode(EXPS_PIN, OUTPUT);
-        ledcSetup(0, 50, 16);
-        ledcAttachPin(EXPS_PIN, 0);
-        pinMode(EXPT_PIN, OUTPUT);
-        ledcSetup(1, 50, 16);
-        ledcAttachPin(EXPT_PIN, 1);
-        _secOff = true;
-        setExSpeed(-1);
-        _haveSec = true;
+    #ifdef SERVOSPEEDO
+    if(!_haveSec) {
+        if(sSpeedoPin) {
+            pinMode(sSpeedoPin, OUTPUT);
+            ledcSetup(0, 50, 16);
+            ledcAttachPin(sSpeedoPin, 0);
+            _haveSSpeedo = true;
+            spos_corr = sSpeedoCorr;
+        }
+        if(sTachopin) {
+            pinMode(sTachopin, OUTPUT);
+            ledcSetup(1, 50, 16);
+            ledcAttachPin(sTachopin, 1);
+            _haveSTacho = true;
+            tpos_corr = sTachoCorr;
+        }
+        if(_haveSSpeedo || _haveSTacho) {
+            _secOff = true;
+            _haveSec = _doSec = true;
+            setExSpeed(-1, true);
+        }
     }
     #endif
+    
+    _i2c = false;
 
     switch(_speedoType) {
 
@@ -394,15 +399,17 @@ bool speedDisplay::begin(int dispType)
         Wire.beginTransmission(_address);
         if(Wire.endTransmission(true)) {
             _speedoType = SPT_NONE;
-            return false; //_haveSec;
+            #ifdef SERVOSPEEDO
+            return _haveSec;
+            #else
+            return false;
+            #endif
         }
-
         _i2c = true;
         break;
 
-    case SPT_BTTFN:
-        _i2c = false;
-        break;
+    //case SPT_BTTFN:
+    //    break;
     }
 
     if(_i2c) {
@@ -434,9 +441,25 @@ bool speedDisplay::begin(int dispType)
     return true;
 }
 
+void speedDisplay::validateSetup()
+{
+    if(_i2c) {
+        switch(_dispType) {
+        case SP_CIRCSETUP:
+            break;
+        case SP_CIRCSETUP3:
+            dispL0Spd = true;
+            setDot(false);
+            break;
+        default:
+            thirdDig = false;
+        }
+    }
+}
+
 bool speedDisplay::haveSpeedoDisplay()
 {
-    #ifdef EXPS
+    #ifdef SERVOSPEEDO
     return _i2c || _haveSec;
     #else
     return _i2c;
@@ -449,7 +472,7 @@ bool speedDisplay::supportsTemperature()
     if(_i2c)
         return true;
         
-    // BTTFN and secondary don't support temperature
+    // Temperature on i2c only
 
     return false;
 }
@@ -462,11 +485,9 @@ void speedDisplay::on()
     if(_i2c) {
         directCmd(0x80 | 1);
     }
-    #ifdef EXPS
-    if(_haveSec) {
-        _secOff = false;
-        setExSpeed(_secSpeed);
-    }
+    #ifdef SERVOSPEEDO
+    _secOff = false;
+    setExSpeed(_secSpeed, true);
     #endif
     _onCache = 1;
     _briCache = 0xfe;
@@ -479,11 +500,9 @@ void speedDisplay::off()
     if(_i2c) {
         directCmd(0x80);
     }
-    #ifdef EXPS
-    if(_haveSec) {
-        _secOff = true;
-        setExSpeed(-1);
-    }
+    #ifdef SERVOSPEEDO
+    _secOff = true;
+    setExSpeed(-1, true);
     #endif
     _onCache = 0;
 }
@@ -500,8 +519,6 @@ void speedDisplay::lampTest()
             Wire.write(0xFF);
         }
         Wire.endTransmission();
-    
-        _lastBufPosCol = 0xffff;
     }
 }
 #endif
@@ -529,7 +546,6 @@ uint8_t speedDisplay::setBrightnessDirect(uint8_t level)
 
     if(level != _briCache) {
         if(_i2c) directCmd(0xE0 | level);  // Dimming command
-        //if(_haveSec) {}
         _briCache = level;
     }
 
@@ -585,18 +601,11 @@ void speedDisplay::show()
         }
     
         Wire.endTransmission();
-    
-        // Save last value written to _colon_pos
-        if(_colon_pos < 255) {
-            _lastBufPosCol = _displayBuffer[_colon_pos];
-        }
 
     }
     
-    #ifdef EXPS
-    if(_haveSec) {
-        setExSpeed(_secSpeed);
-    }
+    #ifdef SERVOSPEEDO
+    setExSpeed(_secSpeed);
     #endif
 }
 
@@ -640,13 +649,13 @@ void speedDisplay::setText(const char *text)
             }
         }
     
-        handleColon();
+        //handleColon();
     }
 }
 
 // Write given speed to buffer
 // (including current dot01 setting; colon is cleared and ignored)
-void speedDisplay::setSpeed(int8_t speedNum)
+void speedDisplay::setSpeed(int speedNum)
 {
     _speed = speedNum;
 
@@ -694,10 +703,8 @@ void speedDisplay::setSpeed(int8_t speedNum)
         if(_dot01) _displayBuffer[_dot_pos01] |= (*(_fontXSeg + 36) << _dot01_shift);
     }
 
-    #ifdef EXPS
-    if(_haveSec) {
-        _secSpeed = speedNum;
-    }
+    #ifdef SERVOSPEEDO
+    _secSpeed = speedNum;
     #endif
 }
 
@@ -716,9 +723,9 @@ void speedDisplay::setTemperature(float temp)
         switch(_num_digs) {
         case 2:
             if(tempNan)            setText(myNan);
-            else if(temp <= -10.0) setText("Lo");
-            else if(temp >= 100.0) setText("Hi");
-            else if(temp >= 10.0 || temp < 0.0) {
+            else if(temp <= -10.0f) setText("Lo");
+            else if(temp >= 100.0f) setText("Hi");
+            else if(temp >= 10.0f || temp < 0.0f) {
                 t = (int)roundf(temp);
                 sprintf(buf, "%d", t);
                 setText(buf);
@@ -729,9 +736,9 @@ void speedDisplay::setTemperature(float temp)
             break;
         case 3:
             if(tempNan)             setText(myNan);
-            else if(temp <= -100.0) setText("Low");
-            else if(temp >= 1000.0) setText("Hi");
-            else if(temp >= 100.0 || temp <= -10.0) {
+            else if(temp <= -100.0f) setText("Low");
+            else if(temp >= 1000.0f) setText("Hi");
+            else if(temp >= 100.0f || temp <= -10.0f) {
                 t = (int)roundf(temp);
                 sprintf(buf, "%d", t);
                 setText(buf);
@@ -759,12 +766,42 @@ void speedDisplay::setTemperature(float temp)
 
     }
 
-    #ifdef EXPS
-    if(_haveSec) {
-        // secondary does not support temperature
-        _secSpeed = -1;
-    }
+    #ifdef SERVOSPEEDO
+    _secSpeed = -1;
     #endif
+}
+#endif
+
+#ifdef SERVOSPEEDO
+void speedDisplay::setCalib(int calib)
+{
+    if(_haveSec) {
+        _doSec = (calib < 0);
+        setExSpeed(_doSec ? _secSpeed : calib, true);
+    }
+}
+bool speedDisplay::setSCorr(int corr)
+{
+    if(_haveSec && !_doSec) {
+        spos_corr = corr;
+        setExSpeed(_secSpeedOld, true);
+        return true;
+    }
+    return false;
+}
+bool speedDisplay::setTCorr(int corr)
+{
+    if(_haveSec && !_doSec) {
+        tpos_corr = corr;
+        setExSpeed(_secSpeedOld, true);
+        return true;
+    }
+    return false;
+}
+void speedDisplay::getCorr(int& scorr, int &tcorr)
+{
+    scorr = spos_corr;
+    tcorr = tpos_corr;
 }
 #endif
 
@@ -780,6 +817,7 @@ void speedDisplay::clearBuf()
     }
 }
 
+/*
 void speedDisplay::handleColon()
 {
     if(_colon_pos < 255) {
@@ -787,21 +825,22 @@ void speedDisplay::handleColon()
         else       _displayBuffer[_colon_pos] &= (~_colon_bm);
     }
 }
+*/
 
 // Returns bit pattern for provided character
 uint16_t speedDisplay::getLEDChar(uint8_t value)
 {
     if(value >= '0' && value <= '9') {
         return *(_fontXSeg + (value - '0'));
+    } else if(value == '-') {
+        return *(_fontXSeg + 37);
     } else if(value >= 'A' && value <= 'Z') {
         return *(_fontXSeg + (value - 'A' + 10));
     } else if(value >= 'a' && value <= 'z') {
         return *(_fontXSeg + (value - 'a' + 10));
-    } else if(value == '.') {
+    } else if(value == '.')
         return *(_fontXSeg + 36);
-    } else if(value == '-')
-        return *(_fontXSeg + 37);
-
+    
     return 0;
 }
 
@@ -815,9 +854,6 @@ void speedDisplay::directCol(int col, int segments)
     Wire.write(segments & 0xFF);
     Wire.write(segments >> 8);
     Wire.endTransmission();
-
-    if(col == _colon_pos)
-        _lastBufPosCol = segments;
 }
 #endif
 
@@ -832,8 +868,6 @@ void speedDisplay::clearDisplay()
     }
 
     Wire.endTransmission();
-
-    _lastBufPosCol = 0;
 }
 
 void speedDisplay::directCmd(uint8_t val)
@@ -843,40 +877,190 @@ void speedDisplay::directCmd(uint8_t val)
     Wire.endTransmission();
 }
 
-#ifdef EXPS
+#ifdef SERVOSPEEDO
 
 // 1 second = 1000000 us
 // 50Hz = 0.02 seconds period = 20000 uS = 65535
-// 500 uS  = duty cycle 1638 (1634?)
+// 500 uS  = duty cycle 1638
 // 2500 uS = duty cycle 8192
+// dc = ((uint32_t)((((270.0 - angle) * 2000.0) / 270.0) * 65536.0 / 20000.0)) + DC_MIN;
 
-void speedDisplay::setExSpeed(int8_t speed)
+static const int sspdpos[17] = {
+ //  15    20    25    30    35    40    45    50
+    2470, 2345, 2220, 2070, 1925, 1759, 1604, 1430,  
+ //  55    60    65    70    75    80    85    90
+    1254, 1085,  920,  754,  597,  452,  300,  140, 0
+};
+
+void speedDisplay::setExSpeed(int speed, bool force)
 {
-    #define DUTY_MIN 1638   // FIXME
+    #define DC_MIN 1638
+    #define DC_MAX 8192
     #define SPD_MAX 95
+
+    if(!_haveSec) return;
+    if(!_doSec && !force) return;
+
+    uint8_t oldSpd = _secSpeedOld;
 
     if(_secOff) speed = -1;
 
-    if(_secSpeedOld == speed) return;
+    if((_secSpeedOld == speed) && !force) return;
 
     _secSpeedOld = speed;
 
-    uint32_t dutyS = 0, dutyT = 0;
-    float pos = 0;
-
     if(speed > SPD_MAX) speed = SPD_MAX;
-    
-    if(speed >= 0) {
-        pos = (float)speed * 270.0 / (float)SPD_MAX;
-        dutyS = ((uint32_t)(((pos * 2000.0) / 270.0) * 65536.0 / 20000.0)) + DUTY_MIN;
-    } else {
-        dutyS = DUTY_MIN;
+
+    uint32_t dc = 0;
+    int angle, temp;
+
+    #define STEPSMAX 1500
+
+    if(_haveSSpeedo) {
+        if(speed >= 0) {
+            if(speed <= 15) {
+                //angle = 2700 - ((2700 - 2437) * speed / 15);
+                angle = 2700 - ((2700 - 2470) * speed / 15);
+            } else if(speed == SPD_MAX) {
+                angle = 0;
+            } else {
+                temp = (speed - 15) / 5;
+                angle = sspdpos[temp];
+                angle -= ((angle - sspdpos[temp + 1]) * (speed % 5) / 5);
+            }
+            angle += spos_corr;
+            if(angle < 0) angle = 0;
+            else if(angle > 2700) angle = 2700;
+            if(!_doSec) {
+                Serial.printf("S: Speed %d Raw angle %.1f, corrected angle %.1f\n", speed, (float)(angle - spos_corr)/10.0f, (float)angle/10.0f);
+            }
+            angle <<= 17; // * 131072;
+            dc = (angle / 3375) + (DC_MIN*16);
+        } else {
+            angle = 2700 + spos_corr;
+            if(angle > 2700) angle = 2700;
+            angle <<= 17;
+            dc = (angle / 3375) + (DC_MIN*16);
+        }
+        if(force) {
+            ledcWrite(0, dc >> 4);
+            currentDC = dc;
+        }
+        targetDC = dc;
+        stepDC = (currentDC - targetDC) / 8;
+        if(stepDC > STEPSMAX) stepDC = STEPSMAX;
+        else if(stepDC < -STEPSMAX) stepDC = -STEPSMAX;
     }
 
-    pos = 20.0; // TODO
-    dutyT = ((uint32_t)(((pos * 2000.0) / 270.0) * 65536.0 / 20000.0)) + DUTY_MIN;
+    #define T_IDLE 700    // 70deg = 775 rpm (200deg on servo)
+    #define TLIM1 20
+    #define T_MXRPM1 1700
+    
+    #define T_CHGPT2 570  // 70+57deg = 2600rpm
+    #define TLIM2 45
+    #define T_MXRPM2 (1740 - T_CHGPT2)
+    
+    #define T_CHGPT3 600  
+    #define TLIM3 65
+    #define T_MXRPM3 (1670 - T_CHGPT3)
+    
+    #define T_CHGPT4 620
+    #define T_MXRPM4 (2200 - T_CHGPT4)
 
-    ledcWrite(0, dutyS);
-    ledcWrite(1, dutyT);
+    #define STEPTMAX 1500
+    
+    if(_haveSTacho) {
+        if(speed >= 0) {
+            if(speed > oldSpd) {
+                if(speed <= TLIM1) {
+                    angle = speed * T_MXRPM1 / TLIM1;
+                } else if(speed <= TLIM2) {
+                    angle = (speed - TLIM1) * T_MXRPM2 / (TLIM2-TLIM1);
+                    angle += T_CHGPT2;
+                } else if(speed <= TLIM3) {
+                    angle = (speed - TLIM2) * T_MXRPM3 / (TLIM3-TLIM2);
+                    angle += T_CHGPT3;
+                } else {
+                    angle = (speed - TLIM3) * T_MXRPM4 / (SPD_MAX-TLIM3);
+                    angle += T_CHGPT4;
+                }
+                angle += T_IDLE;
+            } else {
+                angle = T_IDLE;
+            }
+            angle += tpos_corr;
+            if(angle < 0) angle = 0;
+            else if(angle > 2700) angle = 2700;
+            angle = (2700 - angle) << 17; // * 131072;
+            dc = (angle / 3375) + (DC_MIN*16);
+            if(!_doSec) {
+                Serial.printf("T: Speed %d Raw angle %.1f, corrected angle %.1f\n", speed, (float)(angle - tpos_corr)/10.0, (float)angle/10.0);
+            }
+        } else {
+            angle = 2700 - tpos_corr;
+            if(angle > 2700) angle = 2700;
+            angle <<= 17;
+            dc = (angle / 3375) + (DC_MIN*16);
+        }
+        if(force) {
+            ledcWrite(1, dc >> 4);
+            currentTDC = dc;
+        }
+        targetTDC = dc;
+        stepTDC = (currentTDC - targetTDC) / 8;
+        if(stepTDC > STEPTMAX) stepTDC = STEPTMAX;
+        else if(stepTDC < -STEPTMAX) stepTDC = -STEPTMAX;
+    }
+}
+
+void speedDisplay::speedoSLoop(bool force)
+{
+    unsigned long now = millis();
+    if(force) {
+        if(_haveSSpeedo) {
+            if(targetDC != currentDC) {
+                currentDC = targetDC;
+                ledcWrite(0, currentDC >> 4);
+            }
+        }
+        if(_haveSTacho) {
+            if(targetTDC != currentTDC) {
+                currentTDC = targetTDC;
+                ledcWrite(1, currentTDC >> 4);
+            }
+        }
+    } else if(now - lastSUpdate > 20) {
+        lastSUpdate = now;
+        if(_haveSSpeedo) {
+            if(targetDC < currentDC) {
+               currentDC -= stepDC;
+               if(currentDC < targetDC) {
+                  currentDC = targetDC;
+               }
+               ledcWrite(0, currentDC >> 4);
+            } else if(targetDC > currentDC) {
+               currentDC -= stepDC;
+               if(targetDC < currentDC) {
+                  currentDC = targetDC;
+               }
+               ledcWrite(0, currentDC >> 4);
+            }
+        }
+        if(_haveSTacho) {
+            if(targetTDC < currentTDC) {
+               currentTDC -= stepTDC;
+               if(currentTDC < targetTDC) {
+                  currentTDC = targetTDC;
+               }
+               ledcWrite(1, currentTDC >> 4);
+            } else if(targetTDC > currentTDC) {
+               currentTDC -= stepTDC;
+               if(targetTDC < currentTDC) {
+                  currentTDC = targetTDC;
+               }
+               ledcWrite(1, currentTDC >> 4);
+            }
+        }
+    }
 }
 #endif

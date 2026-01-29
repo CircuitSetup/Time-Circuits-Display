@@ -1,7 +1,7 @@
 /*
   AudioGeneratorWAV
   Audio output generator that reads 8 and 16-bit WAV files
-    
+
   Copyright (C) 2017  Earle F. Philhower, III
 
   This program is free software: you can redistribute it and/or modify
@@ -16,6 +16,8 @@
 
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+  Adapted by Thomas Winischhofer, 2023-2025
 */
 
 #ifndef _AUDIOGENERATORWAV_H
@@ -38,16 +40,19 @@ class AudioGeneratorWAV : public AudioGenerator
     bool ReadU32(uint32_t *dest) { return file->read(reinterpret_cast<uint8_t*>(dest), 4); }
     bool ReadU16(uint16_t *dest) { return file->read(reinterpret_cast<uint8_t*>(dest), 2); }
     bool ReadU8(uint8_t *dest) { return file->read(reinterpret_cast<uint8_t*>(dest), 1); }
-    bool GetBufferedData(int bytes, void *dest);
+    bool GetBufferedData16x2(int16_t& destL, int16_t& destR);
+    bool GetBufferedData16(int16_t& dest);
+    bool GetBufferedData8(uint8_t& dest);
+    //bool GetBufferedData(int bytes, void *dest);
     bool ReadWAVInfo();
 
-    
+
   protected:
     // WAV info
     uint16_t channels;
     uint32_t sampleRate;
     uint16_t bitsPerSample;
-    
+
     uint32_t availBytes;
 
     // We need to buffer some data in-RAM to avoid doing 1000s of small reads

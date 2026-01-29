@@ -1,8 +1,7 @@
 /*
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
- * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2025 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
@@ -25,11 +24,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION_REV   "V3.10"      // 13 chars max
+#define TC_VERSION_REV   "V3.11"      // 13 chars max
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "DEC012025"  // 13 chars max
+#define TC_VERSION_EXTRA "JAN112026"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "12012025"   // 12 chars max
+#define TC_VERSION_EXTRA "01112025"   // 12 chars max
 #endif
 #define TC_VERSION TC_VERSION_REV
 
@@ -115,17 +114,17 @@
 #define HAVE_DS3231
 //#define HAVE_PCF2129
 
-// Speedo types
-#define SP_NUM_TYPES 13  // Number of speedo display types supported
-
 /*************************************************************************
  ***                           Customization                           ***
  *************************************************************************/
 
-//#define TWSOUND         // Use A10001986's sound files
+//#define TWSOUND         // Use A10001986 sound pack
 //#define TWPRIVATE     // A10001986's private customizations
 
-//#define EXPS
+#ifdef TWPRIVATE
+#define SERVOSPEEDO
+//#define TC_PROFILER
+#endif
 
 /*************************************************************************
  ***                             Sanitation                            ***
@@ -191,9 +190,6 @@
 #define EXTERNAL_TIMETRAVEL_IN_PIN  27  // Externally triggered TT (input)
 #define EXTERNAL_TIMETRAVEL_OUT_PIN 14  // TT trigger output
 
-#define EXPS_PIN EXTERNAL_TIMETRAVEL_IN_PIN
-#define EXPT_PIN EXTERNAL_TIMETRAVEL_OUT_PIN
-
 /*************************************************************************
  ***             Display IDs (Do not change, used as index)            ***
  *************************************************************************/
@@ -231,12 +227,12 @@
 
 // NTP baseline data: Prolong life time of NTP and GPS
 // Set this to current year. Stop at 2036.
-#define TCEPOCH       2025
+#define TCEPOCH       2026
 // Set to SECS1970_xxxx, xxxx being current year. Stop at 2036.
-#define TCEPOCH_SECS  SECS1970_2025
+#define TCEPOCH_SECS  SECS1970_2026
 
 // Epoch for general use; increase yearly, no limit
 // Defines the minimum date considered valid
-#define TCEPOCH_GEN   2025
+#define TCEPOCH_GEN   2026
 
 #endif

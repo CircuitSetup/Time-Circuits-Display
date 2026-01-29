@@ -43,7 +43,24 @@
 
 /*  Changelog
  *
-  *  2025/11/29 (A10001986) [3.10] [requires Remote 1.14 for proper operation]
+ *  2026/01/11 (A10001986) [3.11]
+ *    - New sound pack (TW05/CS05)
+ *    - Keypad menu: Add navigation using keypad keys 2 (up), 5 (select), 8 (down), 
+ *      9 (cancel). Old "ENTER" method still supported.
+ *    - Add MQTT commands "PLAY_DOOR_OPEN", "PLAY_DOOR_CLOSE" (with optional
+ *      appendices "_L"/"_R" for playing it on one stereo channel only).
+ *    - Add way for Dash Gauges to play door open/close sounds through TCD
+ *      (Gauges >= 1.29)
+ *    - Fix float settings (temp offset, accel figure factor; broken since 3.6)
+ *    - Add new notification, which eliminates the need for clients to poll for
+ *      data and helps to reduce network traffic.
+ *      (For full effect, other props need updates, too: FC >= 1.91, SID >= 1.63, 
+ *      Gauges >= 1.30, VSR >= 1.25, Remote >= 1.16)
+ *    - Eliminate DNS lookups in loop() (which were a possible reason for sound-
+ *      stutter sometimes)
+ *    - NTP/GPS time sync logic enhancements
+ *    - Various code optimizations (audio, GPS, network, etc)
+ *  2025/11/29 (A10001986) [3.10] [requires Remote 1.14 for proper operation]
  *    - Play user-provided "ttcancel.mp3" if TT is cancelled through brake on
  *      Remote
  *    - Make TCD<->Remote communication more robust
@@ -1557,6 +1574,9 @@ void setup()
     time_setup();
 }
 
+#ifdef TC_PROFILER
+#include "AAProfiler.h"
+#else
 void loop()
 {
     keypad_loop();
@@ -1569,4 +1589,10 @@ void loop()
     wifi_loop();
     audio_loop();
     bttfn_loop();
+    audio_loop();
 }
+#endif
+
+#ifdef TC_DBG
+#warning "Debug output is enabled. Binary not suitable for release."
+#endif
