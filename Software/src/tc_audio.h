@@ -105,6 +105,7 @@ extern bool muteBeep;
 
 extern bool haveMusic;
 extern bool mpActive;
+extern bool mpShuffle;
 
 extern char id3artist[];
 extern char id3track[]; 

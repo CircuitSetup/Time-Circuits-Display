@@ -8,11 +8,11 @@
  * Keypad_I2C Class, TCButton Class: I2C-Keypad and Button handling
  * 
  * TCRotEnc: Rotary Encoder handling:
- * Supports Adafruit 4991, DuPPA I2CEncoder 2.1, DFRobot Gravity 360.
+ * Supports Adafruit 4991/5880, DuPPA I2CEncoder 2.1, DFRobot Gravity 360.
  * For speed, the encoders must be set to their default i2c address
  * (DuPPA I2CEncoder 2.1 must be set to i2c address 0x01 (A0 closed)).
  * For volume, the encoders must be configured as follows:
- * - Ada4991: A0 closed (i2c address 0x37)
+ * - Ada4991/5880: A0 closed (i2c address 0x37)
  * - DFRobot Gravity 360: SW1 off, SW2 on (i2c address 0x55)
  * - DuPPA I2CEncoder 2.1: A0 and A1 closed (i2c address 0x03)
  *
@@ -134,7 +134,7 @@ class Keypad_I2C {
                    uint8_t numRows, uint8_t numCols,
                    int address);
 
-        void begin(unsigned int scanInterval, unsigned int holdTime, void (*myDelay)(unsigned long));
+        void begin(unsigned int scanInterval, unsigned int holdTime, void (*myDelay)(int, unsigned long));
 
         void addEventListener(void (*listener)(char, KeyState)) { _keypadEventListener = listener; }
 
@@ -168,7 +168,7 @@ class Keypad_I2C {
         KeyStruct     _key;
 
         // Ptr to custom delay function
-        void (*_customDelayFunc)(unsigned long) = NULL;
+        void (*_customDelayFunc)(int, unsigned long) = NULL;
 };
 
 /*
@@ -226,7 +226,7 @@ class TCButton {
  * TCRotEnc class
  */
 
-#define TC_RE_TYPE_ADA4991    0     // Adafruit 4991            https://www.adafruit.com/product/4991
+#define TC_RE_TYPE_ADA4991    0     // Adafruit 4991/5880       https://www.adafruit.com/product/4991 https://www.adafruit.com/product/5880
 #define TC_RE_TYPE_DUPPAV2    1     // DuPPA I2CEncoder V2.1    https://www.duppa.net/shop/i2cencoder-v2-1/
 #define TC_RE_TYPE_DFRGR360   2     // DFRobot Gravity 360      https://www.dfrobot.com/product-2575.html
 #define TC_RE_TYPE_CS         3     // CircuitSetup             <yet to be designed>

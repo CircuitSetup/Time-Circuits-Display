@@ -72,6 +72,7 @@ struct dateStruct {
 #define CDT_CORR6 0x0002
 #define CDT_COLON 0x0004
 #define CDT_BLINK 0x0008
+#define CDT_YRDOT 0x0010
 
 // Flags for xxxDirect (dflags)
 #define CDD_FORCE24 0x0001
@@ -87,14 +88,14 @@ class clockDisplay {
         clockDisplay(uint8_t did, uint8_t address);
         void begin();
         void on();
-        void off();
         void onCond();        
         void onBlink(uint8_t blink);
+        void off();
 
         #if 0
-        void realLampTest();
+        void lampTest();
         #endif
-        void lampTest(bool randomize = false);
+        void showPattern(bool randomize = false);
 
         void clearBuf();
 
@@ -112,16 +113,14 @@ class clockDisplay {
         bool getNightMode()             { return _nightmode; }
         void setNMOff(bool NMOff)       { _NmOff = NMOff; }
 
-        void setRTC(bool rtc) { _rtc = rtc; }  // make this an RTC display
-        bool isRTC()          { return _rtc; }
+        bool isRTC() { return _rtc; }
 
         void show();
-        void showAnimate1();
-        #ifdef IS_ACAR_DISPLAY
-        void showAnimate2();
-        #else
-        void showAnimate2(int until = CD_BUF_SIZE);
-        void showAnimate3(int mystep);
+        #ifndef TC_NO_MONTH_ANIM
+        void showAnimate(bool firstStage);
+        #endif
+        #ifndef IS_ACAR_DISPLAY
+        bool showAnimate3(int mystep);
         #endif
 
         void showAlt();
@@ -150,9 +149,11 @@ class clockDisplay {
         uint8_t  getHour()   { return _hour; }
         uint8_t  getMinute() { return _minute; }
 
+        #ifndef IS_ACAR_DISPLAY
         const char* getMonthString(uint8_t month);
+        #endif
 
-        int16_t  getYearOffset() { return _yearoffset; }
+        int16_t getYearOffset() { return _yearoffset; }
 
         void getCompressed(uint8_t *buf, uint8_t& over);
 
@@ -171,19 +172,19 @@ class clockDisplay {
         void showHumDirect(int hum, bool animate = false);
         #endif
 
+        #ifdef TC_HAVEGPS
+        void showNavDirect(char *msg, bool animate);
+        #endif
+
         bool    load();
         void    savePending();
         bool    saveFlush();
         bool    save(bool force = false);
-        bool    _configOnSD = false;
 
-        bool    saveClockStateData(uint16_t curYear);
-        int16_t loadClockStateData(int16_t& yoffs);
+        bool     saveClockStateData(uint16_t curYear);
+        uint16_t loadClockStateData(int16_t& yoffs);
 
     private:
-
-        bool     saveNVMData(uint8_t *savBuf, bool noReadChk = false);
-        bool     loadNVMData(uint8_t *loadBuf, bool& flashAccess);
 
         uint8_t  getLED7NumChar(uint8_t value);
         uint8_t  getLED7AlphaChar(uint8_t value);
@@ -193,43 +194,44 @@ class clockDisplay {
 
         uint16_t makeNum(uint8_t num, uint16_t dflags = 0);
 
-        void directCol(int col, int segments);
-
-        void clearDisplay();
         bool handleNM();
+        
+        #ifdef IS_ACAR_DISPLAY
+        #ifndef TC_NO_MONTH_ANIM
+        void showAnimate2();
+        #endif
+        #else
+        void showAnimate2(int until = CD_BUF_SIZE);
+        #endif
         void showInt(bool animate = false, bool Alt = false);
         void showIntTail(bool animate);
 
-        void colonOn();
-        void colonOff();
-
         void AM();
         void PM();
-        void directAMPM(uint16_t val);
 
+        void clearDisplay();
         void directCmd(uint8_t val);
+        void directBuf(uint16_t *db, int len = CD_BUF_SIZE);
+        void directCol(int col, int segments);
 
-        uint8_t  _did = 0;
-        uint8_t  _address = 0;
         uint16_t _displayBuffer[CD_BUF_SIZE];
         uint16_t _displayBufferAlt[CD_BUF_SIZE];
+        uint8_t  _did = 0;
+        uint8_t  _address = 0;
 
         uint16_t _year = 2021;          // keep track of these
         int16_t  _yearoffset = 0;       // Offset for faking years < 2000, > 2098
-
-        int16_t  _lastWrittenLY = -333; // Not to be confused with possible results from loadClockStateData
-        int16_t  _lastWrittenYO = -11111;
-        bool     _lastWrittenRead = false;
-
-        bool     _mode24 = false;       // true = 24 hour mode, false = 12 hour mode
-        uint16_t _am = _AM;
-        uint16_t _pm = _PM;
 
         uint8_t _month = 1;
         uint8_t _day = 1;
         uint8_t _hour = 0;
         uint8_t _minute = 0;
         bool    _colon = false;         // should colon be on?
+
+        bool     _mode24 = false;       // true = 24 hour mode, false = 12 hour mode
+        uint16_t _am = _AM;
+        uint16_t _pm = _PM;
+        
         bool    _rtc = false;           // will this be displaying real time
         uint8_t _brightness = 15;       // current display brightness
         uint8_t _origBrightness = 15;   // value from settings
@@ -237,11 +239,7 @@ class clockDisplay {
         bool    _NmOff = false;         // true = off during night mode, false = dimmed
         int     _oldnm = -1;
         bool    _corr6 = false;
-        bool    _yearDot = false;
-        bool    _withColon = false;
-
-        int8_t  _Cache = -1;
-        char    _CacheData[10];
+        bool    _WCtimeFits = false;
 
         int     _savePending = 0;
 };

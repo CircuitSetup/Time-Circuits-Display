@@ -160,11 +160,11 @@ static unsigned long timeNow = 0;
 
 static unsigned long lastKeyPressed = 0;
 
-#define DATELEN_STPR  14   // 99mmddyyyyHHMM  spt: month, day, year, hour, min
+#define DATELEN_STPR  14   // 99mmddyyyyHHMM  exh mode: month, day, year, hour, min
 #define DATELEN_ALL   12   // mmddyyyyHHMM  dt: month, day, year, hour, min
 #define DATELEN_REM   10   // 77mmddHHMM    set reminder
 #define DATELEN_DATE   8   // mmddyyyy      dt: month, day, year
-#define DATELEN_ECMD   7   // xyyyyyy       6-digit command for FC, SID, PG, VSR, AUX
+#define DATELEN_ECMD   7   // xyyyyyy       6-digit command for FC, SID, DG, VSR, REMOTE, AUX
 #define DATELEN_QALM   6   // 11HHMM/888xxx 11, hour, min (alarm-set shortcut); 888xxx (mp)
 #define DATELEN_INT    5   // xxxxx         reset
 #define DATELEN_TIME   4   // HHMM          dt: hour, minute
@@ -576,7 +576,6 @@ void keypad_loop()
         cancelETTAnim();
 
         return;
-
     }
 
     if(isEttKeyHeld) {
@@ -668,6 +667,8 @@ void keypad_loop()
 
         timeNow = millis();
 
+        enterDelay = ENTER_DELAY;
+
         if(strLen == DATELEN_ALSH) {
 
             char atxt[16];
@@ -737,7 +738,7 @@ void keypad_loop()
                 specDisp = 10;
                 validEntry = true;
 
-            } else if((code == 88 || code == 55) && haveMusic) {
+            } else if((code == 55) && haveMusic) {
 
                 specDisp = 10;
                 if(mpActive) {
@@ -765,7 +766,17 @@ void keypad_loop()
                 );
                 specDisp = 10;
                 validEntry = true;
-                
+
+            #ifdef SERVOSPEEDO
+            } else if(code == 49) {
+                int scorr, tcorr;
+                loadServoCorr(scorr, tcorr);
+                sprintf(atxt, "S%4d T%4d", scorr, tcorr);
+                dt_showTextDirect(atxt, CDT_CLEAR);
+                specDisp = 10;
+                validEntry = true;
+            #endif
+
             } else
                 invalidEntry = true;
 
@@ -845,10 +856,28 @@ void keypad_loop()
                     destShowAlt = depShowAlt = 0; // Reset TZ-Name-Animation
                     validEntry = true;
                     break;
+                #ifdef TC_HAVEGPS
+                case 114:
+                case 115:
+                case 116:
+                    if(haveNavMode()) {
+                        int dmMode = gpsGetDM();
+                        setNavDisplayMode(code - 114);
+                        if( !isNavMode() ||
+                            (code - 114 == dmMode) ) {
+                            toggleNavMode();
+                        }
+                        departedTime.off();
+                        needDepTime = true;
+                        validEntry = true;
+                    } else
+                        invalidEntry = true;
+                    break;
+                #endif
                 case 222:               // 222+ENTER: Turn shuffle off
                 case 555:               // 555+ENTER: Turn shuffle on
+                    mp_makeShuffle((code == 555));
                     if(haveMusic) {
-                        mp_makeShuffle((code == 555));
                         #ifdef IS_ACAR_DISPLAY
                         sprintf(atxt, "SHUFFLE  %s", (code == 555) ? " ON" : "OFF");
                         #else
@@ -901,7 +930,10 @@ void keypad_loop()
                     validEntry = true;
                     break;
                 case 770:
-                    remMonth = remDay = remHour = remMin = 0;
+                    remMonth = DEF_REM_MONTH;
+                    remDay = DEF_REM_DAY;
+                    remHour = DEF_REM_HOUR;
+                    remMin = DEF_REM_MIN;
                     saveReminder();
                     buildRemOffString(atxt);
                     dt_showTextDirect(atxt);
@@ -967,20 +999,17 @@ void keypad_loop()
                     sprintf(atxt, "BEEP MODE   %1d", beepMode);
                     #endif
                     dt_showTextDirect(atxt);
-                    enterDelay = ENTER_DELAY;
                     specDisp = 10;
                     // Play no sound, ie no xxvalidEntry
                     break;
                 case 9:
                     send_refill_msg();
-                    enterDelay = ENTER_DELAY;
                     // Play no sound, ie no xxvalidEntry
                     break;
                 case 900:
                 case 901:
                     if(ETTOcommands) {
                         setTTOUTpin((code == 901) ? HIGH : LOW);
-                        enterDelay = ENTER_DELAY;
                         // Play no sound, ie no xxvalidEntry
                     } else invalidEntry = true;
                     break;
@@ -1049,6 +1078,9 @@ void keypad_loop()
                         }
                         enableRcMode(false);
                         enableWcMode(false);
+                        #ifdef TC_HAVEGPS
+                        enableNavMode(false);
+                        #endif
                         destinationTime.load();
                         departedTime.load();
                         validEntry = true;
@@ -1058,7 +1090,6 @@ void keypad_loop()
                     stalePresent = !stalePresent;
                     buildStalePTStatus(atxt);
                     dt_showTextDirect(atxt);
-                    enterDelay = ENTER_DELAY;
                     specDisp = 10;
                     saveStaleTime((void *)&stalePresentTime[0], stalePresent);
                     validEntry = true;
@@ -1074,9 +1105,12 @@ void keypad_loop()
                 prepareReboot();
                 delay(1000);
                 esp_restart();
-            }
-
-            invalidEntry = true;
+            } else if(!strncmp(keyBuffer, "53281", 5)) {
+                showUpdAvail = !showUpdAvail;
+                saveUpdAvail();
+                validEntry = true;
+            } else
+                invalidEntry = true;
 
         } else if(strLen == DATELEN_QALM) {
 
@@ -1197,11 +1231,11 @@ void keypad_loop()
                 specDisp = 10;
                 validEntry = true;
                 break;
-            #ifdef SERVOSPEEDO
-            case 5:
-            case 7:
-                sfact = -1;
-                // fall through
+            #ifdef SERVOSPEEDO    // Servo speedo calibration:
+            case 5:               // 45xx: Set Tacho negative offset (in degrees times 10)
+            case 7:               // 46xx: Set Tacho positive offset
+                sfact = -1;       // 47xx: Set Speedo negative offset
+                // fall through   // 48xx: Set Speedo positive offset
             case 6:
             case 8:
                 if(useSpeedoDisplay) {
@@ -1220,7 +1254,7 @@ void keypad_loop()
                     }
                 }
                 break;
-            case 9:
+            case 9:     // 49xx: Servo speedo calib mode. 4999 quits, 49xx (xx<=95) sets speed (mph)
                 if(useSpeedoDisplay) {
                     int val = read2digs(2);
                     speedo.setCalib((val > 95) ? -1 : val);
@@ -1341,7 +1375,6 @@ void keypad_loop()
 
                 buildStalePTStatus(atxt);
                 dt_showTextDirect(atxt);
-                enterDelay = ENTER_DELAY;
                 specDisp = 10;
                 
                 validEntry = true;
@@ -1458,7 +1491,14 @@ void keypad_loop()
                 destinationTime.save();
             }
 
-            // Disable rc&wc modes
+            // Disable nav&rc&wc modes
+            #ifdef TC_HAVEGPS
+            if(isNavMode()) {
+                departedTime.off();
+                needDepTime = true;
+                enableNavMode(false);
+            }
+            #endif
             #ifdef TC_HAVETEMP
             if(isRcMode() && (tempSens.haveHum() || isWcMode())) {
                 departedTime.off();
@@ -1506,7 +1546,6 @@ void keypad_loop()
 
         }
 
-        enterDelay = ENTER_DELAY;
         if(validEntry) {
             play_file("/enter.mp3", PA_INTSPKR|PA_CHECKNM|enterInterruptsMusic|PA_ALLOWSD);
         } else if(invalidEntry) {
@@ -1590,69 +1629,108 @@ void keypad_loop()
             // Fill audio buffer, avoid a pause in the actual animation
             audio_loop();
 
-            #ifdef TC_HAVETEMP
-            if(isRcMode()) {
-
-                if(!isWcMode() || !WcHaveTZ1) {
-                    destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit, true);
-                } else {
-                    destinationTime.showAnimate1();
-                }
-                if(needDepTime) {
-                    if(isWcMode() && WcHaveTZ1) {
-                        departedTime.showTempDirect(tempSens.readLastTemp(), tempUnit, true);
-                    } else if(!isWcMode() && tempSens.haveHum()) {
-                        departedTime.showHumDirect(tempSens.readHum(), true);
-                    } else {
-                        departedTime.showAnimate1();
+            #ifdef TC_HAVEGPS
+            if(isNavMode()) {
+                char destDisp[16];
+                char depDisp[16];
+                gpsMakePos(destDisp, depDisp);
+                #ifndef TC_NO_MONTH_ANIM // ------------------
+                for(bool i : { true, false }) {
+                    destinationTime.showNavDirect(destDisp, i);
+                    if(needDepTime) {
+                        departedTime.showNavDirect(depDisp, i);
                     }
+                    if(i) mydelay(80);
                 }
-
-                mydelay(80);
-
-                if(!isWcMode() || !WcHaveTZ1) {
-                    destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit);
-                } else {
-                    destinationTime.showAnimate2();
-                }
+                #else // -------------------------------------
+                destinationTime.showNavDirect(destDisp, false);
                 if(needDepTime) {
-                    if(isWcMode() && WcHaveTZ1) {
-                        departedTime.showTempDirect(tempSens.readLastTemp(), tempUnit);
-                    } else if(!isWcMode() && tempSens.haveHum()) {
-                        departedTime.showHumDirect(tempSens.readHum());
-                    } else {
-                        departedTime.showAnimate2();
-                    }
+                    departedTime.showNavDirect(depDisp, false);
+                    departedTime.onCond();
                 }
-              
+                destinationTime.onCond();
+                #endif // ------------------------------------
             } else {
             #endif
+                #ifdef TC_HAVETEMP
+                if(isRcMode() && (!isWcMode() || !WcHaveTZ1 || needDepTime)) {
 
-                #ifndef IS_ACAR_DISPLAY
-                if(p3anim) {
-                    for(int i = 0; i < 12; i++) {
-                        destinationTime.showAnimate3(i);
-                        if(needDepTime) {
-                            departedTime.showAnimate3(i);
+                    #ifndef TC_NO_MONTH_ANIM // -----------------------------------
+                    for(bool i : { true, false }) {
+                        if(!isWcMode() || !WcHaveTZ1) {
+                            destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit, i);
+                        } else {
+                            destinationTime.showAnimate(i);
                         }
-                        mydelay(5);
+                        if(needDepTime) {
+                            if(isWcMode() && WcHaveTZ1) {
+                                departedTime.showTempDirect(tempSens.readLastTemp(), tempUnit, i);
+                            } else if(!isWcMode() && tempSens.haveHum()) {
+                                departedTime.showHumDirect(tempSens.readHum(), i);
+                            } else {
+                                departedTime.showAnimate(i);
+                            }
+                        }
+                        if(i) mydelay(80);
                     }
+                    #else // TC_NO_MONTH_ANIM -------------------------------------
+                    if(!isWcMode() || !WcHaveTZ1) {
+                        destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit, false);
+                    } else {
+                        destinationTime.show();
+                    }
+                    if(needDepTime) {
+                        if(isWcMode() && WcHaveTZ1) {
+                            departedTime.showTempDirect(tempSens.readLastTemp(), tempUnit, false);
+                        } else if(!isWcMode() && tempSens.haveHum()) {
+                            departedTime.showHumDirect(tempSens.readHum(), false);
+                        } else {
+                            departedTime.show();
+                        }
+                        departedTime.onCond();
+                    }
+                    destinationTime.onCond();
+                    #endif  // TC_NO_MONTH_ANIM -------------------------------------
+                  
                 } else {
-                #endif    // IS_ACAR_DISPLAY
-                    destinationTime.showAnimate1();
-                    if(needDepTime) {
-                        departedTime.showAnimate1();
+                #endif  // TC_HAVETEMP
+    
+                    #ifndef IS_ACAR_DISPLAY
+                    if(p3anim) {
+                        for(int i = 0; i < 12; i++) {
+                            if(!destinationTime.showAnimate3(i))
+                                break;
+                            if(needDepTime) {
+                                departedTime.showAnimate3(i);
+                            }
+                            mydelay(5);
+                        }
+                    } else {
+                    #endif    // IS_ACAR_DISPLAY
+                        #ifndef TC_NO_MONTH_ANIM // ---------------------
+                        for(bool i : { true, false }) {
+                            destinationTime.showAnimate(i);
+                            if(needDepTime) {
+                                departedTime.showAnimate(i);
+                            }
+                            if(i) mydelay(80);
+                        }
+                        #else // TC_NO_MONTH_ANIM -----------------------
+                        destinationTime.show();
+                        if(needDepTime) {
+                            departedTime.show();
+                            departedTime.onCond();
+                        }
+                        destinationTime.onCond();
+                        #endif  // TC_NO_MONTH_ANIM ---------------------
+                    #ifndef IS_ACAR_DISPLAY    
                     }
-                    mydelay(80);
-                    destinationTime.showAnimate2();
-                    if(needDepTime) {
-                        departedTime.showAnimate2();
-                    }
-                #ifndef IS_ACAR_DISPLAY    
+                    #endif  // IS_ACAR_DISPLAY
+    
+                #ifdef TC_HAVETEMP
                 }
-                #endif  // IS_ACAR_DISPLAY
-
-            #ifdef TC_HAVETEMP
+                #endif
+            #ifdef TC_HAVEGPS
             }
             #endif
 
@@ -1676,14 +1754,29 @@ void cancelEnterAnim(bool reenableDT)
         digitalWrite(WHITE_LED_PIN, LOW);
         
         if(reenableDT) {
+            char destDisp[16];
+            char depDisp[16];
+            #ifdef TC_HAVEGPS
+            if(isNavMode()) {
+                gpsMakePos(destDisp, depDisp);
+                destinationTime.showNavDirect(destDisp, false);
+            } else
+            #endif
             #ifdef TC_HAVETEMP
             if(isRcMode() && (!isWcMode() || !WcHaveTZ1)) {
                 destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit);
             } else
             #endif
                 destinationTime.show();
+            
             destinationTime.onCond();
+            
             if(needDepTime) {
+                #ifdef TC_HAVEGPS
+                if(isNavMode()) {
+                    departedTime.showNavDirect(depDisp, false);
+                } else
+                #endif
                 #ifdef TC_HAVETEMP
                 if(isRcMode()) {
                     if(isWcMode() && WcHaveTZ1) {
@@ -1696,6 +1789,7 @@ void cancelEnterAnim(bool reenableDT)
                 } else
                 #endif
                     departedTime.show();
+
                 departedTime.onCond();
             }
         }
@@ -1856,7 +1950,7 @@ void startBeepTimer()
         muteBeep = false;
     }
 
-    #if defined(TC_DBG) && defined(TC_DBGBEEP)
+    #if defined(TC_DBG_GEN) && defined(TC_DBGBEEP)
     Serial.printf("startBeepTimer: Beepmode %d BeepTimer %d, BTNow %d, now %d mute %d\n", 
         beepMode, beepTimer, beepTimerNow, millis(), muteBeep);
     #endif

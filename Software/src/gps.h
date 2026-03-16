@@ -57,12 +57,16 @@
 #define GPS_MAX_I2C_LEN   255
 #define GPS_MAXLINELEN    128
 
+enum  {
+    GPST_MTK333X = 1,
+};
+
 class tcGPS {
 
     public:
 
-        tcGPS(uint8_t address);
-        bool    begin(int quickUpdates, int speedRate, void (*myDelay)(unsigned long));
+        tcGPS(const uint8_t *addrArr);
+        bool    begin(int numTypes, int quickUpdates, int speedRate, void (*myDelay)(unsigned long));
 
         void    loop(bool doDelay);
 
@@ -70,6 +74,10 @@ class tcGPS {
         bool    haveTime() { return (_haveDateTime || _haveDateTime2); }
         bool    getDateTime(struct tm *timeInfo, unsigned long *fixAge, unsigned long updInt);
         bool    setDateTime(struct tm *timeinfo);
+
+        const char *getPos(bool& cur);
+
+        void    requestVersion();
         
         bool    fix = false;
 
@@ -85,6 +93,8 @@ class tcGPS {
         // Ptr to custom delay function
         void (*_customDelayFunc)(unsigned long) = NULL;
 
+        int     _type;
+        const uint8_t *_addrArr;
         uint8_t _address;
 
         #define GPS_LENBUFLIMIT 0x03
@@ -109,14 +119,22 @@ class tcGPS {
 
         bool    _haveDateTime = false;
         bool    _haveDateTime2 = false;
+        bool    _havePos = false;
         char    _curTime[8]   = { 0 };
         char    _curDate[12]  = { 0 };
         char    _curTime2[8]  = { 0 };
         char    _curDate2[8]  = { 0 };
+        char    _curPos[32]   = { 0 };
         unsigned long _curFrac;
         unsigned long _curFrac2;
         unsigned long _curTS = 0;
         unsigned long _curTS2 = 0;
+        unsigned long _curposTS = 0;
+
+        char axnfw[32] = { 0 };
+        char model[16] = { 0 };
+        bool triedQ = false;
+        char qfw[20] = { 0 };
 
 };
 

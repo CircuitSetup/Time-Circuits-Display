@@ -76,13 +76,14 @@ void wifiOn(unsigned long newDelay = 0, bool alsoInAPMode = false, bool deferCon
 bool wifiOnWillBlock();
 void wifiRestartPSTimer();
 void wifiStartCP();
-
-void updateConfigPortalValues();
+bool updateAvailable();
 
 int  wifi_getStatus();
 bool wifi_getIP(uint8_t& a, uint8_t& b, uint8_t& c, uint8_t& d);
 void wifi_getMAC(char *buf);
 void ipToString(char *str, IPAddress ip);
+
+bool checkIPConfig();
 
 int16_t filterOutUTF8(char *src, char *dst, int srcLen, int maxChars);
 

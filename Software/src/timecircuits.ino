@@ -43,6 +43,31 @@
 
 /*  Changelog
  *
+  *  2026/02/16 (A10001986) [3.20]
+ *    - New file format for secondary and IP settings. This version of the firmware 
+ *      converts old to new.
+ *    - Add geolocation: Display GPS coordinates in Destination and Last Time Dep
+ *      displays. 114(DD notation)/115(DMS)/116(DMD) to enable/disable this mode.
+ *    - Display mode (Room condition, World Clock, Geolocation) is now persistent
+ *      (SD card required). Current mode is saved 10 seconds after activation (or 
+ *      upon fake-power-down or a controlled reboot such as when changing settings 
+ *      in Config Portal)
+ *    - "Shuffle" setting changes are now saved (SD card required), "Shuffle" option
+ *      removed from Config Portal.
+ *    - Add option to *not* use GPS time; no one knows what happens after 2034/2038
+ *      when the GPS week counter rolls over, so although the firmware tries to
+ *      correct wrong times, given I cannot test this in any way, it might fail
+ *      and sync to wrong date/time.
+ *    - Display MAC address (STA) on WiFi Configuration Page
+ *    - Fiddle with timing for smoother Remote speed updates
+ *    - World Clock mode: Display location name with time if both fit
+ *    - Config files are now only written if actually changed which prolongs
+ *      Flash life-span.
+ *    - Add TC_NO_MONTH_ANIM compile-time option to skip the date-entry animation.
+ *      Might be desirable when using A-car displays: Given the "month" is just
+ *      an ordinary 2-digit number (and no back-lit gel) the real thing probably
+ *      switched on the entire line at once.
+ *    - Code optimizations and fixes.
  *  2026/01/11 (A10001986) [3.11]
  *    - New sound pack (TW05/CS05)
  *    - Keypad menu: Add navigation using keypad keys 2 (up), 5 (select), 8 (down), 
@@ -1584,15 +1609,18 @@ void loop()
     scanKeypad();
     ntp_loop();
     audio_loop();
+    bttfn_loop(BNLP_SK_MC|BNLP_SK_NOTDATA|BNLP_SK_EXPIRE);
+    audio_loop();
     time_loop();
     audio_loop();
     wifi_loop();
     audio_loop();
     bttfn_loop();
+    bttfn_loop_ex();
     audio_loop();
 }
 #endif
 
-#ifdef TC_DBG
+#if defined(TC_DBG_TIME) || defined(TC_DBG_NET) || defined(TC_DBG_GPS)
 #warning "Debug output is enabled. Binary not suitable for release."
 #endif

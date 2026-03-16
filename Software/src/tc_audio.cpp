@@ -52,8 +52,9 @@
 
 #include "tc_global.h"
 
-//#define TC_DBG_AUDIO      // debug audio library
-//#define TC_DBG_MP
+#ifdef TC_DBG_AUDIO
+//#define TC_DBG_MP     // debug music player
+#endif
 
 #include <Arduino.h>
 #include <SD.h>
@@ -97,25 +98,25 @@ class AudioGeneratorWAVP : public AudioGeneratorWAV
         // Now set up the buffer or fail
         buff = reinterpret_cast<uint8_t *>(malloc(buffSize));
         if(!buff) {
-          return false;
-        };
+            return false;
+        }
         buffPtr = 0;
         buffLen = 0;
 
         sL = sR = 0;
       
         if(!output->SetRate(sampleRate)) {
-          return false;
+            return freeBuf();
         }
         if(!output->SetBitsPerSample(bitsPerSample)) {
-          return false;
+            return freeBuf();
         }
         if(!output->SetChannels(channels)) {
-          return false;
+            return freeBuf();
         }
       
         if(!output->begin()) {
-          return false;
+            return freeBuf();
         }
       
         running = true;
@@ -139,7 +140,7 @@ static AudioOutputI2S *out;
 
 bool audioInitDone = false;
 
-bool muteBeep      = true;
+bool        muteBeep    = true;
 static bool beepRunning = false;
 
 bool            haveMusic = false;
@@ -147,7 +148,7 @@ bool            mpActive = false;
 static uint16_t maxMusic = 0;
 static uint16_t *playList = NULL;
 static int      mpCurrIdx = 0;
-static bool     mpShuffle = false;
+bool            mpShuffle = false;
 static uint16_t currPlaying = 0;
 #define         MAXID3LEN 2048
 
@@ -184,7 +185,7 @@ bool          useLineOut  = false;
 static bool   playLineOut = false;
 
 static char   keySnd[] = "/key3.mp3";   // not const
-static uint16_t haveKeySnd = 0;
+static uint32_t haveKeySnd = 0;
 
 static const char *tcdrdone = "/TCD_DONE.TXT";
 bool          headLineShown = false;
@@ -262,7 +263,7 @@ void audio_setup()
     loadCurVolume();
 
     loadMusFoldNum();
-    mpShuffle = evalBool(settings.shuffle);
+    loadShuffle();
 
     if(haveLineOut) {
         loadLineOut();
@@ -273,11 +274,9 @@ void audio_setup()
 
     // Check for sound files to avoid unsuccessful file-lookups later
     
-    for(int i = 1; i < 10; i++) {
+    for(int i = 1, bm = 1 << 8; i < 10; i++, bm <<= 1) {
         keySnd[4] = '0' + i;
-        if(check_file_SD(keySnd)) {
-            haveKeySnd |= (1 << i);
-        }
+        if(check_file_SD(keySnd)) haveKeySnd |= bm;
     }
 
     haveHrSnd = check_file_SD(hsnd);
@@ -285,14 +284,12 @@ void audio_setup()
     for(int i = 0; i <= 23; i++) {
         shsnd[6] = (i / 10) + '0';
         shsnd[7] = (i % 10) + '0';
-        if(check_file_SD(shsnd)) {
-            haveSpHrSnd |= (1 << i);
-        }
+        if(check_file_SD(shsnd)) haveSpHrSnd |= (1 << i);
     }
 
     audioInitDone = true;
 
-    #ifdef TC_DBG
+    #ifdef TC_DBG_AUDIO
     Serial.printf("haveKeySnd 0x%x, haveSPHrSnd 0x%x\n", haveKeySnd, haveSpHrSnd);
     #endif    
 }
@@ -337,7 +334,7 @@ static int skipID3(char *buf)
                        (buf[7] << (16-2)) |
                        (buf[8] << (8-1))  |
                        (buf[9])) + 10;
-        #ifdef TC_DBG
+        #ifdef TC_DBG_AUDIO
         Serial.printf("Skipping ID3 tags, seeking to %d (0x%x)\n", pos, pos);
         #endif
         return pos;
@@ -358,7 +355,7 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
 
     pwrNeedFullNow();
 
-    #ifdef TC_DBG
+    #ifdef TC_DBG_AUDIO
     Serial.printf("Audio: Playing %s\n", audio_file);
     #endif
 
@@ -421,7 +418,7 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
             }
             mp3->begin(mySD0, out);
         }
-        #ifdef TC_DBG
+        #ifdef TC_DBG_AUDIO
         Serial.println("Playing from SD");
         #endif
     }
@@ -439,12 +436,12 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
             myFS0->seek(skipID3(buf), SEEK_SET);
             mp3->begin(myFS0, out);
         }
-        #ifdef TC_DBG
+        #ifdef TC_DBG_AUDIO
         Serial.println("Playing from flash FS");
         #endif
     } else {
         key_playing = 0;
-        #ifdef TC_DBG
+        #ifdef TC_DBG_AUDIO
         Serial.println("Audio file not found");
         #endif
     }
@@ -465,9 +462,7 @@ uint32_t play_keypad_sound(char key)
     AudioFileSource *src = NULL;
     
     dtmfBuf[6] = key;
-    
-    //play_file(dtmfBuf, PA_ISWAV|PA_INTSPKR|PA_CHECKNM, 0.6f);
-    
+
     if(mpActive) return kp;
 
     pwrNeedFullNow();
@@ -552,12 +547,10 @@ void play_beep()
 
 void play_key(int k, uint32_t preDTMFkp)
 {
-    uint32_t pa_key;
+    uint32_t pa_key = 1 << (7+k);
     
-    if(!(haveKeySnd & (1 << k)))
+    if(!(haveKeySnd & pa_key))
         return;
-
-    pa_key = (1 << (7+k));
 
     if(pa_key == preDTMFkp) {
         // Logic for keypad sound having interrupted
@@ -581,7 +574,7 @@ void play_door_snd(int doorNum, int state, uint32_t doorFlags)
     // only interrupt if reasonable part of the first door's sound
     // is already played back.
     unsigned long now = millis();
-    if(!startup && ((!(csf & (CSF_P0|CSF_P1|CSF_RE))) || !playTTsounds || checkAudioFree())) {
+    if((!(csf & CSF_ST)) && ((!(csf & (CSF_P0|CSF_P1|CSF_RE))) || !playTTsounds || checkAudioFree())) {
         if((lastDoorNum == doorNum) || !lastDoorNum || (now - lastDoorSoundNow > 750)) {
             play_file((state < 0) ? "/doorclose.mp3" : "/dooropen.mp3", doorFlags|PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD);
             lastDoorSoundNow = now;
@@ -705,7 +698,7 @@ static void setLineOut(bool doLineOut)
  */
 bool check_file_SD(const char *audio_file)
 {
-    #ifdef TC_DBG
+    #ifdef TC_DBG_AUDIO
     Serial.printf("check_file_SD: Checking for %s\n", audio_file);
     #endif
     return (haveSD && SD.exists(audio_file));
@@ -1017,6 +1010,7 @@ void mp_makeShuffle(bool enable)
     int numMsx = maxMusic + 1;
 
     mpShuffle = enable;
+    saveShuffle();
 
     if(!haveMusic) return;
     
@@ -1273,9 +1267,7 @@ static void mpren_looper(bool isSetup, bool checking, int fileNum)
             #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
             speedoUpdate_loop(true);
             #endif
-            int i = 0;
-            while(bttfn_loop()) { i++; }
-            Serial.printf("%d BTTFN packets\n", i);
+            while(bttfn_loop(BNLP_SK_EXPIRE)) { }
             // audio_loop not required, never
             // called when audio is active
         }
@@ -1319,7 +1311,7 @@ static bool mp_renameFilesInDir(bool isSetup)
 #ifdef HAVE_GETNEXTFILENAME
     bool isDir;
 #endif
-    #if defined(TC_DBG) || defined(TC_DBG_MP)
+    #ifdef TC_DBG_MP
     const char *funcName = "MusicPlayer/Renamer: ";
     #endif
 
@@ -1527,7 +1519,7 @@ static bool mp_renameFilesInDir(bool isSetup)
                     }
                 }
             }
-            #ifdef TC_DBG
+            #ifdef TC_DBG_MP
             Serial.printf("%sRenamed '%s' to '%s'\n", funcName, fnbuf2, fnbuf);
             #endif
             

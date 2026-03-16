@@ -268,15 +268,15 @@
 uint8_t autoInterval = DEF_AUTOROTTIMES;
 const uint8_t autoTimeIntervals[6] = {0, 5, 10, 15, 30, 60};  // first must be 0 (=off)
 
-bool    alarmOnOff = false;
-uint8_t alarmHour = 255;
-uint8_t alarmMinute = 255;
-uint8_t alarmWeekday = 0;
+bool    alarmOnOff   = DEF_ALARM_ONOFF;
+uint8_t alarmHour    = DEF_ALARM_HOUR;
+uint8_t alarmMinute  = DEF_ALARM_MINUTE;
+uint8_t alarmWeekday = DEF_ALARM_WD;
 
-uint8_t remMonth = 0;
-uint8_t remDay = 0;
-uint8_t remHour = 0;
-uint8_t remMin = 0;
+uint8_t remMonth = DEF_REM_MONTH;
+uint8_t remDay   = DEF_REM_DAY;
+uint8_t remHour  = DEF_REM_HOUR;
+uint8_t remMin   = DEF_REM_MIN;
 
 static int menuItemNum;
 
@@ -324,6 +324,7 @@ static void doShowNetInfo();
 static void doShowBTTFNInfo();
 static bool menuWaitForRelease();
 static bool checkEnterPress();
+static void waitForEnterRelease();
 static bool waitForMenuControl(bool &wasEnter, bool& dirDown, bool& wasQuit, bool& wasSelect);
 static void prepareInput(int number);
 
@@ -622,9 +623,9 @@ void enter_menu()
             departedTime.setBrightness(ltbri2, true);
 
             // Update & write settings file
-            sprintf(settings.destTimeBright, "%d", dtbri2);
-            sprintf(settings.presTimeBright, "%d", ptbri2);
-            sprintf(settings.lastTimeBright, "%d", ltbri2);
+            settings.destTimeBright = dtbri2;
+            settings.presTimeBright = ptbri2;
+            settings.lastTimeBright = ltbri2;
             
             saveBrightness();
             
@@ -1814,7 +1815,7 @@ static bool doSetBrightness(clockDisplay* displaySet)
     number = oldBri;
 
     // turn on all the segments
-    allLampTest();
+    allShowPattern();
 
     // Display "LVL"
     displayBri(displaySet, number, false);
@@ -1872,7 +1873,7 @@ static bool doSetBrightness(clockDisplay* displaySet)
 
     }
 
-    allLampTest();  // turn on all the segments
+    allShowPattern();  // turn on all the segments
 
     keypadMode = 0;
 
@@ -1959,7 +1960,7 @@ static void doShowSensors()
                     #ifdef TC_HAVELIGHT
                     lightSens.loop();
                     dt_showTextDirect("LIGHT");
-                    //#ifdef TC_DBG
+                    //#ifdef TC_DBG_SENS
                     //sprintf(buf, "%08x", lightSens.readDebug());
                     //#else
                     sprintf(buf, "%d LUX", lightSens.readLux());
@@ -2237,7 +2238,7 @@ static void displayClient(int numCli, int number)
         departedTime.showHalfIPDirect(ip[2], ip[3], CDT_CLEAR);
         pt_on();
         lt_on();
-        #ifdef TC_DBG
+        #ifdef TC_DBG_NET
         Serial.printf("BTTFN client type %d\n", type);
         #endif
     } else {
@@ -2322,13 +2323,8 @@ void doCopyAudioFiles()
     if((!copy_audio_files(delIDfile)) && !FlashROMode) {
         // If copy fails because of a write error, re-format flash FS
         lt_showTextDirect("FORMATTING");
-        formatFlashFS(false);        // Format
-        rewriteSecondarySettings();  // Re-write secondary settings
-        #ifdef TC_DBG 
-        Serial.println("Re-writing general settings");
-        #endif
-        write_settings();            // Re-write general settings
-        copy_audio_files(delIDfile); // Retry copy
+        reInstallFlashFS();
+        copy_audio_files(delIDfile);  // Retry copy
     }
 
     if(delIDfile) {
@@ -2423,7 +2419,7 @@ static bool checkEnterPress()
  * Call myloop() to allow other stuff to proceed
  *
  */
-void waitForEnterRelease()
+static void waitForEnterRelease()
 {
     while(1) {
         while(digitalRead(ENTER_BUTTON_PIN)) {

@@ -113,9 +113,6 @@ class speedDisplay {
         void on();
         void off();
         bool getOnOff() { return !!_onCache; }
-        #if 0
-        void lampTest();
-        #endif
 
         uint8_t setBrightness(uint8_t level, bool isInitial = false);
         uint8_t setBrightnessDirect(uint8_t level) ;
@@ -156,9 +153,6 @@ class speedDisplay {
 
         //void handleColon();
         uint16_t getLEDChar(uint8_t value);
-        #if 0
-        void directCol(int col, int segments);  // directly writes column RAM
-        #endif
         void clearDisplay();                    // clears display RAM
         void directCmd(uint8_t val);
 
@@ -213,7 +207,8 @@ class speedDisplay {
         uint8_t  _dot01_shift;      //      1s dot shift to align in buffer
         uint8_t  _colon_pos;        //      Pos of colon in 16bit buffer (255 = no colon)
         uint16_t _colon_bm;         //      bitmask for colon
-        uint8_t  _num_digs;         //      total number of digits/letters (max 4)
+        unsigned int  _num_digs;    //      total number of digits/letters (max 4)
+        unsigned int  _max_buf;     //      highest buffer position
         const uint8_t *_bufPosArr;  //      Array of buffer positions for digits left->right
         const uint8_t *_bufShftArr; //      Array of shift values for each digit
 

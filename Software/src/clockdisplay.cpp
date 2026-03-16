@@ -79,6 +79,7 @@
 extern bool     alarmOnOff;
 #ifdef TC_HAVEGPS
 extern bool     gpsHaveFix();
+extern int      gpsGetDM();
 #endif
 
 extern uint64_t timeDifference;
@@ -86,19 +87,20 @@ extern bool     timeDiffUp;
 
 extern int      daysInMonth(int month, int year);
 
-extern bool FlashROMode;
-extern bool readFileFromSD(const char *fn, uint8_t *buf, int len);
-extern bool writeFileToSD(const char *fn, uint8_t *buf, int len);
-extern bool readFileFromFS(const char *fn, uint8_t *buf, int len);
-extern bool writeFileToFS(const char *fn, uint8_t *buf, int len);
+extern uint16_t    loadClockState(int16_t& yoffs);
+extern bool        saveClockState(uint16_t curYear, int16_t yearoffset);
+extern void        getClockDataP(uint64_t& timeDifference, bool &timeDiffUp);
+extern dateStruct *getClockDataDL(uint8_t did);
+extern bool        saveClockDataP(bool force);
+extern bool        saveClockDataDL(bool force, uint8_t did, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
 
+#ifndef IS_ACAR_DISPLAY
 static const char months[13][4] = {
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
     "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
     "  _"
 };
 
-#ifndef IS_ACAR_DISPLAY
 static const uint8_t idxtbl[] = {
     0, 
     CD_DAY_POS, CD_DAY_POS, 
@@ -111,15 +113,6 @@ static const uint8_t idxtbl[] = {
 #endif
 
 static const char *nullStr = "";
-
-static const char *fnEEPROM[3] = {
-    "/tcddt", "/tcdpt", "/tcdlt"
-};
-static const char *fnSD[3] = {
-    "/tcddt.bin", "/tcdpt.bin", "/tcdlt.bin"
-};
-static const char *fnLastYear   = "/tcdly";
-static const char *fnLastYearSD = "/tcdly.bin";
 
 /*
  * ClockDisplay class
@@ -135,6 +128,8 @@ clockDisplay::clockDisplay(uint8_t did, uint8_t address)
 // Start the display
 void clockDisplay::begin()
 {
+    _rtc = (_did == DISP_PRES);
+    
     directCmd(0x20 | 1); // turn on oscillator
 
     clearBuf();          // clear buffer
@@ -145,7 +140,7 @@ void clockDisplay::begin()
 
 // Turn on the display
 void clockDisplay::on()
-{   
+{
     directCmd(0x80 | 1);
 }
 
@@ -157,15 +152,15 @@ void clockDisplay::onCond()
     }
 }
 
+void clockDisplay::onBlink(uint8_t blink)
+{
+    directCmd(0x80 | 1 | ((blink & 0x03) << 1)); 
+}
+
 // Turn off the display
 void clockDisplay::off()
 {
     directCmd(0x80);
-}
-
-void clockDisplay::onBlink(uint8_t blink)
-{
-    directCmd(0x80 | 1 | ((blink & 0x03) << 1)); 
 }
 
 // Turn on all LEDs
@@ -174,7 +169,7 @@ void clockDisplay::onBlink(uint8_t blink)
 // and might remain dark after repeatedly
 // calling this.
 #if 0
-void clockDisplay::realLampTest()
+void clockDisplay::lampTest()
 {
     Wire.beginTransmission(_address);
     Wire.write(0x00);  // start address
@@ -188,19 +183,17 @@ void clockDisplay::realLampTest()
 
 // Turn on some LEDs
 // Used for effects and brightness keypad menu
-void clockDisplay::lampTest(bool randomize)
+void clockDisplay::showPattern(bool randomize)
 {
-    Wire.beginTransmission(_address);
-    Wire.write(0x00);  // start address
-
+    uint16_t db[CD_BUF_SIZE];
     uint32_t rnd = esp_random();
 
     for(int i = 0; i < CD_BUF_SIZE; i++) {
-        Wire.write(randomize ? ((rand() % 0x7f) ^ rnd) & 0x7f : 0xaa);
-        Wire.write(randomize ? (((rand() % 0x7f) ^ (rnd >> 8))) & 0x77 : 0x55);
+        db[i] =  (randomize ? ((rand() % 0x7f) ^ rnd) & 0x7f : 0xaa) << 8;
+        db[i] |= (randomize ? (((rand() % 0x7f) ^ (rnd >> 8))) & 0x77 : 0x55);
     }
-    
-    Wire.endTransmission();
+
+    directBuf(db);
 }
 
 // Clear the buffer
@@ -236,8 +229,7 @@ void clockDisplay::resetBrightness()
 
 uint8_t clockDisplay::setBrightnessDirect(uint8_t level)
 {
-    if(level > 15)
-        level = 15;
+    level &= 0x0f;
 
     directCmd(0xe0 | level);
 
@@ -305,56 +297,26 @@ void clockDisplay::show()
 }
 
 // Show all but month
-void clockDisplay::showAnimate1()
+#ifndef TC_NO_MONTH_ANIM
+void clockDisplay::showAnimate(bool firstStage)
 {
-    showInt(true);
+    if(firstStage) showInt(true);
+    else showAnimate2();
 }
+#endif
 
-// Show month, assumes showAnimate1() was called before
-#ifdef IS_ACAR_DISPLAY
-void clockDisplay::showAnimate2()
-{
-    if(_nightmode && _NmOff)
-        return;
-
-    Wire.beginTransmission(_address);
-    Wire.write(0x00);
-    for(int i = 0; i < CD_BUF_SIZE; i++) {
-        Wire.write(_displayBuffer[i] & 0xff);
-        Wire.write(_displayBuffer[i] >> 8);
-    }
-    Wire.endTransmission();
-}
-#else // IS_ACAR_DISPLAY
-void clockDisplay::showAnimate2(int until)
-{
-    if(_nightmode && _NmOff)
-        return;
-
-    Wire.beginTransmission(_address);
-    Wire.write(0x00);
-    for(int i = 0; i < until; i++) {
-        Wire.write(_displayBuffer[i] & 0xff);
-        Wire.write(_displayBuffer[i] >> 8);
-    }
-    for(int i = until; i < CD_BUF_SIZE; i++) {
-        Wire.write(0x00);
-        Wire.write(0x00);
-    }
-    Wire.endTransmission();
-}
-
-void clockDisplay::showAnimate3(int mystep)
+#ifndef IS_ACAR_DISPLAY
+bool clockDisplay::showAnimate3(int mystep)
 {
     uint16_t buf;
     uint16_t *bu;
     
     if(!mystep) {
         if(!handleNM())
-            return;
+            return false;
         off();
         _displayBuffer[CD_AMPM_POS] &= 0x7F7F;  // AM/PM off
-        colonOff();
+        _displayBuffer[CD_COLON_POS] &= 0x7F7F; // Colon off
         showAnimate2(CD_DAY_POS);
         on();
         if(_NmOff) _oldnm = 0;
@@ -382,6 +344,8 @@ void clockDisplay::showAnimate3(int mystep)
     default:
         showAnimate2(lim);
     }
+
+    return true;
 }
 #endif // IS_ACAR_DISPLAY
 
@@ -422,6 +386,8 @@ void clockDisplay::setAltText(const char *text)
         }
         _displayBufferAlt[pos++] = temp;
     }
+
+    _WCtimeFits = (pos <= CD_HOUR_POS);
 
     while(pos <= CD_MIN_POS) {
         _displayBufferAlt[pos++] = 0;
@@ -519,9 +485,9 @@ void clockDisplay::setMinute(int minNum)
 
 void clockDisplay::setYearOffset(int16_t yearOffs)
 {
-    if(_rtc) {
+    if(_did == DISP_PRES) {
         _yearoffset = yearOffs;
-        #ifdef TC_DBG
+        #ifdef TC_DBG_TIME
         Serial.printf("ClockDisplay: _yearoffset set to %d\n", yearOffs);
         #endif
     }
@@ -530,6 +496,8 @@ void clockDisplay::setYearOffset(int16_t yearOffs)
 
 // Query data ------------------------------------------------------------------
 
+
+#ifndef IS_ACAR_DISPLAY
 const char * clockDisplay::getMonthString(uint8_t mon)
 {
     if(mon >= 1 && mon <= 12)
@@ -537,6 +505,7 @@ const char * clockDisplay::getMonthString(uint8_t mon)
     else
         return nullStr;
 }
+#endif
 
 void clockDisplay::getCompressed(uint8_t *buf, uint8_t& over)
 {
@@ -547,42 +516,45 @@ void clockDisplay::getCompressed(uint8_t *buf, uint8_t& over)
     over |= _minute & 0x03;
 }
 
+
 // Put data directly on display (bypass buffer) --------------------------------
+
 
 void clockDisplay::showMonthDirect(int monthNum, uint16_t dflags)
 {
-    clearDisplay();
+    uint16_t db[CD_BUF_SIZE] = { 0 };
 
     if(monthNum > 12)
         monthNum = 12;
 
 #ifdef IS_ACAR_DISPLAY
-    directCol(CD_MONTH_POS, makeNum(monthNum, dflags));
+    db[CD_MONTH_POS] = makeNum(monthNum, dflags);
 #else
     if(monthNum > 0) {
         monthNum--;
     } else {
         monthNum = 12;
     }
-    directCol(CD_MONTH_POS,     getLEDAlphaChar(months[monthNum][0]));
-    directCol(CD_MONTH_POS + 1, getLEDAlphaChar(months[monthNum][1]));
-    directCol(CD_MONTH_POS + 2, getLEDAlphaChar(months[monthNum][2]));
+    db[CD_MONTH_POS]     = getLEDAlphaChar(months[monthNum][0]);
+    db[CD_MONTH_POS + 1] = getLEDAlphaChar(months[monthNum][1]);
+    db[CD_MONTH_POS + 2] = getLEDAlphaChar(months[monthNum][2]);
 #endif
+    directBuf(db);
 }
 
 void clockDisplay::showDayDirect(int dayNum, uint16_t dflags)
 {
-    clearDisplay();
+    uint16_t db[CD_BUF_SIZE] = { 0 };
 
-    directCol(CD_DAY_POS, makeNum(dayNum, dflags));
+    db[CD_DAY_POS] = makeNum(dayNum, dflags);
+    directBuf(db);
 }
 
 void clockDisplay::showYearDirect(int yearNum, uint16_t dflags)
 {
     uint16_t seg = 0;
     int y100;
-
-    clearDisplay();
+    uint16_t db[CD_BUF_SIZE] = { 0 };
 
     while(yearNum >= 10000)
         yearNum -= 10000;
@@ -593,20 +565,20 @@ void clockDisplay::showYearDirect(int yearNum, uint16_t dflags)
         seg = makeNum(y100, dflags);
         if(y100) dflags &= ~CDD_NOLEAD0;
     }
-    directCol(CD_YEAR_POS, seg);
-    directCol(CD_YEAR_POS + 1, makeNum(yearNum % 100, dflags));
+    db[CD_YEAR_POS] = seg;
+    db[CD_YEAR_POS + 1] = makeNum(yearNum % 100, dflags);
+    directBuf(db);
 }
 
 void clockDisplay::showHourDirect(int hourNum, uint16_t dflags)
 {
-    clearDisplay();
+    uint16_t db[CD_BUF_SIZE] = { 0 };
 
-    // This assumes that CD_HOUR_POS is different to
-    // CD_AMPM_POS
+    // This assumes that CD_HOUR_POS is different to CD_AMPM_POS
 
     if(!_mode24 && !(dflags & CDD_FORCE24)) {
 
-        directAMPM((hourNum > 11) ? _pm : _am);
+        db[CD_AMPM_POS] = (hourNum > 11) ? _pm : _am;
 
         if(hourNum == 0) {
             hourNum = 12;
@@ -616,18 +588,20 @@ void clockDisplay::showHourDirect(int hourNum, uint16_t dflags)
 
     } else {
 
-        directAMPM(0);
+        db[CD_AMPM_POS] = 0;
 
     }
 
-    directCol(CD_HOUR_POS, makeNum(hourNum, dflags));
+    db[CD_HOUR_POS] = makeNum(hourNum, dflags);
+    directBuf(db);
 }
 
 void clockDisplay::showMinuteDirect(int minuteNum, uint16_t dflags)
 {
-    clearDisplay();
+    uint16_t db[CD_BUF_SIZE] = { 0 };
 
-    directCol(CD_MIN_POS, makeNum(minuteNum, dflags));
+    db[CD_MIN_POS] = makeNum(minuteNum, dflags);
+    directBuf(db);    
 }
 
 
@@ -639,9 +613,9 @@ void clockDisplay::showTextDirect(const char *text, uint16_t flags)
 {
     int idx = 0, pos = CD_MONTH_POS;
     int temp = 0;
+    uint16_t db[CD_BUF_SIZE];
 
-    _corr6 = (flags & CDT_CORR6) ? true : false;
-    _withColon = (flags & CDT_COLON) ? true : false;
+    _corr6 = !!(flags & CDT_CORR6);
 
 #ifdef IS_ACAR_DISPLAY
     while(text[idx] && pos < (CD_MONTH_POS+CD_MONTH_SIZE)) {
@@ -649,16 +623,16 @@ void clockDisplay::showTextDirect(const char *text, uint16_t flags)
         if(text[idx]) {
             temp |= (getLED7AlphaChar(text[idx++]) << 8);
         }
-        directCol(pos++, temp);
+        db[pos++] = temp;
     }
 #else
     while(text[idx] && pos < (CD_MONTH_POS+CD_MONTH_SIZE)) {
-        directCol(pos++, getLEDAlphaChar(text[idx++]));
+        db[pos++] = getLEDAlphaChar(text[idx++]);
     }
 #endif
 
     while(pos < CD_DAY_POS) {
-        directCol(pos++, 0);
+        db[pos++] = 0;
     }
     
     pos = CD_DAY_POS;
@@ -667,16 +641,24 @@ void clockDisplay::showTextDirect(const char *text, uint16_t flags)
         if(text[idx]) {
             temp |= (getLED7AlphaChar(text[idx++]) << 8);
         }
-        directCol(pos++, temp);
+        db[pos++] = temp;
     }
 
     if(flags & CDT_CLEAR) {
         while(pos <= CD_MIN_POS) {
-            directCol(pos++, 0);
+            db[pos++] = 0;
         }
     }
-    
-    _corr6 = _withColon = false;
+
+    if(flags & CDT_YRDOT)
+        db[CD_YEAR_POS + 1] |= 0x8000;
+
+    if(flags & CDT_COLON)
+        db[CD_YEAR_POS] |= 0x8080;
+
+    directBuf(db, pos);
+
+    _corr6 = false;
 }
 
 // Clear the display RAM and only show the provided 2 numbers (parts of IP)
@@ -721,29 +703,28 @@ void clockDisplay::showTempDirect(float temp, bool tempUnit, bool animate)
 {
     char buf[32];
     const char *ttem = animate ? "    " : "TEMP";
-    int t2; 
+    int t2;
+    char u = tempUnit ? 'C' : 'F';
 
     if(!handleNM())
         return;
 
     if(isnan(temp)) {
         #ifdef IS_ACAR_DISPLAY
-        sprintf(buf, "%s  ----~%c", ttem, tempUnit ? 'C' : 'F');
+        sprintf(buf, "%s  ----~%c", ttem, u);
         #else
-        sprintf(buf, "%s   ----~%c", ttem, tempUnit ? 'C' : 'F');
+        sprintf(buf, "%s   ----~%c", ttem, u);
         #endif
     } else {
         t2 = abs((int)(temp * 100.0f) - ((int)temp * 100));
         #ifdef IS_ACAR_DISPLAY
-        sprintf(buf, "%s%4d%02d~%c", ttem, (int)temp, t2, tempUnit ? 'C' : 'F');
+        sprintf(buf, "%s%4d%02d~%c", ttem, (int)temp, t2, u);
         #else
-        sprintf(buf, "%s %4d%02d~%c", ttem, (int)temp, t2, tempUnit ? 'C' : 'F');
+        sprintf(buf, "%s %4d%02d~%c", ttem, (int)temp, t2, u);
         #endif
     }
     
-    _yearDot = true;
-    showTextDirect(buf);
-    _yearDot = false;
+    showTextDirect(buf, CDT_CLEAR|CDT_YRDOT);
 
     showIntTail(animate);
 }
@@ -776,6 +757,40 @@ void clockDisplay::showHumDirect(int hum, bool animate)
 }
 #endif
 
+#ifdef TC_HAVEGPS
+void clockDisplay::showNavDirect(char *msg, bool animate)
+{
+    char buf[16];
+    char *myMsg = msg;
+    uint16_t flags;
+
+    if(!handleNM())
+        return;
+
+    if(animate) {
+        strcpy(buf, msg);
+        #ifdef IS_ACAR_DISPLAY
+        buf[0] = buf[1] = ' ';
+        #else
+        buf[0] = buf[1] = buf[2] = ' ';
+        #endif
+        myMsg = buf;
+    }
+
+    switch(gpsGetDM()) {
+    case 1:
+      flags = CDT_COLON;
+      break;
+    default:
+      flags = CDT_YRDOT;
+    }
+
+    showTextDirect(myMsg, CDT_CLEAR|flags);
+
+    showIntTail(animate);
+}
+#endif
+
 
 // Load & save data ------------------------------------------------------------
 
@@ -784,38 +799,14 @@ void clockDisplay::showHumDirect(int hum, bool animate)
  * Load time state (lastYear, yearOffset) from NVM 
  * !!! Does not *SET* values, just returns them !!!
  */
-int16_t clockDisplay::loadClockStateData(int16_t& yoffs)
+uint16_t clockDisplay::loadClockStateData(int16_t& yoffs)
 {
-    uint8_t loadBuf[8] = { 0 };
-
     yoffs = 0;
+    
+    if(_did != DISP_PRES)
+        return 0;
 
-    if(!_rtc)
-        return -2;
-
-    if(FlashROMode) {
-        readFileFromSD(fnLastYearSD, loadBuf, 8);
-    } else {
-        readFileFromFS(fnLastYear, loadBuf, 8);
-    }
-
-    if( (loadBuf[0] == (loadBuf[2] ^ 0xff)) &&
-        (loadBuf[1] == (loadBuf[3] ^ 0xff)) ) {
-
-        if( (loadBuf[4] == (loadBuf[6] ^ 0x55)) &&
-            (loadBuf[5] == (loadBuf[7] ^ 0x55)) ) {
-            yoffs = (int16_t)((loadBuf[5] << 8) | loadBuf[4]);
-        }
-
-        _lastWrittenLY = (int16_t)((loadBuf[1] << 8) | loadBuf[0]);
-        _lastWrittenYO = yoffs;
-        _lastWrittenRead = true;
-        
-        return _lastWrittenLY;
-
-    }
-
-    return -1;
+    return loadClockState(yoffs);
 }
 
 /*
@@ -825,99 +816,41 @@ int16_t clockDisplay::loadClockStateData(int16_t& yoffs)
  */
 bool clockDisplay::saveClockStateData(uint16_t curYear)
 {
-    uint8_t savBuf[8];
-
-    if(!_rtc)
+    if(_did != DISP_PRES)
         return false;
 
-    // Check if values identical to last ones written
-    if((_lastWrittenLY == curYear) && (_lastWrittenYO == _yearoffset))
-        return false;
-
-    // If not, read to check if identical to stored
-    if(!_lastWrittenRead) {
-        _lastWrittenLY = loadClockStateData(_lastWrittenYO);
-        _lastWrittenRead = true;
-        if((_lastWrittenLY == curYear) && (_lastWrittenYO == _yearoffset))
-            return true;
-    }
-    
-    savBuf[0] = curYear & 0xff;
-    savBuf[1] = (curYear >> 8) & 0xff;    
-    savBuf[2] = savBuf[0] ^ 0xff;
-    savBuf[3] = savBuf[1] ^ 0xff;
-    savBuf[4] = ((uint16_t)_yearoffset) & 0xff;
-    savBuf[5] = (((uint16_t)_yearoffset) >> 8) & 0xff;
-    savBuf[6] = savBuf[4] ^ 0x55;
-    savBuf[7] = savBuf[5] ^ 0x55;
-
-    _lastWrittenLY = curYear;
-    _lastWrittenYO = _yearoffset;
-
-    if(FlashROMode) {
-        writeFileToSD(fnLastYearSD, savBuf, 8);
-    } else {
-        writeFileToFS(fnLastYear, savBuf, 8);
-    }
-
-    return true;
+    return saveClockState(curYear, _yearoffset);
 }
 
 /*
  * Load display specific data from NVM storage
+ * Returns false if no valid data stored
  *
  */
+
 bool clockDisplay::load()
 {
-    uint8_t loadBuf[10];
-    bool flashAccess;
-
-    if(!_rtc) {
-
-        if(loadNVMData(loadBuf, flashAccess)) {
-
-            setYear((loadBuf[1] << 8) | loadBuf[0]);
-            setMonth(loadBuf[4]);
-            setDay(loadBuf[5]);
-            setHour(loadBuf[6]);
-            setMinute(loadBuf[7]);
-
-            return true;
-
-        }
-
-    } else {
-
-        if(loadNVMData(loadBuf, flashAccess)) {
-
-              timeDifference = ((uint64_t)loadBuf[3] << 32) |  // Dumb casts for
-                               ((uint64_t)loadBuf[4] << 24) |  // silencing compiler
-                               ((uint64_t)loadBuf[5] << 16) |
-                               ((uint64_t)loadBuf[6] <<  8) |
-                                (uint64_t)loadBuf[7];
-
-              timeDiffUp = loadBuf[8] ? true : false;
-
-        } else {
-
-              timeDifference = 0;
-
-        }
-
-        return true;
+    dateStruct *mydate;
+    
+    switch(_did) {
+    case DISP_PRES:
+        getClockDataP(timeDifference, timeDiffUp);
+        break;
+    case DISP_DEST:
+    case DISP_LAST:
+        if(!(mydate = getClockDataDL(_did)))
+            return false;
+        setFromStruct(mydate);
+        break;
     }
-
-    // Do NOT clear NVM if data is invalid.
-    // All 0s are as bad, wait for NVM to be
-    // written by application on purpose
-
-    return false;
+    
+    return true;
 }
 
 /*
  * Delayed save
  * Used in time_loop to queue save operations in order
- * to avoid long blocks due to FS operations
+ * to avoid long delays due to FS operations
  */
 void clockDisplay::savePending()
 {
@@ -926,150 +859,26 @@ void clockDisplay::savePending()
 
 // Returns true if FS was accessed
 bool clockDisplay::saveFlush()
-{    
-    return (_savePending == 1) ? save() : false;
+{
+    return _savePending ? save() : false;
 }
 
 /*
- * Save display specific data to NVM storage (Flash/SD)
+ * Save display specific data to NVM storage
  * Returns true if FS was accessed during operation
  */
 bool clockDisplay::save(bool force)
 {
-    uint8_t savBuf[10]; // Sic! Sum written to last byte by saveNVMData
-
     _savePending = 0;
-    memset(savBuf, 0, 10);
 
-    if(!_rtc) {
-
-        // Non-RTC: Save time
-
-        savBuf[0] = _year & 0xff;
-        savBuf[1] = (_year >> 8) & 0xff;
-        savBuf[4] = _month;
-        savBuf[5] = _day;
-        savBuf[6] = _hour;
-        savBuf[7] = _minute;
-
-    } else {
-
-        // RTC: Save timeDiff
-
-        savBuf[3] = (timeDifference >> 32) & 0xff;
-        savBuf[4] = (timeDifference >> 24) & 0xff;
-        savBuf[5] = (timeDifference >> 16) & 0xff;
-        savBuf[6] = (timeDifference >>  8) & 0xff;
-        savBuf[7] =  timeDifference        & 0xff;
-
-        savBuf[8] = timeDiffUp ? 1 : 0;
-
+    if(_did == DISP_PRES) {
+        return saveClockDataP(force);
     }
 
-    return saveNVMData(savBuf, force);
+    return saveClockDataDL(force, _did, _year, _month, _day, _hour, _minute);
 }
 
 // Private functions ###########################################################
-
-// Returns true if FS was accessed
-// Returns false if not (data identical to cached)
-bool clockDisplay::saveNVMData(uint8_t *savBuf, bool noReadChk)
-{
-    uint16_t sum = 0;
-    uint8_t loadBuf[10];
-    bool skipSave = false;
-    bool flashAccess = false;
-
-    // Read to check if values identical to currently stored (reduce wear)        
-    if(!noReadChk && loadNVMData(loadBuf, flashAccess)) {
-        skipSave = true;
-        for(int i = 0; i < 9; i++) {
-            if(savBuf[i] != loadBuf[i]) {
-                skipSave = false;
-                break;
-            }
-        }
-    }
-
-    if(skipSave)
-        return flashAccess;
-
-    #ifdef TC_DBG
-    unsigned long now = millis();
-    #endif
-
-    for(int i = 0; i < 9; i++) {
-        sum += (savBuf[i] ^ 0x55);
-    }
-    savBuf[9] = sum & 0xff;
-
-    if(_configOnSD) {
-        writeFileToSD(fnSD[_did], savBuf, 10);
-    } else {
-        writeFileToFS(fnEEPROM[_did], savBuf, 10);
-    }
-
-    // Copy to cache regardless of result of write; otherwise
-    // the load function would read corrupt data instead of
-    // using the ok data in the cache.
-    memcpy(_CacheData, savBuf, 10);
-    _Cache = 2;
-
-    #ifdef TC_DBG
-    Serial.printf("saveNVMdata took %ld\n", millis()-now);
-    #endif
-
-    return true;
-}
-
-// Returns true if loaded data is valid, otherwise false
-bool clockDisplay::loadNVMData(uint8_t *loadBuf, bool& flashAccess)
-{
-    uint16_t sum = 0;
-    bool dataOk = false;
-    #ifdef TC_DBG
-    unsigned long now = millis();
-    #endif
-
-    flashAccess = false;
-    memset(loadBuf, 0, 10);
-
-    if(_Cache == 2) {
-        memcpy(loadBuf, _CacheData, 10);
-        for(int i = 0; i < 9; i++) {
-           sum += (loadBuf[i] ^ 0x55);
-        }
-        dataOk = ((sum & 0xff) == loadBuf[9]);
-    }
-
-    if(!dataOk) {
-
-        _Cache = -1;  // Invalidate; either empty or corrupt
-        flashAccess = true;
-            
-        if(_configOnSD) {
-            dataOk = readFileFromSD(fnSD[_did], loadBuf, 10);
-        } 
-        if(!dataOk) {
-            readFileFromFS(fnEEPROM[_did], loadBuf, 10);
-        }
-
-        for(int i = 0; i < 9; i++) {
-           sum += (loadBuf[i] ^ 0x55);
-        }
-        dataOk = ((sum & 0xff) == loadBuf[9]);
-        if(dataOk) {
-            memcpy(_CacheData, loadBuf, 10);
-            _Cache = 2;
-        }
-    }
-
-    #ifdef TC_DBG
-    Serial.printf("loadNVMdata took %ld\n", millis()-now);
-    #endif
-
-    return dataOk;
-}
 
 /*
  * Segment helpers
@@ -1079,8 +888,10 @@ bool clockDisplay::loadNVMData(uint8_t *loadBuf, bool& flashAccess)
 // for display on 7 segment display
 uint8_t clockDisplay::getLED7NumChar(uint8_t value)
 {
-    if(value >= '0' && value <= '9') {
-        return numDigs[value - 32];
+    if(value >= '0') { 
+        if(value <= '9') {
+            return numDigs[value - 32];
+        }
     } else if(value <= 9) {
         return numDigs[value + '0' - 32];
     }
@@ -1094,7 +905,7 @@ uint8_t clockDisplay::getLED7AlphaChar(uint8_t value)
         return 0;
     
     if(value == '6' && _corr6)
-        return numDigs[value - 32] | 0x01;
+        return numDigs['6' - 32] | 0x01;
     
     return numDigs[value - 32];
 }
@@ -1114,49 +925,18 @@ uint16_t clockDisplay::getLEDAlphaChar(uint8_t value)
 }
 #endif
 
-// Make a 2 digit number from the array and return the segment data
+// Make a 2 digit number from num and return the segment data
 uint16_t clockDisplay::makeNum(uint8_t num, uint16_t dflags)
 {
-    uint16_t segments = 0;
-
     // Each position holds two digits
     // MSB = 1s, LSB = 10s
 
-    segments = getLED7NumChar(num % 10) << 8;     
+    uint16_t segments = getLED7NumChar(num % 10) << 8;     
     if(!(dflags & CDD_NOLEAD0) || (num / 10)) {
         segments |= getLED7NumChar(num / 10);   
     }
 
     return segments;
-}
-
-// Directly write to a column with supplied segments
-// (leave buffer intact, directly write to display)
-void clockDisplay::directCol(int col, int segments)
-{
-    if((col == CD_YEAR_POS + 1) && _yearDot) {
-        segments |= 0x8000;
-    } else if((col == CD_YEAR_POS) && _withColon) {
-        segments |= 0x8080;
-    }
-    Wire.beginTransmission(_address);
-    Wire.write(col * 2);
-    Wire.write(segments & 0xff);
-    Wire.write(segments >> 8);
-    Wire.endTransmission();
-}
-
-// Directly clear the display
-void clockDisplay::clearDisplay()
-{
-    Wire.beginTransmission(_address);
-    Wire.write(0x00);
-
-    for(int i = 0; i < CD_BUF_SIZE*2; i++) {
-        Wire.write(0x00);
-    }
-
-    Wire.endTransmission();
 }
 
 bool clockDisplay::handleNM()
@@ -1182,16 +962,51 @@ bool clockDisplay::handleNM()
     return true;
 }
 
+#ifdef IS_ACAR_DISPLAY
+#ifndef TC_NO_MONTH_ANIM
+void clockDisplay::showAnimate2()
+{
+    if(_nightmode && _NmOff)
+        return;
+
+    directBuf(_displayBuffer);
+}
+#endif
+#else // IS_ACAR_DISPLAY
+void clockDisplay::showAnimate2(int until)
+{
+    if(_nightmode && _NmOff)
+        return;
+
+    uint16_t db[CD_BUF_SIZE];
+    
+    for(int i = 0; i < until; i++) {
+        db[i] = _displayBuffer[i];
+    }
+    for(int i = until; i < CD_BUF_SIZE; i++) {
+        db[i] = 0;
+    }
+    directBuf(db);
+}
+#endif
+
 // Show the buffer
 void clockDisplay::showInt(bool animate, bool Alt)
 {
     int i = 0;
-    uint16_t *db = Alt ? _displayBufferAlt : _displayBuffer;
+    uint16_t *dbuf; 
+    uint16_t db[CD_BUF_SIZE];
 
     if(!handleNM())
         return;
 
-    if(animate) off();
+    if(animate) {
+        off();
+        Alt = false;
+        db[i++] = 0;
+        db[i++] = 0;
+        db[i++] = 0;
+    }
 
     if(!_mode24) {
         (_hour < 12) ? AM() : PM();
@@ -1199,44 +1014,36 @@ void clockDisplay::showInt(bool animate, bool Alt)
         _displayBuffer[CD_AMPM_POS] &= 0x7F7F;
     }
 
-    (_colon) ? colonOn() : colonOff();
-
-    Wire.beginTransmission(_address);
-    Wire.write(0x00);
-
-    if(animate) {
-        for(i = 0; i < CD_DAY_POS; i++) {
-            Wire.write(0x00);  // blank month
-            Wire.write(0x00);
-        }
-    }
-
-    for(; i < CD_BUF_SIZE; i++) {
-        Wire.write(db[i] & 0xff);
-        Wire.write(db[i] >> 8);
-    }
-
-    Wire.endTransmission();
+    if(_colon) _displayBuffer[CD_COLON_POS] |= 0x8080;
+    else       _displayBuffer[CD_COLON_POS] &= 0x7F7F;
     
+    dbuf = Alt ? _displayBufferAlt : _displayBuffer;
+    
+    for(; i < CD_BUF_SIZE; i++) {
+        db[i] = dbuf[i];
+    }
+
+    if(Alt && _WCtimeFits) {
+        for(i = CD_HOUR_POS; i < CD_BUF_SIZE; i++) {
+            db[i] = _displayBuffer[i];
+        }
+        //db[CD_AMPM_POS] &= 0x7f7f;  // bits already clear
+        //db[CD_COLON_POS] &= 0x7f7f; // bits already clear
+        db[CD_AMPM_POS] |= (_displayBuffer[CD_AMPM_POS] & 0x8080);
+        db[CD_COLON_POS] |= (_displayBuffer[CD_COLON_POS] & 0x8080);
+    }
+    
+    directBuf(db);
+
     showIntTail(animate);
 }
 
 void clockDisplay::showIntTail(bool animate)
 {
     if(animate) directCmd(0x20 | 1);
-    if(animate || (_NmOff && (_oldnm > 0)) ) on();
+    if(animate || (_NmOff && (_oldnm > 0))) on();
 
     if(_NmOff) _oldnm = 0;
-}
-
-inline void clockDisplay::colonOn()
-{
-    _displayBuffer[CD_COLON_POS] |= 0x8080;
-}
-
-inline void clockDisplay::colonOff()
-{
-    _displayBuffer[CD_COLON_POS] &= 0x7F7F;
 }
     
 inline void clockDisplay::AM()
@@ -1251,18 +1058,38 @@ inline void clockDisplay::PM()
     _displayBuffer[CD_AMPM_POS] &= (~_am);
 }
 
-void clockDisplay::directAMPM(uint16_t val)
+// Directly clear the display
+void clockDisplay::clearDisplay()
 {
-    Wire.beginTransmission(_address);
-    Wire.write(CD_AMPM_POS * 2);
-    Wire.write(val & 0xff);
-    Wire.write(val >> 8);
-    Wire.endTransmission();
+    uint16_t db[CD_BUF_SIZE] = { 0 };
+    directBuf(db);
 }
 
 void clockDisplay::directCmd(uint8_t val)
 {
     Wire.beginTransmission(_address);
     Wire.write(val);
+    Wire.endTransmission();
+}
+
+void clockDisplay::directBuf(uint16_t *db, int len)
+{
+    Wire.beginTransmission(_address);
+    Wire.write(0x00);
+    for(int i = 0; i < len; i++) {
+        Wire.write(db[i] & 0xff);
+        Wire.write(db[i] >> 8);
+    }
+    Wire.endTransmission();
+}
+
+// Directly write to a column with supplied segments
+// (leave buffer intact, directly write to display)
+void clockDisplay::directCol(int col, int segments)
+{
+    Wire.beginTransmission(_address);
+    Wire.write(col * 2);
+    Wire.write(segments & 0xff);
+    Wire.write(segments >> 8);
     Wire.endTransmission();
 }

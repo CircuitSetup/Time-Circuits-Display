@@ -31,7 +31,8 @@
  * VEML6030:      0x10, 0x48 [non-default]
  * VEML7700:      0x10
  * 
- * If a GPS receiver is connected at the same time, 
+ * If a MT(K)333x-based GPS receiver or the CircuitSetup speedo is 
+ * connected at the same time, 
  * - VEML7700 cannot be used;
  * - VEML6030 needs to be set to address 0x48.
  * -------------------------------------------------------------------
@@ -399,7 +400,7 @@ bool tempSensor::begin(void (*myDelay)(unsigned long))
             if(foundSt) {
                 _st = _addrArr[i+1];
     
-                #ifdef TC_DBG
+                #ifdef TC_DBG_SENS
                 const char *tpArr[9] = { "MCP9808", "BMx280", "SHT4x", "SI7021", "TMP117", "AHT20/AM2315C", "HTU31D", "MS8607", "HDC302X" };
                 Serial.printf("Temperature sensor: Detected %s\n", tpArr[_st]);
                 #endif
@@ -719,7 +720,7 @@ float tempSensor::readTemp(bool celsius)
     // We use only 2 digits, so truncate
     if(_hum > 99) _hum = 99;
     
-    #ifdef TC_DBG
+    #ifdef TC_DBG_SENS
     Serial.printf("Sensor temp+offset: %f\n", temp);
     if(_haveHum) {
         Serial.printf("Sensor humidity: %d\n", _hum);
@@ -771,11 +772,11 @@ void tempSensor::HDC302x_setDefault(uint16_t reg, uint8_t val1, uint8_t val2)
     if(Wire.requestFrom(_address, (uint8_t)3) == 3) {
         for(uint8_t i = 0; i < 3; i++) buf[i] = Wire.read();
         if(crc8(HDC302x_CRC_INIT, HDC302x_CRC_POLY, 2, buf) == buf[2]) {
-            #ifdef TC_DBG
+            #ifdef TC_DBG_SENS
             Serial.printf("HDC302x: Read 0x%x\n", reg);
             #endif
             if(buf[0] != val1 || buf[1] != val2) {
-                #ifdef TC_DBG
+                #ifdef TC_DBG_SENS
                 Serial.printf("HDC302x: EEPROM mismatch: 0x%x <> 0x%x, 0x%x <> 0x%x\n", buf[0], val1, buf[1], val2);
                 #endif
                 buf[0] = reg >> 8; buf[1] = reg & 0xff;
@@ -788,17 +789,17 @@ void tempSensor::HDC302x_setDefault(uint16_t reg, uint8_t val1, uint8_t val2)
                 Wire.endTransmission();
                 (*_customDelayFunc)(80);
             } else {
-                #ifdef TC_DBG
+                #ifdef TC_DBG_SENS
                 Serial.printf("HDC302x: EEPROM match: 0x%x, 0x%x\n", buf[0], buf[1]);
                 #endif
             }
         } else {
-            #ifdef TC_DBG
+            #ifdef TC_DBG_SENS
             Serial.printf("HDC302x: EEPROM reading 0x%x failed CRC check\n", reg);
             #endif
         }
     } else {
-        #ifdef TC_DBG
+        #ifdef TC_DBG_SENS
         Serial.printf("HDC302x: EEPROM reading 0x%x failed on i2c level\n", reg);
         #endif
     }
@@ -1023,7 +1024,7 @@ bool lightSensor::begin(bool skipLast, void (*myDelay)(unsigned long))
         if(foundSt) {
             _st = _addrArr[i+1];
             
-            #ifdef TC_DBG
+            #ifdef TC_DBG_SENS
             const char *tpArr[5] = { "TSL2561", "TSL2591", "BH1750", "VEML7700/6030", "LTR303/329" };
             Serial.printf("Light sensor: Detected %s\n", tpArr[_st]);
             #endif

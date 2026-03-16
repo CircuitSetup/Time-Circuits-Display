@@ -80,6 +80,8 @@
 
 #define REM_BRAKE 1900
 
+extern bool showUpdAvail;
+
 extern uint16_t lastYear;
 
 extern bool couldDST[3];
@@ -152,7 +154,6 @@ extern dateStruct stalePresentTime[2];
 
 // These block various events
 extern bool FPBUnitIsOn;
-extern bool startup;
 extern int  specDisp;
 extern int  autoIntAnimRunning;
 
@@ -166,6 +167,12 @@ extern uint32_t csf;
 #define CSF_MA  0x40    // Menu active = busy
 #define CSF_NS  0x80    // No scan: Suppress WiFi Scan (so we don't have to abuse any other flag)
 #define CSF_NM 0x100    // Night mode
+
+// bttfn_loop() taskMask
+#define BNLP_SK_MC      1   // skip MC socket poll
+#define BNLP_SK_SP      2   // skip socket poll
+#define BNLP_SK_NOTDATA 4   // skip sending out NOT_DATA
+#define BNLP_SK_EXPIRE  8   // skip client expiry
 
 extern uint32_t  mqttDisp;
 #ifdef TC_HAVEMQTT
@@ -231,7 +238,7 @@ void      mqttFakePowerOff();
 void      fpbKeyPressed();
 void      fpbKeyLongPressStop();
 
-void      myCustomDelay_KP(unsigned long mydel);
+void      myCustomDelay_KP(int iter, unsigned long mydel);
 
 void      pwrNeedFullNow(bool force = false);
 
@@ -255,12 +262,20 @@ void      re_vol_reset();
 void      flushDelayedSave();
 
 void      animate(bool withLEDs = false);
-void      allLampTest();
+void      allShowPattern();
 void      allOff();
 
 #ifdef TC_HAVEGPS
 bool      gpsHaveFix();
+bool      gpsMakePos(char *lat, char *lon);
+bool      haveNavMode();
+void      enableNavMode(bool onOff);
+bool      toggleNavMode();
+bool      isNavMode();
+int       gpsGetDM();
+void      setNavDisplayMode(int dm);
 #endif
+
 #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
 void      speedoUpdate_loop(bool async);
 #endif
@@ -289,7 +304,8 @@ int       ntp_status();
 
 int       bttfnNumClients();
 bool      bttfnGetClientInfo(int c, char **id, uint8_t **ip, uint8_t *type);
-bool      bttfn_loop();
+bool      bttfn_loop(uint32_t taskMask = 0);
+bool      bttfn_loop_ex();
 void      bttfn_notify_info();
 
 #ifdef TC_HAVE_REMOTE

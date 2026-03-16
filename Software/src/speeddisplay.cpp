@@ -318,24 +318,25 @@ static const struct dispConf {
     uint8_t  colon_pos;      //   Pos of center colon in 16bit buffer (255 = no colon)
     uint16_t colon_bit;      //   The bitmask for the center colon
     uint8_t  num_digs;       //   total number of digits/letters
-    uint8_t  bufPosArr[4];   //   The buffer positions of each of the digits from left to right
+    uint8_t  max_bufPos;     //   highest buffer position to update
+    uint8_t  bufPosArr[4];   //   The buffer positions of each of the digits from left to right (padded with 0)
     uint8_t  bufShftArr[4];  //   Shift-value for each digit from left to right
     const uint16_t *fontSeg; //   Pointer to font
 } displays[SP_NUM_TYPES] = {
-  { SPT_I2C_7S,  0, 1, 0, 8, 1, 8, 255,      0, 2, { 0, 1 },       { 0, 8 },       font7segGeneric },  // CircuitSetup Speedo+GPS add-on
-  { SPT_I2C_7S,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right) (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
-  { SPT_I2C_7S,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)  (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
-  { SPT_I2C_7S,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)  (ADA-1270/1271;1269)
-  { SPT_I2C_7S,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)   (ADA-1270/1271;1269)
-  { SPT_I2C_14S, 2, 3, 0, 0, 3, 0, 255,      0, 4, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right) (ADA-1911/1910;1912/2157/2158/2160)
-  { SPT_I2C_14S, 0, 1, 0, 0, 1, 0, 255,      0, 4, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)  (ADA-1911/1910;1912/2157/2158/2160)
-  { SPT_I2C_14S, 2, 1, 0, 0, 1, 0, 255,      0, 2, { 2, 1 },       { 0, 0, 0, 0 }, font14segGrove },   // SP_GROVE_2DIG14
-  { SPT_I2C_14S, 3, 4, 0, 0, 4, 0,   5, 0x2080, 4, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
-  { SPT_I2C_14S, 1, 2, 0, 0, 2, 0,   5, 0x2080, 4, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
-  { SPT_I2C_14S, 0, 1, 0, 0, 1, 0, 255,      0, 2, { 0, 1 },       { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L(ADA-1911), but left tube only (TW wall clock)
-  { SPT_I2C_7S,  0, 1, 0, 0, 1, 0, 255,      0, 2, { 0, 1 },       { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L(ADA-878), but left tube only (TW speedo replica) - needs rewiring
-  { SP_BTTFN,    0, 0, 0, 0, 0, 0,   0,      0, 0, { 0 },          { 0, 0, 0, 0 }, NULL            },  // BTTFN
-//{ SPT_I2C_7S,  1, 2, 8, 0, 3, 0, 255,      0, 2, { 1, 2 },       { 8, 0 },       font7segGeneric },  // CircuitSetup Speedo+GPS, part-3-"wrong"-style (left dgt covered)
+  { SPT_I2C_7S,  0, 1, 0, 8, 1, 8, 255,      0, 2, 2, { 0, 1, 0, 0 }, { 0, 8 },       font7segGeneric },  // CircuitSetup Speedo+GPS add-on
+  { SPT_I2C_7S,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right) (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
+  { SPT_I2C_7S,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)  (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
+  { SPT_I2C_7S,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4  1.2" (right)  (ADA-1270/1271;1269)
+  { SPT_I2C_7S,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_B7x4L 1.2" (left)   (ADA-1270/1271;1269)
+  { SPT_I2C_14S, 2, 3, 0, 0, 3, 0, 255,      0, 4, 3, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4  0.56" (right) (ADA-1911/1910;1912/2157/2158/2160)
+  { SPT_I2C_14S, 0, 1, 0, 0, 1, 0, 255,      0, 4, 3, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, font14segGeneric }, // SP_ADAF_14x4L 0.56" (left)  (ADA-1911/1910;1912/2157/2158/2160)
+  { SPT_I2C_14S, 2, 1, 0, 0, 1, 0, 255,      0, 2, 2, { 2, 1, 0, 0 }, { 0, 0, 0, 0 }, font14segGrove },   // SP_GROVE_2DIG14
+  { SPT_I2C_14S, 3, 4, 0, 0, 4, 0,   5, 0x2080, 4, 5, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (right)
+  { SPT_I2C_14S, 1, 2, 0, 0, 2, 0,   5, 0x2080, 4, 5, { 1, 2, 3, 4 }, { 0, 0, 0, 0 }, font144segGrove },  // SP_GROVE_4DIG14 (left)
+  { SPT_I2C_14S, 0, 1, 0, 0, 1, 0, 255,      0, 2, 1, { 0, 1, 0, 0 }, { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L(ADA-1911), but left tube only (TW wall clock)
+  { SPT_I2C_7S,  0, 1, 0, 0, 1, 0, 255,      0, 2, 1, { 0, 1, 0, 0 }, { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L(ADA-878), but left tube only (TW speedo replica) - needs rewiring
+  { SP_BTTFN,    0, 0, 0, 0, 0, 0,   0,      0, 0, 0, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, NULL            },  // BTTFN
+//{ SPT_I2C_7S,  1, 2, 8, 0, 3, 0, 255,      0, 2, 2, { 1, 2, 0, 0 }, { 8, 0 },       font7segGeneric },  // CircuitSetup Speedo+GPS, part-3-"wrong"-style (left dgt covered)
 };
 
 // Grove 4-digit special handling
@@ -356,7 +357,7 @@ speedDisplay::speedDisplay(uint8_t address)
 bool speedDisplay::begin(int dispType, int sSpeedoPin, int sTachopin, int sSpeedoCorr, int sTachoCorr)
 {
     if(dispType < 0 || dispType >= SP_NUM_TYPES) {
-        #ifdef TC_DBG
+        #ifdef TC_DBG_BOOT
         Serial.printf("Bad speedo display type: %d\n", dispType);
         #endif
         dispType = 0;
@@ -423,6 +424,7 @@ bool speedDisplay::begin(int dispType, int sSpeedoPin, int sTachopin, int sSpeed
         _colon_pos = displays[dispType].colon_pos;
         _colon_bm = displays[dispType].colon_bit;
         _num_digs = displays[dispType].num_digs;
+        _max_buf = displays[dispType].max_bufPos;
         _bufPosArr = displays[dispType].bufPosArr;
         _bufShftArr = displays[dispType].bufShftArr;
         
@@ -507,22 +509,6 @@ void speedDisplay::off()
     _onCache = 0;
 }
 
-// Turn on all LEDs
-#if 0
-void speedDisplay::lampTest()
-{
-    if(_i2c) {
-        Wire.beginTransmission(_address);
-        Wire.write(0x00);  // start address
-    
-        for(int i = 0; i < 8*2; i++) {
-            Wire.write(0xFF);
-        }
-        Wire.endTransmission();
-    }
-}
-#endif
-
 // Set display brightness
 // Valid brighness levels are 0 to 15. Default is 15.
 // 255 sets it to previous level
@@ -541,8 +527,7 @@ uint8_t speedDisplay::setBrightness(uint8_t level, bool isInitial)
 
 uint8_t speedDisplay::setBrightnessDirect(uint8_t level)
 {
-    if(level > 15)
-        level = 15;
+    level &= 0x0f;
 
     if(level != _briCache) {
         if(_i2c) directCmd(0xE0 | level);  // Dimming command
@@ -595,7 +580,7 @@ void speedDisplay::show()
         Wire.beginTransmission(_address);
         Wire.write(0x00);  // start address
     
-        for(i = 0; i < 8; i++) {
+        for(i = 0; i <= _max_buf; i++) {
             Wire.write(_displayBuffer[i] & 0xFF);
             Wire.write(_displayBuffer[i] >> 8);
         }
@@ -843,19 +828,6 @@ uint16_t speedDisplay::getLEDChar(uint8_t value)
     
     return 0;
 }
-
-#if 0 // Unused currently
-// Directly write to a column with supplied segments
-// (leave buffer intact, directly write to display)
-void speedDisplay::directCol(int col, int segments)
-{
-    Wire.beginTransmission(_address);
-    Wire.write(col * 2);  // 2 bytes per col * position
-    Wire.write(segments & 0xFF);
-    Wire.write(segments >> 8);
-    Wire.endTransmission();
-}
-#endif
 
 // Directly clear the display
 void speedDisplay::clearDisplay()

@@ -121,7 +121,7 @@ bool tcRTC::begin()
             _address = _addrArr[i];
             _rtcType = _addrArr[i+1];
 
-            #ifdef TC_DBG
+            #ifdef TC_DBG_BOOT
             const char *tpArr[2] = { "DS3231", "PCF2129" };
             Serial.printf("RTC: Detected %s\n", tpArr[_rtcType]);
             #endif
@@ -178,7 +178,7 @@ void tcRTC::prepareAdjust(byte second, byte minute, byte hour, byte dayOfWeek, b
     _buffervalid = true;
     _buffNow = millis();
 
-    #ifdef TC_DBG
+    #ifdef TC_DBG_TIME
     Serial.printf("RTC: Prepared to adjust to %d-%02d-%02d %02d:%02d:%02d DOW %d\n",
           year+2000, month, dayOfMonth, hour, minute, second, dayOfWeek);
     #endif
@@ -193,7 +193,7 @@ void tcRTC::finishAdjust()
 
     if(now - _buffNow > 100) {
         _buffervalid = false;
-        #ifdef TC_DBG
+        #ifdef TC_DBG_TIME
         Serial.printf("RTC finishAdjust() too late (%ums)\n", now - _buffNow);
         #endif
         return;
@@ -222,7 +222,7 @@ void tcRTC::finishAdjust()
 
     _buffervalid = false;
 
-    #ifdef TC_DBG
+    #ifdef TC_DBG_TIME
     Serial.printf("RTC updated (delay %ums, took %ums)\n", now - _buffNow, millis() - now);
     #endif
 }

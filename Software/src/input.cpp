@@ -8,11 +8,11 @@
  * Keypad_I2C Class, TCButton Class: I2C-Keypad and Button handling
  * 
  * TCRotEnc: Rotary Encoder handling:
- * Supports Adafruit 4991, DuPPA I2CEncoder 2.1, DFRobot Gravity 360.
+ * Supports Adafruit 4991/5880, DuPPA I2CEncoder 2.1, DFRobot Gravity 360.
  * For speed, the encoders must be set to their default i2c address
  * (DuPPA I2CEncoder 2.1 must be set to i2c address 0x01 (A0 closed)).
  * For volume, the encoders must be configured as follows:
- * - Ada4991: A0 closed (i2c address 0x37)
+ * - Ada4991/5880: A0 closed (i2c address 0x37)
  * - DFRobot Gravity 360: SW1 off, SW2 on (i2c address 0x55)
  * - DuPPA I2CEncoder 2.1: A0 and A1 closed (i2c address 0x03)
  * 
@@ -113,7 +113,7 @@
 #define MAX_ROWS  4
 #define MAX_COLS  3
 
-static void defaultDelay(unsigned long mydelay)
+static void defaultDelay(int iter, unsigned long mydelay)
 {
     delay(mydelay);
 }
@@ -153,7 +153,7 @@ Keypad_I2C::Keypad_I2C(char *userKeymap, const uint8_t *row, const uint8_t *col,
 }
 
 // Initialize I2C
-void Keypad_I2C::begin(unsigned int scanInterval, unsigned int holdTime, void (*myDelay)(unsigned long))
+void Keypad_I2C::begin(unsigned int scanInterval, unsigned int holdTime, void (*myDelay)(int, unsigned long))
 {
     _scanInterval = scanInterval;
     _holdTime = holdTime;
@@ -211,14 +211,14 @@ bool Keypad_I2C::scanKeys()
                 pin_write(_columnPins[c], LOW);
 
                 Wire.requestFrom(_i2caddr, (int)1);
-                if((pinVals[d][c] = Wire.read() & _rowMask) != _rowMask) 
+                if((pinVals[d][c] = Wire.read() & _rowMask) != _rowMask)
                     haveKey = true;
 
                 pin_write(_columnPins[c], HIGH);
 
             }
 
-            if(d < 2) (*_customDelayFunc)(5);
+            if(d < 2) (*_customDelayFunc)(d, 5);
 
         }
 
@@ -453,7 +453,7 @@ void TCButton::transitionTo(ButtonState nextState)
 
 #define HWUPD_DELAY_VOL 150 // ms between hw polls for volume
 
-// Ada4991
+// Ada4991/5880
 
 #define SEESAW_STATUS_BASE  0x00
 #define SEESAW_ENCODER_BASE 0x11
@@ -528,7 +528,7 @@ enum DUV2_CONF2_PARAM {
 
 TCRotEnc::TCRotEnc(int numTypes, const uint8_t *addrArr)
 {
-    _numTypes = min(6, numTypes);
+    _numTypes = numTypes;
     _addrArr = addrArr;
 }
 
@@ -593,8 +593,8 @@ bool TCRotEnc::begin(bool forSpeed)
             if(foundSt) {
                 _st = _addrArr[i+1];
     
-                #ifdef TC_DBG
-                const char *tpArr[6] = { "ADA4991", "DuPPa V2.1", "DFRobot Gravity 360", "CircuitSetup", "", "" };
+                #ifdef TC_DBG_BOOT
+                const char *tpArr[6] = { "ADA4991/5880", "DuPPa V2.1", "DFRobot Gravity 360", "CircuitSetup", "", "" };
                 const char *purpose[2] = { "Speed", "Volume" };
                 Serial.printf("Rotary encoder: Detected %s, used for %s\n", tpArr[_st], purpose[_type]);
                 #endif
