@@ -32,42 +32,9 @@ uint16_t  WiFiManager::_WiFiEventMask = 0;
  * --------------------------------------------------------------------------------
  */
 
-WiFiManagerParameter::WiFiManagerParameter(const char *custom)
+WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, uint8_t flags)
 {
-    _id             = NULL;
-    _label          = NULL;
-    _length         = 0;
-    _value          = NULL;
-    _flags          = WFM_LABEL_DEFAULT;
-    _customHTML     = custom;
-}
-
-WiFiManagerParameter::WiFiManagerParameter(const char *(*CustomHTMLGenerator)(const char *))
-{
-    _id             = NULL;
-    _label          = NULL;
-    _length         = 0;
-    //_value is union with Generator
-    _flags          = WFM_LABEL_DEFAULT;
-    _customHTML     = NULL;
-    _customHTMLGenerator = CustomHTMLGenerator;
-}
-
-/*
-WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label)
-{
-    init(id, label, NULL, 0, NULL, WFM_LABEL_DEFAULT);
-}
-*/
-
-WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length)
-{
-    init(id, label, defaultValue, length, NULL, WFM_LABEL_DEFAULT);
-}
-
-WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, const char *custom)
-{
-    init(id, label, defaultValue, length, custom, WFM_LABEL_DEFAULT);
+    init(id, label, defaultValue, length, NULL, flags);
 }
 
 WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags)
@@ -75,15 +42,19 @@ WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label, co
     init(id, label, defaultValue, length, custom, flags);
 }
 
-void WiFiManagerParameter::init(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags)
+WiFiManagerParameter::WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, const char *custom, uint8_t flags)
 {
-    _id             = id;
-    _label          = label;
-    _flags          = flags;
-    _customHTML     = custom;
-    _length         = 0;
-    _value          = NULL;
-    setValue(defaultValue, length);
+    init(id, label, defaultValue, 1, custom, flags);
+}
+
+WiFiManagerParameter::WiFiManagerParameter(const char *custom, uint8_t flags)
+{
+    initC(custom, NULL, flags);
+}
+
+WiFiManagerParameter::WiFiManagerParameter(const char *(*CustomHTMLGenerator)(const char *, int), uint8_t flags)
+{
+    initC(NULL, CustomHTMLGenerator, flags);
 }
 
 WiFiManagerParameter::~WiFiManagerParameter()
@@ -95,6 +66,29 @@ WiFiManagerParameter::~WiFiManagerParameter()
     // setting length 0, ideally the entire parameter should be removed,
     // or added to wifimanager scope so it follows
     _length = 0;
+}
+
+void WiFiManagerParameter::init(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags)
+{
+    _id             = id;
+    _label          = label;
+    _flags          = flags;
+    _customHTML     = custom;
+    _length         = 0;
+    _value          = NULL;
+    if(flags & WFM_IS_CHKBOX) length = 1;
+    setValue(defaultValue, length);
+}
+
+void WiFiManagerParameter::initC(const char *custom, const char *(*CustomHTMLGenerator)(const char *, int), uint8_t flags)
+{
+    _id             = NULL;
+    _label          = NULL;
+    _length         = 0;
+    //_value is union with Generator
+    _flags          = flags;
+    _customHTML     = custom;
+    _customHTMLGenerator = CustomHTMLGenerator;
 }
 
 void WiFiManagerParameter::setValue(const char *defaultValue, int length)
@@ -110,12 +104,13 @@ void WiFiManagerParameter::setValue(const char *defaultValue, int length)
         _value  = new char[_length + 1];
     }
 
-    memset(_value, 0, _length + 1); // explicit null
+    memset(_value, 0, _length + 1); // +1 for 0-term
 
     if(defaultValue) {
         strncpy(_value, defaultValue, _length);
     }
 }
+
 const char* WiFiManagerParameter::getValue() const
 {
     return _value;
@@ -660,7 +655,7 @@ bool WiFiManager::startConfigPortal(char const *apName, char const *apPassword, 
 
     _wifiOffFlag = false;
 
-    // We never ever use NVS saved data, not do we write to NVS
+    // We never ever use NVS saved data, nor do we write to NVS
     WiFi.persistent(false);
 
     // setup AP
@@ -1199,7 +1194,7 @@ void WiFiManager::getHTTPHeadNew(String& page, const char *title, bool includeMS
 
 // WIFI status at bottom of pages
 
-int WiFiManager::reportStatusLen()
+int WiFiManager::reportStatusLen(bool withMac)
 {
     int bufSize = 0;
     String SSID = WiFi_SSID();
@@ -1234,10 +1229,13 @@ int WiFiManager::reportStatusLen()
                 break;
             }
         }
-        bufSize += STRLEN(HTTP_STATUS_TAIL);
     } else {
         bufSize = STRLEN(HTTP_STATUS_NONE);
     }
+
+    if(withMac) bufSize += 4 + 18;
+
+    bufSize += STRLEN(HTTP_STATUS_TAIL);
 
     #ifdef _A10001986_DBG
     Serial.printf("WM: reportStatusLen bufSize %d\n", bufSize);
@@ -1246,7 +1244,7 @@ int WiFiManager::reportStatusLen()
     return bufSize + 8;
 }
 
-void WiFiManager::reportStatus(String& page, unsigned int estSize)
+void WiFiManager::reportStatus(String& page, unsigned int estSize, bool withMac)
 {
     String SSID = WiFi_SSID();
     String str;
@@ -1290,10 +1288,16 @@ void WiFiManager::reportStatus(String& page, unsigned int estSize)
                 break;
             }
         }
-        str += FPSTR(HTTP_STATUS_TAIL);
     } else {
         str = FPSTR(HTTP_STATUS_NONE);
     }
+
+    if(withMac) {
+        str += FPSTR(HTTP_BR);
+        str += WiFi.macAddress();
+    }
+
+    str += FPSTR(HTTP_STATUS_TAIL);
 
     page += str;
 }
@@ -1326,11 +1330,24 @@ unsigned int WiFiManager::getParamOutSize(WiFiManagerParameter** params,
 
             mysize = 0;
 
+            uint8_t pflags = params[i]->getFlags();
+
+            if(pflags & WFM_SECTS_HEAD) {
+                mysize += STRLEN(HTTP_SECT_HEAD);
+            } else if(pflags & WFM_SECTS) {
+                mysize += STRLEN(HTTP_SECT_START) + STRLEN(HTTP_SECT_HEAD);
+            }
+            if(pflags & WFM_FOOT) {
+                mysize += STRLEN(HTTP_SECT_FOOT);
+            }
+
             if(params[i]->getID()) {
 
-                switch(params[i]->getFlags() & WFM_LABEL_MASK) {
+                bool haveLabel = true;
+
+                switch(pflags & WFM_LABEL_MASK) {
                 case WFM_LABEL_BEFORE:
-                    if(!(params[i]->getFlags() & WFM_NO_BR)) mysize += STRLEN(HTTP_BR);
+                    if(!(pflags & WFM_NO_BR)) mysize += STRLEN(HTTP_BR);
                     // fall through
                 case WFM_LABEL_AFTER:
                     mysize += STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM);
@@ -1341,39 +1358,44 @@ unsigned int WiFiManager::getParamOutSize(WiFiManagerParameter** params,
                     // WFM_NO_LABEL
                     mysize += STRLEN(HTTP_FORM_PARAM);
                     mysize -= (6*3);  // tokens
+                    haveLabel = false;
                     break;
                 }
 
                 // <label for='{i}'>{t}</label>
-                // <input id='{i}' name='{n}' maxlength='{l}' value='{v}' {c}>\n";
+                // <input id='{i}' name='{n}' {l} value='{v}' {c} {f}>
                 mysize += (strlen(params[i]->getID()) * 3);    // 2x{i}, 1x{n}
-                mysize += strlen(params[i]->getLabel());
-                {
-                    int vl = params[i]->getValueLength();
-                    if     (vl <   10) mysize += 1;
-                    else if(vl <  100) mysize += 2;
-                    else if(vl < 1000) mysize += 3;
-                    else               mysize += 5;
+                if(haveLabel && params[i]->getLabel()) {
+                    mysize += strlen(params[i]->getLabel());
                 }
-                mysize += strlen(params[i]->getValue());
+                if(pflags & WFM_IS_CHKBOX) {
+                    mysize += 1;    // value="1"
+                    if(*(params[i]->getValue()) == '1') mysize += 7;  // "checked"
+                    mysize += STRLEN(HTML_CHKBOX);
+                } else {
+                    int vl = params[i]->getValueLength();
+                    if     (vl <   10) mysize += 1+12;
+                    else if(vl <  100) mysize += 2+12;
+                    else if(vl < 1000) mysize += 3+12;
+                    else               mysize += 5+12;
+                    mysize += strlen(params[i]->getValue());
+                }
                 if(params[i]->getCustomHTML()) {
                     mysize += strlen(params[i]->getCustomHTML());
-                }
-                if(params[i]->getFlags() & WFM_IS_CHKBOX) {
-                    mysize += STRLEN(HTML_CHKBOX);
                 }
 
             } else if(params[i]->_customHTMLGenerator) {
 
-                const char *t = (params[i]->_customHTMLGenerator)(NULL);
+                const char *t = (params[i]->_customHTMLGenerator)(NULL, WM_CP_LEN);
                 if(t) {
-                    mysize += strlen(t);
-                    (params[i]->_customHTMLGenerator)(t);
-                } else {
-                    continue;
+                    mysize += *(unsigned int *)t;
                 }
 
             } else if(params[i]->getCustomHTML()) {
+
+                if(pflags & WFM_HL) {
+                    mysize += STRLEN(HTTP_HL_S) + STRLEN(HTTP_HL_E);
+                }
 
                 mysize += strlen(params[i]->getCustomHTML());
 
@@ -1403,7 +1425,7 @@ void WiFiManager::getParamOut(String &page, WiFiManagerParameter** params,
 {
     if(paramsCount > 0) {
 
-        char valLength[6];
+        char valLength[12+6];
 
         // Allocate it once, re-use it
         String pitem;
@@ -1420,65 +1442,98 @@ void WiFiManager::getParamOut(String &page, WiFiManagerParameter** params,
                 continue;
             }
 
+            pitem = "";
+
             // Input templating
-            // "<br/><input id='{i}' name='{n}' maxlength='{l}' value='{v}' {c}>";
-            // if no ID use customhtml for item, else generate from param string
+            // <label for='{i}'>{t}</label>
+            // <input id='{i}' name='{n}' {l} value='{v}' {c} {f}>
+            // if no ID, use customhtml for item, else generate from param string
+
+            uint8_t pflags = params[i]->getFlags();
+
+            if(pflags & WFM_SECTS_HEAD) {
+                pitem += FPSTR(HTTP_SECT_HEAD);
+            } else if(pflags & WFM_SECTS) {
+                pitem += FPSTR(HTTP_SECT_START);
+                pitem += FPSTR(HTTP_SECT_HEAD);
+            }
 
             if(params[i]->getID()) {
 
-                switch (params[i]->getFlags() & WFM_LABEL_MASK) {
+                bool haveLabel = true;
+
+                switch(pflags & WFM_LABEL_MASK) {
                 case WFM_LABEL_BEFORE:
-                    pitem = FPSTR(HTTP_FORM_LABEL);
-                    if(!(params[i]->getFlags() & WFM_NO_BR)) pitem += FPSTR(HTTP_BR);
+                    pitem += FPSTR(HTTP_FORM_LABEL);
+                    if(!(pflags & WFM_NO_BR)) pitem += FPSTR(HTTP_BR);
                     pitem += FPSTR(HTTP_FORM_PARAM);
                     pitem += FPSTR(HTTP_BR);
                     break;
                 case WFM_LABEL_AFTER:
-                    pitem = FPSTR(HTTP_FORM_PARAM);
+                    pitem += FPSTR(HTTP_FORM_PARAM);
                     pitem += FPSTR(HTTP_FORM_LABEL);
                     pitem += FPSTR(HTTP_BR);
                     break;
                 default:
                     // WFM_NO_LABEL
-                    pitem = FPSTR(HTTP_FORM_PARAM);
+                    pitem += FPSTR(HTTP_FORM_PARAM);
+                    haveLabel = false;
                     break;
                 }
 
                 pitem.replace(FPSTR(T_i), params[i]->getID());     // T_i id name
                 pitem.replace(FPSTR(T_n), params[i]->getID());     // T_n id name alias
-                pitem.replace(FPSTR(T_t), params[i]->getLabel());  // T_t title/label
-                snprintf(valLength, 5, "%d", params[i]->getValueLength());
-                pitem.replace(FPSTR(T_l), valLength);              // T_l value length
-                pitem.replace(FPSTR(T_v), params[i]->getValue());  // T_v value
+                if(haveLabel) {
+                    if(params[i]->getLabel()) {
+                        pitem.replace(FPSTR(T_t), params[i]->getLabel());  // T_t title/label
+                    } else {
+                        pitem.replace(FPSTR(T_t), "");
+                    }
+                }
+                if(pflags & WFM_IS_CHKBOX) {
+                    pitem.replace(FPSTR(T_l), (*(params[i]->getValue()) == '1') ? "checked" : "");
+                    pitem.replace(FPSTR(T_v), "1"); // value is ALWAYS "1"!
+                    pitem.replace(FPSTR(T_f), HTML_CHKBOX);
+                } else {
+                    snprintf(valLength, 12+5, "maxlength='%d'", params[i]->getValueLength());
+                    pitem.replace(FPSTR(T_l), valLength);              // T_l maxlength='value length'
+                    pitem.replace(FPSTR(T_v), params[i]->getValue());  // T_v value
+                    pitem.replace(FPSTR(T_f), "");
+                }
                 if(params[i]->getCustomHTML()) {                   // T_c additional attributes
                     pitem.replace(FPSTR(T_c), params[i]->getCustomHTML());
                 } else {
                     pitem.replace(FPSTR(T_c), "");
                 }
-                if(params[i]->getFlags() & WFM_IS_CHKBOX) {
-                    pitem.replace(FPSTR(T_f), HTML_CHKBOX);
-                } else {
-                    pitem.replace(FPSTR(T_f), "");
-                }
 
             } else if(params[i]->_customHTMLGenerator) {
 
-                const char *t = (params[i]->_customHTMLGenerator)(NULL);
+                const char *t = (params[i]->_customHTMLGenerator)(NULL, WM_CP_CREATE);
                 if(t) {
-                    pitem = t;
-                    (params[i]->_customHTMLGenerator)(t);
-                } else {
-                    continue;
+                    pitem += t;
+                    (params[i]->_customHTMLGenerator)(t, WM_CP_DESTROY);
                 }
 
             } else if(params[i]->getCustomHTML()) {
 
-                pitem = params[i]->getCustomHTML();
+                if(pflags & WFM_HL) {
+                    pitem += FPSTR(HTTP_HL_S);
+                }
+
+                pitem += params[i]->getCustomHTML();
+
+                if(pflags & WFM_HL) {
+                    pitem += FPSTR(HTTP_HL_E);
+                }
 
             } else {
 
                 continue;
 
+            }
+
+            if(pflags & WFM_FOOT) {
+                pitem += FPSTR(HTTP_SECT_FOOT);
             }
 
             page += pitem;
@@ -1521,7 +1576,7 @@ void WiFiManager::doParamSave(WiFiManagerParameter** params, int paramsCount)
                 Serial.printf("doSaveParms: checkbox '%s' set to 0\n", params[i]->getID());
                 #endif
             } else {
-                // store it in params array; +1 for null termination
+                // store it in params array; +1 for zero termination
                 value.toCharArray(params[i]->_value, params[i]->_length + 1);
                 #ifdef _A10001986_DBG
                 Serial.printf("doSaveParms: '%s' set to '%s'\n", params[i]->getID(), params[i]->_value);
@@ -1576,7 +1631,7 @@ void WiFiManager::HTTPSend(const String& content)
 /*--------------------------------------------------------------------------*/
 
 // Calc size of root menu (without 0-term)
-int WiFiManager::getMenuOutLength()
+int WiFiManager::getMenuOutLength(unsigned int& appExtraSize)
 {
     int bufSize = 0;
 
@@ -1600,14 +1655,15 @@ int WiFiManager::getMenuOutLength()
     }
 
     if(_menuoutlencallback) {
-        bufSize += _menuoutlencallback();
+        appExtraSize = _menuoutlencallback();
+        bufSize += appExtraSize;
     }
 
     return bufSize;
 }
 
 // Construct root menu
-void WiFiManager::getMenuOut(String& page)
+void WiFiManager::getMenuOut(String& page, unsigned int appExtraSize)
 {
     if(_menuIdArr) {
         int menuId = 0;
@@ -1629,11 +1685,11 @@ void WiFiManager::getMenuOut(String& page)
     }
 
     if(_menuoutcallback) {
-        _menuoutcallback(page);
+        _menuoutcallback(page, appExtraSize);
     }
 }
 
-unsigned int WiFiManager::calcRootLen(unsigned int& headSize, unsigned int& repSize)
+unsigned int WiFiManager::calcRootLen(unsigned int& headSize, unsigned int& repSize, unsigned int& appExtraSize)
 {
     // Calc page size
     unsigned int bufSize = getHTTPHeadLength(_title);
@@ -1646,7 +1702,7 @@ unsigned int WiFiManager::calcRootLen(unsigned int& headSize, unsigned int& repS
         headSize += getWiFiHostname().length() + 3 + 15;
     }
     bufSize += headSize;
-    bufSize += getMenuOutLength();
+    bufSize += getMenuOutLength(appExtraSize);
     repSize = reportStatusLen();
     bufSize += repSize;
     bufSize += STRLEN(HTTP_END);
@@ -1658,7 +1714,7 @@ unsigned int WiFiManager::calcRootLen(unsigned int& headSize, unsigned int& repS
     return bufSize;
 }
 
-void WiFiManager::buildRootPage(String& page, unsigned int headSize, unsigned int repSize)
+void WiFiManager::buildRootPage(String& page, unsigned int headSize, unsigned int repSize, unsigned int appExtraSize)
 {
     // Build page
     String str;
@@ -1670,7 +1726,7 @@ void WiFiManager::buildRootPage(String& page, unsigned int headSize, unsigned in
 
     getHTTPHeadNew(page, _title);
     page += str;
-    getMenuOut(page);
+    getMenuOut(page, appExtraSize);
     reportStatus(page, repSize);
     page += FPSTR(HTTP_END);
 }
@@ -1682,15 +1738,16 @@ void WiFiManager::handleRoot()
 {
     unsigned int headSize = 0;
     unsigned int repSize = 0;
+    unsigned int appExtraSize = 0;
 
     #ifdef _A10001986_DBG
     Serial.println("<- HTTP Root");
     #endif
 
     String page;
-    page.reserve(calcRootLen(headSize, repSize) + 16);
+    page.reserve(calcRootLen(headSize, repSize, appExtraSize) + 16);
 
-    buildRootPage(page, headSize, repSize);
+    buildRootPage(page, headSize, repSize, appExtraSize);
 
     if(_gpcallback) {
         _gpcallback(WM_LP_PREHTTPSEND);
@@ -2031,11 +2088,11 @@ void WiFiManager::getScanItemsOut(String& page, int n, bool scanErr, int *indice
 void WiFiManager::getIpForm(String& page, const char *id, const char *title, IPAddress& value, const char *placeholder)
 {
     // <label for='{i}'>{t}</label>
-    // <input id='{i}' name='{n}' maxlength='{l}' value='{v}' {c}>
+    // <input id='{i}' name='{n}' {l} value='{v}' {c} {f}>
 
     unsigned int s = STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3);
     s += (3*strlen(id)) + strlen(title);
-    s += 2 + 15;
+    s += (12+2) + 15;
     if(placeholder) s += strlen(placeholder);
 
     String item;
@@ -2048,7 +2105,7 @@ void WiFiManager::getIpForm(String& page, const char *id, const char *title, IPA
     item.replace(FPSTR(T_i), id);
     item.replace(FPSTR(T_n), id);
     item.replace(FPSTR(T_t), title);
-    item.replace(FPSTR(T_l), F("15"));
+    item.replace(FPSTR(T_l), F("maxlength='15'"));
     item.replace(FPSTR(T_v), value ? value.toString() : "");
     item.replace(FPSTR(T_c), placeholder ? placeholder : "");
     item.replace(FPSTR(T_f), "");
@@ -2063,21 +2120,21 @@ unsigned int WiFiManager::getStaticLen()
     bool showDns = (_staShowDns || _sta_static_dns);
 
     // "<label for='{i}'>{t}</label>"
-    // "<input id='{i}' name='{n}' maxlength='{l}' value='{v}' {c} {f}>\n"
+    // "<input id='{i}' name='{n}' {l} value='{v}' {c} {f}>\n"
 
     if(showSta || showDns) {
         mySize += STRLEN(HTTP_FORM_SECT_HEAD);
     }
     if(showSta) {
         mySize += (3 * (STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3) + (2*STRLEN(HTTP_BR))));
-        mySize += (3*STRLEN(S_ip)) + STRLEN(S_staticip) + 2 + 15;
+        mySize += (3*STRLEN(S_ip)) + STRLEN(S_staticip) + (12+2) + 15;
         mySize += STRLEN(HTTP_FORM_WIFI_PH);
-        mySize += (3*STRLEN(S_sn)) + STRLEN(S_subnet) + 2 + 15;
-        mySize += (3*STRLEN(S_gw)) + STRLEN(S_staticgw) + 2 + 15;
+        mySize += (3*STRLEN(S_sn)) + STRLEN(S_subnet) + (12+2) + 15;
+        mySize += (3*STRLEN(S_gw)) + STRLEN(S_staticgw) + (12+2) + 15;
     }
     if(showDns) {
         mySize += STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3) + (2*STRLEN(HTTP_BR));
-        mySize += (3*STRLEN(S_dns)) + STRLEN(S_staticdns) + 2 + 15;
+        mySize += (3*STRLEN(S_dns)) + STRLEN(S_staticdns) + (12+2) + 15;
     }
     if(showSta || showDns) {
         mySize += STRLEN(HTTP_FORM_SECT_FOOT);
@@ -2201,7 +2258,7 @@ void WiFiManager::buildWifiPage(String& page, bool scan)
     if(haveShowAll) {
         bufSize += STRLEN(HTTP_SHOWALL_FORM);
     }
-    repSize = reportStatusLen();
+    repSize = reportStatusLen(true);
     bufSize += repSize;
     bufSize += STRLEN(HTTP_END);
 
@@ -2252,7 +2309,7 @@ void WiFiManager::buildWifiPage(String& page, bool scan)
     if(haveShowAll) {
         page += FPSTR(HTTP_SHOWALL_FORM);
     }
-    reportStatus(page, repSize);
+    reportStatus(page, repSize, true);
     page += FPSTR(HTTP_END);
 
     // Add a delay in order to minimize time
@@ -2987,7 +3044,7 @@ void WiFiManager::setMenuOutLenCallback(int(*func)())
 }
 
 // setMenuOutCallback(): Set a callback to add html to root menu
-void WiFiManager::setMenuOutCallback(void(*func)(String &page))
+void WiFiManager::setMenuOutCallback(void(*func)(String &page, unsigned int appExtraSize))
 {
     _menuoutcallback = func;
 }

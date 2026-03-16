@@ -45,6 +45,10 @@
 #define WM_MENU_END        -1
 #define WM_MENU_MAX         WM_MENU_CUSTOM
 
+#define WM_CP_LEN           1
+#define WM_CP_CREATE        2
+#define WM_CP_DESTROY       3
+
 #ifdef WM_PARAM2
 #define WM_PARAM_ARRS 3
 #else
@@ -71,9 +75,13 @@
 #define WFM_LABEL_AFTER   2
 #define WFM_LABEL_DEFAULT WFM_LABEL_BEFORE
 #define WFM_LABEL_MASK    0x03
-// Parm is a checkbox
-#define WFM_IS_CHKBOX     8
-#define WFM_NO_BR        16   // Skip <br> between label and input (LABEL_BEFORE only)
+// Other flags:
+#define WFM_IS_CHKBOX     4   // Parm is a checkbox
+#define WFM_NO_BR         8   // Skip <br> between label and input (LABEL_BEFORE only)
+#define WFM_SECTS_HEAD   16   // Parm is first in first section of page (opens new section)
+#define WFM_SECTS        32   // Parm is first in new section (closes prev section, opens new)
+#define WFM_FOOT         64   // Parm is last in last section of page (closes section)
+#define WFM_HL          128   // Parm is a headline (customHTML only; enclosed in <div cl=hl></div>)
 
 // HTML id:s of "static IP" parameters on "WiFi Configuration" page
 #define WMS_ip    "ip"
@@ -83,7 +91,7 @@
 
 // Parm handed to GPCallback
 #define WM_LP_NONE          0   // No special reason (just do over-due stuff)
-#define WM_LP_PREHTTPSEND   1   // pre-HTTPSend() (problem with mp3 in AP mode)
+#define WM_LP_PREHTTPSEND   1   // pre-HTTPSend()
 #define WM_LP_POSTHTTPSEND  2   // post-HTTPSend() (just do over-due stuff, ...)
 
 #define WM_WIFI_SCAN_BUSY -133
@@ -109,12 +117,11 @@ class WiFiManagerParameter {
         Create custom parameters that can be added to the WiFiManager setup web pages
         @id is used for HTTP queries and must not contain spaces nor other special characters
     */
-    WiFiManagerParameter(const char *custom);
-    WiFiManagerParameter(const char *(*CustomHTMLGenerator)(const char *));
-    //WiFiManagerParameter(const char *id, const char *label);
-    WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length);
-    WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, const char *custom);
-    WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags);
+    WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags = WFM_LABEL_DEFAULT);
+    WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, uint8_t flags = WFM_LABEL_DEFAULT);
+    WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, const char *custom, uint8_t flags = WFM_LABEL_DEFAULT);
+    WiFiManagerParameter(const char *custom, uint8_t flags = 0);
+    WiFiManagerParameter(const char *(*CustomHTMLGenerator)(const char *, int), uint8_t flags = 0);
     ~WiFiManagerParameter();
 
     const char *getID() const;
@@ -127,6 +134,7 @@ class WiFiManagerParameter {
 
   protected:
     void init(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags);
+    void initC(const char *custom, const char *(*CustomHTMLGenerator)(const char *, int), uint8_t flags);
 
   private:
     WiFiManagerParameter& operator=(const WiFiManagerParameter&);
@@ -134,7 +142,7 @@ class WiFiManagerParameter {
     const char *_label;
     union {
         char       *_value;
-        const char *(*_customHTMLGenerator)(const char *);
+        const char *(*_customHTMLGenerator)(const char *, int op);
     };
     int         _length;
     uint8_t     _flags;
@@ -244,7 +252,7 @@ class WiFiManager
 		void          setPostOtaUpdateCallback(void(*func)(bool));
 
     // add stuff to the main menu; second one to give WM the length for buf sizing
-  	void          setMenuOutCallback(void(*func)(String &page));
+  	void          setMenuOutCallback(void(*func)(String &page, unsigned int appExtraSize));
   	void          setMenuOutLenCallback(int(*func)());
 
   	// app-specific replacement for delay()
@@ -481,16 +489,16 @@ class WiFiManager
                         int paramsCount, unsigned int maxItemSize);
     void          doParamSave(WiFiManagerParameter** params, int paramsCount);
 
-	  int           reportStatusLen();
-    void          reportStatus(String &page, unsigned int estSize = 0);
+	  int           reportStatusLen(bool withMac = false);
+    void          reportStatus(String &page, unsigned int estSize = 0, bool withMac = false);
 
     void          HTTPSend(const String &content);
 
 	  // Root menu
-	  int           getMenuOutLength();
-    void          getMenuOut(String& page);
-    unsigned int  calcRootLen(unsigned int& headSize, unsigned int& repSize);
-    void          buildRootPage(String& page, unsigned int headSize, unsigned int repSize);
+	  int           getMenuOutLength(unsigned int& appExtraSize);
+    void          getMenuOut(String& page, unsigned int appExtraSize);
+    unsigned int  calcRootLen(unsigned int& headSize, unsigned int& repSize, unsigned int& appExtraSize);
+    void          buildRootPage(String& page, unsigned int headSize, unsigned int repSize, unsigned int appExtraSize);
     void          handleRoot();
 
   	// WiFi page
@@ -576,7 +584,7 @@ class WiFiManager
     void (*_saveparamscallback)(int);
     void (*_preotaupdatecallback)(void);
     void (*_postotaupdatecallback)(bool);
-	  void (*_menuoutcallback)(String &page);
+	  void (*_menuoutcallback)(String &page, unsigned int appExtraSize);
 	  int  (*_menuoutlencallback)(void);
 	  void (*_delayreplacement)(unsigned int);
 	  void (*_gpcallback)(int);

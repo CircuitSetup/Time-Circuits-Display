@@ -48,6 +48,8 @@ class AudioGeneratorWAV : public AudioGenerator
 
 
   protected:
+    bool freeBuf();
+
     // WAV info
     uint16_t channels;
     uint32_t sampleRate;
