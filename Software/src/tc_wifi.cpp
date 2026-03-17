@@ -546,6 +546,25 @@ static uint16_t      mqttPingsExpired = 0;
 #endif
 
 static unsigned int wmLenBuf = 0;
+static char         *wmCPBuf = NULL;
+static unsigned int wmCPBufSize = 0;
+
+static char *wmAllocCPBuf(unsigned int len)
+{
+    unsigned int need = len + 1;
+
+    if(need > wmCPBufSize) {
+        char *newBuf = (char *)realloc(wmCPBuf, need);
+        if(!newBuf) {
+            return NULL;
+        }
+        wmCPBuf = newBuf;
+        wmCPBufSize = need;
+    }
+
+    wmCPBuf[0] = 0;
+    return wmCPBuf;
+}
 
 static void wifiOff(bool force);
 static void wifiConnect(bool deferConfigPortal = false);
@@ -2235,7 +2254,6 @@ static void buildRadioButtons(char *target, const char **theHTML, int cnt, char 
 static const char *wmBuildbeepaint(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
 
@@ -2247,7 +2265,8 @@ static const char *wmBuildbeepaint(const char *dest, int op)
         return (const char *)&wmLenBuf;
     }
     
-    char *str = (char *)malloc(l);
+    char *str = wmAllocCPBuf(l);
+    if(!str) return NULL;
 
     buildSelectMenu(str, beepCustHTMLSrc, 6, settings.beep);
     buildSelectMenu(str + strlen(str), aintCustHTMLSrc, 8, settings.autoRotateTimes);
@@ -2258,7 +2277,6 @@ static const char *wmBuildbeepaint(const char *dest, int op)
 static const char *wmBuildAnmPreset(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
 
@@ -2276,7 +2294,8 @@ static const char *wmBuildAnmPreset(const char *dest, int op)
     }
     
     int tnm = atoi(settings.autoNMPreset);
-    char *str = (char *)malloc(l);    // actual length 473
+    char *str = wmAllocCPBuf(l);    // actual length 473
+    if(!str) return NULL;
 
     sprintf(str, anmCustHTML1, custHTMLHdr1, custHTMLHdr2, custHTMLSHdr, 
                                settings.autoNMPreset, (tnm == 10) ? custHTMLSel : "", ooe);
@@ -2290,7 +2309,6 @@ static const char *wmBuildAnmPreset(const char *dest, int op)
 static const char *wmBuildSpeedoType(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
     
@@ -2312,7 +2330,8 @@ static const char *wmBuildSpeedoType(const char *dest, int op)
         return (const char *)&wmLenBuf;
     }
     
-    char *str = (char *)malloc(l);
+    char *str = wmAllocCPBuf(l);
+    if(!str) return NULL;
 
     sprintf(str, "%s%s%s%s%s%s", custHTMLHdr1, custHTMLHdr2, spTyCustHTML1, custHTMLSHdr, settings.speedoType, spTyCustHTML2);
 
@@ -2330,7 +2349,6 @@ static const char *wmBuildSpeedoType(const char *dest, int op)
 static const char *wmBuildUpdateRate(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
 
@@ -2341,7 +2359,8 @@ static const char *wmBuildUpdateRate(const char *dest, int op)
         return (const char *)&wmLenBuf;
     }
     
-    char *str = (char *)malloc(l);
+    char *str = wmAllocCPBuf(l);
+    if(!str) return NULL;
     
     buildSelectMenu(str, spdRateCustHTMLSrc, 6, settings.spdUpdRate, true);
     
@@ -2353,7 +2372,6 @@ static const char *wmBuildUpdateRate(const char *dest, int op)
 static const char *wmBuildttinp(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
 
@@ -2364,7 +2382,8 @@ static const char *wmBuildttinp(const char *dest, int op)
         return (const char *)&wmLenBuf;
     }
     
-    char *str = (char *)malloc(t);
+    char *str = wmAllocCPBuf(t);
+    if(!str) return NULL;
     buildRadioButtons(str, ttinCustHTMLSrc, 3, settings.ttinpin);
         
     return str;
@@ -2373,7 +2392,6 @@ static const char *wmBuildttinp(const char *dest, int op)
 static const char *wmBuildttoutp(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
 
@@ -2384,7 +2402,8 @@ static const char *wmBuildttoutp(const char *dest, int op)
         return (const char *)&wmLenBuf;
     }
     
-    char *str = (char *)malloc(t);
+    char *str = wmAllocCPBuf(t);
+    if(!str) return NULL;
     buildRadioButtons(str, ttoutCustHTMLSrc, 3, settings.ttoutpin);
         
     return str;
@@ -2394,7 +2413,6 @@ static const char *wmBuildttoutp(const char *dest, int op)
 static const char *wmBuildApChnl(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
 
@@ -2405,7 +2423,8 @@ static const char *wmBuildApChnl(const char *dest, int op)
         return (const char *)&wmLenBuf;
     }
     
-    char *str = (char *)malloc(l);
+    char *str = wmAllocCPBuf(l);
+    if(!str) return NULL;
 
     buildSelectMenu(str, apChannelCustHTMLSrc, 14, settings.apChnl);
     
@@ -2415,7 +2434,6 @@ static const char *wmBuildApChnl(const char *dest, int op)
 static const char *wmBuildBestApChnl(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
 
@@ -2428,7 +2446,8 @@ static const char *wmBuildBestApChnl(const char *dest, int op)
             wmLenBuf = l;
             return (const char *)&wmLenBuf;
         }
-        char *str = (char *)malloc(l);
+        char *str = wmAllocCPBuf(l);
+        if(!str) return NULL;
         sprintf(str, bestAP, bannerStart, qual < 0 ? col_r : (qual > 0 ? col_g : col_gr), bannerMid, mychan, qual < 0 ? badWiFi : "");
         return str;
     }
@@ -2445,7 +2464,8 @@ static const char *buildBanner(const char *msg, const char *col, int op)
         return (const char *)&wmLenBuf;
     }
     
-    char *str = (char *)malloc(l);
+    char *str = wmAllocCPBuf(l);
+    if(!str) return NULL;
     sprintf(str, bannerGen, bannerStart, col, bannerMid, msg);        
 
     return str;
@@ -2454,7 +2474,6 @@ static const char *buildBanner(const char *msg, const char *col, int op)
 static const char *wmBuildNTPLUF(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
 
@@ -2476,7 +2495,6 @@ static const char *wmBuildNTPLUF(const char *dest, int op)
 static const char *wmBuildHaveSD(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
     
@@ -2490,7 +2508,6 @@ static const char *wmBuildHaveSD(const char *dest, int op)
 static const char *wmBuildMQTTprot(const char *dest, int op)
 {
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
 
@@ -2501,7 +2518,8 @@ static const char *wmBuildMQTTprot(const char *dest, int op)
         return (const char *)&wmLenBuf;
     }
     
-    char *str = (char *)malloc(l);
+    char *str = wmAllocCPBuf(l);
+    if(!str) return NULL;
 
     buildSelectMenu(str, mqttpCustHTMLSrc, 4, settings.mqttVers);
     
@@ -2517,7 +2535,6 @@ static const char *wmBuildMQTTstate(const char *dest, int op)
     }
     
     if(op == WM_CP_DESTROY) {
-        if(dest) free((void *)dest);
         return NULL;
     }
 
@@ -2586,7 +2603,8 @@ static const char *wmBuildMQTTstate(const char *dest, int op)
         return (const char *)&wmLenBuf;
     }
 
-    char *str = (char *)malloc(l);
+    char *str = wmAllocCPBuf(l);
+    if(!str) return NULL;
 
     sprintf(str, mqttStatus, bannerStart, cls, ";margin-bottom:10px", bannerMid, msg, s);
 

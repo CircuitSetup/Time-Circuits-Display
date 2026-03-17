@@ -118,7 +118,7 @@ class speedDisplay {
         uint8_t setBrightnessDirect(uint8_t level) ;
         uint8_t getBrightness() { return _brightness; }
 
-        void setNightMode(bool mymode)  { _nightmode = mymode; }
+        void setNightMode(bool mymode)  { if(_nightmode != mymode) { _nightmode = mymode; invalidateHwCache(); } }
         bool getNightMode()             { return _nightmode; }
 
         void show();
@@ -154,6 +154,7 @@ class speedDisplay {
         //void handleColon();
         uint16_t getLEDChar(uint8_t value);
         void clearDisplay();                    // clears display RAM
+        void invalidateHwCache();
         void directCmd(uint8_t val);
 
         #ifdef SERVOSPEEDO
@@ -180,9 +181,11 @@ class speedDisplay {
 
         uint8_t _address;
         uint16_t _displayBuffer[8];
+        uint16_t _hwDisplay[8] = { 0 };
 
         int8_t _onCache = -1;                   // Cache for on/off
         uint8_t _briCache = 0xfe;               // Cache for brightness
+        bool _hwKnown = false;
 
         bool _dot01 = false;
         //bool _colon = false;

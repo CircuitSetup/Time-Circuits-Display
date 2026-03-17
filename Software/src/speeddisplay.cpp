@@ -493,6 +493,7 @@ void speedDisplay::on()
     #endif
     _onCache = 1;
     _briCache = 0xfe;
+    invalidateHwCache();
 }
 
 // Turn off the display
@@ -507,6 +508,7 @@ void speedDisplay::off()
     setExSpeed(-1, true);
     #endif
     _onCache = 0;
+    invalidateHwCache();
 }
 
 // Set display brightness
@@ -532,6 +534,7 @@ uint8_t speedDisplay::setBrightnessDirect(uint8_t level)
     if(level != _briCache) {
         if(_i2c) directCmd(0xE0 | level);  // Dimming command
         _briCache = level;
+        invalidateHwCache();
     }
 
     return level;
@@ -577,15 +580,19 @@ void speedDisplay::show()
             }
         }
     
-        Wire.beginTransmission(_address);
-        Wire.write(0x00);  // start address
-    
-        for(i = 0; i <= _max_buf; i++) {
-            Wire.write(_displayBuffer[i] & 0xFF);
-            Wire.write(_displayBuffer[i] >> 8);
+        if(!_hwKnown || memcmp(_hwDisplay, _displayBuffer, (_max_buf + 1) * sizeof(uint16_t))) {
+            Wire.beginTransmission(_address);
+            Wire.write(0x00);  // start address
+        
+            for(i = 0; i <= _max_buf; i++) {
+                Wire.write(_displayBuffer[i] & 0xFF);
+                Wire.write(_displayBuffer[i] >> 8);
+            }
+        
+            Wire.endTransmission();
+            memcpy(_hwDisplay, _displayBuffer, (_max_buf + 1) * sizeof(uint16_t));
+            _hwKnown = true;
         }
-    
-        Wire.endTransmission();
 
     }
     
@@ -832,6 +839,19 @@ uint16_t speedDisplay::getLEDChar(uint8_t value)
 // Directly clear the display
 void speedDisplay::clearDisplay()
 {
+    if(_hwKnown) {
+        bool allZero = true;
+        for(int i = 0; i < 8; i++) {
+            if(_hwDisplay[i]) {
+                allZero = false;
+                break;
+            }
+        }
+        if(allZero) {
+            return;
+        }
+    }
+
     Wire.beginTransmission(_address);
     Wire.write(0x00);  // start address
 
@@ -840,6 +860,13 @@ void speedDisplay::clearDisplay()
     }
 
     Wire.endTransmission();
+    memset(_hwDisplay, 0, sizeof(_hwDisplay));
+    _hwKnown = true;
+}
+
+void speedDisplay::invalidateHwCache()
+{
+    _hwKnown = false;
 }
 
 void speedDisplay::directCmd(uint8_t val)

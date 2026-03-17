@@ -314,6 +314,7 @@ void saveShuffle();
 uint8_t loadBootMode();
 void storeBootMode();
 void saveBootMode();
+bool flushPendingSettingWrites(bool force = false);
 
 bool loadIpSettings();
 void writeIpSettings();

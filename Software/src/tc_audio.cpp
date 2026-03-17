@@ -83,6 +83,15 @@
 class AudioGeneratorWAVP : public AudioGeneratorWAV
 {
   public:
+    bool failBeginQuick()
+    {
+        free(buff);
+        buff = NULL;
+        buffPtr = 0;
+        buffLen = 0;
+        return false;
+    }
+
     bool beginQuick(AudioFileSource *source, AudioOutput *output, int chnls, uint32_t sr, uint32_t stPos, uint32_t slen)
     {
         file = source;
@@ -106,17 +115,17 @@ class AudioGeneratorWAVP : public AudioGeneratorWAV
         sL = sR = 0;
       
         if(!output->SetRate(sampleRate)) {
-            return freeBuf();
+            return failBeginQuick();
         }
         if(!output->SetBitsPerSample(bitsPerSample)) {
-            return freeBuf();
+            return failBeginQuick();
         }
         if(!output->SetChannels(channels)) {
-            return freeBuf();
+            return failBeginQuick();
         }
       
         if(!output->begin()) {
-            return freeBuf();
+            return failBeginQuick();
         }
       
         running = true;

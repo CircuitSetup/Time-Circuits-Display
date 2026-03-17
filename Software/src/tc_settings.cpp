@@ -93,6 +93,8 @@
 // Size of main config JSON
 // Needs to be adapted when config grows
 #define JSON_SIZE 2600
+#define JSON_IO_BUF_SIZE 4096
+#define SETTINGS_WRITE_DELAY_MS (10UL * 1000UL)
 #if ARDUINOJSON_VERSION_MAJOR >= 7
 #define DECLARE_S_JSON(x,n) JsonDocument n;
 #define DECLARE_D_JSON(x,n) JsonDocument n;
@@ -163,9 +165,13 @@ static struct [[gnu::packed]] {
 static int      secSetValidBytes = 0;
 static uint32_t secSettingsHash  = 0;
 static bool     haveSecSettings  = false;
+static bool     secSettingsDirty = false;
 static int      terSetValidBytes = 0;
 static uint32_t terSettingsHash  = 0;
 static bool     haveTerSettings  = false;
+static bool     terSettingsDirty = false;
+static bool     settingsDeferredReady = false;
+static unsigned long settingsDirtyNow = 0;
 
 // ClockState
 // Do not change or insert new values, this
@@ -240,6 +246,11 @@ static const char *failFileWrite = "Failed to open file for writing";
 static const char *badConfig = "Settings bad/missing/incomplete; writing new file";
 #endif
 
+#define CFG_IO_MAX(a, b) ((a) > (b) ? (a) : (b))
+#define CONFIG_IO_PAYLOAD_SIZE CFG_IO_MAX(CFG_IO_MAX(CFG_IO_MAX(sizeof(secSettings), sizeof(terSettings)), CFG_IO_MAX(sizeof(clockState), sizeof(clockData))), sizeof(ipsettings))
+static char    jsonIOBuf[JSON_IO_BUF_SIZE + 1];
+static uint8_t configIOBuf[CONFIG_IO_PAYLOAD_SIZE + 3];
+
 // If LittleFS/SPIFFS is mounted
 bool haveFS = false;
 
@@ -304,6 +315,8 @@ static bool saveConfigFile(const char *fn, uint8_t *buf, int len, int forcefs = 
 static uint32_t calcHash(uint8_t *buf, int len);
 static bool saveSecSettings(bool useCache);
 static bool saveTerSettings(bool useCache);
+static void queueSecSettingsSave();
+static void queueTerSettingsSave();
 #ifdef SETTINGS_TRANSITION
 static void removeOldFiles(const char *oldfn);
 #endif
@@ -626,6 +639,8 @@ void settings_setup()
         }
         digitalWrite(WHITE_LED_PIN, LOW);
     }
+
+    settingsDeferredReady = true;
 }
 
 void unmount_fs()
@@ -1145,7 +1160,7 @@ void saveBrightness()
     secSettings.brightness[0] = settings.destTimeBright;
     secSettings.brightness[1] = settings.presTimeBright;
     secSettings.brightness[2] = settings.lastTimeBright;
-    saveSecSettings(true);
+    queueSecSettingsSave();
 }
 
 /*
@@ -1195,7 +1210,7 @@ void saveBeepAutoInterval()
 {
     secSettings.autoInterval = autoInterval;
     secSettings.beepMode = beepMode;
-    saveSecSettings(true);
+    queueSecSettingsSave();
     updateAIntBeepCP();
 }
 
@@ -1242,7 +1257,7 @@ void storeCurVolume()
 void saveCurVolume()
 {
     storeCurVolume();
-    saveSecSettings(true);
+    queueSecSettingsSave();
 }
 
 /*
@@ -1304,7 +1319,7 @@ void saveAlarm()
     secSettings.alarmMinute = alarmMinute;
     secSettings.alarmOnOff = alarmOnOff ? 1 : 0;
     secSettings.alarmWeekday = alarmWeekday;
-    saveSecSettings(true);
+    queueSecSettingsSave();
 }
 
 /*
@@ -1369,7 +1384,7 @@ void saveReminder()
         secSettings.remHour = remHour;
         secSettings.remMin = remMin;
     }
-    saveSecSettings(true);
+    queueSecSettingsSave();
 }
 
 /*
@@ -1405,7 +1420,7 @@ static void loadCarMode()
 void saveCarMode()
 {
     secSettings.carMode = carMode ? 1 : 0;
-    saveSecSettings(true);
+    queueSecSettingsSave();
 }
 
 /*
@@ -1450,7 +1465,7 @@ void saveStaleTime(void *source, bool currentOn)
 {
     secSettings.exhOnOff = currentOn ? 1 : 0;
     memcpy((void *)&secSettings.exhDates[0], source, 2*sizeof(dateStruct));
-    saveSecSettings(true);
+    queueSecSettingsSave();
 }
 
 void initDefaultStaleTime(void *src)
@@ -1498,7 +1513,7 @@ void saveLineOut()
         return;
 
     secSettings.useLineOut = useLineOut ? 1 : 0;
-    saveSecSettings(true);
+    queueSecSettingsSave();
 }
 
 /*
@@ -1540,7 +1555,7 @@ void saveRemoteAllowed()
 {
     secSettings.remoteAllowed = remoteAllowed ? 1 : 0;
     secSettings.remoteKPAllowed = remoteKPAllowed ? 1 : 0;
-    saveSecSettings(true);
+    queueSecSettingsSave();
 }
 #endif
 
@@ -1579,7 +1594,7 @@ void saveServoCorr(int scorr, int tcorr)
 {
     secSettings.scorr = scorr;
     secSettings.tcorr = tcorr;
-    saveSecSettings(true);
+    queueSecSettingsSave();
 }
 #endif
 
@@ -1597,7 +1612,7 @@ static void loadUpdAvail()
 void saveUpdAvail()
 {
     secSettings.showUpdAvail = showUpdAvail ? 1 : 0;
-    saveSecSettings(true);
+    queueSecSettingsSave();
 }
 
 /*
@@ -1642,7 +1657,7 @@ void loadMusFoldNum()
 void saveMusFoldNum()
 {
     terSettings.musFolderNum = musFolderNum;
-    saveTerSettings(true);
+    queueTerSettingsSave();
 }
 
 /*
@@ -1659,7 +1674,7 @@ void loadShuffle()
 void saveShuffle()
 {
     terSettings.mpShuffle = mpShuffle;
-    saveTerSettings(true);
+    queueTerSettingsSave();
 }
 
 /*
@@ -1689,7 +1704,7 @@ void storeBootMode()
 void saveBootMode()
 {
     storeBootMode();
-    saveTerSettings(true);
+    queueTerSettingsSave();
 }
 
 /*
@@ -2254,6 +2269,7 @@ void moveSettings()
         #ifdef TC_DBG_BOOT
         Serial.println("moveSettings: Writing to flash prohibted (FlashROMode), aborting.");
         #endif
+        return;
     }
 
     // Flush pending saves
@@ -2287,79 +2303,76 @@ void moveSettings()
  */
 static DeserializationError readJSONCfgFile(JsonDocument& json, File& configFile, uint32_t *readHash)
 {
-    const char *buf = NULL;
     size_t bufSize = configFile.size();
     DeserializationError ret;
 
-    if(!(buf = (const char *)malloc(bufSize + 1))) {
-        Serial.printf("rJSON: malloc failed (%d)\n", bufSize);
+    if(bufSize > JSON_IO_BUF_SIZE) {
+        Serial.printf("rJSON: file too large (%d)\n", bufSize);
         return DeserializationError::NoMemory;
     }
 
-    memset((void *)buf, 0, bufSize + 1);
+    memset(jsonIOBuf, 0, sizeof(jsonIOBuf));
 
-    configFile.read((uint8_t *)buf, bufSize);
+    if(configFile.read((uint8_t *)jsonIOBuf, bufSize) != bufSize) {
+        return DeserializationError::IncompleteInput;
+    }
 
     #ifdef TC_DBG_BOOT
-    Serial.println(buf);
+    Serial.println(jsonIOBuf);
     #endif
 
     if(readHash) {
-        *readHash = calcHash((uint8_t *)buf, bufSize);
+        *readHash = calcHash((uint8_t *)jsonIOBuf, bufSize);
     }
     
-    ret = deserializeJson(json, buf);
-
-    free((void *)buf);
+    ret = deserializeJson(json, jsonIOBuf);
 
     return ret;
 }
 
 static bool writeJSONCfgFile(const JsonDocument& json, const char *fn, bool useSD, uint32_t oldHash, uint32_t *newHash)
 {
-    char *buf;
     size_t bufSize = measureJson(json);
     bool success = false;
+    uint32_t newH = 0;
 
-    if(!(buf = (char *)malloc(bufSize + 1))) {
-        Serial.printf("wJSON: malloc failed (%d) (%s)\n", bufSize, fn);
+    if(bufSize > JSON_IO_BUF_SIZE) {
+        Serial.printf("wJSON: buffer too small (%d) (%s)\n", bufSize, fn);
         return false;
     }
 
-    memset(buf, 0, bufSize + 1);
-    serializeJson(json, buf, bufSize);
+    memset(jsonIOBuf, 0, sizeof(jsonIOBuf));
+    serializeJson(json, jsonIOBuf, bufSize + 1);
 
     #ifdef TC_DBG_BOOT
     Serial.printf("Writing %s to %s, %d bytes\n", fn, useSD ? "SD" : "FS", bufSize);
-    Serial.println((const char *)buf);
+    Serial.println(jsonIOBuf);
     #endif
 
     if(oldHash || newHash) {
-        uint32_t newH = calcHash((uint8_t *)buf, bufSize);
-        
-        if(newHash) *newHash = newH;
+        newH = calcHash((uint8_t *)jsonIOBuf, bufSize);
     
         if(oldHash) {
             if(oldHash == newH) {
                 #ifdef TC_DBG_BOOT
                 Serial.printf("Not writing %s, hash identical (%x)\n", fn, oldHash);
                 #endif
-                free(buf);
+                if(newHash) *newHash = newH;
                 return true;
             }
         }
     }
 
     if(useSD) {
-        success = writeFileToSD(fn, (uint8_t *)buf, (int)bufSize);
+        success = writeFileToSD(fn, (uint8_t *)jsonIOBuf, (int)bufSize);
     } else {
-        success = writeFileToFS(fn, (uint8_t *)buf, (int)bufSize);
+        success = writeFileToFS(fn, (uint8_t *)jsonIOBuf, (int)bufSize);
     }
-
-    free(buf);
 
     if(!success) {
         Serial.printf("wJSON: %s - %s\n", fn, failFileWrite);
+    } else if(newHash) {
+        *newHash = newH;
     }
 
     return success;
@@ -2379,39 +2392,41 @@ static bool readFile(File& myFile, uint8_t *buf, int len)
         return false;
 }
 
-static bool readFileU(File& myFile, uint8_t*& buf, int& len)
+static bool readFileU(File& myFile, uint8_t *buf, int& len, int maxLen)
 {
     if(myFile) {
         len = myFile.size();
-        buf = (uint8_t *)malloc(len+1);
-        if(buf) {
-            buf[len] = 0;
-            return readFile(myFile, buf, len);
-        } else {
+        if(len >= maxLen) {
+            #ifdef TC_DBG_BOOT
+            Serial.printf("readFileU: file too large (%d >= %d)\n", len, maxLen);
+            #endif
             myFile.close();
+            return false;
         }
+        buf[len] = 0;
+        return readFile(myFile, buf, len);
     }
     return false;
 }
 
 // Read file of unknown size from SD
-static bool readFileFromSDU(const char *fn, uint8_t*& buf, int& len)
+static bool readFileFromSDU(const char *fn, uint8_t *buf, int& len, int maxLen)
 {   
     if(!haveSD)
         return false;
 
     File myFile = SD.open(fn, FILE_READ);
-    return readFileU(myFile, buf, len);
+    return readFileU(myFile, buf, len, maxLen);
 }
 
 // Read file of unknown size from NVS
-static bool readFileFromFSU(const char *fn, uint8_t*& buf, int& len)
+static bool readFileFromFSU(const char *fn, uint8_t *buf, int& len, int maxLen)
 {   
     if(!haveFS || !MYNVS.exists(fn))
         return false;
 
     File myFile = MYNVS.open(fn, FILE_READ);
-    return readFileU(myFile, buf, len);
+    return readFileU(myFile, buf, len, maxLen);
 }
 
 // Read file of known size from SD
@@ -2479,47 +2494,62 @@ static bool loadConfigFile(const char *fn, uint8_t *buf, int len, int& validByte
 {
     bool haveConfigFile = false;
     int fl;
-    uint8_t *bbuf = NULL;
+    uint8_t *bbuf = configIOBuf;
+    validBytes = 0;
 
     // forcefs: > 0: SD only; = 0 either (configOnSD); < 0: Flash if !FlashROMode, SD if FlashROMode
 
     if(haveSD && ((!forcefs && configOnSD) || forcefs > 0 || (forcefs < 0 && FlashROMode))) {
-        haveConfigFile = readFileFromSDU(fn, bbuf, fl);
+        haveConfigFile = readFileFromSDU(fn, bbuf, fl, sizeof(configIOBuf));
     }
     if(!haveConfigFile && haveFS && (!forcefs || (forcefs < 0 && !FlashROMode))) {
-        haveConfigFile = readFileFromFSU(fn, bbuf, fl);
+        haveConfigFile = readFileFromFSU(fn, bbuf, fl, sizeof(configIOBuf));
     }
     if(haveConfigFile) {
-        uint8_t chksum = cfChkSum(bbuf, fl - 1);
-        if((haveConfigFile = (bbuf[fl - 1] == chksum))) {
-            validBytes = bbuf[0] | (bbuf[1] << 8);
-            memcpy(buf, bbuf + 2, min(len, validBytes));
-            haveConfigFile = true; //(len <= validBytes);
+        if(fl < 3) {
             #ifdef TC_DBG_BOOT
-            Serial.printf("loadConfigFile: loaded %s: need %d, got %d bytes: ", fn, len, validBytes);
-            for(int k = 0; k < len; k++) Serial.printf("%02x ", buf[k]);
-            Serial.printf("chksum %02x\n", chksum);
+            Serial.printf("loadConfigFile: %s too short (%d)\n", fn, fl);
             #endif
+            haveConfigFile = false;
         } else {
-            #ifdef TC_DBG_BOOT
-            Serial.printf("loadConfigFile: Bad checksum %02x %02x\n", chksum, bbuf[fl - 1]);
-            #endif
+            uint8_t chksum = cfChkSum(bbuf, fl - 1);
+            if((haveConfigFile = (bbuf[fl - 1] == chksum))) {
+                validBytes = bbuf[0] | (bbuf[1] << 8);
+                int storedBytes = fl - 3;
+
+                if(validBytes > storedBytes) {
+                    #ifdef TC_DBG_BOOT
+                    Serial.printf("loadConfigFile: %s length mismatch (%d > %d)\n", fn, validBytes, storedBytes);
+                    #endif
+                    haveConfigFile = false;
+                } else {
+                    memcpy(buf, bbuf + 2, min(len, validBytes));
+                    haveConfigFile = true;
+                    #ifdef TC_DBG_BOOT
+                    Serial.printf("loadConfigFile: loaded %s: need %d, got %d bytes: ", fn, len, validBytes);
+                    for(int k = 0; k < len; k++) Serial.printf("%02x ", buf[k]);
+                    Serial.printf("chksum %02x\n", chksum);
+                    #endif
+                }
+            } else {
+                #ifdef TC_DBG_BOOT
+                Serial.printf("loadConfigFile: Bad checksum %02x %02x\n", chksum, bbuf[fl - 1]);
+                #endif
+            }
         }
     }
-
-    if(bbuf) free(bbuf);
 
     return haveConfigFile;
 }
 
 static bool saveConfigFile(const char *fn, uint8_t *buf, int len, int forcefs)
 {
-    uint8_t *bbuf;
     bool ret = false;
 
-    if(!(bbuf = (uint8_t *)malloc(len + 3)))
+    if((len + 3) > sizeof(configIOBuf))
         return false;
 
+    uint8_t *bbuf = configIOBuf;
     bbuf[0] = len & 0xff;
     bbuf[1] = len >> 8;
     memcpy(bbuf + 2, buf, len);
@@ -2537,8 +2567,6 @@ static bool saveConfigFile(const char *fn, uint8_t *buf, int len, int forcefs)
         ret = writeFileToFS(fn, bbuf, len + 3);
     }
 
-    free(bbuf);
-
     return ret;
 }
 
@@ -2553,20 +2581,24 @@ static uint32_t calcHash(uint8_t *buf, int len)
 
 static bool saveSecSettings(bool useCache)
 {
-    uint32_t oldHash = secSettingsHash;
-
-    secSettingsHash = calcHash((uint8_t *)&secSettings, sizeof(secSettings));
+    uint32_t newHash = calcHash((uint8_t *)&secSettings, sizeof(secSettings));
     
     if(useCache) {
-        if(oldHash == secSettingsHash) {
+        if(secSettingsHash == newHash) {
             #ifdef TC_DBG_BOOT
-            Serial.printf("saveSecSettings: Data up to date, not writing (%x)\n", secSettingsHash);
+            Serial.printf("saveSecSettings: Data up to date, not writing (%x)\n", newHash);
             #endif
-            return true;
+            return false;
         }
     }
-    
-    return saveConfigFile(secCfgName, (uint8_t *)&secSettings, sizeof(secSettings), 0);
+
+    if(saveConfigFile(secCfgName, (uint8_t *)&secSettings, sizeof(secSettings), 0)) {
+        secSettingsHash = newHash;
+        haveSecSettings = true;
+        return true;
+    }
+
+    return false;
 }
 
 static bool saveTerSettings(bool useCache)
@@ -2574,20 +2606,101 @@ static bool saveTerSettings(bool useCache)
     if(!haveSD)
         return false;
 
-    uint32_t oldHash = terSettingsHash;
-    
-    terSettingsHash = calcHash((uint8_t *)&terSettings, sizeof(terSettings));
+    uint32_t newHash = calcHash((uint8_t *)&terSettings, sizeof(terSettings));
     
     if(useCache) {
-        if(oldHash == terSettingsHash) {
+        if(terSettingsHash == newHash) {
             #ifdef TC_DBG_BOOT
-            Serial.printf("saveTerSettings: Data up to date, not writing (%x)\n", terSettingsHash);
+            Serial.printf("saveTerSettings: Data up to date, not writing (%x)\n", newHash);
             #endif
-            return true;
+            return false;
         }
     }
-    
-    return saveConfigFile(terCfgName, (uint8_t *)&terSettings, sizeof(terSettings), 1);
+
+    if(saveConfigFile(terCfgName, (uint8_t *)&terSettings, sizeof(terSettings), 1)) {
+        terSettingsHash = newHash;
+        haveTerSettings = true;
+        return true;
+    }
+
+    return false;
+}
+
+static void queueSecSettingsSave()
+{
+    haveSecSettings = true;
+    if(!settingsDeferredReady) {
+        saveSecSettings(true);
+        return;
+    }
+    secSettingsDirty = true;
+    settingsDirtyNow = millis();
+}
+
+static void queueTerSettingsSave()
+{
+    if(!haveSD) {
+        return;
+    }
+    haveTerSettings = true;
+    if(!settingsDeferredReady) {
+        saveTerSettings(true);
+        return;
+    }
+    terSettingsDirty = true;
+    settingsDirtyNow = millis();
+}
+
+bool flushPendingSettingWrites(bool force)
+{
+    bool wrote = false;
+
+    if(!settingsDeferredReady || (!secSettingsDirty && !terSettingsDirty)) {
+        return false;
+    }
+
+    if(!force && (millis() - settingsDirtyNow < SETTINGS_WRITE_DELAY_MS)) {
+        return false;
+    }
+
+    while(secSettingsDirty || terSettingsDirty) {
+        if(secSettingsDirty) {
+            uint32_t newHash = calcHash((uint8_t *)&secSettings, sizeof(secSettings));
+            if(newHash == secSettingsHash) {
+                secSettingsDirty = false;
+                continue;
+            }
+            if(saveSecSettings(false)) {
+                secSettingsDirty = false;
+                wrote = true;
+            }
+            if(!force || secSettingsDirty) {
+                break;
+            }
+            continue;
+        }
+
+        if(terSettingsDirty) {
+            uint32_t newHash = calcHash((uint8_t *)&terSettings, sizeof(terSettings));
+            if(newHash == terSettingsHash) {
+                terSettingsDirty = false;
+                continue;
+            }
+            if(saveTerSettings(false)) {
+                terSettingsDirty = false;
+                wrote = true;
+            }
+            if(!force || terSettingsDirty) {
+                break;
+            }
+        }
+    }
+
+    if(!secSettingsDirty && !terSettingsDirty) {
+        settingsDirtyNow = 0;
+    }
+
+    return wrote;
 }
 
 #ifdef SETTINGS_TRANSITION
@@ -2771,6 +2884,9 @@ void renameUploadFile(int idx)
     if(haveSD && uploadFileName) {
 
         char *t = (char *)malloc(strlen(uploadFileName)+4);
+        if(!t) {
+            return;
+        }
         t[0] = uploadFileName[0];
         t[1] = 0;
         strcat(t, uploadFileName+2);

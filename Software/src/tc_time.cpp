@@ -289,11 +289,6 @@ static bool          tempLock = false;
 static unsigned long tempLockNow = 0;
 static bool          spdreOldNM = false;
 #endif
-static bool          volChanged = false;
-static unsigned long volChangedNow = 0;
-static bool          disChanged = false;
-static unsigned long disChangedNow = 0;
-
 bool                 useTemp = false;
 bool                 dispTemp = true;
 bool                 tempOffNM = true;
@@ -2490,16 +2485,8 @@ void time_loop()
                     Serial.printf("Write lastYear to FS %d\n", millis());
                     #endif
                 }
-                if(!postHSecChangeBusy) {
-                    if(volChanged && (pscnow - volChangedNow > 10*1000)) {
-                        volChanged = false;
-                        saveCurVolume();
-                        postHSecChangeBusy = true;
-                    } else if(disChanged && (pscnow - disChangedNow > 10*1000)) {
-                        disChanged = false;
-                        saveBootMode();
-                        postHSecChangeBusy = true;
-                    }
+                if(!postHSecChangeBusy && flushPendingSettingWrites()) {
+                    postHSecChangeBusy = true;
                 }
                 // Slot was delayed, but is now taken
                 postHSecChange = false;
@@ -2732,9 +2719,7 @@ void time_loop()
             int oldVol = curVolume;
             curVolume = rotEncVol->updateVolume(curVolume, false);
             if(oldVol != curVolume) {
-                storeCurVolume();
-                volChanged = true;
-                volChangedNow = millis();
+                saveCurVolume();
             }
         }
         #endif
@@ -4957,23 +4942,12 @@ void flushDelayedSave()
     presentTime.saveFlush();
     destinationTime.saveFlush();
     departedTime.saveFlush();
-                
-    if(volChanged) {
-        volChanged = false;
-        saveCurVolume();
-    }
-
-    if(disChanged) {
-        disChanged = false;
-        saveBootMode();
-    }
+    flushPendingSettingWrites(true);
 }
 
 static void triggerSaveDisplayMode()
 {
-    storeBootMode();
-    disChanged = true;
-    disChangedNow = millis();
+    saveBootMode();
 }
 
 /*

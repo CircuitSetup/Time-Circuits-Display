@@ -141,26 +141,42 @@ void clockDisplay::begin()
 // Turn on the display
 void clockDisplay::on()
 {
+    if(_powerCache == (0x80 | 1)) {
+        return;
+    }
     directCmd(0x80 | 1);
+    _powerCache = (0x80 | 1);
+    invalidateHwCache();
 }
 
 // Turn on the display unless off due to night mode
 void clockDisplay::onCond()
 {
     if(!_nightmode || !_NmOff) {
-        directCmd(0x80 | 1);
+        on();
     }
 }
 
 void clockDisplay::onBlink(uint8_t blink)
 {
-    directCmd(0x80 | 1 | ((blink & 0x03) << 1)); 
+    uint8_t cmd = 0x80 | 1 | ((blink & 0x03) << 1);
+    if(_powerCache == cmd) {
+        return;
+    }
+    directCmd(cmd);
+    _powerCache = cmd;
+    invalidateHwCache();
 }
 
 // Turn off the display
 void clockDisplay::off()
 {
+    if(_powerCache == 0x80) {
+        return;
+    }
     directCmd(0x80);
+    _powerCache = 0x80;
+    invalidateHwCache();
 }
 
 // Turn on all LEDs
@@ -231,7 +247,11 @@ uint8_t clockDisplay::setBrightnessDirect(uint8_t level)
 {
     level &= 0x0f;
 
-    directCmd(0xe0 | level);
+    if(level != _briCache) {
+        directCmd(0xe0 | level);
+        _briCache = level;
+        invalidateHwCache();
+    }
 
     return level;
 }
@@ -1065,6 +1085,11 @@ void clockDisplay::clearDisplay()
     directBuf(db);
 }
 
+void clockDisplay::invalidateHwCache()
+{
+    _hwKnown = false;
+}
+
 void clockDisplay::directCmd(uint8_t val)
 {
     Wire.beginTransmission(_address);
@@ -1074,6 +1099,10 @@ void clockDisplay::directCmd(uint8_t val)
 
 void clockDisplay::directBuf(uint16_t *db, int len)
 {
+    if(_hwKnown && !memcmp(_hwDisplay, db, len * sizeof(uint16_t))) {
+        return;
+    }
+
     Wire.beginTransmission(_address);
     Wire.write(0x00);
     for(int i = 0; i < len; i++) {
@@ -1081,15 +1110,30 @@ void clockDisplay::directBuf(uint16_t *db, int len)
         Wire.write(db[i] >> 8);
     }
     Wire.endTransmission();
+
+    if(_hwKnown || (len == CD_BUF_SIZE)) {
+        memcpy(_hwDisplay, db, len * sizeof(uint16_t));
+        if(len == CD_BUF_SIZE) {
+            _hwKnown = true;
+        }
+    }
 }
 
 // Directly write to a column with supplied segments
 // (leave buffer intact, directly write to display)
 void clockDisplay::directCol(int col, int segments)
 {
+    if(_hwKnown && _hwDisplay[col] == segments) {
+        return;
+    }
+
     Wire.beginTransmission(_address);
     Wire.write(col * 2);
     Wire.write(segments & 0xff);
     Wire.write(segments >> 8);
     Wire.endTransmission();
+
+    if(_hwKnown) {
+        _hwDisplay[col] = segments;
+    }
 }

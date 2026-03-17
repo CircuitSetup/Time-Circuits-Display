@@ -109,9 +109,9 @@ class clockDisplay {
 
         void setAMPMOrder(bool reverse) { _am = reverse ? _PM : _AM; _pm = reverse ? _AM : _PM; }
 
-        void setNightMode(bool mymode)  { _nightmode = mymode; }
+        void setNightMode(bool mymode)  { if(_nightmode != mymode) { _nightmode = mymode; invalidateHwCache(); } }
         bool getNightMode()             { return _nightmode; }
-        void setNMOff(bool NMOff)       { _NmOff = NMOff; }
+        void setNMOff(bool NMOff)       { if(_NmOff != NMOff) { _NmOff = NMOff; invalidateHwCache(); } }
 
         bool isRTC() { return _rtc; }
 
@@ -210,12 +210,14 @@ class clockDisplay {
         void PM();
 
         void clearDisplay();
+        void invalidateHwCache();
         void directCmd(uint8_t val);
         void directBuf(uint16_t *db, int len = CD_BUF_SIZE);
         void directCol(int col, int segments);
 
         uint16_t _displayBuffer[CD_BUF_SIZE];
         uint16_t _displayBufferAlt[CD_BUF_SIZE];
+        uint16_t _hwDisplay[CD_BUF_SIZE] = { 0 };
         uint8_t  _did = 0;
         uint8_t  _address = 0;
 
@@ -240,6 +242,9 @@ class clockDisplay {
         int     _oldnm = -1;
         bool    _corr6 = false;
         bool    _WCtimeFits = false;
+        bool    _hwKnown = false;
+        int8_t  _powerCache = -1;
+        uint8_t _briCache = 0xff;
 
         int     _savePending = 0;
 };
