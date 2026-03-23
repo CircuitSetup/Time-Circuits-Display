@@ -1687,5 +1687,5 @@ The reason for this is in 99.9% of cases a problem with i2c cabling connecting y
 List will be extended when problems are reported.
 
 ---
-_Text & images: (C) Thomas Winischhofer ("A10001986"). See LICENSE._ Source: https://github.com/CircuitSetup/Time-Circuits-Display  
+_Text & images: (C) Thomas Winischhofer ("A10001986"). See LICENSE._ Source: https://tcd.out-a-ti.me
 _Other props: [Flux Capacitor](https://github.com/CircuitSetup/Flux-Capacitor) ... [SID](https://github.com/CircuitSetup/SID) ... [Dash Gauges](https://github.com/CircuitSetup/Dash-Gauges) ... [VSR](https://vsr.out-a-ti.me) ... [Remote Control](https://github.com/CircuitSetup/Remote) ... [TFC](https://tfc.out-a-ti.me)_
