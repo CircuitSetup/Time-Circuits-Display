@@ -39,7 +39,7 @@ Features include
 - Network capabilities:
   - Advanced network-accessible [Config Portal](#the-config-portal) for setup (http://timecircuits.local, hostname configurable)
   - Easy [firmware updates](#firmware-installation--firmware-update) over-the-air
-  - [Wireless communication](#connecting-props-wirelessly-bttf-network-bttfn) with compatible props such as CircuitSetup's [Flux Capacitor](https://github.com/CircuitSetup/Flux-Capacitor) and [SID](https://github.com/CircuitSetup/SID), as well as the [Dash Gauges](https://github.com/CircuitSetup/Dash-Gauges), [VSR](https://vsr.out-a-ti.me) and modified [Futaba Remote Control](https://github.com/CircuitSetup/Remote), for synchronized Time Travel sequences, replaying movie scenes, mututal remote control, and more.
+  - [Wireless communication](#connecting-props-wirelessly-bttf-network-bttfn) with compatible props such as CircuitSetup's [Flux Capacitor](https://circuitsetup.us/product/flux-capacitor-light-sound-kit/) and [SID](https://circuitsetup.us/product/delorean-time-machine-status-indicator-display-sid/), as well as the [Dash Gauges](https://circuitsetup.us/product/delorean-time-machine-dash-gauge-control-board/), [VSR](https://vsr.out-a-ti.me) and modified [Futaba Remote Control](https://circuitsetup.us/product/futaba-remote-stanley-display-wireless-control-kit/), for synchronized Time Travel sequences, replaying movie scenes, mututal remote control, and more.
   - [Home Assistant](#home-assistant--mqtt) (MQTT) support for displaying messages, remote controlling and more.
 - [Night mode](#night-mode): Dim or switch off displays on schedule, manually or sensor-controlled.
 - [Music player](#the-music-player): Play mp3 files located on an SD card
@@ -511,7 +511,7 @@ mm = month (01-12, 2 digits); dd = day (01-31, 2 digits); yyyy = year (4 digits)
 
 #### Remote controlling the TCD's keypad
 
-The TCD's keypad can be remote controlled through either [Flux Capacitor](https://github.com/CircuitSetup/Flux-Capacitor) and [SID](https://github.com/CircuitSetup/SID), using their respective IR remote control. In order to permit keypad remote controlling, enter 995 followed by ENTER. To prohibit remote controlling, enter 994 followed by ENTER. No further configuration is required on the TCD's side. Please see the [Flux Capacitor](https://github.com/CircuitSetup/Flux-Capacitor) and/or [SID](https://github.com/CircuitSetup/SID) documentation for details. 
+The TCD's keypad can be remote controlled through either [Flux Capacitor](https://circuitsetup.us/product/flux-capacitor-light-sound-kit/) and [SID](https://circuitsetup.us/product/delorean-time-machine-status-indicator-display-sid/), using their respective IR remote control. In order to permit keypad remote controlling, enter 995 followed by ENTER. To prohibit remote controlling, enter 994 followed by ENTER. No further configuration is required on the TCD's side. Please see the [Flux Capacitor](https://github.com/CircuitSetup/Flux-Capacitor) and/or [SID](https://github.com/CircuitSetup/SID) documentation for details. 
 
 ## Time travel
 
@@ -1085,7 +1085,7 @@ BTTFN requires the props to be connected to the same network, such as, for examp
 
 On the TCD, no special configuration is required for using BTTFN. 
 
-On the other prop, such as CircuitSetup's [Flux Capacitor](https://circuitsetup.us/product/flux-capacitor-light-sound-pcb/), [SID](https://circuitsetup.us/product/delorean-time-machine-status-indicator-display-sid/), the [Dash Gauges](https://github.com/CircuitSetup/Dash-Gauges), the [VSR](https://vsr.out-a-ti.me) or the [Futaba Remote Control kit](https://github.com/CircuitSetup/Remote), the TCD's IP address or hostname must be entered into the *IP address or hostname of TCD* field on the Setup page in their Config Portal - that's all.
+On the other prop, such as CircuitSetup's [Flux Capacitor](https://circuitsetup.us/product/flux-capacitor-light-sound-pcb/), [SID](https://circuitsetup.us/product/delorean-time-machine-status-indicator-display-sid/), the [Dash Gauges](https://circuitsetup.us/product/delorean-time-machine-dash-gauge-control-board/), the [VSR](https://vsr.out-a-ti.me) or the [Futaba Remote Control kit](https://circuitsetup.us/product/futaba-remote-stanley-display-wireless-control-kit/?v=7d0db380a5b9), the TCD's IP address or hostname must be entered into the *IP address or hostname of TCD* field on the Setup page in their Config Portal - that's all.
 
 To see which BTTFN clients are currently known to the TCD, either check at the Config Portal's main page, or enter the keypad menu and select "BTTFN CLIENTS", 
 
