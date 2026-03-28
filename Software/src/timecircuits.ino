@@ -137,7 +137,23 @@
  */
 
 /*  Changelog
- *          
+ *  
+ *  2026/03/27 (A10001986) [3.21]
+ *    - New sound-pack (TW06/CS06)
+ *    - New "extended" alarm function: Pressing ENTER optionally snoozes, holding ENTER stop the alarm. User-provided sound can be looped. Old legacy mode still supported.
+ *    - 117 toggles new "minimal mode": Present time shows weekday instead of year when displaying actual present time, red and yellow displays are off.
+ *    - 110 restores display mode to default (disables RC, WC, Geo, mini modes)
+ *    - 91mmddyyyyhhMM/92mmddyyyyhhMM are short-cuts to enter and save user-defined dates for the Destination Time/Last Time Departed displays, just like using the keypad menu. Time-cycling is paused for 30 mins.
+ *    - Programming the Destination Time/Last Time Departed displays through the keypad menu no longer disables time cycling, it only pauses it for 30 mins.
+ *    - MQTT: Add 10 user defined topics and messages for publishing through keypad commands 600-609.
+ *    - WiFi: Allow defining a BSSID (AP MAC address) to connect to a specific AP if multiple APs with identical SSID are available.
+ *    - A-Car version can now swap red and yellow displays to emulate B-Car as seen in part 3.
+ *    - New Easter Egg
+ *    - Music player: Fix off-by-one bug in ID3 decoding
+ *    - MQTT: Disable if server can't be resolved
+ *    - WiFi: Do not power down AP long as a client is connected
+ *    - Brush up Config Portal a bit
+ *    - Code optimizations and fixes.
  *  2026/02/16 (A10001986) [3.20]
  *    - New file format for secondary and IP settings. This version of the firmware 
  *      converts old to new.
