@@ -645,7 +645,7 @@ bool PubSubClient::subscribe_int(bool unsubscribe, const char *topic, const char
     if(!unsubscribe) {
         if(qos > 1)
             return false;
-        if(this->bufferSize < mqtt_max_header_size+2 + 2+topicLength+1 + (topicLength2 ? 2+topicLength+1 : 0))
+        if(this->bufferSize < mqtt_max_header_size+2 + 2+topicLength+1 + (topicLength2 ? 2+topicLength2+1 : 0))
             return false;
     } else {
         if(this->bufferSize < mqtt_max_header_size+2 + 2+topicLength)

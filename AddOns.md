@@ -1,4 +1,3 @@
-
 # DIY additions for the Time Circuits Display
 
 - [Rotary Encoder](#rotary-encoder)
@@ -27,7 +26,7 @@ Up to two rotary encoders can be connected, one for speed, one for volume.
 In order to use an encoder for speed or volume, it needs to be configured as follows:
 
   <table>
-  <tr><td></td><td>Ada4991</td><td>DFRobot</td><td>DuPPA</td></tr>
+  <tr><td></td><td>Ada4991/5880</td><td>DFRobot</td><td>DuPPA</td></tr>
   <tr><td>Speed</td><td>Default</td><td>SW1=0,SW2=0</td><td>A0 closed</td></tr>
   <tr><td>Volume</td><td>A0 closed</td><td>SW1=0,SW2=1</td><td>A0,A1 closed</td></tr>
   </table>
@@ -220,7 +219,7 @@ The TCD has a TT-OUT pin (marked "TT OUT (IO14)" or "IO14") which can be used to
 
 Signaling is done by setting this pin HIGH (2.7-3.3V).
 
-For connecting CircuitSetup/A10001986 props, see the prop's documentation ([Flux capacitor](https://github.com/realA10001986/Flux-Capacitor/tree/main?tab=readme-ov-file#connecting-a-tcd-by-wire), [SID](https://github.com/realA10001986/SID/tree/main?tab=readme-ov-file#connecting-a-tcd-by-wire), [Dash Gauges](https://github.com/realA10001986/Dash-Gauges/blob/main/hardware/README.md#connecting-a-tcd-to-the-dash-gauges-by-wire), [VSR](https://github.com/realA10001986/VSR#connecting-a-tcd-by-wire)).
+For connecting CircuitSetup/A10001986 props, see the prop's documentation ([Flux capacitor](https://github.com/CircuitSetup/Flux-Capacitor#connecting-a-tcd-by-wire), [SID](https://github.com/CircuitSetup/SID#connecting-a-tcd-by-wire), [Dash Gauges](https://github.com/CircuitSetup/Dash-Gauges/blob/main/hardware/README.md#connecting-a-tcd-to-the-dash-gauges-by-wire), [VSR](https://github.com/realA10001986/VSR#connecting-a-tcd-by-wire)).
 
 In order to connect props that can sense HIGH/LOW levels (and don't use the TT OUT pin for power supply), you need two wires for connecting the TCD: TT-OUT and GND, which need to be connected to the prop:
 
@@ -383,4 +382,4 @@ As you can see, there is no stall: The props receive proper info on when the tem
 Conclusion: If you are not planning on using GPS/Rotary Encoder/Futaba remote speed with your TCD, you can use the normal TIMETRAVEL command. In the other case, you need to teach your MQTT-aware device how to interpret the enhanced TIMETRAVEL_xxxx_yyyy command. Both xxxx and yyyy are always four digits. xxxx is the time until temporal displacement starts, yyyy is an approximation of the duration of the temporal displacement; however, don't use this value to time the reentry, instead wait for the REENTRY command to initiate your re-entry sequence.
 
 ---
-_Text & images: (C) Thomas Winischhofer ("A10001986"). See LICENSE._ Source: https://tcd.out-a-ti.me
+_Text & images: (C) Thomas Winischhofer ("A10001986"). See LICENSE._ Source: https://github.com/CircuitSetup/Time-Circuits-Display

@@ -69,6 +69,8 @@
 #define PA_KEYMASK 0x1ff00
 #define PA_DOORL   0x0100
 #define PA_DOORR   0x0200
+#define PA_LOOP    0x20000
+#define PA_ALARM   0x40000
 
 void  audio_setup();
 void  audio_loop();
@@ -81,12 +83,14 @@ void      play_key(int k, uint32_t preDTMFkp);
 void      play_door_snd(int doorNum, int state, uint32_t doorFlags);
 
 bool  check_file_SD(const char *audio_file);
+unsigned int check_file_len_SD(const char *audio_file, bool& file_exists);
 int   getSWVolFromHWVol();
 bool  checkAudioDone();
 bool  checkAudioFree();
 bool  checkMP3Running();
 void  stopAudio();
 void  stop_key();
+void  stopAlarm(bool force);
 
 void  mp_init(bool isSetup = false);
 void  mp_play(bool forcePlay = true);

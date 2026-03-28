@@ -76,7 +76,8 @@
 #define CD_AMPM_POS   CD_DAY_POS
 #define CD_COLON_POS  CD_YEAR_POS
 
-extern bool     alarmOnOff;
+extern bool          alarmOnOff;
+extern bool          snoozeRunning();
 #ifdef TC_HAVEGPS
 extern bool     gpsHaveFix();
 extern int      gpsGetDM();
@@ -91,7 +92,9 @@ extern uint16_t    loadClockState(int16_t& yoffs);
 extern bool        saveClockState(uint16_t curYear, int16_t yearoffset);
 extern void        getClockDataP(uint64_t& timeDifference, bool &timeDiffUp);
 extern dateStruct *getClockDataDL(uint8_t did);
+extern void        updateClockDataP();
 extern bool        saveClockDataP(bool force);
+extern void        updateClockDataDL(uint8_t did, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
 extern bool        saveClockDataDL(bool force, uint8_t did, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
 
 #ifndef IS_ACAR_DISPLAY
@@ -112,7 +115,13 @@ static const uint8_t idxtbl[] = {
 };
 #endif
 
+static const char weekdays[7][4] = {
+    "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"
+};
+
 static const char *nullStr = "";
+static const char tempStr[] = "TEMP";
+static const char humStr[]  = "HUMIDITY";
 
 /*
  * ClockDisplay class
@@ -239,17 +248,19 @@ uint8_t clockDisplay::setBrightnessDirect(uint8_t level)
 // Setup date in buffer --------------------------------------------------------
 
 
-// Set the displayed time with supplied DateTime object
-void clockDisplay::setDateTime(DateTime& dt)
+// Set the displayed time from supplied DateTime object
+// If wd is non-zero, year is overwritten by weekday
+void clockDisplay::setDateTime(DateTime& dt, int wd)
 {
     setYear(dt.year());
     setMonth(dt.month());
     setDay(dt.day());
     setHour(dt.hour());
     setMinute(dt.minute());
+    if(wd) setWeekDay(wd - 1);
 }
 
-// Set YEAR, MONTH, DAY, HOUR, MIN from structure
+// Set the displayed time from dateStruct
 void clockDisplay::setFromStruct(const dateStruct *s)
 {    
     setYear(s->year);
@@ -472,7 +483,12 @@ void clockDisplay::setHour(uint16_t hourNum)
 
 void clockDisplay::setMinute(int minNum)
 {
-    uint16_t seg = ((_did == DISP_PRES) && alarmOnOff) ? 0x8000 : 0;
+    uint16_t seg = 0;
+    
+    if(_did == DISP_PRES) {
+        if(snoozeRunning()) seg = _beat ? 0x8000 : 0x0000;
+        else if(alarmOnOff) seg = 0x8000;
+    }
     
     if(minNum < 0 || minNum > 59) {
         minNum = (minNum > 59) ? 59 : 0;
@@ -493,6 +509,20 @@ void clockDisplay::setYearOffset(int16_t yearOffs)
     }
 }
 
+void clockDisplay::setWeekDay(int wd)
+{
+    uint16_t temp;
+    uint16_t seg = _displayBuffer[CD_YEAR_POS + 1] & 0x8000;
+
+    temp = getLED7AlphaChar(weekdays[wd][0]) << 8;
+    //temp |= (getLED7AlphaChar(weekdays[wd][1]) << 8);
+    _displayBuffer[CD_YEAR_POS] = temp;
+
+    temp = getLED7AlphaChar(weekdays[wd][1]);
+    temp |= (getLED7AlphaChar(weekdays[wd][2]) << 8);
+    temp |= seg;     
+    _displayBuffer[CD_YEAR_POS + 1] = temp;
+}
 
 // Query data ------------------------------------------------------------------
 
@@ -654,7 +684,7 @@ void clockDisplay::showTextDirect(const char *text, uint16_t flags)
         db[CD_YEAR_POS + 1] |= 0x8000;
 
     if(flags & CDT_COLON)
-        db[CD_YEAR_POS] |= 0x8080;
+        db[CD_COLON_POS] |= 0x8080;
 
     directBuf(db, pos);
 
@@ -702,7 +732,7 @@ void clockDisplay::showSettingValDirect(const char* setting, int8_t val, uint16_
 void clockDisplay::showTempDirect(float temp, bool tempUnit, bool animate)
 {
     char buf[32];
-    const char *ttem = animate ? "    " : "TEMP";
+    const char *ttem = animate ? nullStr : tempStr;
     int t2;
     char u = tempUnit ? 'C' : 'F';
 
@@ -711,16 +741,16 @@ void clockDisplay::showTempDirect(float temp, bool tempUnit, bool animate)
 
     if(isnan(temp)) {
         #ifdef IS_ACAR_DISPLAY
-        sprintf(buf, "%s  ----~%c", ttem, u);
+        sprintf(buf, "%4.4s  ----~%c", ttem, u);
         #else
-        sprintf(buf, "%s   ----~%c", ttem, u);
+        sprintf(buf, "%4.4s   ----~%c", ttem, u);
         #endif
     } else {
         t2 = abs((int)(temp * 100.0f) - ((int)temp * 100));
         #ifdef IS_ACAR_DISPLAY
-        sprintf(buf, "%s%4d%02d~%c", ttem, (int)temp, t2, u);
+        sprintf(buf, "%4.4s%4d%02d~%c", ttem, (int)temp, t2, u);
         #else
-        sprintf(buf, "%s %4d%02d~%c", ttem, (int)temp, t2, u);
+        sprintf(buf, "%4.4s %4d%02d~%c", ttem, (int)temp, t2, u);
         #endif
     }
     
@@ -732,22 +762,22 @@ void clockDisplay::showTempDirect(float temp, bool tempUnit, bool animate)
 void clockDisplay::showHumDirect(int hum, bool animate)
 {
     char buf[16];
-    const char *thum = animate ? "        " : "HUMIDITY";
+    const char *thum = animate ? nullStr : humStr;
 
     if(!handleNM())
         return;
 
     if(hum < 0) {
         #ifdef IS_ACAR_DISPLAY
-        sprintf(buf, "%s--\x7f\x80", thum);
+        sprintf(buf, "%8.8s--\x7f\x80", thum);
         #else
-        sprintf(buf, "%s --\x7f\x80", thum);
+        sprintf(buf, "%8.8s --\x7f\x80", thum);
         #endif
     } else {
         #ifdef IS_ACAR_DISPLAY
-        sprintf(buf, "%s%2d\x7f\x80", thum, hum);
+        sprintf(buf, "%8.8s%2d\x7f\x80", thum, hum);
         #else
-        sprintf(buf, "%s %2d\x7f\x80", thum, hum);
+        sprintf(buf, "%8.8s %2d\x7f\x80", thum, hum);
         #endif
     }
 
@@ -855,6 +885,12 @@ bool clockDisplay::load()
 void clockDisplay::savePending()
 {
     _savePending = 1;
+
+    if(_did == DISP_PRES) {
+        return updateClockDataP();
+    }
+    
+    updateClockDataDL(_did, _year, _month, _day, _hour, _minute);
 }
 
 // Returns true if FS was accessed
@@ -901,7 +937,7 @@ uint8_t clockDisplay::getLED7NumChar(uint8_t value)
 // Returns bit pattern for provided character for display on 7 segment display
 uint8_t clockDisplay::getLED7AlphaChar(uint8_t value)
 {
-    if(value < 32 || value >= 127 + 2)
+    if(value < 32 || value >= 127 + 4)
         return 0;
     
     if(value == '6' && _corr6)
@@ -914,7 +950,7 @@ uint8_t clockDisplay::getLED7AlphaChar(uint8_t value)
 #ifndef IS_ACAR_DISPLAY
 uint16_t clockDisplay::getLEDAlphaChar(uint8_t value)
 {
-    if(value < 32 || value >= 127)
+    if(value < 32 || value >= 127 + 4)
         return 0;
 
     // For text, use common "6" pattern to conform with 7-seg-part

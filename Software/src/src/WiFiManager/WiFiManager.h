@@ -39,33 +39,69 @@
 #define WM_MENU_WIFI        0
 #define WM_MENU_PARAM       1
 #define WM_MENU_PARAM2      2
-#define WM_MENU_UPDATE      3
-#define WM_MENU_SEP         4
-#define WM_MENU_CUSTOM      5
+#define WM_MENU_PARAM3      3
+#define WM_MENU_UPDATE      4
+#define WM_MENU_SEP         5
+#define WM_MENU_SEP_F       6
+#define WM_MENU_CUSTOM      7
+#if defined(WM_PARAM2) && defined(WM_DYNPARM3)
+#define WM_MENU_PARAM2A     8
+#endif
 #define WM_MENU_END        -1
+#if defined(WM_PARAM2) && defined(WM_DYNPARM3)
+#define WM_MENU_MAX         WM_MENU_PARAM2A
+#else
 #define WM_MENU_MAX         WM_MENU_CUSTOM
+#endif
 
+// operator for generated HTML params
 #define WM_CP_LEN           1
 #define WM_CP_CREATE        2
 #define WM_CP_DESTROY       3
 
 #ifdef WM_PARAM2
-#define WM_PARAM_ARRS 3
-#else
-#define WM_PARAM_ARRS 2
-#endif
-
 #ifndef WM_PARAM2_CAPTION
-#define WM_PARAM2_CAPTION "Settings 2"
+#define WM_PARAM2_CAPTION   "Settings 2"
 #endif
 #ifndef WM_PARAM2_TITLE
-#define WM_PARAM2_TITLE "Settings 2"
+#define WM_PARAM2_TITLE     "Settings 2"
+#endif
+#ifdef WM_PARAM3
+#ifndef WM_PARAM3_CAPTION
+#define WM_PARAM3_CAPTION   "Settings 3"
+#endif
+#ifndef WM_PARAM3_TITLE
+#define WM_PARAM3_TITLE     "Settings 3"
+#endif
+#define WM_PARAM_ARRS       4
+#else
+#define WM_PARAM_ARRS       3
+#endif
+#else
+#define WM_PARAM_ARRS       2
+#endif
+
+#ifndef WM_PARAM2_TITLE
+#define WM_PARAM2_TITLE     ""
+#endif
+#ifndef WM_PARAM3_TITLE
+#define WM_PARAM3_TITLE     ""
 #endif
 
 // params will autoincrement and realloc by this amount when max is reached
-// can (and should) be overruled by allocParms()/allocWiFiParms()
+// can (and should) be overruled by allocParms()
 #ifndef WIFI_MANAGER_MAX_PARAMS
 #define WIFI_MANAGER_MAX_PARAMS 5
+#endif
+
+// Selector for allocParms, addParameter, getParameters, getParameterCount
+#define WM_PARM_WIFI       0
+#define WM_PARM_SETTINGS   1
+#ifdef WM_PARAM2
+#define WM_PARM_SETTINGS2  2
+#ifdef WM_PARAM3
+#define WM_PARM_SETTINGS3  3
+#endif
 #endif
 
 // Flags:
@@ -98,7 +134,8 @@
 
 #define DNS_PORT           53
 
-#define MAX_SCAN_OUTPUT_SIZE  6144  // Maximum buffer for scan list on WiFi Config page
+// Maximum buffer for scan list on WiFi Config page
+#define MAX_SCAN_OUTPUT_SIZE  6144
 
 #if defined(ESP_ARDUINO_VERSION) && defined(ESP_ARDUINO_VERSION_VAL)
     #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2,0,0)
@@ -111,12 +148,12 @@
     #define WM_NOCOUNTRY
 #endif
 
+// Extentions to WL_XXX status
+#define TWL_DHCP_TIMEOUT 0x1000
+#define TWL_STATUS_NONE  0x2000
+
 class WiFiManagerParameter {
   public:
-    /*
-        Create custom parameters that can be added to the WiFiManager setup web pages
-        @id is used for HTTP queries and must not contain spaces nor other special characters
-    */
     WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags = WFM_LABEL_DEFAULT);
     WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, uint8_t flags = WFM_LABEL_DEFAULT);
     WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, const char *custom, uint8_t flags = WFM_LABEL_DEFAULT);
@@ -124,13 +161,14 @@ class WiFiManagerParameter {
     WiFiManagerParameter(const char *(*CustomHTMLGenerator)(const char *, int), uint8_t flags = 0);
     ~WiFiManagerParameter();
 
-    const char *getID() const;
-    const char *getValue() const;
-    const char *getLabel() const;
-    int         getValueLength() const;
-    uint8_t     getFlags() const;
-    virtual const char *getCustomHTML() const;
+    const char *getID() const                 { return _id; };
+    const char *getValue() const              { return _value; };
+    const char *getLabel() const              { return _label; };
+    int         getValueLength() const        { return _length; };
+    uint8_t     getFlags() const              { return _flags; };
+    virtual const char *getCustomHTML() const { return _customHTML; };
     void        setValue(const char *defaultValue, int length);
+    void        setValue(const char *defaultValue);
 
   protected:
     void init(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags);
@@ -142,7 +180,7 @@ class WiFiManagerParameter {
     const char *_label;
     union {
         char       *_value;
-        const char *(*_customHTMLGenerator)(const char *, int op);
+        const char *(*_customHTMLGenerator)(const char *, int);
     };
     int         _length;
     uint8_t     _flags;
@@ -163,107 +201,101 @@ class WiFiManager
     ~WiFiManager();
     void WiFiManagerInit();
 
-    // auto connect to saved wifi, or custom, and start config portal on failures
-    bool          autoConnect(const char *ssid, const char *pass, const char *apName, const char *apPassword = NULL);
+    // Connect to given wifi network, and fall-back to AP mode on fail
+    bool          wifiConnect(const char *ssid, const char *pass, const char *bssid, const char *apName, const char *apPassword = NULL);
 
-    // manually start the config portal (AP mode)
-    bool          startConfigPortal(const char *apName, const char *apPassword = NULL,
-                            const char *ssid = NULL, const char *pass = NULL);
-
-    // manually stop the config portal if started manually, stop immediatly
-    bool          stopConfigPortal();
-
-    // manually start the web portal (STA/connected) (=same as Config Portal in AP mode)
+    // Start/stop the web portal in STA mode. Note: Web is not started by wifiConnect().
     void          startWebPortal();
-
-    // manually stop the web portal if started manually (used for when connected)
     void          stopWebPortal();
 
-    // Run webserver processing. Param: Do handle webserver, or skip
-    void          process(bool handleWeb = true);
+    // Start/stop the AP mode and Web Portal
+    bool          startAPModeAndPortal(const char *apName, const char *apPassword = NULL,
+                            const char *ssid = NULL, const char *pass = NULL, const char *bssid = NULL);
+    bool          stopAPModeAndPortal();
 
-    // disconnect wifi
-    bool          disconnect();
+    // loop() function: Run webserver and DNS processing. Param: Do handle web requests, or skip
+    void          process(bool handleWeb = true);
 
     // Disable WiFi all together (result: WiFi mode = WIFI_OFF if in STA; in AP mode only if waitForOff = true)
     void          disableWiFi(bool waitForOFF = true);
 
     // allocate numParms entries in params array (overrules WIFI_MANAGER_MAX_PARAMS)
-    void          allocParms(int numParms);
+    void          allocParms(int idx, int numParms)     { _max_params[idx] = numParms; };
 
     // adds a custom parameter, returns false on failure
-    bool          addParameter(WiFiManagerParameter *p);
+    bool          addParameter(int idx, WiFiManagerParameter *p);
 
     // returns the list of Parameters
-    WiFiManagerParameter** getParameters();
+    WiFiManagerParameter** getParameters(int idx)       { return _params[idx];} ;
 
     // returns the Parameters Count
-    int           getParametersCount();
-
-    // same as above for param2
-    #ifdef WM_PARAM2
-    void          allocParms2(int numParms);
-    bool          addParameter2(WiFiManagerParameter *p);
-    WiFiManagerParameter** getParameters2();
-    int           getParameters2Count();
-    #endif
-
-    // same as above for WiFi Configuration page
-    void          allocWiFiParms(int numParms);
-    bool          addWiFiParameter(WiFiManagerParameter *p);
-    WiFiManagerParameter** getWiFiParameters();
-    int           getWiFiParametersCount();
+    int           getParametersCount(int idx)           { return _paramsCount[idx]; };
 
     // SET CALLBACKS
 
     // called after AP mode and config portal has started
     #ifdef WM_APCALLBACK
-    void          setAPCallback(void(*func)(WiFiManager*));
+    void          setAPCallback(void(*func)(WiFiManager*))
+                                  { _apcallback = func; };
     #endif
 
     // called after wifi hw init, but before connection attempts
     #ifdef WM_PRECONNECTCB
-    void          setPreConnectCallback(void(*func)());
+    void          setPreConnectCallback(void(*func)())
+                                  { _preconnectcallback = func; };
     #endif
 
     #ifdef WM_EVENTCB
-    void          setWiFiEventCallback(void(*func)(WiFiEvent_t event));
+    void          setWiFiEventCallback(void(*func)(WiFiEvent_t event))
+                                  { _wifieventcallback = func; };
     #endif
 
     // called after webserver has started
-    void          setWebServerCallback(void(*func)());
+    void          setWebServerCallback(void(*func)())
+                                  { _webservercallback = func; };
 
     // called when saving params-in-wifi before anything else happens
-    void          setPreSaveWiFiCallback(void(*func)());
+    void          setPreSaveWiFiCallback(void(*func)())
+                                  { _presavewificallback = func; };
 
     // called when wifi settings have been read from the webform
-    void          setSaveWiFiCallback(void(*func)(const char *, const char *));
+    void          setSaveWiFiCallback(void(*func)(const char *, const char *, const char *))
+                                  { _savewificallback = func; };
 
     // called when saving params before anything else happens
     #ifdef WM_PRESAVECB
-    void          setPreSaveParamsCallback(void(*func)(int));
+    void          setPreSaveParamsCallback(void(*func)(int))
+                                  { _presaveparamscallback = func; };
     #endif
 
     // called when saving either params-in-wifi or params page
-    void          setSaveParamsCallback(void(*func)(int));
+    void          setSaveParamsCallback(void(*func)(int))
+                                  { _saveparamscallback = func; };
 
     // called just before/after OTA update
-    void          setPreOtaUpdateCallback(void(*func)());
-		void          setPostOtaUpdateCallback(void(*func)(bool));
+    void          setPreOtaUpdateCallback(void(*func)())
+                                  { _preotaupdatecallback = func; };
+		void          setPostOtaUpdateCallback(void(*func)(bool))
+		                              { _postotaupdatecallback = func; };
 
     // add stuff to the main menu; second one to give WM the length for buf sizing
-  	void          setMenuOutCallback(void(*func)(String &page, unsigned int appExtraSize));
-  	void          setMenuOutLenCallback(int(*func)());
+  	void          setMenuOutCallback(void(*func)(String &page, unsigned int appExtraSize))
+  	                              { _menuoutcallback = func; };
+  	void          setMenuOutLenCallback(int(*func)())
+  	                              { _menuoutlencallback = func; };
 
   	// app-specific replacement for delay()
-  	void          setDelayReplacement(void(*func)(unsigned int));
+  	void          setDelayReplacement(void(*func)(unsigned int))
+  	                              { _delayreplacement = func; };
 
   	// called to give app chance to update stuff when WM op might take a while
   	// WM_LP_xxx given as arg
-  	void          setGPCallback(void(*func)(int));
+  	void          setGPCallback(void(*func)(int))
+  	                              { _gpcallback = func; };
 
   	// Pre-scan, allows app to forbid scan (use cache, or display no list)
-  	void          setPreWiFiScanCallback(bool(*func)());
+  	void          setPreWiFiScanCallback(bool(*func)())
+  	                              { _prewifiscancallback = func; };
 
   	// Set connection parameters
 
@@ -280,29 +312,26 @@ class WiFiManager
 
     // sets a custom ip /gateway /subnet configuration
     #ifdef WM_AP_STATIC_IP
-    void          setAPStaticIPConfig(IPAddress ip, IPAddress gw, IPAddress sn);
+    void          setAPStaticIPConfig(IPAddress& ip, IPAddress& gw, IPAddress& sn);
     #endif
 
     // sets config for a static IP
-    void          setSTAStaticIPConfig(IPAddress ip, IPAddress gw, IPAddress sn);
+    void          setSTAStaticIPConfig(IPAddress& ip, IPAddress& gw, IPAddress& sn);
 
     // sets config for a static IP with DNS
-    void          setSTAStaticIPConfig(IPAddress ip, IPAddress gw, IPAddress sn, IPAddress dns);
+    void          setSTAStaticIPConfig(IPAddress& ip, IPAddress& gw, IPAddress& sn, IPAddress& dns);
 
     // set a custom hostname, sets sta and ap dhcp client id for esp32
     // Given hostname is not copied but referenced by pointer
-    void          setHostname(const char * hostname);
+    void          setHostname(const char * hostname)
+                                  { _hostname = hostname; };
 
     // set ap channel
-    void          setWiFiAPChannel(int32_t channel);
+    void          setWiFiAPChannel(int32_t channel)
+                                  { _apChannel = channel; };
 
     // set ap max clients
     void          setWiFiAPMaxClients(int max); // default 4
-
-    // clean connect, always disconnect before connecting
-    #ifdef WM_ADDLSETTERS
-    void          setCleanConnect(bool enable); // default true
-    #endif
 
     // set port of webserver, 80
     #ifdef WM_ADDLSETTERS
@@ -314,41 +343,58 @@ class WiFiManager
     // set custom menu items and order
     // docopy can be false if the menu array is a global const (that does not
     // get destructed) that also has WM_MENU_END at the end.
-    void          setMenu(const int8_t *menu, uint8_t size, bool doCopy = true);
+    void          setMenu(const int8_t *menu, unsigned int size, bool doCopy = true);
 
     // set the webapp title, default WiFiManager
     // Given title is not copied but referenced by pointer
-    void          setTitle(const char *title);
+    void          setTitle(const char *title)
+                                  { _title = title; };
+
+    #ifdef WM_FW_HW_VER
+    void          setReqFirmwareVersion(const char *x);
+    #endif
 
     // show audio upload on Update page
-    void          showUploadContainer(bool enable, const char *contName, bool showMsg = false);
+    #ifdef WM_UPLOAD
+    void          showUploadContainer(bool enable, const char *contName, const char *contVer, bool isInstalled);
+    #endif
+
+    // set download link for updates
+    void          setDownloadLink(const char *theLink, bool haveCV, const char *nv);
 
     // Custom
-    void          setCarMode(bool enable);
+    void          setCarMode(bool enable)
+                                  { _carMode = enable; };
 
     // add custom html at inside <head> for all pages
-    void          setCustomHeadElement(const char* html);
+    void          setCustomHeadElement(const char* html)
+                                  { _customHeadElement = html; };
 
     // if this is set, customise style
-    void          setCustomMenuHTML(const char* html);
+    void          setCustomMenuHTML(const char* html)
+                                  { _customMenuHTML = html; };
 
     // if true, always show static net inputs, IP, subnet, gateway, else only show if set via setSTAStaticIPConfig
     #ifdef WM_ADDLSETTERS
-    void          setShowStaticFields(bool alwaysShow);
+    void          setShowStaticFields(bool alwaysShow)
+                                  { _staShowStaticFields = doShow; };
     #endif
 
     // if true, always show static dns, esle only show if set via setSTAStaticIPConfig
     #ifdef WM_ADDLSETTERS
-    void          setShowDnsFields(bool alwaysShow);
+    void          setShowDnsFields(bool alwaysShow)
+                                  { _staShowDns = doShow; };
     #endif
 
     // get last connection result, includes autoconnect and wifisave
     #ifdef WM_ADDLGETTERS
-    uint8_t       getLastConxResult();
+    uint8_t       getLastConxResult()
+                                  { return _lastconxresult; };
     #endif
 
     // gets number of retries for autoconnect, force retry after wait failure exit
-    uint8_t       getConnectRetries();
+    uint8_t       getConnectRetries()
+                                  { return _connectRetries; };
 
     // make some HTML templates available for app
     const char *  getHTTPSTART(int& titleStart);
@@ -358,23 +404,22 @@ class WiFiManager
 
     // check if config portal is active (true)
     #ifdef WM_ADDLGETTERS
-    bool          getConfigPortalActive();
+    bool          getAPPortalActive()
+                                  { return APPortalActive; };
     #endif
 
     // check if web portal is active (true)
-    bool          getWebPortalActive();
-
-    // get hostname helper
-    String        getWiFiHostname();
+    bool          getWebPortalActive()
+                                  { return STAPortalActive; };
 
     bool          getBestAPChannel(int32_t& channel, int& quality);
 
     // Transitional function to read out the NVS-stored credentials
     void          getStoredCredentials(char *ssid, size_t slen, char *pass, size_t plen);
 
-    std::unique_ptr<DNSServer> dnsServer;
+    std::unique_ptr<DNSServer> dnsServer = NULL;
 
-    std::unique_ptr<WebServer> server;
+    std::unique_ptr<WebServer> server = NULL;
 
     /////////////////////////////////////////////////////////////////////////////
     //                                 Private                                 //
@@ -396,51 +441,60 @@ class WiFiManager
     IPAddress     _sta_static_sn;
     IPAddress     _sta_static_dns;
 
-    uint8_t       _lastconxresult         = WL_IDLE_STATUS; // store last result when doing connect operations
+    uint16_t      _lastconxresult         = TWL_STATUS_NONE; // store last result when doing connect operations
+    bool          _badBSSID               = false;
     int           _numNetworks            = 0;
-    int16_t       _numNetworksAsync       = 0;
     unsigned long _lastscan               = 0; // ms for timing wifi scans
     unsigned long _bestChCacheTime        = 0;
     uint16_t      _bestChCache            = 0;
+
+    volatile uint32_t _WiFiEventMask      = 0;
+    volatile int32_t  _numNetworksAsync   = 0;
 
     // SSIDs and passwords
     char          _apName[34]             = "";
     char          _apPassword[66]         = "";
     char          _ssid[34]               = "";    // currently used ssid
     char          _pass[66]               = "";    // currently used psk
+    char          _bssid[18]              = "";    // currently used bssid
 
     const char *  _hostname               = "";    // hostname for dhcp, and/or MDNS
 
     const char *  _title                  = NULL;  // app title
 
     // options & flags
-    unsigned long _connectTimeout         = 0;     // ms stop trying to connect to ap if set
+    unsigned long _connectTimeout         = 7000;  // ms stop trying to connect to ap
 
-    bool          _cleanConnect           = true;  // disconnect before connect in connectwifi, increases stability on connects
-    #if 0
-    bool          _disableSTA             = false; // disable sta when starting ap, always
-    bool          _disableSTAConn         = true;  // disable sta when starting ap, if sta is not connected ( stability )
-    #endif
     int32_t       _apChannel              = 0;     // default channel to use for ap, 0 for auto
     int           _ap_max_clients         = 4;     // softap max clients
     uint16_t      _httpPort               = 80;    // port for webserver
     uint8_t       _connectRetries         = 1;     // number of sta connect retries, force reconnect, wait loop (connectimeout) does not always work and first disconnect bails
 
     wifi_event_id_t wm_event_id           = 0;
-    static uint8_t  _eventlastconxresult;          // for wifi event callback
-    static uint16_t _WiFiEventMask;                // for wifi event callback
-    bool          _wifiOffFlag            = false;
+    int           _wifiOffFlag            = 0;
+    unsigned long _wifiOffNow             = 0;
 
     int           _minimumRSSI            = -1000; // filter wifiscan ap by this rssi
     bool          _staShowStaticFields    = true;
     bool          _staShowDns             = true;
 
+    #ifdef WM_UPLOAD
     bool          _showUploadSnd          = false; // Show upload audio on Update page
-    bool          _showContMsg            = false;
     char          _sndContName[8]         = "";    // File name of BIN file to upload
+    const char *  _sndContVer             = NULL;
+    bool          _sndIsInstalled         = false;
+    #endif
+
+    #ifdef WM_FW_HW_VER
+    const char *  _rfw                    = NULL;
+    #endif
 
     const char *  _customHeadElement      = NULL;  // store custom head element html from user inside <head>
-    const char *  _customMenuHTML         = NULL;  // store custom element html from user inside menu
+    const char *  _customMenuHTML         = NULL;  // store custom element html from user inside root menu
+
+    const char *  _downloadLink           = NULL;
+    const char *  _nv                     = NULL;
+    bool          _vd                     = false;
 
     // internal options
     unsigned int  _scancachetime          = 30000; // ms cache time for preload scans
@@ -449,18 +503,21 @@ class WiFiManager
 
     bool          _carMode                = false; // Custom
 
-    bool          _hasBegun               = false; // flag wm loaded,unloaded
+    volatile bool _beginSemaphore         = false;
+
+    #ifdef WM_MDNS
+    bool          _mdnsStarted            = false;
+    #endif
 
     void          _begin();
     void          _end();
 
-	  void          _delay(unsigned int mydel);
-
 	  bool          CheckParmID(const char *id);
 	  bool          _addParameter(int idx, WiFiManagerParameter *p);
 
-    void          setupConfigPortal();
-    bool          shutdownConfigPortal();
+	  uint8_t       connectWifi(const char *ssid, const char *pass, const char *bssid = NULL);
+    uint8_t       waitForConnectResult(bool haveStatic, unsigned long timeout, bool& timedout, bool& DHCPtimeout);
+    bool          setStaticConfig();
 
     bool          startAP();
 
@@ -468,20 +525,16 @@ class WiFiManager
     void          setupHTTPServer();
     void          setupMDNS();
 
-    uint8_t       connectWifi(const char *ssid, const char *pass);
-    bool          setStaticConfig();
-    bool          wifiConnectNew(const char *ssid, const char *pass);
-
-    uint8_t       waitForConnectResult(bool haveStatic);
-    uint8_t       waitForConnectResult(bool haveStatic, uint32_t timeout);
+    bool          shutdownWebPortal();
 
     bool          wifiSTAOn();
     bool          wifiSTAOff();
-    bool          waitEvent(uint16_t mask, unsigned long timeout);
+    bool          waitEvent(uint32_t mask, unsigned long timeout);
 
-    // webserver handlers
-	  unsigned int  getHTTPHeadLength(const char *title, bool includeMSG = false, bool includeQI = false);
-	  void          getHTTPHeadNew(String& page, const char *title, bool includeMSG = false, bool includeQI = false);
+    // Webserver handlers
+    unsigned int  calcTitleLen(const char *title);
+	  unsigned int  getHTTPHeadLength(const char *title, uint32_t incFlags = 0);
+	  void          getHTTPHeadNew(String& page, const char *title, uint32_t incFlags = 0);
 
 	  unsigned int  getParamOutSize(WiFiManagerParameter** params,
                         int paramsCount, unsigned int& maxItemSize);
@@ -492,17 +545,19 @@ class WiFiManager
 	  int           reportStatusLen(bool withMac = false);
     void          reportStatus(String &page, unsigned int estSize = 0, bool withMac = false);
 
-    void          HTTPSend(const String &content);
+    void          send_cc();
+    void          HTTPSend(const String &content, bool sendCC);
 
 	  // Root menu
 	  int           getMenuOutLength(unsigned int& appExtraSize);
     void          getMenuOut(String& page, unsigned int appExtraSize);
-    unsigned int  calcRootLen(unsigned int& headSize, unsigned int& repSize, unsigned int& appExtraSize);
-    void          buildRootPage(String& page, unsigned int headSize, unsigned int repSize, unsigned int appExtraSize);
+    unsigned int  calcRootLen(unsigned int& repSize, unsigned int& appExtraSize);
+    void          buildRootPage(String& page, unsigned int repSize, unsigned int appExtraSize);
     void          handleRoot();
 
   	// WiFi page
-  	int           getScanItemStart();
+  	int16_t       WiFi_waitForScan();
+  	int16_t       WiFi_scanNetworks(bool force, bool async);
   	void          sortNetworks(int n, int *indices, int& haveDupes, bool removeDupes);
   	unsigned int  getScanItemsLen(int n, bool scanErr, int *indices, unsigned int& maxItemSize, int& stopAt, bool showall);
     void          getScanItemsOut(String& page, int n, bool scanErr, int *indices, unsigned int maxItemSize, bool showall);
@@ -513,7 +568,7 @@ class WiFiManager
 	  void          handleWifi(bool scan);
     void          handleWifiSave();
 
-  	// Param page
+  	// Param pages
   	int	  	      calcParmPageSize(int aidx, unsigned int& maxItemSize, const char *title, const char *action);
   	void          _handleParam(int aidx, const char *title, const char *action);
   	void          _handleParamSave(int aidx, const char *title);
@@ -522,6 +577,10 @@ class WiFiManager
     #ifdef WM_PARAM2
   	void          handleParam2();
   	void          handleParam2Save();
+  	#ifdef WM_PARAM3
+  	void          handleParam3();
+  	void          handleParam3Save();
+  	#endif
   	#endif
 
   	// OTA Update page
@@ -532,68 +591,59 @@ class WiFiManager
   	// Other
   	void          handleNotFound();
 
-    void          processConfigPortal(bool handleWeb);
+    // get default ap esp uses, esp_chipid
+    void          getDefaultAPName(char *apname);
 
-    // wifi platform abstractions
-    void          WiFi_installEventHandler();
-    String        WiFi_SSID() const;
-
-    int16_t       WiFi_scanNetworks(bool force, bool async);
-	  int16_t       WiFi_waitForScan();
-	  void          WiFi_scanComplete(int16_t networksFound);
-
-    void          WiFiEvent(WiFiEvent_t event, arduino_event_info_t info);
-
-    // helper for html
+    // Helpers for html
     String        htmlEntities(String& str, bool forprint = false);
 	  int           htmlEntitiesLen(String& str, bool forprint = false);
 	  bool          checkSSID(String& ssid);
 
 	  long          wmmap(long x);
-
-    // get default ap esp uses, esp_chipid
-    void          getDefaultAPName(char *apname);
+	  void          _delay(unsigned int mydel);
 
     // internal version
     bool          _getbestapchannel(int32_t& channel, int& quality);
 
-    // reboot esp32
-    void          reboot();
+    // Wifi events
+    void          WiFiEvent(WiFiEvent_t event, arduino_event_info_t info);
+    void          WiFi_installEventHandler();
+    void          andWiFiEventMask(uint32_t to_and);
 
-    // flags
-    bool          configPortalActive  = false;
-    bool          webPortalActive     = false;
-
-    // WiFiManagerParameter
-    int           _paramsCount[WM_PARAM_ARRS]     = { 0 };
-    int           _max_params[WM_PARAM_ARRS];
-    WiFiManagerParameter** _params[WM_PARAM_ARRS] = { NULL };
+    // Flags
+    bool          APPortalActive       = false;
+    bool          STAPortalActive      = false;
 
     bool          _uplError            = false;
 
-    // callbacks
+    // WiFiManagerParameters
+    int           _paramsCount[WM_PARAM_ARRS]     = { 0 };
+    int           _max_params[WM_PARAM_ARRS];     // Initialized in WiFiManagerInit()
+    WiFiManagerParameter** _params[WM_PARAM_ARRS] = { NULL };
+
+    // Callbacks
     #ifdef WM_APCALLBACK
-    void (*_apcallback)(WiFiManager*);
+    void (*_apcallback)(WiFiManager*)                                   = NULL;
     #endif
-    void (*_webservercallback)(void);
-    void (*_savewificallback)(const char *, const char *);
-    void (*_presavewificallback)(void);
+    void (*_webservercallback)(void)                                    = NULL;
+    void (*_savewificallback)(const char *, const char *, const char *) = NULL;
+    void (*_presavewificallback)(void)                                  = NULL;
     #ifdef WM_PRESAVECB
-    void (*_presaveparamscallback)(int);
+    void (*_presaveparamscallback)(int)                                 = NULL;
     #endif
-    void (*_saveparamscallback)(int);
-    void (*_preotaupdatecallback)(void);
-    void (*_postotaupdatecallback)(bool);
-	  void (*_menuoutcallback)(String &page, unsigned int appExtraSize);
-	  int  (*_menuoutlencallback)(void);
-	  void (*_delayreplacement)(unsigned int);
-	  void (*_gpcallback)(int);
-	  bool (*_prewifiscancallback)(void);
+    void (*_saveparamscallback)(int)                                    = NULL;
+    void (*_preotaupdatecallback)(void)                                 = NULL;
+    void (*_postotaupdatecallback)(bool)                                = NULL;
+	  void (*_menuoutcallback)(String&, unsigned int)                     = NULL;
+	  int  (*_menuoutlencallback)(void)                                   = NULL;
+	  void (*_delayreplacement)(unsigned int)                             = NULL;
+	  void (*_gpcallback)(int)                                            = NULL;
+	  bool (*_prewifiscancallback)(void)                                  = NULL;
 	  #ifdef WM_PRECONNECTCB
-	  void (*_preconnectcallback)(void);
+	  void (*_preconnectcallback)(void)                                   = NULL;
 	  #endif
 	  #ifdef WM_EVENTCB
-	  void (_wifieventcallback)(WiFiEvent_t event);
+	  void (_wifieventcallback)(WiFiEvent_t event)                        = NULL;
 	  #endif
 
     #ifdef _A10001986_DBG

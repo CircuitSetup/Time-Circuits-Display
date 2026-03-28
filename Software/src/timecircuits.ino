@@ -2,12 +2,12 @@
  * -------------------------------------------------------------------
  * CircuitSetup.us Time Circuits Display
  * (C) 2021-2022 John deGlavina https://circuitsetup.us
- * (C) 2022-2023 Thomas Winischhofer (A10001986)
+ * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
- * https://tcd.backtothefutu.re
+ * https://tcd.out-a-ti.me
  *
  * -------------------------------------------------------------------
- * License: MIT
+ * License: MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -19,6 +19,25 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * In addition, the following restrictions apply:
+ *
+ * 1. The Software and any modifications made to it may not be used 
+ * for the purpose of training or improving machine learning algorithms, 
+ * including but not limited to artificial intelligence, natural 
+ * language processing, or data mining. This condition applies to any 
+ * derivatives, modifications, or updates based on the Software code. 
+ * Any usage of the Software in an AI-training dataset is considered a 
+ * breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for 
+ * training or improving machine learning algorithms, including but 
+ * not limited to artificial intelligence, natural language processing, 
+ * or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these 
+ * restrictions will be subject to legal action and may be held liable 
+ * for any damages resulting from such use.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
@@ -30,20 +49,96 @@
  */
 
 /*
+ * Build instructions (for Arduino IDE)
  * 
- * Needs ESP32 Arduino framework: https://github.com/espressif/arduino-esp32
+ * - Install the Arduino IDE
+ *   https://www.arduino.cc/en/software
+ *    
+ * - This firmware requires the "ESP32-Arduino" framework. To install this framework, 
+ *   in the Arduino IDE, go to "File" > "Preferences" and add the URL   
+ *   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+ *   - or (if the URL above does not work) -
+ *   https://espressif.github.io/arduino-esp32/package_esp32_index.json
+ *   to "Additional Boards Manager URLs". The list is comma-separated.
+ *   
+ * - Go to "Tools" > "Board" > "Boards Manager", then search for "esp32", and install 
+ *   the latest 2.x version by Espressif Systems. Versions >=3.x are not supported.
+ *   Detailed instructions for this step:
+ *   https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html
+ *   
+ * - Go to "Tools" > "Board: ..." -> "ESP32 Arduino" and select your board model. For
+ *   CircuitSetup original boards, select "NodeMCU-32S".
+ *   
+ * - If you want Arduino IDE to upload the firmware via USB (which is only required for
+ *   fresh ESP32 boards; if a previous version of the firmware is installed on your
+ *   board, you can update through the Config Portal and don't need an USB connection):
+ *   
+ *   Connect your ESP32 board using a suitable USB cable.
+ *   
+ *   Note that ESP32 boards come in two flavors that differ in which serial communications 
+ *   chip is used: Either SiLabs CP210x or WCH CH340. CircuitSetup uses the CP210x.
+ * 
+ *   Mac:
+ *   * CP210x: Since ca. 10.15.7, MacOS comes with a driver for the CP210x. For earlier 
+ *     versions of MacOS, installing a driver is required:
+ *     https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers?tab=downloads
+ *     The port ("Tools -> "Port" in Arduino IDE) is named 
+ *     - /dev/cu.usbserial-xxxx when using the Apple driver, 
+ *     - /dev/cu.SLAB_USBtoUART when using the SiLabs driver. 
+ *     The maximum upload speed ("Tools" -> "Upload Speed" in Arduino IDE) can be used.
+ *     Note: The SiLabs driver has a bug that affects TCD Control Boards V1.4 and later.
+ *     Firmware uploads will fail ("No data received"). Use the Apple driver for those 
+ *     boards.
+ *   * CH340: This chip is supported out-of-the-box since Mojave. 
+ *     The port ("Tools -> "Port" in Arduino IDE) is named /dev/cu.usbserial-XXXX, and 
+ *     the maximum upload speed is 460800.
+ * 
+ *   Windows:
+ *   * CP210x: Current Windows versions may come with a suitable driver. If the chip 
+ *     is not recognized (ie no Port is created), a driver needs to be installed:
+ *     https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers?tab=downloads
+ *   * CH340: Windows will install a driver when connecting the board; in case it 
+ *     doesn't or it fails doing so, please install this driver:
+ *     http://www.wch-ic.com/downloads/CH341SER_ZIP.html
+ *     Note that the maximum upload speed for the CH340 is apparently 460800.
+ *   After driver installation, connect your ESP32, start the Device Manager, expand 
+ *   the "Ports (COM & LPT)" list and look for the port with the ESP32 name. Choose 
+ *   this port under "Tools" -> "Port" in Arduino IDE.
  *
- * Library dependencies:
- *   - ArduinoJSON >= 6.19: https://arduinojson.org/v6/doc/installation/
- * 
- * 
- * Detailed installation and compilation instructions are here:
- * https://github.com/CircuitSetup/Time-Circuits-Display/wiki/9.-Programming-&-Upgrading-the-Firmware-(ESP32)
+ * - Install required libraries. In the Arduino IDE, go to "Tools" -> "Manage Libraries" 
+ *   and install the following library:
+ *   - ArduinoJSON (>= 6.19): https://arduinojson.org/v6/doc/installation/
+ *     (Versions 7 and on of this lib are much bigger, so it might happen that the 
+ *     binary does not fit the ESP32's flash memory. Use v6 instead.)
+ *
+ * - Download the complete firmware source code:
+ *   https://github.com/realA10001986/Time-Circuits-Display/archive/refs/heads/main.zip
+ *   Extract this file somewhere. Enter the "timecircuits-A10001986" folder and 
+ *   double-click on "timecircuits-A10001986.ino". This opens the firmware in the
+ *   Arduino IDE.
+ *
+ * - For USB connected ESP32 boards: 
+ *   Go to "Sketch" -> "Upload" to compile and upload the firmware to your ESP32 board.
+ * - For OTA updates via the Config Portal:
+ *   Go to "Sketch" -> "Export compiled Binary" to compile the firmware; a ".bin" file 
+ *   is created in the source directory, which can then be uploaded through the Config
+ *   Portal.
+ *   
+ * - Install the sound-pack: 
+ *   - Go to Config Portal, click "Update" and upload the sound-pack (TCDA.bin, extracted
+ *     from install/sound-pack-xxxx.zip) through the bottom file selector.
+ *     A FAT32 (not ExFAT!) formatted SD card must be present in the slot during this 
+ *     operation.
+ *   Alternatively:
+ *   - Copy TCDA.bin to the top folder of a FAT32 (not ExFAT!) formatted SD card (max 
+ *     32GB) and put this card into the slot while the TCD is powered down. 
+ *   - Now power-up. The sound-pack will now be installed. When finished, the TCD will 
+ *     reboot.
  */
 
 /*  Changelog
- *
-  *  2026/02/16 (A10001986) [3.20]
+ *          
+ *  2026/02/16 (A10001986) [3.20]
  *    - New file format for secondary and IP settings. This version of the firmware 
  *      converts old to new.
  *    - Add geolocation: Display GPS coordinates in Destination and Last Time Dep
@@ -85,10 +180,11 @@
  *      stutter sometimes)
  *    - NTP/GPS time sync logic enhancements
  *    - Various code optimizations (audio, GPS, network, etc)
- *  2025/11/29 (A10001986) [3.10] [requires Remote 1.14 for proper operation]
+ *  2025/11/29 (A10001986) [3.10]
  *    - Play user-provided "ttcancel.mp3" if TT is cancelled through brake on
  *      Remote
  *    - Make TCD<->Remote communication more robust
+ *    * Requires Remote 1.14 for proper operation in combination with Remote
  *  2025/11/28 (A10001986)
  *    - P0: Fix speed-jumps on Remote when hitting brake (Remote and TCD firmware)
  *  2025/11/27 (A10001986)
@@ -232,7 +328,7 @@
  *    - WM: Add "show all", add channel info (when all are shown) and proposed
  *      AP WiFi channel on WiFi Configuration page.
  *    - WM: Use events when connecting, instead of delays
- *  2025/10/07 (A10001986) [3.5.0]
+ *  2025/10/07 (A10001986) [3.5]
  *    - Add emergency firmware update via SD (for dev purposes)
  *    - WM fixes (Upload, etc)
  *  2025/10/06 (A10001986)
@@ -283,7 +379,7 @@
  *  2025/09/17-18 (A10001986)
  *    - WiFi Manager: Remove some more unused code to reduce bin size. Reduce 
  *      HTML output by removing "quality icon" styles where not needed. 
- *  2025/09/15 (A10001986) [3.3.0]
+ *  2025/09/15 (A10001986) [3.3]
  *    - Refine mp3 upload facility; allow deleting files from SD by prefixing
  *      filename with "delete-".
  *    - WiFi manager: Remove lots of <br> tags; makes Safari display the
@@ -327,11 +423,11 @@
  *      losing the fix) was < 4, it goes to "00" directly. It's nicer to see "--" in a
  *      tunnel than "00", and the exhibition situation (stationary car, indoors) is
  *      still covered.
- *  2024/11/15 (A10001986)
- *    - Set version number to 3.2.000, in order define a lower limit for Remote
+ *  2024/11/15 (A10001986) [3.2.000]
+ *    - Set version number to 3.2.000, in order define a clear limit for Remote
  *      compatibility. No changes.
  *  2024/11/07 (A10001986)
- *    - GPS: Display "0" when there is no fix. Old behavior (--) can be compile-time
+ *    - GPS: Display "00" when there is no fix. Old behavior (--) can be compile-time
  *      configured. Use case: Indoor presentation....
  *  2024/10/27 (A10001986)
  *    - BTTFN: Do regular speed broadcasts every ~3 secs even if speed didn't change.
@@ -415,7 +511,7 @@
  *    - Allow CP access if RTC not found
  *    - Switched keypad sounds to wav for more immediate play-back
  *  2024/05/12-13 (A10001986)
- *    - Some preparations for TCD CB 1.4
+ *    - Some preparations for TCD CB 1.4.5
  *  2024/05/09 (A10001986)
  *    - Pre-init ENTER button without pull up
  *  2024/04/12 (A10001986)
@@ -468,7 +564,7 @@
  *    - Do not "return from time travel" if not on a time travel.
  *    - Exhibition mode: Leave timeDifference alone when time travelling in Exh.
  *      mode. Previously, a time travel was performed for local time and Exh. mode
- *      time simultaniously, which was confusing then disabling Exh. mode.
+ *      time simultaneously, which was confusing then disabling Exh. mode.
  *    - Don't call old waitAudioDone[now: Menu] from outside of menu
  *  2024/02/07 (A10001986)
  *    - Config Portal: Propose most used time-zones as datalists for time zone
@@ -499,7 +595,7 @@
  *    - Reformat FlashFS only if audio file installation fails due to a write error
  *    - Some minor bin-size-crunching
  *    - Allow sound installation in Flash-RO-mode
- *  2024/01/22 (A10001986)
+ *  2024/01/22 (A10001986) [released by CS as 3.0.0]
  *    - Save Exh-mode settings when reformatting Flash FS or when copying from
  *      or to SD
  *  2024/01/21 (A10001986)
@@ -616,7 +712,7 @@
  *    - Prepare support for MS8607 temp+hum sensor (yet untested)
  *  2023/11/08  (A10001986)
  *    - Fixes for rot enc (direction; some logic)
- *  2023/11/06-07 (A10001986)
+ *  2023/11/06-07 (A10001986) [released by CS as 2.9.1]
  *    - Abort audio file installer on first error
  *    - Add TSL2591 light sensor support (yet untested), since 2561 is discontinued.
  *    - Fixes for rotatry encoder
@@ -636,7 +732,7 @@
  *  2023/11/02 (A10001986)
  *    * WiFiManager: Disable pre-scanning of WiFi networks when starting the CP.
  *      Scanning is now only done when accessing the "Configure WiFi" page.
- *      To do that in your own installation, set _preloadwifiscan to false
+ *      To do that in your own build-chain, set _preloadwifiscan to false
  *      in WiFiManager.h
  *  2023/10/31 (A10001986)
  *    - Further defer starting the Config Portal in some cases to avoid WiFi scan 
@@ -644,7 +740,7 @@
  *  2023/10/30 (A10001986)
  *    - BTTFN: Clients can now discover the TCD's IP address through the TCD's 
  *      hostname. Uses multicast, not DNS.
- *  2023/10/10 (A10001986)
+ *  2023/10/10 (A10001986) [released by CS as 2.9]
  *    - Fix P1 length sent to BTTFN clients
  *  2023/10/05 (A10001986)
  *    - Colons on in night mode
@@ -657,8 +753,8 @@
  *    - Don't use speedo if not detected
  *  2023/10/02 (A10001986)
  *    - Exhibition mode: Honor "Make time travels persistent" option properly
- *  2023/09/30 (A10001986) [released by CS as 2.9]
- *    - Make remote commands for FC, SID, PD 32bit
+ *  2023/09/30 (A10001986)
+ *    - Make remote commands for FC, SID, PG 32bit
  *    - Exhibition mode: Make persistent over reboots/power-downs
  *    * Exhibition mode feature enabled in precompiled binary
  *  2023/09/26 (A10001986)
@@ -698,7 +794,7 @@
  *  2023/09/06 (A10001986)
  *    - Change link in CP
  *  2023/09/04 (A10001986)
- *    - Add option to signal time travel on TT_OUT/IO13 without 5 seconds lead. This
+ *    - Add option to signal time travel on TT_OUT/IO14 without 5 seconds lead. This
  *      is for signalling a time travel to third party props. For CircuitSetup
  *      original props (if they are connected by wire) this option must NOT be set.
  *      Time travels are still approx 1.4 seconds delayed (time between button press
@@ -775,13 +871,13 @@
  *  2023/07/07 (A10001986)
  *    - Block WiFi power-saving as long as BTTFN clients are present
  *    - GPS speed: Increase update rate to twice per second for smoother speedo display.
- *      Also, add CP option "Quick GPS updates" for peripherals that poll the TCD for 
+ *      Also, add CP option "Provide GPS speed" for peripherals that poll the TCD for 
  *      speed (such as SID). If neither this nor the option "Display GPS speed" is set, 
  *      GPS rate is every 5 seconds; if either is set, twice per second.
  *    - Extend mere "network polling" into "BTTF network" ("BTTFN"): TCD now not only 
  *      answers to polling requests (time, temp, lux, speed), but also sends notifications
  *      to known clients about time timetravel and alarm. Those notifications are only
- *      sent, if MQTT is disabled or "send commands for other props" is unchecked.
+ *      sent, if MQTT is disabled or "send event notifications" is unchecked.
  *    - BTTFN: Show connected clients in keypad menu (hostname, IP). This helps finding 
  *      out the IP address of other props when they are connected to the TCD's AP.
  *  2023/06/27 (A10001986)
@@ -832,12 +928,12 @@
  *      behavior.
  *  2023/05/23 (A10001986)
  *    - Keypad: 440ENTER deletes timer (4400 still does, too; added for uniformity)
- *  2023/05/22 (A10001986)
- *    - 77mmdd sets reminder to month/day, leaving time unchanged (unless hr and min are 
- *      zero, in which case it sets the reminder to 9am)  
- *    - MusicPlayer: 88 shows currently played song
- *    - 11, 44, 77: If alarm/timer/reminder is unset/off, play regular enter sound, not
- *      the "error" one
+ *  2023/05/22 (A10001986) [released by CS as 2.8]
+ *    - 77mmddENTER sets reminder to month/day, leaving time unchanged (unless hr and 
+ *      min are zero, in which case it sets the reminder to 9am)  
+ *    - MusicPlayer: 88ENTER shows currently played song
+ *    - Keypad: 11, 44, 77: If alarm/timer/reminder is unset/off, play regular enter
+ *      sound, not the "error" one
  *    - If Music Player is active, show "ERROR" for bad/invalid input (since the player
  *      should not be interrupted) (Exception: Programming a Destination Time)
  *  2023/05/21 (A10001986)
@@ -869,9 +965,9 @@
  *    - MQTT: Increase reconnect-attempt-interval over time
  *  2023/05/12 (A10001986)
  *    - Music Player: Fix going to song# when player is off
- *    - MQTT: Add async ping to server before trying to connect. This avoids
- *      "frozen" displays and audio interruptions but requires that the server
- *      actually answers to ping (ICMP) requests.
+ *    - MQTT: Add async ping to server before trying to connect. This avoids "frozen" 
+ *      displays and audio interruptions but requires that the server properly answers 
+ *      to ping (ICMP) requests.
  *  2023/05/11 (A10001986)
  *    - MQTT: Make (re)connection/subscription async on MQTT protocol level
  *    - MQTT: Limit re-connection attempts.
@@ -889,7 +985,7 @@
  *    - JS optimization for CP
  *    - Fix MQTT message scrolling
  *  2023/05/02 (A10001986)
- *    - [Pre-compiled binary: Patch WiFiManager::HTTPSend (avoid duplication of String)]
+ *    * [Pre-compiled binary: Patch WiFiManager::HTTPSend (avoid duplication of String)]
  *    - HA/MQTT: Publish "REENTRY" for external props; fix error in topic scanning;
  *      subscribe two topics at a time.
  *    - time_loop(): Move less timing critical stuff to when there is no half-
@@ -900,7 +996,7 @@
  *    - Using MQTT now disables WiFi power save
  *    - Disable modem sleep to avoid delays in CP and MQTT
  *  2023/04/29 (A10001986)
- *    - BETA: Add HomeAssitant/MQTT 3.1.1 support. MTQQ code by Nicholas O'Leary; adapted,
+ *    - BETA: Add HomeAssitant/MQTT 3.1.1 support. MQTT code by Nicholas O'Leary; adapted,
  *      optimized and minimized by me. Only unencrypted traffic, no TLS/SSL support.
  *      Used in three ways:
  *      1) User can send messages to configurable subscribed topic, which are displayed 
@@ -909,7 +1005,7 @@
  *      reception of a message.
  *      2) User can send commands to TCD (topic "bttf/tcd/cmd"), for example TIMETRAVEL
  *      or RETURN (as in "return from time travel").
- *      3) TCD can trigger time travel via MTQQ (topic "bttf/tcd/pub"). This works like
+ *      3) TCD can trigger time travel via MQTT (topic "bttf/tcd/pub"). This works like
  *      the "external time travel" for wired props.
  *      Broker can be configured using IP or domain, optionally with :xxxx for port
  *      number ("192.168.3.5:1234"); the default port is 1883.  User and password are 
@@ -973,7 +1069,7 @@
  *    - Revisit WiFi reconnection logic: Support case where WiFi network was inaccessible
  *      during power-up. See comments tc_time.cpp for details.
  *    - Add keypad menu item "TIME SYNC", shows when last time sync (NTP/GPS) was done.
- *  2023/04/06 (A10001986) [CS 2.7 Release]
+ *  2023/04/06 (A10001986) [would have been CS 2.7 Release]
  *    - Audio: Re-do beep; remove all traces of (obsolete) MIXER; Short fx are now 
  *      played without re-scanning the analog input during play-back. Reason: Pot 
  *      tolerance led to audible "distortions" with very short sounds.
@@ -1003,7 +1099,7 @@
  *    - Add beep option to setup page
  *  2023/03/28 (A10001986)
  *    - Add option to keep temperature display on (and dimmed) in night mode
- *  2023/03/27 (A10001986)
+ *  2023/03/23 (A10001986)
  *    - Add (annoying) beep sound. Enabled/disabled by 000+ENTER. Disabled by default.
  *      Requires new sound-pack.
  *  2023/03/16 (A10001986)
@@ -1018,7 +1114,7 @@
  *  2023/02/21 (A10001986)
  *    - Prepare for TCD CB 1.3 with switchable LEDs. LEDs are off when fake power
  *      is off, and in night mode.
- *  2023/01/28 (A10001986)
+ *  2023/01/28 (A10001986) [released by CS as 2.6]
  *    - PCF2129 RTC: Fix obvious copy/paste error; add OTP refresh
  *  2023/01/26 (A10001986)
  *    - GPS: Code optimizations; quicker time-sync if GPS has valid time
@@ -1136,7 +1232,7 @@
  *    - Changed read logic for Si7021 and SHT4x; fix typo in TMP117 code path
  *    - Run MCP9808 in higher resolution mode, scrap sensor shut-down
  *    - Restrict allowed chars in NTP server and hostname fields in Config Portal
- *    - Updated WiFiManager to 2.0.15-rc1 in pre-compiled binary
+ *    * Updated WiFiManager to 2.0.15-rc1 in pre-compiled binary
  *  2022/12/18 (A10001986)
  *    - Audio files installer in keypad menu: If copy fails, re-format flash FS,
  *      re-write settings, and retry copy. (Same can be done by writing "FORMAT"
@@ -1163,8 +1259,8 @@
  *      network modes (AP, STA, etc). The digit "6" as part of the MAC is shown using
  *      the "modern"/common segment pattern here to distinguish it from "b".
  *    - Fix formatting bug in tc_font.h leading to font missing one character
- *  2022/12/02 (A10001986)
- *    - Add support for BMx820 sensor (temperature only).
+ *  2022/12/02 (A10001986) [released by CS as 2.5]
+ *    - Add support for BMx280 sensor (temperature only).
  *    - Modify former "light sensor" keypad menu to not only show measured lux level
  *      from a light sensor, but also current ambient temperature as measured by
  *      a connected temperature sensor. Rename menu to "Sensors" accordingly.
@@ -1173,13 +1269,13 @@
  *      sensor placement. In order to calibrate the offset, use the keypad menu 
  *      "SENSORS" since the temperature shown there is not rounded (unlike what is
  *      shown on a speedo display if it has less than three digits).
- *  2022/11/22 (A10001986) [2.4]
+ *  2022/11/22 (A10001986) [released by CS as 2.4]
  *    - Audio: SPIFFS does not adhere to POSIX standards and returns a file object
  *      even if a file does not exist. Fix by work-around (SPIFFS only).
  *    - clockdisplay: lampTest(), as part of the display disruption sequence, might 
  *      be the reason for some red displays to go dark after time travel; reduce 
  *      the number of segments lit.
- *    - Rename "tempSensor" to "sensors" and add light sensor support. Three types
+ *    - Rename "tempSensor" to "sensors" and add light sensor support. Three models
  *      are supported: TSL2561, BH1750, VEML7700/VEML6030 (VEML7700 only if no GPS 
  *      receiver is connected due to an i2c address conflict; VEML6030 must be configured
  *      for address 0x48, ie ADDR must be high, if GPS is connected at the same time). 
@@ -1197,10 +1293,10 @@
  *  2022/11/10 (A10001986)
  *    - Minor optimizations (wifi)
  *    - Soft-reset the clock by entering 64738 and ENTER
- *  2022/11/08 (A10001986)
+ *  2022/11/08 (A10001986) [released by CS as 2.3]
  *    - Allow time travel to (non-existing) year 0, so users can simulate the movie
  *      error (Dec 25, 0000).
- *    - RTC can no longer be set to a date below TCEPOCH (which is 2022 currently)
+ *    - RTC can no longer be set to a date below TCEPOCH_GEN (which is 2022 currently)
  *    - Adapt temperature sensor code to allow quickly adding other sensor types
  *    - Fix time travel time difference in case of a 9999->1 roll-over.
  *  2022/11/06 (A10001986)
@@ -1261,7 +1357,7 @@
  *    - Enhancements to DST logic
  *    - Fine-tune GPS polling and RTC updating
  *    - Remove unused stuff
- *  2022/10/24 (A10001986)
+ *  2022/10/24 (A10001986) [released by CS as 2.2]
  *    - Defer starting the Config Portal during boot: Starting with 2.0.13beta,
  *      WiFiManager triggers an async WiFi Scan when the CP is started, which 
  *      interferes with our NTP traffic during the boot process. Start CP after NTP 
@@ -1291,7 +1387,7 @@
  *      This system is only active, if no authoritative time source is available.
  *      As long as NTP or GPS deliver time, we rely on their assessments.
  *    - Clean up declarations & definitions all over
- *  2022/10/11 (A10001986)
+ *  2022/10/11 (A10001986)  [released by CS as 2.1]
  *    - IMPORTANT BUGFIX: Due to some (IMHO) compiler idiocy and my sloppyness, in 
  *      this case presenting itself in trusting Serial output instead of checking 
  *      the actual result of a function, the entire leap-year-detection was de-funct. 
@@ -1302,6 +1398,7 @@
  *      RTC to years <1900 or >2099.
  *    - Throw out more unused code from DateTime class
  *    - Use Sakamoto's method for day-of-week determination
+ *    - Fix tcRTC.getTemperature() (only used in debug mode)
  *    - Clarification: The clock only supports the Gregorian Calendar, of which it
  *      pretends to have been used since year 1. The Julian Calendar is not taken
  *      into account. As a result, some years that, in the Julian Calendar, were leap 
@@ -1323,7 +1420,7 @@
  *  2022/10/05 (A10001986)
  *    - Important: The external time travel trigger button is now no longer
  *      on IO14, but IO27. This will require some soldering on existing TC
- *      boards, see https://github.com/realA10001986/Time-Circuits-Display-A10001986
+ *      boards, see https://github.com/realA10001986/Time-Circuits-Display
  *      Also, externally triggered time travels will now include the speedo
  *      sequence as part of the time travel sequence, if a speedo is
  *      connected and activated in the Config Portal. If, in the Config Portal,
@@ -1380,16 +1477,18 @@
  *    - Speedo module re-written to make speedo type configurable at run-time
  *    - WiFi Menu: Params over Info
  *    - time: end autopause regardless of autoInt setting (avoid overflow)
- *  2022/09/5-6 (A10001986)
+ *  2022/09/05-06 (A10001986)  [released by CS as 2.0]
  *    - Fix TC settings corruption when changing WiFi settings
  *    - Format flash file system if mounting fails
- *    - Reduce WiFi transmit power in AP mode (to avoid power issues with volume pot if not at minimum)
- *    - Nightmode: Displays can be individually configured to be dimmed or switched off in night mode
+ *    - Reduce WiFi transmit power in AP mode (to avoid power issues with volume
+ *      pot if not at minimum)
+ *    - Nightmode: Displays can be individually configured to be dimmed or
+ *      switched off in night mode
  *    - Fix logic screw-up in autoTimes, changed intervals to 5, 10, 15, 30, 60.
  *    - More Config Portal beauty enhancements
  *    - Clockdisplay: Remove dependency on settings.h
  *    - Fix static ip parameter handling (make sure strings are 0-terminated)
- *    [- I2C-Speedo integration; still inactive]
+ *    - [I2C-Speedo integration; still inactive]
  *  2022/08/31 (A10001986)
  *    - Add some tool tips to Config Portal
  *  2022/08/30 (A10001986)
@@ -1411,14 +1510,14 @@
  *    - Attempt to beautify the Config Portal by using checkboxes instead of
  *      text input for boolean options
  *  2022/08/25 (A10001986)
- *    - Add default sound file installer. This installer is for initial installation  
- *      or upgrade of the software. Put the contents of the data folder on a
+ *    - Add default sound file installer. This installer is for initial installation
+ *      or upgrade of the firmware. Put the contents of the data folder on a
  *      FAT formatted SD card, put this card in the slot, reboot the clock,
- *      and either go to the "INSTALL AUDIO FILES" menu item in the keypad menu,  
- *      or to the "Setup" page on the Config Portal (see bottom). 
- *      Note that this only installs the original default files. It is not meant 
- *      for custom audio files substituting the default files. Custom audio files 
- *      reside on the SD card and will be played back from there. 
+ *      and either go to the "INSTALL AUDIO FILES" menu item in the keypad menu,
+ *      or to the "Setup" page on the Config Portal (see bottom).
+ *      Note that this only installs the original default files. It is not meant
+ *      for custom audio files substituting the default files. Custom audio files
+ *      reside on the SD card and will be played back from there.
  *  2022/08/24 (A10001986)
  *    - Intro beefed up with sound
  *    - Do not interrupt time travel by key presses
@@ -1428,11 +1527,11 @@
  *    - AutoTimes sync'd with movies
  *  2022/08/23 (A10001986)
  *    - Allow a static IP (plus gateway, subnet mask, dns) to be configured.
- *      All four IP address must be valid. IP settings can be reset to DHCP
+ *      All four IP addresses must be valid. IP settings can be reset to DHCP
  *      by holding down ENTER during power-up until the white LED goes on.
  *    - F-ified most constant texts (pointless on ESP32, but standard)
  *  2022/08/22 (A10001986)
- *    - New long time travel sequence (only for keypad-timetravel, not for 
+ *    - New long time travel sequence (only for keypad-timetravel, not for
  *      externally triggered timetravel)
  *    - Hourly sound now respects the "RTC vs presentTime" setting for the alarm
  *    - Fix bug introduced in last update (crash when setting alarm)
@@ -1446,10 +1545,10 @@
  *    - Value check for settings entered on WiFi setup page
  *  2022/08/20 (A10001986)
  *    - Added a little intro display upon power on; not played at "fake" power on.
- *    - Added menu item to show software version
+ *    - Added menu item to show firmware version
  *    - Fixed copy/paste error in WiFi menu display; add remaining WiFi stati.
  *    - Fixed compilation for A-Car display
- *    - Displays off during boot 
+ *    - Displays off during boot
  *  2022/08/19 (A10001986)
  *    - Network keypad menu: Add WiFi status information
  *    - audio: disable mixer, might cause static after stopping sound playback
@@ -1460,83 +1559,74 @@
  *  2022/08/18 (A10001986)
  *    - Destination time/date can now be entered in mmddyyyy, mmddyyyyhhmm or hhmm
  *      format.
- *    - Sound file "hour.mp3" is played hourly on the hour, if the file exists on 
+ *    - Sound file "hour.mp3" is played hourly on the hour, if the file exists on
  *      the SD card; disabled in night mode
  *    - Holding "3" or "6" plays sound files "key3.mp3"/"key6.mp3" if these files
  *      exist on the SD card
- *    - Since audio mixing is a no-go for the time being, remove all unneccessary 
+ *    - Since audio mixing is a no-go for the time being, remove all unneccessary
  *      code dealing with this.
  *    - Volume knob is now polled during play back, allowing changes while sound
  *      is playing
- *    - Fix auto time rotation pause logic at menu return
- *    - [Fix crash when saving settings before WiFi was connected (John)]
+ *    - Fixed auto time rotation pause logic at menu return
+ *    - [Fixed crash when saving settings before WiFi was connected (John)]
  *  2022/08/17 (A10001986)
  *    - Silence compiler warnings
- *    - Fix missing return value in loadAlarm
+ *    - Fixed missing return value in loadAlarm
  *  2022/08/16 (A10001986)
- *    - Show "BATT" during booting if RTC battery is depleted and needs to be 
+ *    - Show "BATT" during booting if RTC battery is depleted and needs to be
  *      changed
  *    - Pause autoInterval-cycling when user entered a valid destination time
  *      and/or initiated a time travel
  *  2022/08/15 (A10001986)
  *    - Time logic re-written. RTC now always keeps real actual present
- *      time, all fake times are calculated off the RTC time. 
- *      This makes the device independent of NTP; the RTC can be manually 
- *      set through the keypad menu ("RTC" is now displayed to remind the 
+ *      time, all fake times are calculated off the RTC time.
+ *      This makes the device independent of NTP; the RTC can be manually
+ *      set through the keypad menu ("RTC" is now displayed to remind the
  *      user that he is actually setting the *real* time clock).
  *    - Alarm base can now be selected between RTC (ie actual present
  *      time, what is stored in the RTC), or "present time" (ie fake
  *      present time).
- *    - Fix fake power off if time rotation interval is non-zero
- *    - Correct some inconsistency in my assumptions on A-car display
+ *    - Fixed fake power off if time rotation interval is non-zero
+ *    - Corrected some inconsistency in my assumptions on A-car display
  *      handling
  *  2022/08/13 (A10001986)
- *    - Changed "fake power" logic : This is no longer a "button" to  
- *      only power on, but a switch. The unit can now be "fake" powered 
- *      and "fake" powered off. 
+ *    - Changed "fake power" logic : This is no longer a "button" to
+ *      only power on, but a switch. The unit can now be "fake" powered
+ *      on and "fake" powered off.
  *    - External time travel trigger: Connect active-low button to
  *      io14 (see tc_global.h). Upon activation (press for 200ms), a time
- *       travel is triggered. Note that the device only simulates the 
- *      re-entry part of a time travel so the trigger should be timed 
+ *      travel is triggered. Note that the device only simulates the
+ *      re-entry part of a time travel so the trigger should be timed
  *      accordingly.
- *    - Fix millis() roll-over errors
+ *    - Fixed millis() roll-over errors
  *    - All new sounds. The volume of the various sound effects has been
  *      normalized, and the sound quality has been digitally enhanced.
- *    - Make keypad more responsive
- *    - Fix garbled keypad sounds in menu
- *    - Fix timeout logic errors in menu
- *    - Make RTC usable for eternity (by means of yearOffs)
+ *    - Made keypad more responsive
+ *    - Fixed garbled keypad sounds in menu
+ *    - Fixed timeout logic errors in menu
+ *    - Made RTC usable for eternity (by means of yearOffs)
  *  2022/08/12 (A10001986)
  *    - A-Car display support enhanced (untested)
  *    - Added SD support. Audio files will be played from SD, if
  *      an SD is found. Files need to reside in the root folder of
- *      a FAT-formatted SD and be named 
- *      - "startup.mp3": The startup sound
- *      - "enter.mp3": The sound played when a date was entered
- *      - "baddate.mp3": If a bad date was entered
- *      - "timetravel.mp3": A time travel was triggered
- *      - "alarm.mp3": The alarm sound
- *      - "nmon.mp3": Night mode is enabled
- *      - "nmoff.mp3": Night mode is disabled*      
- *      - "alarmon.mp3": The alarm was enabled
- *      - "alarmoff.mp3": The alarm was disabled      
- *      Mp3 files with 128kpbs or below recommended. 
+ *      a FAT-formatted SD.
+ *      Mp3 files with 128kpbs or below recommended.
  *  2022/08/11 (A10001986)
- *    - Integrate a modified Keypad_I2C into the project in order 
- *      to fix the "ghost" key presses issue by reducing i2c traffic 
+ *    - Integrated a modified Keypad_I2C into the project in order
+ *      to fix the "ghost" key presses issue by reducing i2c traffic
  *      and validating the port status data by reading the value
  *      twice.
  *  2022/08/10 (A10001986)
- *    - Added "fake power on" facility. Device will boot, setup 
+ *    - Added "fake power on" facility. Device will boot, setup
  *      WiFi, sync time with NTP, but not start displays until
- *      an active-low button is pressed (connected to io13, see 
+ *      an active-low button is pressed (connected to io13, see
  *      tc_global.h)
  *  2022/08/10 (A10001986)
  *    - Nightmode now also reduced volume of sound (except alarm)
- *    - Fix autoInterval array size
+ *    - Fixed autoInterval array size
  *    - Minor cleanups
  *  2022/08/09 (A10001986)
- *    - Fix "animation" (ie. month displayed a tad delayed)
+ *    - Fixed "animation" (ie. month displayed a tad delayed)
  *    - Added night mode; enabled by holding "4", disabled by holding "5"
  *    - Fix for flakey i2c connection to RTC (check data and retry)
  *      Sometimes the RTC chip loses sync and no longer responds, this
@@ -1545,9 +1635,9 @@
  *    - If alarm is enabled, the dot in present time's minute field is lit
  *    - Selectable "persistent" time travel mode (WiFi Setup page):
  *        If enabled, time travel is persistent, which means all times
- *        changed during a time travel are saved to EEPROM, overwriting 
- *        user programmed times. In persistent mode, the fake present time  
- *        also continues to run during power loss, and is NOT reset to 
+ *        changed during a time travel are saved to EEPROM, overwriting
+ *        user programmed times. In persistent mode, the fake present time
+ *        also continues to run during power loss, and is NOT reset to
  *        actual present time upon restart.
  *        If disabled, user programmed times are never overwritten, and
  *        time travels are not persistent. Present time will be reset
@@ -1555,6 +1645,8 @@
  *    - Alarm data is now saved to file system, no longer to EEPROM
  *      (reduces wear on flash memory)
  *  2022/08/03-06 (A10001986)
+ *    - Jun 2022 code base imported from
+ *      https://github.com/CircuitSetup/Time-Circuits-Display/tree/587ec1c56fefe8f2a0e08e9a014dd10b810c217b
  *    - Alarm function added
  *    - 24-hour mode added for non-Americans (though not authentic at all)
  *    - Keypad menu item to show IP address added
@@ -1600,7 +1692,7 @@ void setup()
 }
 
 #ifdef TC_PROFILER
-#include "AAProfiler.h"
+#include "zzProfiler.h"
 #else
 void loop()
 {

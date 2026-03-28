@@ -374,10 +374,11 @@ void enter_menu()
     bool preNM = presentTime.getNightMode();
     bool depNM = departedTime.getNightMode();
     bool mpActive;
-    bool nonRTCdisplayChanged = false;
+    bool destDisplayChanged = false;
+    bool lastDisplayChanged = false;
     int mode_min;
-    int y1, m1, d1, h1, mi1;
-    int y2, m2, d2, h2, mi2;
+    dateStruct dBackup;
+    dateStruct lBackup;
     DateTime dtu, dtl;
 
     pwrNeedFullNow();
@@ -402,8 +403,8 @@ void enter_menu()
     menuItemNum = mode_min = MODE_ALRM;
 
     // Backup currently displayed times
-    destinationTime.getToParms(y1, m1, d1, h1, mi1);
-    departedTime.getToParms(y2, m2, d2, h2, mi2);
+    destinationTime.getToStruct(&dBackup);
+    departedTime.getToStruct(&lBackup);
     // Load the custom times from NVM
     destinationTime.load();
     departedTime.load();
@@ -530,17 +531,24 @@ void enter_menu()
 
             // Non-RTC: Setting a static display, turn off autoInverval
 
+            /* Previously, we here disabled time cycling (persistently)
             if(autoInterval) {
                 autoInterval = 0;
                 saveBeepAutoInterval();
             }
+            */
+            pauseAuto();    // Now we only pause for 30 mins
 
-            nonRTCdisplayChanged = true;
+            if(menuItemNum == MODE_DEST) destDisplayChanged = true;
+            else                         lastDisplayChanged = true;
 
         }
 
         // update the object
         displaySet->setFromParms(yearSet, monthSet, daySet, hourSet, minSet);
+
+        if(destDisplayChanged)      backupDestTime();
+        else if(lastDisplayChanged) backupLastTime();
 
         // Save to NVM (regardless of persistence mode)
         displaySet->save();
@@ -666,22 +674,21 @@ quitMenu:
     waitForEnterRelease();
 
     // Return dest/dept displays to where they should be
-    if((autoTimeIntervals[autoInterval] == 0) || checkIfAutoPaused()) {
-        if(nonRTCdisplayChanged) {
-            if(!isWcMode() || !WcHaveTZ1) destinationTime.load();
-            if(!isWcMode() || !WcHaveTZ2) departedTime.load();
+    if(!isWcMode() || !WcHaveTZ1) {
+        if(destDisplayChanged) {
+            destinationTime.load();
         } else {
-            if(!isWcMode() || !WcHaveTZ1) {
-                  destinationTime.setFromParms(y1, m1, d1, h1, mi1); 
-            }
-            if(!isWcMode() || !WcHaveTZ2) {
-                  departedTime.setFromParms(y2, m2, d2, h2, mi2);
-            }
+            destinationTime.setFromStruct(&dBackup);
         }
-    } else {
-        if(!isWcMode() || !WcHaveTZ1) destinationTime.setFromStruct(&destinationTimes[autoTime]);
-        if(!isWcMode() || !WcHaveTZ2) departedTime.setFromStruct(&departedTimes[autoTime]);
     }
+    if(!isWcMode() || !WcHaveTZ2) {
+        if(lastDisplayChanged) {
+            departedTime.load();
+        } else {
+            departedTime.setFromStruct(&lBackup);
+        }
+    }
+
     destShowAlt = depShowAlt = 0; // Reset TZ-Name-Animation
 
     // Done, turn off displays
@@ -698,16 +705,16 @@ quitMenu:
 
     // Restore present time
     
-    myrtcnow(dtu);
-    UTCtoLocal(dtu, dtl, 0);
+    myrtcnow(gdtu);
+    UTCtoLocal(gdtu, gdtl, 0);
     
     if(stalePresent)
-        presentTime.setFromStruct(&stalePresentTime[1]);
+        updateStalePresent(1);  //presentTime.setFromStruct(&stalePresentTime[1]);
     else
-        updatePresentTime(dtu, dtl);
+        updatePresentTime();    // Uses gdt{u,l}
 
     if(isWcMode()) {
-        setDatesTimesWC(dtu);
+        setDatesTimesWC(gdtu);
     }
 
     // all displays on and show
@@ -897,15 +904,16 @@ static void menuShow(int number)
             pt_showTextDirect("NEVER");
             sw_sel(D_P|D_D);
         } else {
-            uint64_t ago = (millis64() - lastAuthTime64) / 1000;
+            uint64_t ago64 = (millis64() - lastAuthTime64) / 1000;
+            uint32_t ago = ago64;
             if(ago > 24*60*60) {
-                sprintf(buf, "%d DAYS", (uint32_t)(ago / (24*60*60)));
+                sprintf(buf, "%d DAYS", ago / (24*60*60));
             } else if(ago > 60*60) {
-                sprintf(buf, "%d HOURS", (uint32_t)(ago / (60*60)));
+                sprintf(buf, "%d HOURS", ago / (60*60));
             } else if(ago > 60) {
-                sprintf(buf, "%d MINS", (uint32_t)(ago / 60));
+                sprintf(buf, "%d MINS", ago / 60);
             } else {
-                sprintf(buf, "%d SECS", (uint32_t)ago);
+                sprintf(buf, "%d SECS", ago);
             }
             pt_showTextDirect(buf);
             lt_showTextDirect("AGO");
@@ -1016,7 +1024,7 @@ static bool setField(int& number, uint8_t field, int year, int month, uint16_t d
     displaySet->onBlink(2);
 
     // No, timeBuffer is pre-set with previous value
-    //timeBuffer[0] = '\0';   
+    //timeBuffer[0] = 0;   
 
     switch(field) {
     case FIELD_MONTH:
@@ -1287,7 +1295,7 @@ static void doSetVolume()
                 }
 
                 if(triggerPlay && (mm - playNow >= 1*1000)) {
-                    play_file("/alarm.mp3", PA_INTRMUS|PA_ALLOWSD|PA_DYNVOL);
+                    play_file("/startup.mp3", PA_INTRMUS|PA_ALLOWSD);
                     triggerPlay = false;
                 }
 
@@ -1464,11 +1472,13 @@ static void doSetMSfx()
 void alarmOff()
 {
     alarmOnOff = false;
+    cancelSnooze();
     saveAlarm();
 }
 
 bool alarmOn()
 {
+    cancelSnooze();
     if(alarmHour <= 23 && alarmMinute <= 59) {
         alarmOnOff = true;
         saveAlarm();
@@ -1656,19 +1666,15 @@ static void doSetAlarm()
         displaySet->showTextDirect(StrSaving);
         displaySet->on();
 
-        // Save it (if changed)
-        if( (alarmOnOff != newAlarmOnOff)   ||
-            (alarmHour != newAlarmHour)     ||
-            (alarmMinute != newAlarmMinute) ||
-            (alarmWeekday != newAlarmWeekday) ) {
-        
-            alarmOnOff = newAlarmOnOff;
-            alarmHour = newAlarmHour;
-            alarmMinute = newAlarmMinute;
-            alarmWeekday = newAlarmWeekday;
+        // Save it
+        alarmOnOff = newAlarmOnOff;
+        alarmHour = newAlarmHour;
+        alarmMinute = newAlarmMinute;
+        alarmWeekday = newAlarmWeekday;
 
-            saveAlarm();
-        }
+        saveAlarm();
+
+        cancelSnooze();
 
         menuDelay(1000);
     }
@@ -2313,7 +2319,7 @@ void doShowBTTFNInfo()
 }
 
 /*
- * Install default audio files from SD to flash FS #############
+ * Install sound pack from SD to flash FS #############
  */
 
 void doCopyAudioFiles()
@@ -2525,25 +2531,3 @@ static void menuLoops()
     audio_loop();
     #endif
 }
-
-/*
- * Special case for very short, non-recurring delays
- * Only calls essential loops while waiting
- */
-/* 
-static void menuShortDelay(unsigned long mydel)
-{
-    unsigned long startNow = millis();
-
-    audio_loop();
-
-    while(millis() - startNow < mydel) {
-        ntp_short_loop();
-        audio_loop();
-        #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
-        speedoUpdate_loop(true);  // GPS part: 6-12ms without delay, 8-13ms with delay
-        audio_loop();
-        #endif
-    }
-}
-*/

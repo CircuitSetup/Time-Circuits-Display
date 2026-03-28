@@ -78,7 +78,7 @@
 // When ENTER button is pressed, turn off display for this many ms
 // Must be sync'd to the sound file used (enter.mp3)
 #define BADDATE_DELAY 400
-#ifdef TWSOUND
+#ifdef V_A10001986
 #define ENTER_DELAY   500
 #else
 #define ENTER_DELAY   600
@@ -90,25 +90,28 @@
 #define EE1_DELAY3   2000
 #define EE2_DELAY     600
 #define EE3_DELAY     500
-#define EE4_DELAY    3000
+#define EE4_DELAY    7500 //3000
+#define EE4_DELAY2    500
+#define EE4_DELAY3    500
+#define EE4_DELAY4    500
 
 #ifndef TC_JULIAN_CAL
 #define EEXSP1 70667637
 #define EEXSP2 59572453
 #define EEXSP3 97681642
-#define EEXSP4 65998071
+#define EEXSP4 59769333 //65998071
 #define EEXSP5 8765917
 #elif !defined(JSWITCH_1582)
 #define EEXSP1 119882773
 #define EEXSP2 125110405
 #define EEXSP3 105941666
-#define EEXSP4 118949015
+#define EEXSP4 124258709  //118949015
 #define EEXSP5 1753125
 #else
 #define EEXSP1 119882773
 #define EEXSP2 125110677
 #define EEXSP3 105941666
-#define EEXSP4 118949255
+#define EEXSP4 124258437  //118949255
 #define EEXSP5 1753125
 #endif
 
@@ -136,16 +139,31 @@ static const uint8_t colPins[3] = {2, 0, 4};
 static const char *weekDays[7] = {
       "SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"
 };
+#ifdef IS_ACAR_DISPLAY
+static const char spTxtS1[]  = { 207, 254, 206, 255, 206, 247, 206, 247, 199, 247, 207, 247 };
+static const char spTxtS5A[] = { 0x81, 95, 95, 95, 95, 45, 95, 45, 95, 45, 95, 45, 0};
+static const char spTxtS5B[] = { 0x81, 95, 95, 95, 45, 95, 45, 95, 45, 95, 45, 95, 0};
+#else
+static const char spTxtS1[]  = { 181, 244, 186, 138, 187, 138, 179, 138, 179, 131, 179, 139, 179 };
+static const char spTxtS5A[] = { 0x81, 95, 0x82, 95, 95, 95, 45, 95, 45, 95, 45, 95, 45, 0};
+static const char spTxtS5B[] = { 0x81, 95, 0x82, 95, 95, 45, 95, 45, 95, 45, 95, 45, 95, 0};
+#endif
+static const char spTxtS2[]  = { 181, 224, 179, 231, 199, 140, 197, 129, 197, 140, 194, 133 };
+static const char spTxtS4[]  = { 175, 253, 178, 246, 163, 224, 180, 148, 218, 149, 193 };
+static const char spTxtS5[]  = { 190, 253, 169, 252, 189, 241, 189, 228 };
+static const char spTxtS6[]  = { 185, 235, 174, 235 };
+
+static char snoozeString[14];
 
 static Keypad_I2C keypad((char *)keys, rowPins, colPins, 4, 3, KEYPAD_ADDR);
 
-bool isEnterKeyPressed = false;
-bool isEnterKeyHeld    = false;
+bool        isEnterKeyPressed = false;
+bool        isEnterKeyHeld = false;
 static bool enterWasPressed = false;
 
 static bool needDepTime = false;
 #ifndef IS_ACAR_DISPLAY
-bool p3anim = false;
+bool        p3anim = false;
 #endif
 
 bool                 isEttKeyPressed = false;
@@ -160,14 +178,14 @@ static unsigned long timeNow = 0;
 
 static unsigned long lastKeyPressed = 0;
 
-#define DATELEN_STPR  14   // 99mmddyyyyHHMM  exh mode: month, day, year, hour, min
+#define DATELEN_STPR  14   // 99mmddyyyyHHMM  exh mode: month, day, year, hour, min; also 91/92 for storing dest/last
 #define DATELEN_ALL   12   // mmddyyyyHHMM  dt: month, day, year, hour, min
 #define DATELEN_REM   10   // 77mmddHHMM    set reminder
 #define DATELEN_DATE   8   // mmddyyyy      dt: month, day, year
 #define DATELEN_ECMD   7   // xyyyyyy       6-digit command for FC, SID, DG, VSR, REMOTE, AUX
 #define DATELEN_QALM   6   // 11HHMM/888xxx 11, hour, min (alarm-set shortcut); 888xxx (mp)
-#define DATELEN_INT    5   // xxxxx         reset
-#define DATELEN_TIME   4   // HHMM          dt: hour, minute
+#define DATELEN_INT    5   // xxxxx         reset etc
+#define DATELEN_TIME   4   // HHMM          dt: hour, minute; 4xxx timer & servo speedo; 3-9xxx BTTFN commands
 #define DATELEN_CODE   3   // xxx           special codes
 #define DATELEN_ALSH   2   // 11            show alarm time/wd, etc.
 #define DATELEN_CMIN   DATELEN_ALSH     // min length of code entry
@@ -215,10 +233,14 @@ static void enterKeyHeld();
 static void ettKeyPressed();
 static void ettKeyHeld();
 
+static void resetEnterAnim();
+
+static void resetDisplayMode(bool setDep = false);
 static void setupWCMode();
 static void buildRemString(char *buf);
 static void buildRemOffString(char *buf);
 static void buildStalePTStatus(char *buf);
+static void displayAlarmOff(bool snooze);
 
 static void waitAudioDone();
 
@@ -236,6 +258,18 @@ static void handleTTrefusal(int reason)
     }
 }
 
+static void prepareSpecText(const char *p, char *d, int l)
+{            
+    d[l] = 0;
+    for(int i = l-1; i >= 0; i--) {
+        d[i] = p[i] ^ (i == 0 ? 0xff : p[i-1]);
+    }
+}
+
+void s5(bool b)
+{
+    dt_showTextDirect(b ? spTxtS5A : spTxtS5B, CDT_CLEAR);
+}
 
 /*
  * keypad_setup()
@@ -273,6 +307,12 @@ void keypad_setup()
 
     dateBuffer[0] = 0;
     timeBuffer[0] = 0;
+
+    #ifdef IS_ACAR_DISPLAY
+    sprintf(snoozeString, "SNOOZE    %2s", settings.snoozeTime);
+    #else
+    sprintf(snoozeString, "SNOOZE     %2s", settings.snoozeTime); 
+    #endif
 }
 
 /*
@@ -292,8 +332,10 @@ static void keypadEvent(char key, KeyState kstate)
     bool playBad = false;
     int i;
 
-    if(csf & (CSF_OFF|CSF_ST|CSF_P0|CSF_P1|CSF_RE))
+    if(csf & (CSF_OFF|CSF_ST|CSF_P0|CSF_P1|CSF_RE|CSF_AL)) {
+        doKey = false;
         return;
+    }
 
     pwrNeedFullNow();
 
@@ -454,7 +496,7 @@ static void recordKey(char key)
     dateBuffer[dateIndex] = 0;
     // Don't wrap around, overwrite end of date instead
     if(dateIndex >= DATELEN_MAX) dateIndex = DATELEN_MAX - 1;  
-    lastKeyPressed = millis();
+    lastKeyPressed = millisNonZero();
 }
 
 static void recordForMenu(char key, bool isYear)
@@ -505,7 +547,7 @@ void enterkeyScan()
         ettKey.scan();
 }
 
-static uint8_t read2digs(uint8_t idx)
+static unsigned int read2digs(unsigned int idx)
 {
     return (binBuf[idx] * 10) + binBuf[idx+1];
 }
@@ -522,11 +564,17 @@ void injectKeypadKey(char key, int kaction)
             isEnterKeyHeld = false;
             break;
         case BTTFN_KP_KS_HOLD:
-            // We don't enter the keypad menu remotely.
+            // We don't enter the keypad menu remotely,
+            // but we allow stopping the alarm.
+            if(csf & CSF_AL) {
+                stopAlarm(true);
+                cancelSnooze();
+            }
             break;
         }
     } else if(key >= '0' && key <= '9') {
         bool b = doKey;
+        doKey = false;
         switch(kaction) {
         case BTTFN_KP_KS_PRESSED:
             keypadEvent(key, TCKS_PRESSED);
@@ -548,14 +596,21 @@ void injectKeypadKey(char key, int kaction)
  */
 void keypad_loop()
 {
+    const char *tmr = "TIMER   ";
     char *keyBuffer = dateBuffer;
     char spTxt[16];
-    #define EE1_KL2 12
-    const char spTxtS2[EE1_KL2] = { 181, 224, 179, 231, 199, 140, 197, 129, 197, 140, 194, 133 };
-    const char *tmr = "TIMER   ";
 
     if(!inputInjected) {
         enterkeyScan();
+        if((csf & CSF_OFF) && (csf & CSF_AL)) {
+            if(isEnterKeyHeld) {
+                stopAlarm(true);
+                cancelSnooze();
+            } else if(isEnterKeyPressed) {
+                stopAlarm(true);
+                startSnooze();
+            }
+        }
     } else {
         keyBuffer = injectBuffer;
     }
@@ -617,25 +672,45 @@ void keypad_loop()
         cancelEnterAnim();
         cancelETTAnim();
 
-        timeIndex = 0;
-        timeBuffer[0] = 0;
+        if(csf & CSF_AL) {
 
-        menuActive = true;
-        csf |= CSF_MA;
-        bttfn_notify_info();
+            stopAlarm(true);
+            cancelSnooze();
 
-        enter_menu();
+            // Simulate pressing ENTER
+            enterWasPressed = true;
+            cancelETTAnim();
+            digitalWrite(WHITE_LED_PIN, HIGH);
+            destinationTime.off();
+            timeNow = millis();
+            enterDelay = ENTER_DELAY;
+            
+            displayAlarmOff(false);
+            specDisp = 10;
+            
+        } else {
 
-        isEnterKeyHeld = false;
-        isEnterKeyPressed = false;
+            timeIndex = 0;
+            timeBuffer[0] = 0;
+    
+            menuActive = true;
+            csf |= CSF_MA;
+            bttfn_notify_info();
+    
+            enter_menu();
+    
+            isEnterKeyHeld = false;
+            isEnterKeyPressed = false;
+    
+            // No external tt while in menu mode,
+            // so reset flag upon menu exit
+            isEttKeyPressed = isEttKeyHeld = isEttKeyImmediate = false;
+    
+            menuActive = false;
+            csf &= ~CSF_MA;
+            bttfn_notify_info();
 
-        // No external tt while in menu mode,
-        // so reset flag upon menu exit
-        isEttKeyPressed = isEttKeyHeld = isEttKeyImmediate = false;
-
-        menuActive = false;
-        csf &= ~CSF_MA;
-        bttfn_notify_info();
+        }
 
     }
 
@@ -669,7 +744,13 @@ void keypad_loop()
 
         enterDelay = ENTER_DELAY;
 
-        if(strLen == DATELEN_ALSH) {
+        if(!inputInjected && (csf & CSF_AL)) {
+
+            stopAlarm(true);
+            displayAlarmOff(startSnooze());
+            specDisp = 10;
+
+        } else if(strLen == DATELEN_ALSH) {
 
             char atxt[16];
             uint16_t flags = 0;
@@ -698,6 +779,16 @@ void keypad_loop()
                 specDisp = 10;
                 validEntry = true;
 
+            } else if(code == 12) {
+
+                if(snoozeRunning()) {
+                    dt_showTextDirect("ALARM STOP", CDT_CLEAR);
+                    cancelSnooze();
+                    specDisp = 10;
+                    validEntry = true;
+                } else 
+                    invalidEntry = true;
+
             } else if(code == 44) {
 
                 if(!ctDown) {
@@ -707,9 +798,9 @@ void keypad_loop()
                     sprintf(atxt, "%s  OFF", tmr);
                     #endif
                 } else {
-                    unsigned long el = ctDown - (millis()-ctDownNow);
-                    uint8_t mins = el/(1000*60);
-                    uint8_t secs = (el-(mins*1000*60))/1000;
+                    unsigned long el = ctDown - (millis() - ctDownNow);
+                    int mins = el / (1000 * 60);
+                    int secs = (el - (mins * 1000 * 60)) / 1000;
                     if((long)el < 0) mins = secs = 0;
                     #ifdef IS_ACAR_DISPLAY
                     sprintf(atxt, "%s%02d%02d", tmr, mins, secs);
@@ -813,16 +904,55 @@ void keypad_loop()
                 play_key(code - 500, 0xffff);
 
                 // Play no sound, ie no xxvalidEntry
-              
+
+            #ifdef TC_HAVEMQTT
+            } else if(code >= 600 && code <= 609) {
+                int idx = code - 600;
+                if(settings.mqmt[idx] && settings.mqmm[idx]) {
+                    mqttPublish(settings.mqmt[idx], settings.mqmm[idx], strlen(settings.mqmm[idx]));
+                }
+                // Play no sound, ie no xxvalidEntry
+            #endif
+
             } else {
             
                 switch(code) {
+                case 110:           // 110: Return to default display mode (disable RC, WC, Nav, mini)
+                    if(isRcMode() || isWcMode() || isNavMode() || isMiniMode()) {
+                        bool needDep = isMiniMode();
+                        if(!needDep) {
+                            if(isWcMode() && (WcHaveTZ2 || isRcMode())) needDep = true;
+                            #ifdef TC_HAVETEMP
+                            else if(isRcMode() && tempSens.haveHum())   needDep = true;
+                            #endif
+                            #ifdef TC_HAVEGPS
+                            else if(isNavMode()) needDep = true;
+                            #endif
+                        }
+                        if(needDep) {
+                            //departedTime.off();
+                            needDepTime = true;
+                        }
+                        if(isMiniMode()) enableMiniMode(false);
+                        #ifdef TC_HAVEGPS
+                        else if(isNavMode()) enableNavMode(false);
+                        #endif
+                        #ifdef TC_HAVETEMP
+                        if(isRcMode()) enableRcMode(false);
+                        #endif
+                        if(isWcMode()) {
+                            enableWcMode(false);
+                            setupWCMode();
+                        }
+                    }
+                    validEntry = true;
+                    break;
                 #ifdef TC_HAVETEMP
                 case 111:               // 111+ENTER: Toggle rc-mode
                     if(haveRcMode) {
                         toggleRcMode();
                         if(tempSens.haveHum() || isWcMode()) {
-                            departedTime.off();
+                            //departedTime.off();
                             needDepTime = true;
                         }
                         validEntry = true;
@@ -835,7 +965,7 @@ void keypad_loop()
                     if(haveWcMode) {
                         toggleWcMode();
                         if(WcHaveTZ2 || isRcMode()) {
-                            departedTime.off();
+                            //departedTime.off();
                             needDepTime = true;
                         }
                         setupWCMode();
@@ -848,7 +978,7 @@ void keypad_loop()
                 case 113:               // 113+ENTER: Toggle rc+wc mode
                     // Dep Time display needed in any case:
                     // Either for TZ2 or TEMP
-                    departedTime.off();
+                    //departedTime.off();
                     needDepTime = true;
                     rcModeState = toggleRcMode();
                     enableWcMode(rcModeState);
@@ -867,13 +997,23 @@ void keypad_loop()
                             (code - 114 == dmMode) ) {
                             toggleNavMode();
                         }
-                        departedTime.off();
+                        //departedTime.off();
                         needDepTime = true;
                         validEntry = true;
                     } else
                         invalidEntry = true;
                     break;
                 #endif
+                case 117:
+                    if(isWcMode()) {
+                        enableWcMode(false);
+                        setupWCMode();
+                    }
+                    toggleMiniMode();
+                    //departedTime.off();
+                    needDepTime = true;
+                    validEntry = true;
+                    break;
                 case 222:               // 222+ENTER: Turn shuffle off
                 case 555:               // 555+ENTER: Turn shuffle on
                     mp_makeShuffle((code == 555));
@@ -1071,18 +1211,19 @@ void keypad_loop()
                     if(timetravelPersistent) {
                         invalidEntry = true;
                     } else {
-                        departedTime.off();
+                        //departedTime.off();
                         needDepTime = true;
-                        if(autoTimeIntervals[autoInterval]) {
-                            pauseAuto();
-                        }
+                        pauseAuto();
                         enableRcMode(false);
                         enableWcMode(false);
                         #ifdef TC_HAVEGPS
                         enableNavMode(false);
                         #endif
+                        enableMiniMode(false);
                         destinationTime.load();
                         departedTime.load();
+                        backupDestTime();
+                        backupLastTime();
                         validEntry = true;
                     }
                     break;
@@ -1115,7 +1256,7 @@ void keypad_loop()
         } else if(strLen == DATELEN_QALM) {
 
             char atxt[16];
-            uint8_t code = read2digs(0);
+            int code = read2digs(0);
 
             if(code == 11) {
 
@@ -1124,14 +1265,11 @@ void keypad_loop()
 
                 if(aHour <= 23 && aMin <= 59) {
                     const char *alwd = getAlWD(alarmWeekday);
-                    if( (alarmHour != aHour)  ||
-                        (alarmMinute != aMin) ||
-                        !alarmOnOff ) {
-                        alarmHour = aHour;
-                        alarmMinute = aMin;
-                        alarmOnOff = true;
-                        saveAlarm();
-                    }
+                    alarmHour = aHour;
+                    alarmMinute = aMin;
+                    alarmOnOff = true;
+                    saveAlarm();
+                    cancelSnooze();
                     #ifdef IS_ACAR_DISPLAY
                     sprintf(atxt, "%-7s %02d%02d", alwd, alarmHour, alarmMinute);
                     #else
@@ -1153,19 +1291,16 @@ void keypad_loop()
 
                     if(!sMon || sDay <= daysInMonth(sMon, 2000)) {
 
-                        if( (remMonth != sMon) || (remDay != sDay) ) {
-                        
-                            remMonth = sMon;
-                            remDay = sDay;
+                        remMonth = sMon;
+                        remDay = sDay;
 
-                            // If current hr and min are zero
-                            // assume unset, set default 9am.
-                            if(!remHour && !remMin) {
-                                remHour = 9;
-                            }
-                            
-                            saveReminder();
+                        // If current hr and min are zero
+                        // assume unset, set default 9am.
+                        if(!remHour && !remMin) {
+                            remHour = 9;
                         }
+                        
+                        saveReminder();
 
                         buildRemString(atxt);
 
@@ -1266,15 +1401,14 @@ void keypad_loop()
 
             invalidEntry = !validEntry;
 
-        } else if((strLen == DATELEN_TIME || strLen == DATELEN_ECMD) && 
-                                                      binBuf[0] >= 3 &&
-                                                      binBuf[0] != 4) {
+        } else if((strLen == DATELEN_TIME || strLen == DATELEN_ECMD) && (binBuf[0] >= 3)) {
                       
             uint32_t cmd;
             if(strLen == DATELEN_TIME)
                 cmd = (binBuf[1] * 100) + read2digs(2);
             else
                 cmd = (read2digs(1) * 10000) + (read2digs(3) * 100) + read2digs(5);
+            
             switch(binBuf[0]) {
             case 3:
                 bttfnSendFluxCmd(cmd);
@@ -1294,8 +1428,11 @@ void keypad_loop()
             case 9:
                 bttfnSendPCGCmd(cmd);
                 break;
+            default:
+                invalidEntry = true;
             }
-            validEntry = true;
+
+            validEntry = !invalidEntry;
         
         } else if(strLen == DATELEN_REM) {
 
@@ -1312,16 +1449,12 @@ void keypad_loop()
 
                     if(!sMon || sDay <= daysInMonth(sMon, 2000)) {
 
-                        if( (remMonth != sMon) || (remDay != sDay) || 
-                            (remHour != sHour) || (remMin != sMin) ) {
-                        
-                            remMonth = sMon;
-                            remDay = sDay;
-                            remHour = sHour;
-                            remMin = sMin;
-                        
-                            saveReminder();
-                        }
+                        remMonth = sMon;
+                        remDay = sDay;
+                        remHour = sHour;
+                        remMin = sMin;
+                    
+                        saveReminder();
 
                         buildRemString(atxt);
 
@@ -1337,46 +1470,66 @@ void keypad_loop()
 
         } else if(strLen == DATELEN_STPR) {
 
-            if(read2digs(0) == 99) {
+            int code = read2digs(0);
+
+            if(code == 91 || code == 92 || code == 99) {
                 char atxt[16];
-                int temp1 = read2digs(2);
-                int temp2 = read2digs(4);
+                int tm = read2digs(2);
+                int td = read2digs(4);
+                int y = ((int)read2digs(6) * 100) + read2digs(8);
+                int th, tmi;
 
-                stalePresentTime[0].year = ((int)read2digs(6) * 100) + read2digs(8);
-
-                if(temp1 < 1) temp1 = 1;
-                else if(temp1 > 12) temp1 = 12;
-                if(temp2 < 1)  temp2 = 1;
+                if(tm < 1) tm = 1;
+                else if(tm > 12) tm = 12;
+                if(td < 1)  td = 1;
                 else {
-                    int temp3 = daysInMonth(temp1, stalePresentTime[0].year);
-                    if(temp2 > temp3) temp2 = temp3;
+                    int tdd = daysInMonth(tm, y);
+                    if(td > tdd) td = tdd;
                 }
+                
                 #ifdef TC_JULIAN_CAL
-                correctNonExistingDate(stalePresentTime[0].year, temp1, temp2);
+                correctNonExistingDate(y, tm, td);
                 #endif
-                stalePresentTime[0].month = temp1;
-                stalePresentTime[0].day = temp2;
                 
-                temp1 = read2digs(10);
-                if(temp1 < 0) temp1 = 0;
-                else if(temp1 > 23) temp1 = 23;
-                stalePresentTime[0].hour = temp1;
+                th = read2digs(10);
+                if(th > 23) th = 23;
                 
-                temp1  = read2digs(12);
-                if(temp1 < 0) temp1 = 0;
-                else if(temp1 > 59) temp1 = 59;
-                stalePresentTime[0].minute = temp1;
+                tmi  = read2digs(12);
+                if(tmi > 59) tmi = 59;
 
-                memcpy((void *)&stalePresentTime[1], (void *)&stalePresentTime[0], sizeof(dateStruct));
+                switch(code) {
+                case 91:
+                    // Disable nav&rc&wc&mini modes
+                    resetDisplayMode();
+                    destinationTime.setFromParms(y, tm, td, th, tmi);
+                    destinationTime.save();
+                    backupDestTime();
+                    pauseAuto();
+                    break;
+                case 92:
+                    //departedTime.off();
+                    needDepTime = true;
+                    // Disable nav&rc&wc&mini modes
+                    resetDisplayMode(true);
+                    departedTime.setFromParms(y, tm, td, th, tmi);
+                    departedTime.save();
+                    backupLastTime();
+                    pauseAuto();
+                    break;
+                default:
+                    stalePresentTime[0].year = y;
+                    stalePresentTime[0].month = tm;
+                    stalePresentTime[0].day = td;
+                    stalePresentTime[0].hour = th;
+                    stalePresentTime[0].minute = tmi;
+                    memcpy((void *)&stalePresentTime[1], (void *)&stalePresentTime[0], sizeof(dateStruct));
+                    stalePresent = true;
+                    saveStaleTime((void *)&stalePresentTime[0], stalePresent);
+                    buildStalePTStatus(atxt);
+                    dt_showTextDirect(atxt);
+                    specDisp = 10;
+                }
 
-                stalePresent = true;
-
-                saveStaleTime((void *)&stalePresentTime[0], stalePresent);
-
-                buildStalePTStatus(atxt);
-                dt_showTextDirect(atxt);
-                specDisp = 10;
-                
                 validEntry = true;
             } else {
                 invalidEntry = true;
@@ -1388,13 +1541,6 @@ void keypad_loop()
             int _setHour = -1, _setMin = -1, temp1, temp2;
             int special = 0;
             uint32_t spTmp;
-            #ifdef IS_ACAR_DISPLAY
-            #define EE1_KL1 12
-            const char spTxtS1[EE1_KL1] = { 207, 254, 206, 255, 206, 247, 206, 247, 199, 247, 207, 247 };
-            #else
-            #define EE1_KL1 13
-            const char spTxtS1[EE1_KL1] = { 181, 244, 186, 138, 187, 138, 179, 138, 179, 131, 179, 139, 179 };
-            #endif
 
             temp1 = read2digs(0);
             temp2 = read2digs(2);
@@ -1435,10 +1581,7 @@ void keypad_loop()
                 spTmp = (uint32_t)_setYear << 16 | _setMonth << 8 | _setDay;
                 if((spTmp ^ getHrs1KYrs(7)) == EEXSP1) {
                     special = 1;
-                    spTxt[EE1_KL1] = 0;
-                    for(int i = EE1_KL1-1; i >= 0; i--) {
-                        spTxt[i] = spTxtS1[i] ^ (i == 0 ? 0xff : spTxtS1[i-1]);
-                    }
+                    prepareSpecText(spTxtS1, spTxt, sizeof(spTxtS1));
                 } else if((spTmp ^ getHrs1KYrs(8)) == EEXSP2)  {
                     if(_setHour >= 9 && _setHour <= 12) {
                         special = 2;
@@ -1447,6 +1590,7 @@ void keypad_loop()
                     special = 3;
                 } else if((spTmp ^ getHrs1KYrs(8)) == EEXSP4)  {
                     special = 4;
+                    
                 }
             }
 
@@ -1462,7 +1606,7 @@ void keypad_loop()
                 validEntry = true;
                 break;
             case 2:
-                play_file("/ee2.mp3", PA_INTSPKR|PA_CHECKNM|PA_INTRMUS);
+                play_file("/ee2.mp3", PA_LINEOUT|PA_CHECKNM|PA_INTRMUS);
                 enterDelay = EE2_DELAY;
                 break;
             case 3:
@@ -1470,8 +1614,11 @@ void keypad_loop()
                 enterDelay = EE3_DELAY;
                 break;
             case 4:
-                play_file("/ee4.mp3", PA_INTSPKR|PA_CHECKNM|PA_INTRMUS);
+                destinationTime.clearDisplay();
+                destinationTime.onCond();
+                play_file("/ee4.mp3", PA_LINEOUT|PA_CHECKNM|PA_INTRMUS);
                 enterDelay = EE4_DELAY;
+                specDisp = 5;
                 break;
             default:
                 validEntry = true;
@@ -1484,6 +1631,8 @@ void keypad_loop()
             if(_setHour >= 0) destinationTime.setHour(_setHour);
             if(_setMin >= 0)  destinationTime.setMinute(_setMin);
 
+            backupDestTime();
+
             // We only save the new time if user wants persistence.
             // Might not be preferred; this messes with the user's custom
             // times. Secondly, it wears the flash memory.
@@ -1491,45 +1640,8 @@ void keypad_loop()
                 destinationTime.save();
             }
 
-            // Disable nav&rc&wc modes
-            #ifdef TC_HAVEGPS
-            if(isNavMode()) {
-                departedTime.off();
-                needDepTime = true;
-                enableNavMode(false);
-            }
-            #endif
-            #ifdef TC_HAVETEMP
-            if(isRcMode() && (tempSens.haveHum() || isWcMode())) {
-                departedTime.off();
-                needDepTime = true;
-            }
-            #endif
-            enableRcMode(false);
-            if(isWcMode() && WcHaveTZ1) {
-                // If WC mode is enabled and we have a TZ for red display,
-                // we need to disable WC mode in order to keep the new dest
-                // time on display. In that case, and if we have a TZ for the
-                // yellow display, we also restore the yellow time to either 
-                // the stored value or the current auto-int step, otherwise 
-                // the current yellow WC time would remain but become stale,
-                // which is confusing.
-                // If there is no TZ for red display, no need to disable WC
-                // mode at this time; let timetravel() take care of this.
-                if(WcHaveTZ2) {
-                    // Restore NVM time if either time cycling is off, or
-                    // if paused; latter only if we have the last
-                    // time stored. Otherwise we have no previous time.
-                    if(autoTimeIntervals[autoInterval] == 0 || (timetravelPersistent && checkIfAutoPaused())) {
-                        departedTime.load();
-                    } else {
-                        departedTime.setFromStruct(&departedTimes[autoTime]);
-                    }
-                    departedTime.off();
-                    needDepTime = true;
-                }
-                enableWcMode(false);
-            }
+            // Disable nav&rc&wc&mini modes
+            resetDisplayMode();
 
             // Pause autoInterval-cycling so user can play undisturbed
             pauseAuto();
@@ -1546,11 +1658,16 @@ void keypad_loop()
 
         }
 
+        if(needDepTime) {
+            departedTime.off();
+        }
+
         if(validEntry) {
             play_file("/enter.mp3", PA_INTSPKR|PA_CHECKNM|enterInterruptsMusic|PA_ALLOWSD);
         } else if(invalidEntry) {
             play_file("/baddate.mp3", PA_INTSPKR|PA_CHECKNM|enterInterruptsMusic|PA_ALLOWSD);
             enterDelay = BADDATE_DELAY;
+            specDisp = 0;
             if(!enterInterruptsMusic && mpActive) {
                 dt_showTextDirect("ERROR", CDT_CLEAR);
                 specDisp = 10;
@@ -1574,38 +1691,59 @@ void keypad_loop()
         switch(specDisp) {
         case 0:
             break;
-        case 2:
+        case 1:
+        case 5:
         case 10:
         case 20:
             specDisp++;
-            if(specDisp == 3) destinationTime.onCond();
-            else              { destinationTime.resetBrightness(); destinationTime.on(); }
             digitalWrite(WHITE_LED_PIN, LOW);
             timeNow = millis();
-            enterWasPressed = true;
-            enterDelay = (specDisp == 3) ? EE1_DELAY2 : SPEC_DELAY;
-            break;
-        case 3:
-            specDisp++;
-            spTxt[EE1_KL2] = 0;
-            for(int i = EE1_KL2-1; i >= 0; i--) {
-                spTxt[i] = spTxtS2[i] ^ (i == 0 ? 0xff : spTxtS2[i-1]);
+            switch(specDisp) {
+            case 2:
+                destinationTime.onCond();
+                enterDelay = EE1_DELAY2;
+                break;
+            case 6:
+                prepareSpecText(spTxtS4, spTxt, sizeof(spTxtS4));
+                dt_showTextDirect(spTxt);
+                enterDelay = EE4_DELAY2;
+                break;
+            default:
+                destinationTime.resetBrightness(); 
+                destinationTime.on();
+                enterDelay = SPEC_DELAY;
             }
+            break;
+        case 2:
+            specDisp++;
+            prepareSpecText(spTxtS2, spTxt, sizeof(spTxtS2));            
+            dt_showTextDirect(spTxt);
+            play_file("/ee1.mp3", PA_LINEOUT|PA_CHECKNM|PA_INTRMUS);
+            timeNow = millis();
+            enterDelay = EE1_DELAY3;
+            break;
+        case 6:
+        case 7:
+            if(specDisp == 6) {
+                prepareSpecText(spTxtS5, spTxt, sizeof(spTxtS5));
+                enterDelay = EE4_DELAY3;
+            } else {
+                prepareSpecText(spTxtS6, spTxt, sizeof(spTxtS6)); 
+                enterDelay = EE4_DELAY4;
+            }
+            specDisp++;
             dt_showTextDirect(spTxt);
             timeNow = millis();
-            enterWasPressed = true;
-            enterDelay = EE1_DELAY3;
-            play_file("/ee1.mp3", PA_INTSPKR|PA_CHECKNM|PA_INTRMUS);
             break;
         case 21:
         case 22:
             dt_showTextDirect(specDisp == 21 ? btxt : ctxt);
             specDisp++;
             timeNow = millis();
-            enterWasPressed = true;
             enterDelay = SPEC_DELAY;
             break;
-        case 4:
+        case 3:
+        case 8:
         case 11:
         case 23:
             specDisp = 0;
@@ -1694,38 +1832,51 @@ void keypad_loop()
                   
                 } else {
                 #endif  // TC_HAVETEMP
-    
-                    #ifndef IS_ACAR_DISPLAY
-                    if(p3anim) {
-                        for(int i = 0; i < 12; i++) {
-                            if(!destinationTime.showAnimate3(i))
-                                break;
-                            if(needDepTime) {
-                                departedTime.showAnimate3(i);
-                            }
-                            mydelay(5);
-                        }
-                    } else {
-                    #endif    // IS_ACAR_DISPLAY
-                        #ifndef TC_NO_MONTH_ANIM // ---------------------
-                        for(bool i : { true, false }) {
-                            destinationTime.showAnimate(i);
-                            if(needDepTime) {
-                                departedTime.showAnimate(i);
-                            }
-                            if(i) mydelay(80);
-                        }
-                        #else // TC_NO_MONTH_ANIM -----------------------
-                        destinationTime.show();
+
+                    if(isMiniMode()) {
+                        
+                        destinationTime.clearDisplay();
                         if(needDepTime) {
-                            departedTime.show();
+                            departedTime.clearDisplay();
                             departedTime.onCond();
                         }
                         destinationTime.onCond();
-                        #endif  // TC_NO_MONTH_ANIM ---------------------
-                    #ifndef IS_ACAR_DISPLAY    
+                        
+                    } else {
+    
+                        #ifndef IS_ACAR_DISPLAY
+                        if(p3anim) {
+                            for(int i = 0; i < 12; i++) {
+                                if(!destinationTime.showAnimate3(i))
+                                    break;
+                                if(needDepTime) {
+                                    departedTime.showAnimate3(i);
+                                }
+                                mydelay(5);
+                            }
+                        } else {
+                        #endif    // IS_ACAR_DISPLAY
+                            #ifndef TC_NO_MONTH_ANIM // ---------------------
+                            for(bool i : { true, false }) {
+                                destinationTime.showAnimate(i);
+                                if(needDepTime) {
+                                    departedTime.showAnimate(i);
+                                }
+                                if(i) mydelay(80);
+                            }
+                            #else // TC_NO_MONTH_ANIM -----------------------
+                            destinationTime.show();
+                            if(needDepTime) {
+                                departedTime.show();
+                                departedTime.onCond();
+                            }
+                            destinationTime.onCond();
+                            #endif  // TC_NO_MONTH_ANIM ---------------------
+                        #ifndef IS_ACAR_DISPLAY    
+                        }
+                        #endif  // IS_ACAR_DISPLAY
+
                     }
-                    #endif  // IS_ACAR_DISPLAY
     
                 #ifdef TC_HAVETEMP
                 }
@@ -1734,13 +1885,8 @@ void keypad_loop()
             }
             #endif
 
-            destShowAlt = depShowAlt = 0;     // Reset TZ-Name-Animation
-
-            digitalWrite(WHITE_LED_PIN, LOW); // turn off white LED
-
-            enterWasPressed = false;          // reset flags
-
-            needDepTime = false;
+            // Turn off white LED, reset TZ-Name-Animation & flags
+            resetEnterAnim();
         }
 
     }
@@ -1749,14 +1895,11 @@ void keypad_loop()
 void cancelEnterAnim(bool reenableDT)
 {
     if(enterWasPressed) {
-      
-        enterWasPressed = false;
-        digitalWrite(WHITE_LED_PIN, LOW);
-        
+
         if(reenableDT) {
+            #ifdef TC_HAVEGPS
             char destDisp[16];
             char depDisp[16];
-            #ifdef TC_HAVEGPS
             if(isNavMode()) {
                 gpsMakePos(destDisp, depDisp);
                 destinationTime.showNavDirect(destDisp, false);
@@ -1767,10 +1910,11 @@ void cancelEnterAnim(bool reenableDT)
                 destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit);
             } else
             #endif
+            if(isMiniMode())
+                destinationTime.clearDisplay();
+            else
                 destinationTime.show();
-            
-            destinationTime.onCond();
-            
+
             if(needDepTime) {
                 #ifdef TC_HAVEGPS
                 if(isNavMode()) {
@@ -1788,16 +1932,34 @@ void cancelEnterAnim(bool reenableDT)
                     }
                 } else
                 #endif
+                if(isMiniMode())
+                    departedTime.clearDisplay();
+                else
                     departedTime.show();
 
                 departedTime.onCond();
             }
+
+            destinationTime.onCond();
         }
 
-        destShowAlt = depShowAlt = 0;     // Reset TZ-Name-Animation
-        needDepTime = false;
+        // Turn off white LED, reset TZ-Name-Animation & flags
+        // Call this here, it resets needDepTime, still needed above
+        resetEnterAnim();
+        
         specDisp = 0;
     }
+}
+
+static void resetEnterAnim()
+{
+    enterWasPressed = false;
+    digitalWrite(WHITE_LED_PIN, LOW);
+
+    // Reset TZ-Name-Animation
+    destShowAlt = depShowAlt = 0;
+
+    needDepTime = false;
 }
 
 void cancelETTAnim()
@@ -1810,21 +1972,86 @@ bool keypadIsIdle()
     return (!lastKeyPressed || (millis() - lastKeyPressed >= 2*60*1000));
 }
 
+static void resetDisplayMode(bool setDep)
+{
+    // Reset the red display and disable nav&rc&wc&mini modes if they use it.
+    // if setDep is set, reset the yellow display instead, and disable
+    // rc/wc/nav/mini it they use it.
+
+    // Mini & Nav use both displays, so disable regardless of display to set
+
+    if(isMiniMode()) {
+        enableMiniMode(false);
+        needDepTime = true;
+    }
+
+    #ifdef TC_HAVEGPS
+    if(isNavMode()) {
+        enableNavMode(false);
+        needDepTime = true;
+    }
+    #endif
+
+    #ifdef TC_HAVETEMP
+    bool rcUsesLT = (isRcMode() && (tempSens.haveHum() || isWcMode()));
+    #endif
+
+    if(!setDep) {
+        // If setting the red display, disable RC mode, and
+        // reset yellow display if used for RC or RC+WC mode.
+        #ifdef TC_HAVETEMP
+        if(rcUsesLT) needDepTime = true;
+        enableRcMode(false);
+        #endif
+
+        if(isWcMode() && WcHaveTZ1) {
+            // If WC mode is enabled and we have a TZ for red display,
+            // we need to disable WC mode in order to keep the new dest
+            // time on display. When disabling WC mode we need to reset
+            // the yellow display as well if we have a TZ for it.
+            // We restore the yellow time to either the stored value or 
+            // the current auto-int step, otherwise the current yellow WC 
+            // time would remain but become stale, which is confusing.
+            // If there is no TZ for red display, no need to disable WC
+            // mode at this point.
+            if(WcHaveTZ2) {
+                // Restore backed up time
+                restoreLastTime();
+                needDepTime = true;
+            }
+            enableWcMode(false);
+        }
+        
+    } else {
+
+        // Since the caller explicitly wants to reset the yellow
+        // display, it needs to set needDepTime to true.
+      
+        // If setting the yellow display, check if it used by RC
+        // or RC+WC mode, and only disable either one if yes.
+        #ifdef TC_HAVETEMP
+        if(rcUsesLT) enableRcMode(false);
+        #endif
+
+        if(isWcMode() && WcHaveTZ2) {
+            // As above but vice versa.
+            if(WcHaveTZ1) restoreDestTime();
+            enableWcMode(false);
+        }
+        
+    }
+}
+
 static void setupWCMode()
 {
     if(isWcMode()) {
         DateTime dtu;
         myrtcnow(dtu);
         setDatesTimesWC(dtu);
-    } else if(autoTimeIntervals[autoInterval] == 0 || (timetravelPersistent && checkIfAutoPaused())) {
-        // Restore stored time if either time cycling is off, or
-        // if paused; latter only if we have the last
-        // time stored. Otherwise we have no previous time.
-        if(WcHaveTZ1) destinationTime.load();
-        if(WcHaveTZ2) departedTime.load();
     } else {
-        if(WcHaveTZ1) destinationTime.setFromStruct(&destinationTimes[autoTime]);
-        if(WcHaveTZ2) departedTime.setFromStruct(&departedTimes[autoTime]);
+        // Restore backed up times
+        if(WcHaveTZ1) restoreDestTime();
+        if(WcHaveTZ2) restoreLastTime();
     }
 }
 
@@ -1862,6 +2089,11 @@ static void buildStalePTStatus(char *buf)
     #else
     sprintf(buf, "EXH MODE  %s", stalePresent ? " ON" : "OFF");
     #endif
+}
+
+static void displayAlarmOff(bool snooze)
+{
+    dt_showTextDirect(snooze ? snoozeString : "ALARM STOP", CDT_CLEAR);
 }
 
 void prepareReboot()

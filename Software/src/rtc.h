@@ -67,7 +67,6 @@ class DateTime {
                     { 
                         _y = 2000; _m = 1; _d = 1; 
                         _hh = 0; _mm = 0; _ss = 0; 
-                        _minsValid = false; 
                     }
         
         DateTime(uint16_t year, uint8_t month, uint8_t day, 
@@ -75,7 +74,6 @@ class DateTime {
                     {
                         _y  = year;  _m  = month; _d  = day;
                         _hh = hour;  _mm = min;   _ss = sec;
-                        _minsValid = false;
                     }
 
         uint16_t year()   const { return _y; }
@@ -90,18 +88,13 @@ class DateTime {
                     {
                         _y  = yyy; _m  = mon; _d  = ddd; 
                         _hh = hhh; _mm = mmm; _ss = sss;
-                        _minsValid = false;
                     }
         void     setYear(uint16_t yyy) 
                     {
                         _y = yyy;
-                        _minsValid = false;
                     }
 
         uint16_t hwRTCYear = 0;
-        
-        bool     _minsValid = false;
-        uint64_t _mins = 0;
 
     private:
 

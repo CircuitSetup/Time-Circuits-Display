@@ -15,9 +15,12 @@
  ***                     Basic Hardware Definition                     ***
  *************************************************************************/
 
-// Uncomment if month is 2 digits (7-seg), as in the original A-Car display.
+// Uncomment if using A-Car displays (numeric month)
 // See TC_NO_MONTH_ANIM for more "A-carness".
 //#define IS_ACAR_DISPLAY
+
+// Uncomment if using a GTE keypad control board
+//#define GTE_KEYPAD
 
 /*************************************************************************
  ***                          Version Strings                          ***
@@ -25,11 +28,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION_REV   "V3.20"      // 7 chars max. Do NOT change format.
+#define TC_VERSION_REV   "V3.21"      // 7 chars max. Do NOT change format.
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "MAR042026"  // 13 chars max
+#define TC_VERSION_EXTRA "MAR272026"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "03042026"   // 12 chars max
+#define TC_VERSION_EXTRA "03272026"   // 12 chars max
 #endif
 
 /*************************************************************************
@@ -76,9 +79,6 @@
 // See sensors.cpp for supported i2c slave addresses.
 //#define TC_HAVELIGHT
 
-// Uncomment if using a GTE/TRW keypad control board
-//#define GTE_KEYPAD
-
 // (Un)comment for RTC chip selection. At least one MUST be defined.
 #define HAVE_DS3231
 //#define HAVE_PCF2129
@@ -112,7 +112,9 @@
 // Might be desirable when using A-car displays: Given the "month" is
 // just an ordinary 2-digit number (and no back-lit gel) the real thing
 // probably switched on the entire line at once.
-//#define TC_NO_MONTH_ANIM
+#ifdef IS_ACAR_DISPLAY
+#define TC_NO_MONTH_ANIM
+#endif
 
 // Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino 2.x)
 //#define USE_SPIFFS
@@ -121,11 +123,12 @@
  ***                           Customization                           ***
  *************************************************************************/
 
-//#define TWSOUND         // Use A10001986 sound pack
-//#define TWPRIVATE     // A10001986's private customizations
+//#define V_A10001986     // Define A10001986 edition (sound-pack)
+
+//#define TWPRIVATE       // A10001986's private customizations
 
 #ifdef TWPRIVATE
-//#define SERVOSPEEDO
+#define SERVOSPEEDO
 //#define TC_PROFILER
 #endif
 
@@ -137,7 +140,7 @@
 //#define TCD_DBG_NONE
 
 #if !defined(TCD_DBG_NONE)
-#define TC_DBG_BOOT           // Boot strap & settings
+//#define TC_DBG_BOOT           // Boot strap & settings
 //#define TC_DBG_WIFI           // WiFi-related
 //#define TC_DBG_MQTT           // MQTT-related
 //#define TC_DBG_AUDIO          // Audio-related
@@ -169,7 +172,7 @@
 #endif
 #ifdef TWPRIVATE
 #define TC_VERSION TC_VERSION_REV " P" V_ACAR V_GTE V_SS
-#elif defined(TWSOUND)
+#elif defined(V_A10001986)
 #define TC_VERSION TC_VERSION_REV " A" V_ACAR V_GTE V_SS
 #else
 #define TC_VERSION TC_VERSION_REV " C" V_ACAR V_GTE V_SS

@@ -76,7 +76,6 @@ extern uint32_t mainConfigHash;
 // Default settings
 #define DEF_HOSTNAME        "timecircuits"
 #define DEF_WIFI_RETRY      3     // 1-10; Default: 3 retries
-#define DEF_WIFI_TIMEOUT    7     // 7-25; Default: 7 seconds
 #define DEF_WIFI_PRETRY     1     // 1: Nightly periodic WiFi reconnection attempts for time sync; 0: off
 #define DEF_WIFI_OFFDELAY   0     // 0/10-99; Default 0 = Never power down WiFi in STA-mode
 #define DEF_AP_CHANNEL      1     // 1-13; 0 = random(1-13)
@@ -85,14 +84,21 @@ extern uint32_t mainConfigHash;
 #define DEF_PLAY_INTRO      1     // 0: Skip intro; 1: Play intro
 #define DEF_BEEP            0     // 0: annoying beep(tm) off, 1: on, 2: on (30 secs), 3: on (60 secs)
 #define DEF_AUTOROTTIMES    1     // Time cycling interval. 0: off, 1: 5min, 2: 10min, 3: 15min, 4: 30min, 5: 60min
+#define DEF_ANIM_AUTOROT    1     // 0: Skip time cycling animation, 1:Animate
 #define DEF_SKIP_TTANIM     0     // 0: Display disruption during TT; 1: No disruption
 #define DEF_P3ANIM          0     // 0: P1/P2 anim, 1: P3 anim on destination date entry
+#define DEF_SWPDL           0     // 0: Red is red displays, y is y; 1: swap (for b-car replica)
 #define DEF_PLAY_TT_SND     1     // 1: Play time travel sounds, 0: Do not; for use with external gear
 #define DEF_ALARM_RTC       1     // 0: Alarm is presentTime-based; 1: Alarm is RTC-based
 #define DEF_MODE24          0     // 0: 12 hour clock; 1: 24 hour clock
 #define DEF_TIMEZONE        ""    // Default: UTC; Posix format
 #define DEF_NTP_SERVER      "pool.ntp.org"
-#define DEF_USE_GPS_TIME    1     // Use GPS time (if available). 
+#define DEF_USE_GPS_TIME    1     // Use GPS time (if available)
+#define DEF_ALARM_TYPE      0     // 0: Simple/legacy, 1: Advanced
+#define DEF_SNOOZE          1
+#define DEF_SNOOZE_TIME     9
+#define DEF_ASNOOZE         1
+#define DEF_LOOP_USER_SND   0
 #define DEF_BRIGHT_DEST     10    // 1-15
 #define DEF_BRIGHT_PRES     10
 #define DEF_BRIGHT_DEPA     10
@@ -104,8 +110,12 @@ extern uint32_t mainConfigHash;
 #define DEF_AUTONM_OFF      0
 #define DEF_USE_LIGHT       0     // 0: Ignore light sensor, 1: use sensor
 #define DEF_LUX_LIMIT       3     // Lux threshold for night mode
-#define DEF_TEMP_UNIT       0     // 0: temperature unit Fahrenheit; 1: Celsius
-#define DEF_TEMP_OFFS       0.0f  // temperature offset
+#define DEF_CFG_ON_SD       1     // 1: Save secondary settings on SD, 0: Do not (use internal Flash)
+#define DEF_TIMES_PERS      0     // 0: Timetravels not persistent; 1: TT persistent
+#define DEF_SD_FREQ         0     // 0: SD/SPI frequency: Default 16MHz
+#define DEF_REVAMPM         0     // 0: AM/PM like in P1, 1: AM/PM like in P2/P3
+
+#define DEF_FAKE_PWR        0     // 0: Do not use external fake "power" switch, 1: Do
 #define DEF_SPEEDO_TYPE     99    // 99: None
 #define DEF_BRIGHT_SPEEDO   15    // Brightness for speedo
 #ifdef SP_ALWAYS_ON
@@ -122,20 +132,17 @@ extern uint32_t mainConfigHash;
 #define DEF_DISP_TEMP       1     // 1: Display temperature (if available) on speedo; 0: do not (speedo off)
 #define DEF_TEMP_BRIGHT     3     // Temperature brightness
 #define DEF_TEMP_OFF_NM     1     // 1: temperature off in night mode; 0: dimmed
-#define DEF_FAKE_PWR        0     // 0: Do not use external fake "power" switch, 1: Do
+#define DEF_TEMP_UNIT       0     // 0: temperature unit Fahrenheit; 1: Celsius
+#define DEF_TEMP_OFFS       0.0f  // temperature offset
 #define DEF_ETT_DELAY       0     // in ms; Default 0: ETT immediately
 #define DEF_ETT_LONG        1     // [removed] 0: Ext. TT short (reentry), 1: long
-#define DEF_GPS4BTTFN       0     // 0: Do not provide GPS speed for BTTF props; 1: Do
 #define DEF_ETTO_CMD        0     // 0: not controllable by 990/991 commands, 1: controllable by commands
 #define DEF_USE_ETTO        0     // 0: No signal on TT; 1: TT_OUT signals time travel
 #define DEF_ETTO_ALM        0     // 0: No signal on alarm; 1: TT_OUT signals alarm
 #define DEF_ETTO_PUS        0     // TT_OUT by command: 0: Power up state is low; 1: high
 #define DEF_NO_ETTO_LEAD    0     // 0: ETTO with ETTO_LEAD lead time; 1: without
 #define DEF_ETTO_ALM_D      5     // TT_OUT signals alarm for x seconds
-#define DEF_CFG_ON_SD       1     // 1: Save secondary settings on SD, 0: Do not (use internal Flash)
-#define DEF_TIMES_PERS      0     // 0: Timetravels not persistent; 1: TT persistent
-#define DEF_SD_FREQ         0     // 0: SD/SPI frequency: Default 16MHz
-#define DEF_REVAMPM         0     // 0: AM/PM like in P1, 1: AM/PM like in P2/P3
+#define DEF_GPS4BTTFN       0     // 0: Do not provide GPS speed to BTTF props; 1: Do
 
 #define DEF_MQTT_VTT        1     // 0: MQTT sends TIMETRAVEL, 5 sec lead. 1: sends TIMETRAVEL_xxxx_yyyy with variable lead
 
@@ -152,11 +159,11 @@ extern uint32_t mainConfigHash;
 struct Settings {
     char ssid[34]           = "";
     char pass[66]           = "";
+    char bssid[18]          = "";
 
-    char hostName[34]       = DEF_HOSTNAME;
+    char hostName[32]       = DEF_HOSTNAME;
     char wifiConRetries[4]  = MS(DEF_WIFI_RETRY);
-    char wifiConTimeout[4]  = MS(DEF_WIFI_TIMEOUT);
-    char wifiPRetry[4]      = MS(DEF_WIFI_PRETRY);
+    char wifiPRetry[2]      = MS(DEF_WIFI_PRETRY);
     char wifiOffDelay[4]    = MS(DEF_WIFI_OFFDELAY);
     char systemID[8]        = "";
     char appw[10]           = "";
@@ -166,11 +173,14 @@ struct Settings {
     char playIntro[2]       = MS(DEF_PLAY_INTRO);
     char beep[2]            = MS(DEF_BEEP);
     char autoRotateTimes[2] = MS(DEF_AUTOROTTIMES);
-    char autoRotAnim[2]     = "1";
+    char autoRotAnim[2]     = MS(DEF_ANIM_AUTOROT);
     char skipTTAnim[2]      = MS(DEF_SKIP_TTANIM);
-#ifndef IS_ACAR_DISPLAY    
+#ifndef IS_ACAR_DISPLAY
     char p3anim[2]          = MS(DEF_P3ANIM);
-#endif    
+#endif
+#ifdef IS_ACAR_DISPLAY
+    char swapDL[2]          = MS(DEF_SWPDL);
+#endif
     char playTTsnds[2]      = MS(DEF_PLAY_TT_SND);
     char alarmRTC[2]        = MS(DEF_ALARM_RTC);
     char mode24[2]          = MS(DEF_MODE24);
@@ -183,6 +193,11 @@ struct Settings {
     char timeZoneDep[64]    = "";
     char timeZoneNDest[16]  = "";
     char timeZoneNDep[16]   = "";
+    char alarmType[2]       = MS(DEF_ALARM_TYPE);
+    char doSnooze[2]        = MS(DEF_SNOOZE);
+    char snoozeTime[4]      = MS(DEF_SNOOZE_TIME);
+    char autoSnooze[2]      = MS(DEF_ASNOOZE);
+    char almLoopUserSnd[2]  = MS(DEF_LOOP_USER_SND);
     char dtNmOff[2]         = MS(DEF_DT_OFF);
     char ptNmOff[2]         = MS(DEF_PT_OFF);
     char ltNmOff[2]         = MS(DEF_LT_OFF);
@@ -192,11 +207,13 @@ struct Settings {
 #ifdef TC_HAVELIGHT
     char useLight[2]        = MS(DEF_USE_LIGHT);
     char luxLimit[8]        = MS(DEF_LUX_LIMIT);
-#endif    
-#ifdef TC_HAVETEMP
-    char tempUnit[2]        = MS(DEF_TEMP_UNIT);
-    char tempOffs[6]        = MS(DEF_TEMP_OFFS);
 #endif
+    char CfgOnSD[2]         = MS(DEF_CFG_ON_SD);
+    char timesPers[2]       = MS(DEF_TIMES_PERS);
+    //char sdFreq[2]          = MS(DEF_SD_FREQ);
+    char revAmPm[4]         = MS(DEF_REVAMPM);
+
+    char fakePwrOn[2]       = MS(DEF_FAKE_PWR);
     char speedoType[4]      = MS(DEF_SPEEDO_TYPE);
     char speedoBright[4]    = MS(DEF_BRIGHT_SPEEDO);
     char speedoAO[2]        = MS(DEF_SPEEDO_AO);
@@ -212,13 +229,25 @@ struct Settings {
     char dispTemp[2]        = MS(DEF_DISP_TEMP);
     char tempBright[4]      = MS(DEF_TEMP_BRIGHT);
     char tempOffNM[2]       = MS(DEF_TEMP_OFF_NM);
+    char tempUnit[2]        = MS(DEF_TEMP_UNIT);
+    char tempOffs[6]        = MS(DEF_TEMP_OFFS);
 #endif
-    char fakePwrOn[2]       = MS(DEF_FAKE_PWR);
     char ettDelay[8]        = MS(DEF_ETT_DELAY);
     char ettLong[2]         = MS(DEF_ETT_LONG);
+    char ETTOcmd[2]         = MS(DEF_ETTO_CMD);
+    char useETTO[2]         = MS(DEF_USE_ETTO);
+    char ETTOalm[2]         = MS(DEF_ETTO_ALM);
+    char ETTOpus[2]         = MS(DEF_ETTO_PUS);
+    char noETTOLead[2]      = MS(DEF_NO_ETTO_LEAD);
+    char ETTOAD[6]          = MS(DEF_ETTO_ALM_D);
+#ifdef SERVOSPEEDO
+    char ttinpin[4]         = "0";
+    char ttoutpin[4]        = "0";
+#endif
 #ifdef TC_HAVEGPS
     char provGPS2BTTFN[2]   = MS(DEF_GPS4BTTFN);
 #endif
+
 #ifdef TC_HAVEMQTT  
     char useMQTT[2]         = "0";
     char mqttVers[2]        = "0"; // 0 = 3.1.1, 1 = 5.0
@@ -229,21 +258,11 @@ struct Settings {
     char MQTTvarLead[2]     = MS(DEF_MQTT_VTT); // publish TIMETRAVEL with lead and P1 duration appended (default to on)
     char mqttPwr[2]         = "0"; // Do not start with MQTT having control over fake-power
     char mqttPwrOn[2]       = "0"; // Do not wait for POWER_ON at startup
+    char *mqmt[10];
+    char *mqmm[10];
 #endif // TC_HAVEMQTT
-    char ETTOcmd[2]         = MS(DEF_ETTO_CMD);
-    char useETTO[2]         = MS(DEF_USE_ETTO);
-    char ETTOalm[2]         = MS(DEF_ETTO_ALM);
-    char ETTOpus[2]         = MS(DEF_ETTO_PUS);
-    char noETTOLead[2]      = MS(DEF_NO_ETTO_LEAD);
-    char ETTOAD[6]          = MS(DEF_ETTO_ALM_D);
-    char CfgOnSD[2]         = MS(DEF_CFG_ON_SD);
-    char timesPers[2]       = MS(DEF_TIMES_PERS);
-    //char sdFreq[2]          = MS(DEF_SD_FREQ);
-    char revAmPm[4]         = MS(DEF_REVAMPM);
-#ifdef SERVOSPEEDO
-    char ttinpin[4]         = "0";
-    char ttoutpin[4]        = "0";
-#endif
+
+    // Kludge
     uint8_t destTimeBright  = DEF_BRIGHT_DEST;
     uint8_t presTimeBright  = DEF_BRIGHT_PRES;
     uint8_t lastTimeBright  = DEF_BRIGHT_DEPA;
@@ -304,6 +323,9 @@ void saveServoCorr(int scorr, int tcorr);
 #endif
 
 void saveUpdAvail();
+
+void loadUpdVers(int &v, int& r);
+void saveUpdVers(int v, int r);
 
 void loadMusFoldNum();
 void saveMusFoldNum();

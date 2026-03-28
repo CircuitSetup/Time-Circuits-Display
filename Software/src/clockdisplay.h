@@ -86,6 +86,9 @@ class clockDisplay {
     public:
 
         clockDisplay(uint8_t did, uint8_t address);
+        #ifdef IS_ACAR_DISPLAY
+        void setAddress(uint8_t address) { _address = address; }
+        #endif
         void begin();
         void on();
         void onCond();        
@@ -126,7 +129,7 @@ class clockDisplay {
         void showAlt();
         void setAltText(const char *text);
 
-        void setDateTime(DateTime& dt);
+        void setDateTime(DateTime& dt, int wd = 0);
         void setFromStruct(const dateStruct *s);
         void setFromParms(int year, int month, int day, int hour, int minute);
 
@@ -138,8 +141,9 @@ class clockDisplay {
         void setYear(uint16_t yearNum);
         void setHour(uint16_t hourNum);
         void setMinute(int minNum);
+        void setWeekDay(int wd);
 
-        void setColon(bool col) { _colon = _nightmode ? true : col; } // colon is on in night mode
+        void setColon(bool col) { _colon = _nightmode ? true : col; _beat ^= col; } // colon is on in night mode
 
         void setYearOffset(int16_t yearOffs);
 
@@ -176,6 +180,8 @@ class clockDisplay {
         void showNavDirect(char *msg, bool animate);
         #endif
 
+        void clearDisplay();
+
         bool    load();
         void    savePending();
         bool    saveFlush();
@@ -209,7 +215,6 @@ class clockDisplay {
         void AM();
         void PM();
 
-        void clearDisplay();
         void directCmd(uint8_t val);
         void directBuf(uint16_t *db, int len = CD_BUF_SIZE);
         void directCol(int col, int segments);
@@ -227,6 +232,7 @@ class clockDisplay {
         uint8_t _hour = 0;
         uint8_t _minute = 0;
         bool    _colon = false;         // should colon be on?
+        bool    _beat = false;
 
         bool     _mode24 = false;       // true = 24 hour mode, false = 12 hour mode
         uint16_t _am = _AM;

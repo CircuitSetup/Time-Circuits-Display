@@ -84,6 +84,7 @@ extern bool showUpdAvail;
 
 extern uint16_t lastYear;
 
+extern DateTime gdtu, gdtl;
 extern bool couldDST[3];
 extern bool haveWcMode;
 extern bool WcHaveTZ1;
@@ -142,6 +143,8 @@ extern bool          forceReEvalANM;
 extern unsigned long ctDown;
 extern unsigned long ctDownNow;
 
+extern unsigned long alarmPlaying;
+
 extern bool          ETTOcommands;
 
 #define NUM_AUTOTIMES 11
@@ -167,6 +170,7 @@ extern uint32_t csf;
 #define CSF_MA  0x40    // Menu active = busy
 #define CSF_NS  0x80    // No scan: Suppress WiFi Scan (so we don't have to abuse any other flag)
 #define CSF_NM 0x100    // Night mode
+#define CSF_AL 0x200    // Alarm
 
 // bttfn_loop() taskMask
 #define BNLP_SK_MC      1   // skip MC socket poll
@@ -224,7 +228,14 @@ void      bttfnSendRemCmd(uint32_t payload);
 void      resetPresentTime();
 
 bool      currentlyOnTimeTravel();
-void      updatePresentTime(DateTime& dtu, DateTime& dtl);
+
+void      backupDestTime();
+void      restoreDestTime();
+void      backupLastTime();
+void      restoreLastTime();
+
+void      updatePresentTime(uint8_t wdplus1 = 0);
+void      updateStalePresent(int index);
 
 void      pauseAuto();
 bool      checkIfAutoPaused();
@@ -245,11 +256,20 @@ void      pwrNeedFullNow(bool force = false);
 void      myrtcnow(DateTime& dt);
 
 uint64_t  millis64();
+unsigned long millisNonZero();
+
+bool      startSnooze();
+void      cancelSnooze();
+bool      snoozeRunning();
 
 void      enableWcMode(bool onOff);
 bool      toggleWcMode();
 bool      isWcMode();
 void      setDatesTimesWC(DateTime& dt);
+
+void      enableMiniMode(bool onOff);
+bool      toggleMiniMode();
+bool      isMiniMode();
 
 void      enableRcMode(bool onOff);
 bool      toggleRcMode();
@@ -271,10 +291,10 @@ bool      gpsMakePos(char *lat, char *lon);
 bool      haveNavMode();
 void      enableNavMode(bool onOff);
 bool      toggleNavMode();
-bool      isNavMode();
 int       gpsGetDM();
 void      setNavDisplayMode(int dm);
 #endif
+bool      isNavMode();
 
 #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
 void      speedoUpdate_loop(bool async);

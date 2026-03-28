@@ -101,4 +101,6 @@ void enterkeyScan();
 
 void prepareReboot();
 
+void s5(bool b);
+
 #endif

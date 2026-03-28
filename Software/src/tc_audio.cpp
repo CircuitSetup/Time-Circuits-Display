@@ -59,14 +59,8 @@
 #include <Arduino.h>
 #include <SD.h>
 #include <FS.h>
-#ifdef USE_SPIFFS
-#include <SPIFFS.h>
-#include "src/ESP8266Audio/AudioFileSourceSPIFFS.h"
-#else
-#include <LittleFS.h>
-#include "src/ESP8266Audio/AudioFileSourceLittleFS.h"
-#endif
-#include "src/ESP8266Audio/AudioFileSourceSD.h"
+
+#include "AudioFileSourceLoop.h"
 #include "src/ESP8266Audio/AudioFileSourcePROGMEM.h"
 
 #include "src/ESP8266Audio/AudioGeneratorMP3.h"
@@ -128,12 +122,8 @@ class AudioGeneratorWAVP : public AudioGeneratorWAV
 static AudioGeneratorMP3 *mp3;
 static AudioGeneratorWAVP *wav;
 
-#ifdef USE_SPIFFS
-static AudioFileSourceSPIFFS *myFS0;
-#else
-static AudioFileSourceLittleFS *myFS0;
-#endif
-static AudioFileSourceSD *mySD0;
+static AudioFileSourceFSLoop *myFS0;
+static AudioFileSourceSDLoop *mySD0;
 static AudioFileSourcePROGMEM *myPM;
 
 static AudioOutputI2S *out;
@@ -176,6 +166,8 @@ static int     sampleCnt  = 0;
 static int     mutechannels = 0;
 
 static uint32_t key_playing = 0;
+static bool     alarm_playing = 0;
+static bool     alarm_looped = false;
 
 static int      lastDoorNum = 0;
 static unsigned long lastDoorSoundNow = 0;
@@ -203,6 +195,8 @@ char id3track[16] = { 0 };
 
 static float  getVolume();
 static void   setLineOut(bool doLineOut);
+
+static void clear_alarm_playing();
 
 static int    mp_findMaxNum();
 static void   mp_nextprev(bool forcePlay, bool next);
@@ -248,14 +242,10 @@ void audio_setup()
     mp3 = new AudioGeneratorMP3();
     wav = new AudioGeneratorWAVP();
 
-    #ifdef USE_SPIFFS
-    myFS0 = new AudioFileSourceSPIFFS();
-    #else
-    myFS0 = new AudioFileSourceLittleFS();
-    #endif
-
+    myFS0 = new AudioFileSourceFSLoop();
+    
     if(haveSD) {
-        mySD0 = new AudioFileSourceSD();
+        mySD0 = new AudioFileSourceSDLoop();
     }
 
     myPM = new AudioFileSourcePROGMEM();
@@ -309,6 +299,7 @@ void audio_loop()
         if(!mp3->loop()) {
             mp3->stop();
             key_playing = 0;
+            clear_alarm_playing();
             if(mpActive) {
                 mp_next(true);
             }
@@ -345,7 +336,7 @@ static int skipID3(char *buf)
 void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
 {
     char buf[10];
-    int pos;
+    int32_t pos = 0;
 
     if(flags & PA_INTRMUS) {
         mpActive = false;
@@ -354,7 +345,7 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
     }
 
     pwrNeedFullNow();
-
+    
     #ifdef TC_DBG_AUDIO
     Serial.printf("Audio: Playing %s\n", audio_file);
     #endif
@@ -382,6 +373,9 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
         }
     }
     key_playing = flags & PA_KEYMASK;
+    if((alarm_playing = !!(flags & PA_ALARM))) {
+        alarm_looped = !!(flags & PA_LOOP);
+    }
 
     curVolFact = volumeFactor;
 
@@ -394,7 +388,10 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
 
     out->SetGain(getVolume(), mutechannels);
 
+    buf[0] = 0;
+
     if(haveSD && ((flags & PA_ALLOWSD) || FlashROMode) && mySD0->open(audio_file)) {
+        mySD0->setPlayLoop(false);
         if(flags & PA_ISWAV) {
             wav->begin(mySD0, out);
         } else {
@@ -412,9 +409,11 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
                     mySD0->seek(pos, SEEK_SET);
                 }
             } else {
-                buf[0] = 0;
+                mySD0->setPlayLoop(!!(flags & PA_LOOP));
                 mySD0->read((void *)buf, 10);
-                mySD0->seek(skipID3(buf), SEEK_SET);
+                pos = skipID3(buf);
+                mySD0->setStartPos(pos);
+                mySD0->seek(pos, SEEK_SET);
             }
             mp3->begin(mySD0, out);
         }
@@ -429,11 +428,14 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
     #endif
     {
         if(flags & PA_ISWAV) {
+            myFS0->setPlayLoop(false);
             wav->begin(myFS0, out);
         } else {
-            buf[0] = 0;
+            myFS0->setPlayLoop(!!(flags & PA_LOOP));
             myFS0->read((void *)buf, 10);
-            myFS0->seek(skipID3(buf), SEEK_SET);
+            pos = skipID3(buf);
+            myFS0->setStartPos(pos);
+            myFS0->seek(pos, SEEK_SET);
             mp3->begin(myFS0, out);
         }
         #ifdef TC_DBG_AUDIO
@@ -441,6 +443,7 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
         #endif
     } else {
         key_playing = 0;
+        clear_alarm_playing();
         #ifdef TC_DBG_AUDIO
         Serial.println("Audio file not found");
         #endif
@@ -467,16 +470,14 @@ uint32_t play_keypad_sound(char key)
 
     pwrNeedFullNow();
 
-    stopAudio();
+    stopAudio();    // Clears key_playing, alarm_playing, id3
     beepRunning = playLineOut = false;
     setLineOut(playLineOut);
-    mutechannels = key_playing = 0;
+    mutechannels = 0;
     curChkNM = true;
     curVolFact = 0.6f;
     rawVolIdx = 0;
     anaReadCount = 0;
-
-    id3artist[0] = id3track[0] = 0;
 
     out->SetGain(getVolume(), 0);
 
@@ -512,7 +513,7 @@ void play_beep()
 {
     bool wavRunning = wav->isRunning();
     
-    if((csf & (CSF_NM|CSF_OFF)) ||
+    if((csf & (CSF_NM|CSF_OFF|CSF_AL)) ||
        muteBeep         ||
        mpActive         ||
        mp3->isRunning() ||
@@ -558,7 +559,7 @@ void play_key(int k, uint32_t preDTMFkp)
         return;
     }
     if(pa_key == key_playing) {
-        stopAudio();
+        stopAudio();  // Clears key_playing, alarm_playing, id3
         return;
     }
     
@@ -704,6 +705,20 @@ bool check_file_SD(const char *audio_file)
     return (haveSD && SD.exists(audio_file));
 }
 
+unsigned int check_file_len_SD(const char *audio_file, bool& file_exists)
+{
+    unsigned int s = 0;
+    if(haveSD) {
+        File file;
+        if(file = SD.open(audio_file, FILE_READ)) {
+            s = file.size();
+            file.close();
+        }
+    }
+    file_exists = (s > 0);
+    return s;
+}
+
 int getSWVolFromHWVol()
 {
     float curHWvol = getRawVolume();
@@ -745,14 +760,42 @@ void stopAudio()
     }
     key_playing = 0;    
     id3artist[0] = id3track[0] = 0;
+    clear_alarm_playing();
 }
 
 void stop_key()
 {
     if(key_playing) {
-        mp3->stop();
-        key_playing = 0;
-        id3artist[0] = id3track[0] = 0;
+        stopAudio();
+    }
+}
+
+void stopAlarm(bool force)
+{
+    if(alarm_playing) {
+        if(!force && alarm_looped) {
+            if(haveSD) mySD0->setPlayLoop(false);
+            if(haveFS) myFS0->setPlayLoop(false);
+        } else {
+            stopAudio();
+        }
+    }
+
+    // Cancel timeout in time_loop().
+    // Do not do that in clear_alarm_playing; if the alarm
+    // is interrupted by another sound, stopAudio() calls
+    // clear_alarm_playing(), which clears CSF_AL and thereby
+    // releases the keypad. The timeout-loop in time_loop() 
+    // (controlled by alarmPlaying) can continue to run and
+    // eventually initiate auto-snooze.
+    alarmPlaying = 0;
+}
+
+static void clear_alarm_playing()
+{
+    if(alarm_playing) {
+        alarm_playing = false;
+        csf &= ~CSF_AL;
     }
 }
 

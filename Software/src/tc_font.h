@@ -54,7 +54,7 @@
 #define _TC_FONT_H
 
 #ifndef IS_ACAR_DISPLAY
-static const uint16_t alphaChars[127-31-1] = {
+static const uint16_t alphaChars[127-31-1+4] = {
     0b0000000000000000,  // <space>
     0b0000000000000110,  // !
     0b0000001000100000,  // "
@@ -149,11 +149,15 @@ static const uint16_t alphaChars[127-31-1] = {
     0b0000100101001001,  // {
     0b0001001000000000,  // |
     0b0010010010001001,  // }
-    0b0000000011100011   // ~ (126) displayed as '°' (encoded as ~) [was: 0b0000010100100000]
+    0b0000000011100011,  // ~ (126) displayed as '°' (encoded as ~) [was: 0b0000010100100000]
+    0,                   // unused as 14seg (encoded as \x7f)
+    0,                   // unused as 14seg (encoded as \x80)
+    0b0000011111001000,  // ee4/1 (encoded as \x81)
+    0b0001010000001011   // ee4/2 (encoded as \x82)
 };
 #endif
 
-static const uint8_t numDigs[127-31-1+2] = {
+static const uint8_t numDigs[127-31-1+4] = {
     0b00000000, // space
     0b00000010, // !
     0b00100010, // "
@@ -250,7 +254,9 @@ static const uint8_t numDigs[127-31-1+2] = {
     0b00001111, // }
     0b01100011, // ~  displayed as '°' (encoded as ~)
     0b01101011, // %1  (encoded as \x7f)
-    0b01011101  // %2  (encoded as \x80)
+    0b01011101, // %2  (encoded as \x80)
+    0b01101011, // ee4/1 (encoded as \x81)
+    0b00000000  // ee4/2 (encoded as \x82)
 };
 
 #endif
