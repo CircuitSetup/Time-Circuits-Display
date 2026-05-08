@@ -36,7 +36,7 @@
  * - VEML7700 cannot be used;
  * - VEML6030 needs to be set to address 0x48.
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -48,6 +48,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -314,7 +317,7 @@ tempSensor::tempSensor(int numTypes, const uint8_t *addrArr)
 }
 
 // Start the display
-bool tempSensor::begin(void (*myDelay)(unsigned long))
+bool tempSensor::begin(void (*myDelay)(unsigned long), bool InCelsius)
 {
     bool foundSt = false;
     uint8_t temp, timeOut = 20;
@@ -323,6 +326,7 @@ bool tempSensor::begin(void (*myDelay)(unsigned long))
     unsigned long millisNow = millis();
     
     _customDelayFunc = defaultDelay;
+    _tempInCelsius = InCelsius;
     _st = -1;
 
     // Give the sensor some time to boot
@@ -583,7 +587,7 @@ bool tempSensor::begin(void (*myDelay)(unsigned long))
 }
 
 // Read temperature
-float tempSensor::readTemp(bool celsius)
+float tempSensor::readTemp()
 {
     float temp = NAN;
     uint16_t t = 0, h = 0;
@@ -710,7 +714,7 @@ float tempSensor::readTemp(bool celsius)
     _tempReadNow = millis();
 
     if(!isnan(temp)) {
-        if(!celsius) temp = temp * 9.0f / 5.0f + 32.0f;
+        if(!_tempInCelsius) temp = temp * 9.0f / 5.0f + 32.0f;
         temp += _userOffset;
         _lastTempNan = false;
     } else {

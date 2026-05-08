@@ -6,12 +6,12 @@
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
- * Keypad Menu handling
+ * Keypad Menu
  *
- * Based on code by John Monaco, Marmoset Electronics
+ * Based on ideas by John Monaco, Marmoset Electronics
  * https://www.marmosetelectronics.com/time-circuits-clock
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -23,6 +23,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -55,83 +58,74 @@
 /*
  * The keypad menu
  *
- * The menu is controlled by "pressing" or "holding" the ENTER key on the 
- * keypad.
- *
- * A "press" is shorter than 2 seconds, a "hold" is 2 seconds or longer.
+ * The menu is controlled by the keypad as follows:
  * 
- * Since 3.11, keys 2 (up), 5 (select), 8 (down) and 9 (cancel) are also
- * a way of navigating the keypad menu (unless numerical input is awaited).
+ * Hold ENTER for 2 seconds to invoke the keypad menu.
  * 
- * Data entry is done by pressing the keypad's number keys, and works as 
- * follows: 
+ * Scrolling through lists or increasing/decreasing numerical
+ * values is done by pressing 2/8.
+ * Selecting an item is done by pressing 5 or ENTER.
+ * Pressing 9 cancels and quits without saving any changes. In
+ * case of multi-step menus (such as alarm or volume), 9 
+ * cancels all changes in previous steps, too.
+ * 
+ * ***************  ***************  **************
+ * **     1     **  **     2     **  **     3    **
+ * **           **  **  UP or +  **  **          **
+ * **           **  **           **  **          **
+ * ***************  ***************  **************
+ * 
+ * ***************  ***************  **************
+ * **     4     **  **     5     **  **     6    **
+ * **           **  **  Select   **  **          **
+ * **           **  **           **  **          **
+ * ***************  ***************  **************
+ * 
+ * ***************  ***************  **************
+ * **     7     **  **     8     **  **     9    **
+ * **           **  ** DOWN or - **  **  Cancel/ **
+ * **           **  **           **  **    Quit  **
+ * ***************  ***************  **************
+ * 
+ * When the menu expects numeric data to be entered, it displays "TYPE DIGITS". 
+ * Data entry is then to be done by pressing the keypad's number keys, and this
+ * works as follows: 
  * If you want to keep the currently shown pre-set, press ENTER to proceed 
- * to next field. Otherwise press a digit on the keypad; the pre-set is then 
- * overwritten by the value entered. 2 digits can be entered (4 for years), 
- * upon which the current value is stored and the next field is activated. 
- * You can also enter less than 2/4 digits and press ENTER when done with 
- * the field.
- * Note that the month needs to be entered numerically (1-12), and the hour 
+ * to next field. Otherwise, press a digit on the keypad; the pre-set is then 
+ * overwritten by the value entered. 2 digits can be entered (4 for years). 
+ * Press ENTER when done.
+ * Note that the month needs to be entered numerically (01-12), and the hour 
  * needs to be entered in 24 hour notation (ie from 0 to 23), regardless of 
- * 12-hour or 24-hour mode as per the Config Portal setting.
- *
- * The menu is invoked by holding the ENTER button.
- *
- * First step is to choose a menu item. The available "items" are
- *
- *     - set an alarm ("ALA-RM"),
- *     - set the audio volume (VOL-UME),
- *     - select the music folder number ("MUSIC FOLDER NUMBER")
- *     - select the Time-Cycling Interval ("TIME CYCLING"),
- *     - select the brightness for the three displays ("BRIGHTNESS"),
- *     - show network information ("NET-WORK"),
- *     - enter dates/times for the three displays/set built-in RTC,
- *     - show currently measured data from connected sensors ("SENSORS"),
- *     - show currently registered BTTF clients ("BTTF CLIENTS"),
- *     - quit the menu ("END").
- *
- * Pressing ENTER cycles through the list, holding ENTER selects an item.
+ * 12-hour or 24-hour mode as set in the Config Portal.
  *
  * How to set up the alarm:
  *
  *     - Hold ENTER to invoke main menu
- *     - "ALA-RM" is shown
- *     - Hold ENTER
- *     - Press ENTER to toggle the alarm on and off, hold ENTER to proceed
- *     - Then enter the hour and minutes. This works as described above.
+ *     - "ALARM" is shown
+ *     - Press 5 or ENTER
+ *     - Press 2/8 to toggle the alarm on and off, press 5 or ENTER to proceed
+ *     - Then type the hour and minutes. This works as described above.
  *       Remember to enter the hour in 24-hour notation.
- *     - Select the weekday(s); press ENTER to cycle through the list of
+ *     - Select the weekday(s); press 2/8 to cycle through the list of
  *       available options.
- *     - Hold ENTER. "SAVING" is displayed briefly.
- *
- *    Under normal operation (ie outside of the menu), holding "1" toggles 
- *    the alarm on/off. When the alarm is set and enabled, the dot in the 
- *    present time's minute field will light up.
- *    
- *    This quickly set the alarm time outside of the menu, enter "11hhMM" and 
- *    press ENTER. (Weekday selection must be done through the menu.)
- *    To see the current time/weekday settings, type 11 and press ENTER.
- *
- *    Note that the alarm is recurring, ie it rings at the programmed time
- *    unless disabled. Also note that the alarm is by default relative to your 
- *    actual present time, not the time displayed (eg after a time travel). 
- *    It can, however, be configured to be based on the time displayed, in 
- *    the Config Portal.
+ *     - Press 5 or ENTER to select. 
+ *     - If "Custom Days" was selected, press 1-7 to toggle days. Press
+ *       ENTER when done.
+ *     - "SAVING" is displayed briefly.
  *
  * How to set the audio volume:
  *
- *     Basically, and by default, the device uses the hardware volume knob to 
- *     determine the desired volume. You can change this to a fixed level as 
- *     follows:
+ *     By default, the TCD uses the hardware volume knob to determine the desired 
+ *     volume. You can change this to a fixed level as follows:
  *
  *     - Hold ENTER to invoke main menu
- *     - Press ENTER until "VOL-UME" is shown
- *     - Hold ENTER
- *     - Press ENTER to toggle between "USE VOLUME KNOB" and "FIXED LEVEL"
- *     - Hold ENTER to proceed
- *     - If you chose "FIXED LEVEL", you can now select the desired level by 
- *       pressing ENTER repeatedly. There are 20 levels available.
- *     - Hold ENTER to save and quit the menu ("SAVING" is displayed
+ *     - Press 2/8 until "VOLUME" is shown
+ *     - Press 5 or ENTER
+ *     - Press 2/8 to toggle between "USE VOLUME KNOB" and "SELECT LEVEL"
+ *     - Press 5 or ENTER to proceed
+ *     - If you chose "SELECT LEVEL", you can now select the desired level by 
+ *       pressing 2/8. There are 20 levels available.
+ *     - Press 5 or ENTER to save and quit the menu ("SAVING" is displayed
  *       briefly)
  *       
  *     Commands 3xx (00-19; 99) also allow configuring the volume; using
@@ -141,56 +135,48 @@
  * How to select the Music Folder Number:
  * 
  *     - Hold ENTER to invoke main menu
- *     - Press ENTER until "MUSIC FOLDER NUMBER" is shown
- *     - Hold ENTER, "NUMBER" is displayed
- *     - Press ENTER to cycle through the possible settings (0-9)
- *       values.
- *     - Hold ENTER to save and quit the menu ("SAVING" is displayed
+ *     - Press 2/8 until "MUSIC FOLDER NUMBER" is shown
+ *     - Press 5 or ENTER
+ *     - Press 2/8 to cycle through the possible values (0-9)
+ *     - Press 5 or ENTER to save and quit the menu ("SAVING" is displayed
  *       briefly)
  * 
  * How to select the Time-cycling Interval:
  *
  *     - Hold ENTER to invoke main menu
- *     - Press ENTER until "TIME CYCLING" is shown
- *     - Hold ENTER, "INTERVAL" is displayed
- *     - Press ENTER to cycle through the possible Time-cycling Interval 
+ *     - Press 2/8 until "TIME CYCLING" is shown
+ *     - Press 5 or ENTER
+ *     - Press 2/8 to cycle through the possible Time-cycling Interval 
  *       values.
- *
- *       A value of 0 disables automatic time cycling ("OFF").
- *
- *       Non-zero values make the device cycle through a number of pre-
- *       programmed times. The value means "minutes" (hence "MINUTES") between 
- *       changes.
- *
- *     - Hold ENTER to select the value shown and exit the menu ("SAVING" is 
+ *     - Press 5 or ENTER to select the value shown and exit the menu ("SAVING" is 
  *       displayed briefly)
  *
  * How to adjust the display brightness:
  *
  *     - Hold ENTER to invoke main menu
- *     - Press ENTER until "BRIGHTNESS" is shown
- *     - Hold ENTER, the displays show all elements, the top-most display 
- *       says "LVL"
- *     - Press ENTER to cycle through the possible levels (1-15)
- *     - Hold ENTER to use current value and proceed to next display
+ *     - Press 2/8 until "BRIGHTNESS" is shown
+ *     - Press 5 or ENTER
+ *     - Press 2/8 to cycle through the possible levels (1-15) for the
+ *       red display.
+ *     - Press 5 or ENTER to proceed to the next display
  *     - After the third display, "SAVING" is displayed briefly and the menu 
  *       is left automatically.
  *
  * How to find out the IP address, WiFi status, MAC address, HA Status
  *
  *     - Hold ENTER to invoke main menu
- *     - Press ENTER until "NET-WORK" is shown
- *     - Hold ENTER, the displays shows the IP address
- *     - Press ENTER to toggle between WiFi status, MAC address, IP address
+ *     - Press 2/8 until "NETWORK" is shown
+ *     - Press 5 or ENTER, the displays shows the IP address
+ *     - Press 2/8 to switch between WiFi status, MAC address, IP address
  *       and HomeAssistant/MQTT connection status
- *     - Hold ENTER to leave the menu
+ *     - Press 5 or ENTER to leave the menu
  *
  * How to enter dates/times for the three displays / set the RTC:
  *
  *     - Hold ENTER to invoke main menu
- *     - Press ENTER until the desired display is the only one lit
- *     - Hold ENTER until the display goes off except for the first field 
- *       to enter data into
+ *     - Press 2/8 until the desired display shows a date and time, and
+ *       "PROGRAM DATE" or "SET CLOCK" (for the green display) is shown
+ *     - Press 5 or ENTER
  *     - The field to enter data into is shown (exclusively), pre-set with
  *       its current value.
  *     - Data entry works as described above.
@@ -207,25 +193,23 @@
  *     Portal.
  *     
  *     Note that when entering dates/times into the destination time or last 
- *     time departed displays, the Time-rotation Interval is automatically 
- *     set to 0 (ie turned off). Your entered date/time(s) are shown until 
- *     overwritten by time travels (see above, section How to select the 
- *     Time-rotation Interval").
+ *     time departed displays, Time Cycling is paused for 30 minutes. 
+ *     Your entered date/time(s) are shown until overwritten by time travels.
+ *     To bring them back, use keypad command 998.
  *     
  * How to view light/temperature/humidity sensor data:
  *
  *     - Hold ENTER to invoke main menu
- *     - Press ENTER until "SENSORS" is shown. If this menu does not appear,
+ *     - Press 2/8 until "SENSORS" is shown. If this menu does not appear,
  *       no light and/or temperature sensors were detected during boot.
- *     - Hold ENTER to proceed
+ *     - Press 5 or ENTER to proceed
  *     - Sensor data is shown; if both light and temperature sensors are present,
- *       press ENTER to toggle between their data.
- *     - Hold ENTER to leave the menu
+ *       press 2/8 to switch between their data.
+ *     - Press 5 or ENTER to leave the menu
  *
  * How to leave the menu:
  *
- *     While the menu is active, repeatedly press ENTER until "END" is displayed.
- *     Hold ENTER to leave the menu
+ *     While the main menu is active, press 9 to quit.
  */
 
 #include "tc_global.h"
@@ -234,7 +218,7 @@
 #include <Wire.h>
 #include <WiFi.h> 
 
-#include "clockdisplay.h"
+#include "tcddisplay.h"
 #include "tc_keypad.h"
 #include "tc_time.h"
 #include "tc_audio.h"
@@ -256,8 +240,9 @@
 #define MODE_LTS  10
 #define MODE_CLI  11
 #define MODE_VER  12
-#define MODE_END  13
-#define MODE_MAX  MODE_END
+
+#define MODE_MIN  MODE_ALRM
+#define MODE_MAX  MODE_VER
 
 #define FIELD_MONTH   0
 #define FIELD_DAY     1
@@ -265,35 +250,27 @@
 #define FIELD_HOUR    3
 #define FIELD_MINUTE  4
 
-uint8_t autoInterval = DEF_AUTOROTTIMES;
-const uint8_t autoTimeIntervals[6] = {0, 5, 10, 15, 30, 60};  // first must be 0 (=off)
-
-bool    alarmOnOff   = DEF_ALARM_ONOFF;
-uint8_t alarmHour    = DEF_ALARM_HOUR;
-uint8_t alarmMinute  = DEF_ALARM_MINUTE;
-uint8_t alarmWeekday = DEF_ALARM_WD;
-
-uint8_t remMonth = DEF_REM_MONTH;
-uint8_t remDay   = DEF_REM_DAY;
-uint8_t remHour  = DEF_REM_HOUR;
-uint8_t remMin   = DEF_REM_MIN;
-
-static int menuItemNum;
-
-int  keypadMode = 0;
-bool isYearUpdate = false;
-
-static clockDisplay* displaySet;
-
-// File copy progress
-static bool fcprog = false;
-static unsigned long fcstart = 0;
+static tcdDisplay* displaySet;
 
 // Our generic timeout when waiting for buttons
 #define MENUTIMEOUT 60000   // 60 seconds
 static unsigned long timeout = 0;
 
-static const char *StrSaving = "SAVING";
+static const char *digitsHelp = "TYPE DIGITS";
+
+static const char *StrSaving  = "SAVING";
+static const char *StrCancel1 = "CANCELED -";
+static const char *StrCancel2 = "CHANGES NOT";
+static const char *StrCancel3 = "SAVED";
+
+static const char *alarmWDSel = "USER DAYS";
+static const char *alarmWDHelp = "1-7 FOR DAYS";
+
+#ifdef IS_ACAR_DISPLAY
+static const char *almFmt = "%3s     %02d%02d";
+#else
+static const char *almFmt = "%3s      %02d%02d";
+#endif
 static const char *alarmWD[10] = {
       #ifdef IS_ACAR_DISPLAY
       "MON-SUN", "MON-FRI", "SAT-SUN",
@@ -302,31 +279,24 @@ static const char *alarmWD[10] = {
       #endif
       "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"
 };
+static const char alarmWDLetters[] = "SMTWTFS";
+static char       alarmWDBuf[8];
 
-static bool menuSelect(int& number, int mode_min, DateTime& dtu, DateTime& dtl);
-static void menuShow(int number);
-static void setUpdate(int number, int field, uint16_t dflags = 0);
-static bool setField(int& number, uint8_t field, int year = 0, int month = 0, uint16_t dflags = 0);
-static void showCurVolHWSW(bool blink);
-static void showCurVol(bool blink, bool doComment);
-static void doSetVolume();
-static void displayMSfx(int msfx, bool blink, bool doFolderChk);
-static void doSetMSfx();
-static void doSetAlarm();
-static void displayAI(int interval, bool blink, bool doComment);
-static void doSetAutoInterval();
-static bool doSetBrightness(clockDisplay* displaySet);
+static int  doSetVolume();
+static int  doSetMSfx();
+static int  doSetAlarm();
+static int  doSetAutoInterval();
+static int  doSetBrightness(tcdDisplay* displaySet, uint8_t& newbri);
 #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
 static void doShowSensors();
 #endif
-static void displayIP();
 static void doShowNetInfo();
 static void doShowBTTFNInfo();
-static bool menuWaitForRelease();
+static bool menuWaitForReleaseNC();
 static bool checkEnterPress();
 static void waitForEnterRelease();
-static bool waitForMenuControl(bool &wasEnter, bool& dirDown, bool& wasQuit, bool& wasSelect);
-static void prepareInput(int number);
+static int  checkForMenuControl(bool &wasEnter, bool& dirDown, bool& wasQuit, bool& wasSelect);
+static int  checkForMenuInput(bool &wasEnter, char& key);
 
 static void resetTimeOut();
 static bool checkTimeOut();
@@ -336,24 +306,25 @@ static void menuDelay(unsigned long mydel);
 static void menuLoops();
 //static void menuShortDelay(unsigned long mydel);
 
-static void dt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR)
+// Some bin-size-friendly short-cuts, also used by other modules
+void dt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR)
 {
     destinationTime.showTextDirect(text, flags);
 }
-static void pt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR)
+void pt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR)
 {
     presentTime.showTextDirect(text, flags);
 }
-static void lt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR)
+void lt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR)
 {
     departedTime.showTextDirect(text, flags);
 }
-static void dt_off() { destinationTime.off(); }
-static void pt_off() { presentTime.off();     }
-static void lt_off() { departedTime.off();    }
-static void dt_on() {  destinationTime.on(); }
-static void pt_on() {  presentTime.on();     }
-static void lt_on() {  departedTime.on();    }
+void dt_off() { destinationTime.off(); }
+void pt_off() { presentTime.off();     }
+void lt_off() { departedTime.off();    }
+void dt_on()  { destinationTime.on();  }
+void pt_on()  { presentTime.on();      }
+void lt_on()  { departedTime.on();     }
 
 #define D_D 1
 #define D_P 2
@@ -364,34 +335,356 @@ static void sw_sel(int w) {
     (w & D_L) ? lt_on() : lt_off();
 }
 
+static void allOffWaitEnterRelease()
+{
+    allOff();
+    waitForEnterRelease();
+}
+
+static void prepareForInput()
+{
+    resetTimeOut();
+
+    keypadKeyPressed = 0;
+    resetKeypadState();
+    keypadMode = 2;
+}
+
 /*
- * enter_menu()
+ *  Display the current main menu item
+ *
+ */
+static void menuShow(int number, tcdDisplay*& displayHelp)
+{
+    char buf[32];
+    
+    switch (number) {
+    case MODE_DEST:  // Destination Time
+        displaySet = &destinationTime;
+        displaySet->setColon(true);
+        displaySet->show();
+        pt_showTextDirect("PROGRAM DATE");
+        sw_sel(D_P|D_D);
+        displayHelp = &presentTime;
+        break;
+    case MODE_PRES:  // Present Time (RTC)
+        displaySet = &presentTime;
+        displaySet->setColon(true);
+        displaySet->show();
+        dt_showTextDirect("SET CLOCK");
+        sw_sel(D_P|D_D);
+        displayHelp = &departedTime;
+        break;
+    case MODE_DEPT:  // Last Time Departed
+        displaySet = &departedTime;
+        displaySet->setColon(true);
+        displaySet->show();
+        pt_showTextDirect("PROGRAM DATE");
+        sw_sel(D_P|D_L);
+        displayHelp = &presentTime;
+        break;
+    case MODE_VOL:    // Volume
+        dt_showTextDirect("VOLUME");
+        sw_sel(D_D);
+        break;
+    case MODE_MSFX:   // Music Folder Number
+        dt_showTextDirect("MUSIC FOLDER");
+        sw_sel(D_D);
+        break;
+    case MODE_ALRM:   // Alarm
+        dt_showTextDirect("ALARM");
+        sw_sel(D_D);
+        break;
+    case MODE_AINT:   // Time Cycling inverval
+        dt_showTextDirect("TIME CYCLING");
+        sw_sel(D_D);
+        break;
+    case MODE_BRI:    // Brightness
+        dt_showTextDirect("BRIGHTNESS");
+        sw_sel(D_D);
+        break;
+    case MODE_NET:    // Network info
+        dt_showTextDirect("NETWORK");
+        sw_sel(D_D);
+        break;
+    #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+    case MODE_SENS:
+        dt_showTextDirect("SENSORS");
+        sw_sel(D_D);
+        break;
+    #endif
+    case MODE_LTS:    // Last time sync info
+        dt_showTextDirect("TIME SYNC");
+        if(!lastAuthTime64) {
+            pt_showTextDirect("NEVER");
+            sw_sel(D_P|D_D);
+        } else {
+            uint64_t ago64 = (millis64() - lastAuthTime64) / 1000;
+            uint32_t ago = ago64;
+            if(ago > 24*60*60) {
+                sprintf(buf, "%d DAYS", ago / (24*60*60));
+            } else if(ago > 60*60) {
+                sprintf(buf, "%d HOURS", ago / (60*60));
+            } else if(ago > 60) {
+                sprintf(buf, "%d MINS", ago / 60);
+            } else {
+                sprintf(buf, "%d SECS", ago);
+            }
+            pt_showTextDirect(buf);
+            lt_showTextDirect("AGO");
+            sw_sel(D_L|D_P|D_D);
+        }
+        break;
+    case MODE_CLI:
+        #ifdef IS_ACAR_DISPLAY
+        dt_showTextDirect("BTTFN");
+        pt_showTextDirect("CLIENTS");
+        sw_sel(D_P|D_D);
+        #else
+        dt_showTextDirect("BTTFN CLIENTS");
+        sw_sel(D_D);
+        #endif
+        break;
+    case MODE_VER:  // Version info
+        dt_showTextDirect("VERSION");
+        pt_showTextDirect(TC_VERSION);
+        #ifdef TC_VERSION_EXTRA
+        lt_showTextDirect(TC_VERSION_EXTRA);
+        sw_sel(D_L|D_P|D_D);
+        #else
+        sw_sel(D_P|D_D);
+        #endif
+        break;
+    }
+}
+
+/*
+ *  Cycle through main menu
+ *  
+ *  Returns
+ *  - true if item selected
+ *  - false on timeout or cancel
+ *
+ */
+
+static int menuSelect(int& number, DateTime& dtu, DateTime& dtl, tcdDisplay*& displayHelp)
+{
+    bool wasEnter, dirDown, wasQuit, wasSelect;
+
+    prepareForInput();
+
+    while(!checkTimeOut()) {
+
+        if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+
+            if(wasQuit) break;
+                
+            if(wasSelect || (wasEnter && menuWaitForReleaseNC())) {
+                keypadMode = 0;
+                return 1;
+            }
+
+            if(dirDown) {
+                if(number == MODE_MAX) number = MODE_MIN;
+                else {
+                    number++;
+                    if(number == MODE_MSFX && !haveSD) number++;
+                    #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+                    if(number == MODE_SENS && (!(sgf & (SGF_UTemp|SGF_ULightSens)))) number++;
+                    #else
+                    if(number == MODE_SENS) number++;
+                    #endif
+                }
+            } else {
+                if(number == MODE_MIN) number = MODE_MAX;
+                else {
+                    number--;
+                    #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+                    if(number == MODE_SENS && (!(sgf & (SGF_UTemp|SGF_ULightSens)))) number--;
+                    #else
+                    if(number == MODE_SENS) number--;
+                    #endif
+                    if(number == MODE_MSFX && !haveSD) number--;
+                }
+            }
+
+            if(number == MODE_PRES) {
+                myrtcnow(dtu);
+                UTCtoLocal(dtu, dtl, 0);
+                presentTime.setDateTime(dtl);
+            }
+
+            // Show only the selected display, or menu item text
+            menuShow(number, displayHelp);
+
+        } else {
+
+            menuDelay(50);
+
+        }
+
+    }
+
+    keypadMode = 0;
+
+    return 0;
+}
+
+/*
+ * Show only the field to be updated and set up pre-set contents
+ *
+ */
+static void showField(int number, int field, uint16_t dflags)
+{
+    switch(field) {
+    case FIELD_MONTH:
+        displaySet->showMonthDirect(number, dflags);
+        break;
+    case FIELD_DAY:
+        displaySet->showDayDirect(number, dflags);
+        break;
+    case FIELD_YEAR:
+        displaySet->showYearDirect(number, dflags);
+        break;
+    case FIELD_HOUR:
+        displaySet->showHourDirect(number, dflags);
+        break;
+    case FIELD_MINUTE:
+        displaySet->showMinuteDirect(number, dflags);
+        break;
+    }
+}
+
+/*
+ * Wait for user input to update a field
+ *
+ */
+static int requestNumericInput(int& number, int field, int year = 0, int month = 0, uint16_t dflags = 0)
+{
+    int upperLimit, lowerLimit;
+    int setNum, prevNum = number;
+    unsigned long blinkNow = 0;
+    bool blinkSwitch = true;
+
+    resetTimeOut();
+
+    showField(number, field, dflags);
+
+    // Write pre-set into buffer, reset index to 0
+    // Upon first key input, the pre-set will be overwritten
+    // This allows the user to keep the pre-set by pressing
+    // enter
+    sprintf(timeBuffer, "%d", number);
+    resetTimebufIndices();
+    timeBufferSize = 2;
+
+    // Start blinking
+    displaySet->onBlink(2);
+
+    switch(field) {
+    case FIELD_MONTH:
+        upperLimit = 12;
+        lowerLimit = 1;
+        break;
+    case FIELD_DAY:
+        upperLimit = daysInMonth(month, year);
+        lowerLimit = 1;
+        break;
+    case FIELD_YEAR:
+        upperLimit = 9999;
+        lowerLimit = year;
+        timeBufferSize = 4;
+        break;
+    case FIELD_HOUR:
+        upperLimit = 23;
+        lowerLimit = 0;
+        break;
+    case FIELD_MINUTE:
+        upperLimit = 59;
+        lowerLimit = 0;
+        break;
+    }
+
+    waitForEnterRelease();
+
+    // Force keypad to send keys to our timeBuffer (and block key holding)
+    keypadMode = 1;
+
+    // Reset key state machine
+    resetKeypadState();
+
+    while(!checkTimeOut() && !checkEnterPress()) {
+
+        scanKeypad();
+
+        setNum = atoi(timeBuffer);
+
+        // Show setNum in field
+        if(prevNum != setNum) {
+            showField(setNum, field, dflags | CDD_NOLEAD0);
+            prevNum = setNum;
+            resetTimeOut();
+            displaySet->on();
+            blinkNow = millis();
+            blinkSwitch = false;
+        }
+
+        menuDelay(50);
+
+        if(!blinkSwitch && (millis() - blinkNow > 500)) {
+            displaySet->onBlink(2);
+            blinkSwitch = true;
+        }
+
+    }
+    
+    // Force keypad to send keys somewhere else but our buffer
+    keypadMode = 0;
+
+    // Stop blinking
+    displaySet->on();
+
+    if(checkTimeOut())
+        return 0;
+
+    setNum = atoi(timeBuffer);
+    if(setNum < lowerLimit)      setNum = lowerLimit;
+    else if(setNum > upperLimit) setNum = upperLimit;
+    #ifdef TC_JULIAN_CAL
+    if(field == FIELD_DAY) {
+        correctNonExistingDate(year, month, setNum);
+    }
+    #endif
+    number = setNum;
+
+    // Display (corrected) number for .5 seconds
+    showField(setNum, field, dflags);
+
+    menuDelay(500);
+
+    return 1;
+}
+
+/*
+ * enter_menu(): The main menu loop
  *
  */
 void enter_menu()
 {
-    bool desNM = destinationTime.getNightMode();
-    bool preNM = presentTime.getNightMode();
-    bool depNM = departedTime.getNightMode();
+    bool currNM = destinationTime.getNightMode();
     bool mpActive;
-    bool destDisplayChanged = false;
-    bool lastDisplayChanged = false;
-    int mode_min;
+    int  displayChanged = 0;
+    int  showCancel = 0;
+    int  menuItemNum;
     dateStruct dBackup;
     dateStruct lBackup;
     DateTime dtu, dtl;
+    tcdDisplay *displayHelp;
 
     pwrNeedFullNow();
 
-    isEnterKeyHeld = false;
-    isEnterKeyPressed = false;
-
-    destinationTime.setNightMode(false);
-    presentTime.setNightMode(false);
-    departedTime.setNightMode(false);
-    destinationTime.resetBrightness();
-    presentTime.resetBrightness();
-    departedTime.resetBrightness();
+    allNightmode(false);
+    allresetBrightness();
     // Do not propagate through BTTFN, menu is TCD-private
 
     mpActive = mp_stop();
@@ -399,15 +692,15 @@ void enter_menu()
 
     flushDelayedSave();
 
-    // start with first menu item
-    menuItemNum = mode_min = MODE_ALRM;
+    // Start with first menu item
+    menuItemNum = MODE_ALRM;
 
     // Backup currently displayed times
     destinationTime.getToStruct(&dBackup);
     departedTime.getToStruct(&lBackup);
-    // Load the custom times from NVM
-    destinationTime.load();
-    departedTime.load();
+
+    // Load the user times from NVM
+    loadUserDLTimes();
 
     // Load local time into present time
     myrtcnow(dtu);
@@ -415,20 +708,19 @@ void enter_menu()
     presentTime.setDateTime(dtl);
 
     // Show first menu item
-    menuShow(menuItemNum);
+    menuShow(menuItemNum, displayHelp);
 
     waitForEnterRelease();
 
-    // menuSelect:
-    // Wait for ENTER to cycle through main menu,
-    // HOLDing ENTER selects current menu "item"
-    // (Also sets displaySet to selected display, if applicable)
-    if(!(menuSelect(menuItemNum, mode_min, dtu, dtl)))
+    if(!menuSelect(menuItemNum, dtu, dtl, displayHelp))
         goto quitMenu;
 
     if(menuItemNum >= MODE_PRES && menuItemNum <= MODE_DEPT) {
 
         // Enter display times
+
+        displayHelp->showTextDirect(digitsHelp);
+        displayHelp->on();
 
         // Generate pre-set values, which the user may keep (or overwrite)
 
@@ -456,39 +748,34 @@ void enter_menu()
         }
 
         // Get year
-        setUpdate(yearSet, FIELD_YEAR);
-        prepareInput(yearSet);
-        waitForEnterRelease();
-        if(!setField(yearSet, FIELD_YEAR, displaySet->isRTC() ? TCEPOCH_GEN : 0, 0))
+        if(!requestNumericInput(yearSet, FIELD_YEAR, displaySet->isRTC() ? TCEPOCH_GEN : 0, 0)) {
+            showCancel = 1;
             goto quitMenu;
+        }
 
         // Get month
-        setUpdate(monthSet, FIELD_MONTH);
-        prepareInput(monthSet);
-        waitForEnterRelease();
-        if(!setField(monthSet, FIELD_MONTH))
-            goto quitMenu;          
+        if(!requestNumericInput(monthSet, FIELD_MONTH)) {
+            showCancel = 1;
+            goto quitMenu;
+        }
 
         // Get day
-        setUpdate(daySet, FIELD_DAY);
-        prepareInput(daySet);
-        waitForEnterRelease();
-        if(!setField(daySet, FIELD_DAY, yearSet, monthSet))  // this depends on the month and year
+        if(!requestNumericInput(daySet, FIELD_DAY, yearSet, monthSet)) {  // this depends on the month and year
+            showCancel = 1;
             goto quitMenu;
+        }
 
         // Get hour
-        setUpdate(hourSet, FIELD_HOUR, CDD_FORCE24);
-        prepareInput(hourSet);
-        waitForEnterRelease();
-        if(!setField(hourSet, FIELD_HOUR, 0, 0, CDD_FORCE24))
+        if(!requestNumericInput(hourSet, FIELD_HOUR, 0, 0, CDD_FORCE24)) {
+            showCancel = 1;
             goto quitMenu;
+        }
 
         // Get minute
-        setUpdate(minSet, FIELD_MINUTE);
-        prepareInput(minSet);
-        waitForEnterRelease();
-        if(!setField(minSet, FIELD_MINUTE))
+        if(!requestNumericInput(minSet, FIELD_MINUTE)) {
+            showCancel = 1;
             goto quitMenu;
+        }
 
         // Have new date & time at this point
 
@@ -496,6 +783,7 @@ void enter_menu()
 
         // Show a save message for a brief moment
         displaySet->showTextDirect(StrSaving);
+        displayHelp->off();
 
         if(displaySet->isRTC()) {  // this is the RTC display, set the RTC
 
@@ -539,16 +827,19 @@ void enter_menu()
             */
             pauseAuto();    // Now we only pause for 30 mins
 
-            if(menuItemNum == MODE_DEST) destDisplayChanged = true;
-            else                         lastDisplayChanged = true;
+            displayChanged = menuItemNum;
 
         }
 
         // update the object
         displaySet->setFromParms(yearSet, monthSet, daySet, hourSet, minSet);
 
-        if(destDisplayChanged)      backupDestTime();
-        else if(lastDisplayChanged) backupLastTime();
+        // copy date to user slot
+        displaySet->copyToUserTimes();
+
+        if(displayChanged) {
+            (displayChanged == MODE_DEST) ? backupDestTime() : backupLastTime();
+        }
 
         // Save to NVM (regardless of persistence mode)
         displaySet->save();
@@ -557,102 +848,88 @@ void enter_menu()
 
     } else if(menuItemNum == MODE_VOL) {
 
-        allOff();
-        waitForEnterRelease();
+        allOffWaitEnterRelease();
 
         // Set volume
-        doSetVolume();
+        showCancel = doSetVolume();
 
     } else if(menuItemNum == MODE_MSFX) {
 
-        allOff();
-        waitForEnterRelease();
+        allOffWaitEnterRelease();
 
         // Set music folder number
-        doSetMSfx();
+        showCancel = doSetMSfx();
 
     } else if(menuItemNum == MODE_ALRM) {
 
-        allOff();
-        waitForEnterRelease();
+        allOffWaitEnterRelease();
 
         // Set alarm
-        doSetAlarm();
+        showCancel = doSetAlarm();
 
     } else if(menuItemNum == MODE_AINT) {
 
-        allOff();
-        waitForEnterRelease();
+        allOffWaitEnterRelease();
 
         // Set autoInterval
-        doSetAutoInterval();
+        showCancel = doSetAutoInterval();
 
     } else if(menuItemNum == MODE_BRI) {
 
         uint8_t dtbri = destinationTime.getBrightness();
         uint8_t ptbri = presentTime.getBrightness();
         uint8_t ltbri = departedTime.getBrightness();
+        uint8_t dtbri2, ptbri2, ltbri2;
 
-        allOff();
+        allOffWaitEnterRelease();
         
         // Set brightness settings
-        waitForEnterRelease();
-        if(!doSetBrightness(&destinationTime)) 
-            goto quitMenu;
 
-        waitForEnterRelease();
-        if(!doSetBrightness(&presentTime)) {
-            destinationTime.setBrightness(dtbri);
-            goto quitMenu;
+        if(!(showCancel = doSetBrightness(&destinationTime, dtbri2))) {
+            waitForEnterRelease();
+            if(!(showCancel = doSetBrightness(&presentTime, ptbri2))) {
+                waitForEnterRelease();
+                showCancel = doSetBrightness(&departedTime, ltbri2);
+            }
         }
 
-        waitForEnterRelease();
-        if(!doSetBrightness(&departedTime)) {
+        if(showCancel) {
+
             destinationTime.setBrightness(dtbri);
             presentTime.setBrightness(ptbri);
-            goto quitMenu;
-        }
+            
+        } else {
 
-        // Now save
-        dt_showTextDirect(StrSaving);
-        sw_sel(D_D);
-
-        uint8_t dtbri2 = destinationTime.getBrightness();
-        uint8_t ptbri2 = presentTime.getBrightness();
-        uint8_t ltbri2 = departedTime.getBrightness();
-
-        if( (dtbri2 != dtbri) ||
-            (ptbri2 != ptbri) || 
-            (ltbri2 != ltbri) ) {
-
+            // Now save
+            dt_showTextDirect(StrSaving);
+            sw_sel(D_D);
+    
             // (Re)Set current brightness as "initial" brightness
             destinationTime.setBrightness(dtbri2, true);
             presentTime.setBrightness(ptbri2, true);
             departedTime.setBrightness(ltbri2, true);
-
+    
             // Update & write settings file
             settings.destTimeBright = dtbri2;
             settings.presTimeBright = ptbri2;
             settings.lastTimeBright = ltbri2;
-            
+    
             saveBrightness();
-            
-        }
+    
+            menuDelay(1000);
 
-        menuDelay(1000);
+        }
 
     } else if(menuItemNum == MODE_NET) {   // Show network info
 
-        allOff();
-        waitForEnterRelease();
+        allOffWaitEnterRelease();
 
         // Show net info
         doShowNetInfo();
 
     } else if(menuItemNum == MODE_CLI) {   // Show bttfn clients
 
-        allOff();
-        waitForEnterRelease();
+        allOffWaitEnterRelease();
 
         // Show client info
         doShowBTTFNInfo();
@@ -660,36 +937,43 @@ void enter_menu()
     #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
     } else if(menuItemNum == MODE_SENS) {   // Show sensor info
 
-        allOff();
-        waitForEnterRelease();
+        allOffWaitEnterRelease();
 
         doShowSensors();
     #endif
 
-    }                                      // LTS, VERSION, END: Bail out
+    }                                      // LTS, VERSION: Bail out
 
 quitMenu:
 
-    allOff();
-    waitForEnterRelease();
+    allOffWaitEnterRelease();
+
+    if(showCancel) {
+        dt_showTextDirect(StrCancel1);
+        pt_showTextDirect(StrCancel2);
+        lt_showTextDirect(StrCancel3);
+        sw_sel(D_D|D_P|D_L);
+        menuDelay(1500);
+    }
 
     // Return dest/dept displays to where they should be
-    if(!isWcMode() || !WcHaveTZ1) {
-        if(destDisplayChanged) {
+    if(!isWcMode() || (!(wcf & WCF_HaveTZ1))) {
+        if(displayChanged == MODE_DEST) {
             destinationTime.load();
         } else {
             destinationTime.setFromStruct(&dBackup);
         }
     }
-    if(!isWcMode() || !WcHaveTZ2) {
-        if(lastDisplayChanged) {
+    if(!isWcMode() || (!(wcf & WCF_HaveTZ2))) {
+        if(displayChanged == MODE_DEPT) {
             departedTime.load();
         } else {
             departedTime.setFromStruct(&lBackup);
         }
     }
 
-    destShowAlt = depShowAlt = 0; // Reset TZ-Name-Animation
+    // Reset TZ-Name-Animation
+    destShowAlt = depShowAlt = 0;
 
     // Done, turn off displays
     allOff();
@@ -709,7 +993,7 @@ quitMenu:
     UTCtoLocal(gdtu, gdtl, 0);
     
     if(stalePresent)
-        updateStalePresent(1);  //presentTime.setFromStruct(&stalePresentTime[1]);
+        updateStalePresent(1);  // presentTime.setFromStruct(&stalePresentTime[1]);
     else
         updatePresentTime();    // Uses gdt{u,l}
 
@@ -717,14 +1001,11 @@ quitMenu:
         setDatesTimesWC(gdtu);
     }
 
-    // all displays on and show
-
-    animate();
-
     // Restore night mode
-    destinationTime.setNightMode(desNM);
-    presentTime.setNightMode(preNM);
-    departedTime.setNightMode(depNM);
+    allNightmode(currNM);
+
+    // All displays on and show
+    animate();
 
     menuLoops();
 
@@ -742,69 +1023,90 @@ quitMenu:
     if(mpActive) mp_play();
 }
 
+
 /*
- *  Cycle through main menu
- *  
- *  Returns
- *  - true if item selected
- *  - false if timeout
- *
+ *  Alarm ######################################################
  */
-static bool menuSelect(int& number, int mode_min, DateTime& dtu, DateTime& dtl)
+
+const char *getAlWD(unsigned int wd, bool menuMode)
 {
-    bool wasEnter, dirDown, wasQuit, wasSelect;
-
-    keypadKeyPressed = 0;
-    resetKeypadState();
-    keypadMode = 2;
+    char *buf = alarmWDBuf;
+    int ri;
     
-    resetTimeOut();
+    if(menuMode && wd > 9) {
+        return alarmWDSel;
+    }
+    if(wd & 0x80) {
+        for(int i = 0; i < 7; i++) {
+            if(i == 0) ri = 6;
+            else       ri = i - 1;
+            buf[ri] = (wd & (1 << i)) ? alarmWDLetters[i] : '_';
+        }
+        buf[7] = 0;
+        return (const char *)alarmWDBuf;
+    } else
+        return alarmWD[wd];
+}
 
-    // Wait for enter
-    while(!checkTimeOut()) {
+// Set Alarm
+static int doSetAlarm()
+{
+    char almBuf[16];
+    char almBuf2[16];
+    bool blinkSwitch = false;
+    unsigned long blinkNow = millis();
+    bool alarmDone = false;
+    bool newAlarmOnOff = alarmOnOff;
+    int  newAlarmHour = (alarmHour <= 23) ? alarmHour : 0;
+    int  newAlarmMinute = (alarmMinute <= 59) ? alarmMinute : 0;
+    unsigned int newAlarmWeekday = alarmWeekday;
+    bool wasEnter, dirDown, wasQuit = false, wasSelect;
+    char newkey = 0;
 
-        scanKeypad();
+    // For requestNumericInput()
+    displaySet = &destinationTime;
 
-        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+    // On/Off
+    sprintf(almBuf2, almFmt, "" , newAlarmHour, newAlarmMinute);
+    sprintf(almBuf, almFmt, newAlarmOnOff ? "ON " : "OFF", newAlarmHour, newAlarmMinute);
+    dt_showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
+    dt_on();
 
-            resetTimeOut();
+    prepareForInput();
+
+    while(!checkTimeOut() && !alarmDone) {
+
+        if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
             if(wasQuit) break;
-                
-            if(wasSelect || (wasEnter && menuWaitForRelease())) {
-                keypadMode = 0;
-                return true;
+
+            if(blinkSwitch) {
+                dt_showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
             }
 
-            if(wasEnter || !dirDown) {
-                number++;
-                if(number == MODE_MSFX && !haveSD) number++;
-                #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
-                if(number == MODE_SENS && !useLight && !useTemp) number++;
-                #else
-                if(number == MODE_SENS) number++;
-                #endif
-                if(number > MODE_MAX) number = wasEnter ? mode_min : MODE_MAX;
-            } else {
-                if(number > 0) number--;
-                #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
-                if(number == MODE_SENS && !useLight && !useTemp) number--;
-                #else
-                if(number == MODE_SENS) number--;
-                #endif
-                if(number == MODE_MSFX && !haveSD) number--;
-            }
+            alarmDone = (wasSelect || (wasEnter && menuWaitForReleaseNC()));
 
-            if(number == MODE_PRES) {
-                myrtcnow(dtu);
-                UTCtoLocal(dtu, dtl, 0);
-                presentTime.setDateTime(dtl);
-            }
+            if(!alarmDone) {
 
-            // Show only the selected display, or menu item text
-            menuShow(number);
+                newAlarmOnOff = !newAlarmOnOff;
+
+                sprintf(almBuf, almFmt, newAlarmOnOff ? "ON " : "OFF", newAlarmHour, newAlarmMinute);
+                dt_showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
+
+                blinkSwitch = false;
+                blinkNow = millis();
+
+            }
 
         } else {
+
+            unsigned long mm = millis();
+            
+            if(mm - blinkNow > 500) {
+                blinkSwitch = !blinkSwitch;
+                dt_showTextDirect(blinkSwitch ? almBuf2 : almBuf, CDT_CLEAR|CDT_COLON);
+                blinkNow = mm;
+            }
 
             menuDelay(50);
 
@@ -814,314 +1116,167 @@ static bool menuSelect(int& number, int mode_min, DateTime& dtu, DateTime& dtl)
 
     keypadMode = 0;
 
-    return false;
-}
+    if(!(alarmDone & (!wasQuit))) return 1;
 
-/*
- *  Displays the current main menu item
- *
- */
-static void menuShow(int number)
-{
-    displaySet = NULL;
-    char buf[32];
+    lt_showTextDirect(digitsHelp);
+    lt_on();
+
+    // Get hour
+    if(!requestNumericInput(newAlarmHour, FIELD_HOUR, 0, 0, CDD_FORCE24)) {
+        waitAudioDoneMenu();    // (keypad; should not be necessary)
+        return 1;
+    }
+
+    // Get minute
+    if(!requestNumericInput(newAlarmMinute, FIELD_MINUTE)) {
+        waitAudioDoneMenu();    // (keypad; should not be necessary)
+        return 1;
+    }
+
+    lt_off();
+    waitAudioDoneMenu();    // For keypad sounds
+
+    // Weekday(s)
+
+    waitForEnterRelease();
+
+    if(alarmWeekday & 0x80) newAlarmWeekday = 10;
     
-    switch (number) {
-    case MODE_DEST:  // Destination Time
-        displaySet = &destinationTime;
-        sw_sel(D_D);
-        displaySet->setColon(true);
-        displaySet->show();
-        break;
-    case MODE_PRES:  // Present Time (RTC)
-        displaySet = &presentTime;
-        dt_showTextDirect("SET CLOCK");
-        sw_sel(D_P|D_D);
-        displaySet->setColon(true);
-        displaySet->show();
-        break;
-    case MODE_DEPT:  // Last Time Departed
-        displaySet = &departedTime;
-        sw_sel(D_L);
-        displaySet->setColon(true);
-        displaySet->show();
-        break;
-    case MODE_VOL:   // Software volume
-        #ifdef IS_ACAR_DISPLAY
-        dt_showTextDirect("VOLUME");
-        sw_sel(D_D);
-        #else
-        dt_showTextDirect("VOL");    // "M" on 7seg no good, 2 lines
-        pt_showTextDirect("UME");
-        sw_sel(D_P|D_D);
-        #endif
-        break;
-    case MODE_MSFX:   // Music Folder Number
-        dt_showTextDirect("MUSIC");
-        pt_showTextDirect("FOLDER");
-        lt_showTextDirect("NUMBER");
-        sw_sel(D_L|D_P|D_D);
-        break;
-    case MODE_ALRM:   // Alarm
-        #ifdef IS_ACAR_DISPLAY
-        dt_showTextDirect("ALARM");
-        sw_sel(D_D);
-        #else
-        dt_showTextDirect("ALA");    // "M" on 7seg no good, 2 lines
-        pt_showTextDirect("RM");
-        sw_sel(D_P|D_D);
-        #endif
-        displaySet = &destinationTime;
-        break;
-    case MODE_AINT:  // Time Cycling inverval
-        dt_showTextDirect("TIME");
-        pt_showTextDirect("CYCLING");
-        sw_sel(D_P|D_D);
-        break;
-    case MODE_BRI:  // Brightness
-        dt_showTextDirect("BRIGHTNESS");
-        sw_sel(D_D);
-        break;
-    case MODE_NET:  // Network info
-        #ifdef IS_ACAR_DISPLAY
-        dt_showTextDirect("NETWORK");
-        sw_sel(D_D);
-        #else
-        dt_showTextDirect("NET");  // "W" on 7seg no good, 2 lines
-        pt_showTextDirect("WORK");
-        sw_sel(D_P|D_D);
-        #endif
-        break;
-    #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
-    case MODE_SENS:
-        dt_showTextDirect("SENSORS");
-        sw_sel(D_D);
-        break;
-    #endif
-    case MODE_LTS:  // last time sync info
-        dt_showTextDirect("TIME SYNC");
-        if(!lastAuthTime64) {
-            pt_showTextDirect("NEVER");
-            sw_sel(D_P|D_D);
-        } else {
-            uint64_t ago64 = (millis64() - lastAuthTime64) / 1000;
-            uint32_t ago = ago64;
-            if(ago > 24*60*60) {
-                sprintf(buf, "%d DAYS", ago / (24*60*60));
-            } else if(ago > 60*60) {
-                sprintf(buf, "%d HOURS", ago / (60*60));
-            } else if(ago > 60) {
-                sprintf(buf, "%d MINS", ago / 60);
-            } else {
-                sprintf(buf, "%d SECS", ago);
-            }
-            pt_showTextDirect(buf);
-            lt_showTextDirect("AGO");
-            sw_sel(D_L|D_P|D_D);
-        }
-        break;
-    case MODE_CLI:
-        #ifdef IS_ACAR_DISPLAY
-        dt_showTextDirect("BTTFN");
-        pt_showTextDirect("CLIENTS");
-        sw_sel(D_P|D_D);
-        #else
-        dt_showTextDirect("BTTFN CLIENTS");
-        sw_sel(D_D);
-        #endif
-        break;
-    case MODE_VER:  // Version info
-        dt_showTextDirect("VERSION");
-        pt_showTextDirect(TC_VERSION);
-        #ifdef TC_VERSION_EXTRA
-        lt_showTextDirect(TC_VERSION_EXTRA);
-        sw_sel(D_L|D_P|D_D);
-        #else
-        sw_sel(D_P|D_D);
-        #endif
-        break;
-    case MODE_END:  // end
-        dt_showTextDirect("END");
-        sw_sel(D_D);
-        break;
-    }
-}
+    dt_showTextDirect(getAlWD(newAlarmWeekday, true));
+    destinationTime.onBlink(2);
+    blinkSwitch = true;
 
-/*
- * Show only the field to be updated
- * and set up pre-set contents
- *
- * number = number to show
- * field = field to show it in
- *
- */
-static void setUpdate(int number, int field, uint16_t dflags)
-{
-    switch(field) {
-    case FIELD_MONTH:
-        displaySet->showMonthDirect(number, dflags);
-        break;
-    case FIELD_DAY:
-        displaySet->showDayDirect(number, dflags);
-        break;
-    case FIELD_YEAR:
-        displaySet->showYearDirect(number, dflags);
-        break;
-    case FIELD_HOUR:
-        displaySet->showHourDirect(number, dflags);
-        break;
-    case FIELD_MINUTE:
-        displaySet->showMinuteDirect(number, dflags);
-        break;
-    }
-}
+    prepareForInput();
 
-// Prepare timeBuffer
-static void prepareInput(int number)
-{
-    // Write pre-set into buffer, reset index to 0
-    // Upon first key input, the pre-set will be overwritten
-    // This allows the user to keep the pre-set by pressing
-    // enter
-    sprintf(timeBuffer, "%d", number);
-    resetTimebufIndices();
-}
+    alarmDone = false;
 
-static void prepareForInput()
-{
-    isEnterKeyHeld = false;
+    while(!checkTimeOut() && !alarmDone) {
 
-    keypadKeyPressed = 0;
-    resetKeypadState();
-    keypadMode = 2;
+        if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
-    resetTimeOut();  // reset timeout
-}
+            if(wasQuit) break;
 
-/*
- * Update a field of a display using user input
- *
- * number - a value we're updating (pre-set and result of input)
- * field - field being modified, this will be displayed as it is updated
- * year, month - for checking maximum day number, etc.
- *
- */
-static bool setField(int& number, uint8_t field, int year, int month, uint16_t dflags)
-{
-    int upperLimit;
-    int lowerLimit;
-    int i;
-    int setNum = 0, prevNum = number;
-    int numVal = 0;
-    int numChars = 2;
-    bool someupddone = false;
-    unsigned long blinkNow = 0;
-    bool blinkSwitch = true;
-
-    resetTimeOut();  // reset timeout
-
-    // Start blinking
-    displaySet->onBlink(2);
-
-    // No, timeBuffer is pre-set with previous value
-    //timeBuffer[0] = 0;   
-
-    switch(field) {
-    case FIELD_MONTH:
-        upperLimit = 12;
-        lowerLimit = 1;
-        break;
-    case FIELD_DAY:
-        upperLimit = daysInMonth(month, year);
-        lowerLimit = 1;
-        break;
-    case FIELD_YEAR:
-        upperLimit = 9999;
-        lowerLimit = year;
-        numChars = 4;
-        isYearUpdate = true;
-        break;
-    case FIELD_HOUR:
-        upperLimit = 23;
-        lowerLimit = 0;
-        break;
-    case FIELD_MINUTE:
-        upperLimit = 59;
-        lowerLimit = 0;
-        break;
-    }
-
-    // Force keypad to send keys to our buffer (and block key holding)
-    keypadMode = 1;
-
-    // Reset key state machine
-    resetKeypadState();
-
-    while( !checkTimeOut() && 
-           !checkEnterPress() &&
-           ( (!someupddone && number == prevNum) || strlen(timeBuffer) < numChars) ) {
-
-        // We're outside our main loop, so poll here
-        scanKeypad();
-
-        setNum = 0;
-        for(i = 0; i < strlen(timeBuffer); i++) {
-            setNum *= 10;
-            setNum += (timeBuffer[i] - '0');
-        }
-
-        // Show setNum in field
-        if(prevNum != setNum) {
-            someupddone = true;
-            setUpdate(setNum, field, dflags | CDD_NOLEAD0);
-            prevNum = setNum;
-            resetTimeOut();  // key pressed, reset timeout
-            displaySet->on();
-            blinkNow = millis();
+            dt_on();
             blinkSwitch = false;
-        }
 
-        menuDelay(50);
+            alarmDone = (wasSelect || (wasEnter && menuWaitForReleaseNC()));
 
-        if(!blinkSwitch && (millis() - blinkNow > 500)) {
-            displaySet->onBlink(2);
-            blinkSwitch = true;
+            if(!alarmDone) {
+
+                if(dirDown) {
+                    newAlarmWeekday++;
+                    if(newAlarmWeekday > 10) newAlarmWeekday = 0;
+                } else {
+                    if(!newAlarmWeekday) newAlarmWeekday = 10;
+                    else newAlarmWeekday--;
+                }
+
+                dt_showTextDirect(getAlWD(newAlarmWeekday, true));
+
+            }
+
+        } else {
+
+            menuDelay(50);
+
+            if(!blinkSwitch) {
+                destinationTime.onBlink(2);
+                blinkSwitch = true;
+            }
+
         }
 
     }
 
-    isYearUpdate = false;
-    
-    // Force keypad to send keys somewhere else but our buffer
     keypadMode = 0;
 
-    // Stop blinking
-    displaySet->on();
+    if(alarmDone & (!wasQuit)) {
 
-    if(checkTimeOut())
-        return false;
+        // Individual weekday selection
+        if(newAlarmWeekday > 9) {
+    
+            if(alarmWeekday & 0x80)
+                newAlarmWeekday = alarmWeekday;
+            else
+                newAlarmWeekday = 0xff;
 
-    numVal = 0;
-    for(i = 0; i < strlen(timeBuffer); i++) {
-       numVal *= 10;
-       numVal += (timeBuffer[i] - '0');
+            lt_showTextDirect(alarmWDHelp);
+            lt_on();
+            
+            dt_showTextDirect(getAlWD(newAlarmWeekday));
+            destinationTime.onBlink(2);
+            blinkSwitch = true;
+        
+            prepareForInput();
+        
+            alarmDone = false;
+        
+            while(!checkTimeOut() && !alarmDone) {
+
+                if(checkForMenuInput(wasEnter, newkey)) {
+        
+                    if(newkey == '9') {
+                        wasQuit = true;
+                        break;
+                    }
+        
+                    dt_on();
+                    blinkSwitch = false;
+        
+                    alarmDone = (wasEnter && menuWaitForReleaseNC());
+        
+                    if(!alarmDone) {
+    
+                        if(newkey >= '1' && newkey <= '7') {
+                            newkey -= '0';
+                            if(newkey == 7) newkey = 0;
+                            newAlarmWeekday ^= (1 << newkey);
+                            dt_showTextDirect(getAlWD(newAlarmWeekday));
+                        }
+        
+                    }
+        
+                } else {
+        
+                    menuDelay(50);
+        
+                    if(!blinkSwitch) {
+                        destinationTime.onBlink(2);
+                        blinkSwitch = true;
+                    }
+        
+                }
+        
+            }
+            keypadMode = 0;
+            waitAudioDoneMenu();    // For keypad sounds
+        }
     }
-    if(numVal < lowerLimit) numVal = lowerLimit;
-    if(numVal > upperLimit) numVal = upperLimit;
-    #ifdef TC_JULIAN_CAL
-    if(field == FIELD_DAY) {
-        correctNonExistingDate(year, month, numVal);
+    
+    allOff();
+
+    if(alarmDone & (!wasQuit)) {
+
+        dt_showTextDirect(StrSaving);
+        dt_on();
+
+        // Save it
+        alarmOnOff = newAlarmOnOff;
+        alarmHour = newAlarmHour;
+        alarmMinute = newAlarmMinute;
+        alarmWeekday = newAlarmWeekday;
+        saveAlarm();
+
+        cancelSnooze();
+
+        menuDelay(1000);
+
+        return 0;
     }
-    #endif
-    number = numVal;
 
-    // Display (corrected) number for .5 seconds
-    setUpdate(numVal, field, dflags);
-
-    menuDelay(500);
-
-    return true;
+    return 1;
 }
+
 
 /*
  *  Volume #####################################################
@@ -1133,15 +1288,13 @@ static void showCurVolHWSW(bool blink)
         allOff();
     } else {
         if(curVolume == 255) {
-            dt_showTextDirect("USE");
-            pt_showTextDirect("VOLUME");
-            lt_showTextDirect("KNOB");
-            sw_sel(D_L|D_P|D_D);
+            dt_showTextDirect("USE VOLUME");
+            pt_showTextDirect("KNOB");
         } else {
             dt_showTextDirect("SELECT");
             pt_showTextDirect("LEVEL");
-            sw_sel(D_P|D_D);
         }
+        sw_sel(D_P|D_D);
     }
 }
 
@@ -1154,17 +1307,16 @@ static void showCurVol(bool blink, bool doComment)
     dt_on();
 
     if(doComment) {
-        if(curVolume == 0) {
+        int w = D_D;
+        if(!curVolume) {
             pt_showTextDirect("MUTE");
-            pt_on();
-        } else {
-            pt_off();
+            w |= D_P;
         }
-        lt_off();
+        sw_sel(w);
     }
 }
 
-static void doSetVolume()
+static int doSetVolume()
 {
     bool volDone = false;
     int oldVol = curVolume;
@@ -1178,22 +1330,17 @@ static void doSetVolume()
 
     prepareForInput();
 
-    // Wait for enter
     while(!checkTimeOut() && !volDone) {
 
-        scanKeypad();
-
-        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+        if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
             if(wasQuit) break;
-
-            resetTimeOut();  // button pressed, reset timeout
 
             if(blinkSwitch) {
                 showCurVolHWSW(false);
             }
 
-            volDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+            volDone = (wasSelect || (wasEnter && menuWaitForReleaseNC()));
 
             if(!volDone) {
 
@@ -1249,30 +1396,24 @@ static void doSetVolume()
 
         playNow = millis();
 
-        // Wait for enter
         while(!checkTimeOut() && !volDone) {
 
-            scanKeypad();
-
-            if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+            if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
                 if(wasQuit) break;
-                
-                resetTimeOut();  // button pressed, reset timeout
 
                 if(blinkSwitch) {
                     showCurVol(false, false);
                 }
 
-                volDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+                volDone = (wasSelect || (wasEnter && menuWaitForReleaseNC()));
                 
                 if(!volDone) {
 
                     if(dirDown) {
-                        curVolume++;
-                        if(curVolume == 20) curVolume = 0;
-                    } else {
                         if(curVolume > 0) curVolume--;
+                    } else {
+                        if(curVolume < 19) curVolume++;
                     }
 
                     showCurVol(false, true);
@@ -1316,17 +1457,18 @@ static void doSetVolume()
         dt_showTextDirect(StrSaving);
         sw_sel(D_D);
 
-        // Save it (if changed)
-        if(oldVol != curVolume) {
-            saveCurVolume();
-        }
+        // Save it
+        saveCurVolume();
+        
         menuDelay(1000);
-
-    } else {
-
-        curVolume = oldVol;
+        
+        return 0;
 
     }
+
+    curVolume = oldVol;
+
+    return 1;
 }
 
 /*  
@@ -1335,42 +1477,43 @@ static void doSetVolume()
 
 static void displayMSfx(int msfx, bool blink, bool doFolderChk, int& folderState)
 {
+    int w = D_D|D_P;
     uint16_t flags = CDT_CLEAR;
     if(blink) flags |= CDT_BLINK;
     
     destinationTime.showSettingValDirect("FOLDER", msfx, flags);
     dt_on();
-
+    
     if(doFolderChk) {
+        pt_showTextDirect("WAIT...");
+        sw_sel(w);
         folderState = mp_checkForFolder(msfx);
         switch(folderState) {
         case 1:
-            sw_sel(D_D);
+            pt_showTextDirect("OK");
             break;
         case 0:
             pt_showTextDirect("NOT FOUND");
-            sw_sel(D_P|D_D);
             break;
         case -1:
             pt_showTextDirect("NEEDS");
             lt_showTextDirect("PROCESSING");
+            w |= D_L;
             break;
         case -2:
             pt_showTextDirect("NO AUDIO");
             lt_showTextDirect("FILES");
+            w |= D_L;
             break;
         case -3:
-            pt_showTextDirect("NOT A");
-            lt_showTextDirect("FOLDER");
+            pt_showTextDirect("NOT A FOLDER");
             break;
         }
-        if(folderState < 0) {
-            sw_sel(D_L|D_P|D_D);
-        }
+        sw_sel(w);
     }
 }
 
-static void doSetMSfx()
+static int doSetMSfx()
 {
     bool msfxDone = false;
     int oldmsfx = musFolderNum, folderState, dummy;
@@ -1382,31 +1525,26 @@ static void doSetMSfx()
 
     prepareForInput();
 
-    // Wait for enter
     while(!checkTimeOut() && !msfxDone) {
 
-        scanKeypad();
-
-        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+        if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
             if(wasQuit) break;
-
-            resetTimeOut();  // button pressed, reset timeout
 
             if(blinkSwitch) {
                 displayMSfx(musFolderNum, false, false, dummy);
             }
 
-            msfxDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+            msfxDone = (wasSelect || (wasEnter && menuWaitForReleaseNC()));
 
             if(!msfxDone) {
 
                 if(dirDown) {
-                    musFolderNum++;
-                    if(musFolderNum > 9)
-                        musFolderNum = wasEnter ? 0 : 9;
+                    if(!musFolderNum) musFolderNum = 9;
+                    else musFolderNum--;
                 } else {
-                    if(musFolderNum > 0) musFolderNum--;
+                    if(musFolderNum == 9) musFolderNum = 0;
+                    else musFolderNum++;
                 }
 
                 displayMSfx(musFolderNum, false, true, folderState);
@@ -1439,251 +1577,37 @@ static void doSetMSfx()
         dt_showTextDirect(StrSaving);
         sw_sel(D_D);
 
-        // Save it (if changed)
-        if(oldmsfx != musFolderNum) {
-            saveMusFoldNum();
-            if(folderState == -1) {
-                // We do not do processing (=renaming) here.
-                // This is more or less a blocking activity,
-                // not suitable for our "multitasking" (with
-                // regard to speedo action, especially).
-                menuDelay(1000);
-                prepareReboot();
-                delay(1000);
-                esp_restart();
-            } else {
-                mp_init();
-            }
-        }
-
-        menuDelay(1000);
-
-    } else {
-
-        musFolderNum = oldmsfx;
-        
-    }
-}
-
-/*
- *  Alarm ######################################################
- */
-
-void alarmOff()
-{
-    alarmOnOff = false;
-    cancelSnooze();
-    saveAlarm();
-}
-
-bool alarmOn()
-{
-    cancelSnooze();
-    if(alarmHour <= 23 && alarmMinute <= 59) {
-        alarmOnOff = true;
-        saveAlarm();
-    } else {
-        return false;
-    }
-
-    return true;
-}
-
-int toggleAlarm()
-{
-    if(alarmOnOff) {
-        alarmOff();
-        return 0;
-    }
-    return alarmOn() ? 1 : -1;
-}
-
-int getAlarm()
-{
-    if(alarmHour <= 23 && alarmMinute <= 59) {
-        return (alarmHour << 8) | alarmMinute;
-    }
-    return -1;
-}
-
-const char *getAlWD(int wd)
-{
-    return alarmWD[wd];
-}
-
-// Set Alarm
-static void doSetAlarm()
-{
-    char almBuf[16];
-    char almBuf2[16];
-    bool blinkSwitch = false;
-    unsigned long blinkNow = millis();
-    bool alarmDone = false;
-    bool newAlarmOnOff = alarmOnOff;
-    int  newAlarmHour = (alarmHour <= 23) ? alarmHour : 0;
-    int  newAlarmMinute = (alarmMinute <= 59) ? alarmMinute : 0;
-    int  newAlarmWeekday = alarmWeekday;
-    #ifdef IS_ACAR_DISPLAY
-    const char *almFmt = "%s     %02d%02d";
-    #else
-    const char *almFmt = "%s      %02d%02d";
-    #endif
-    bool wasEnter, dirDown, wasQuit = false, wasSelect;
-
-    // On/Off
-    sprintf(almBuf2, almFmt, "   " , newAlarmHour, newAlarmMinute);
-    sprintf(almBuf, almFmt, newAlarmOnOff ? "ON " : "OFF", newAlarmHour, newAlarmMinute);
-    displaySet->showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
-    displaySet->on();
-
-    prepareForInput();
-
-    // Wait for enter
-    while(!checkTimeOut() && !alarmDone) {
-
-        scanKeypad();
-
-        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
-
-            if(wasQuit) break;
-
-            resetTimeOut();  // button pressed, reset timeout
-
-            if(blinkSwitch) {
-                displaySet->showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
-            }
-
-            alarmDone = (wasSelect || (wasEnter && menuWaitForRelease()));
-
-            if(!alarmDone) {
-
-                newAlarmOnOff = !newAlarmOnOff;
-
-                sprintf(almBuf, almFmt, newAlarmOnOff ? "ON " : "OFF", newAlarmHour, newAlarmMinute);
-                displaySet->showTextDirect(almBuf, CDT_CLEAR|CDT_COLON);
-
-                blinkSwitch = false;
-                blinkNow = millis();
-
-            }
-
-        } else {
-
-            unsigned long mm = millis();
-            
-            if(mm - blinkNow > 500) {
-                blinkSwitch = !blinkSwitch;
-                displaySet->showTextDirect(blinkSwitch ? almBuf2 : almBuf, CDT_CLEAR|CDT_COLON);
-                blinkNow = mm;
-            }
-
-            menuDelay(50);
-
-        }
-
-    }
-
-    keypadMode = 0;
-
-    if(!(alarmDone & (!wasQuit))) return;
-
-    // Get hour
-    setUpdate(newAlarmHour, FIELD_HOUR, CDD_FORCE24);
-    prepareInput(newAlarmHour);
-    waitForEnterRelease();
-    if(!setField(newAlarmHour, FIELD_HOUR, 0, 0, CDD_FORCE24)) {
-        waitAudioDoneMenu();    // (keypad; should not be necessary)
-        return;
-    }
-
-    // Get minute
-    setUpdate(newAlarmMinute, FIELD_MINUTE);
-    prepareInput(newAlarmMinute);
-    waitForEnterRelease();
-    if(!setField(newAlarmMinute, FIELD_MINUTE)) {
-        waitAudioDoneMenu();    // (keypad; should not be necessary)
-        return;
-    }
-
-    // Weekday(s)
-    waitForEnterRelease();
-    displaySet->showTextDirect(getAlWD(newAlarmWeekday));
-    displaySet->onBlink(2);
-    blinkSwitch = true;
-
-    prepareForInput();
-
-    alarmDone = false;
-
-    // Wait for enter
-    while(!checkTimeOut() && !alarmDone) {
-
-        scanKeypad();
-
-        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
-
-            if(wasQuit) break;
-
-            resetTimeOut();  // button pressed, reset timeout
-            displaySet->on();
-            blinkSwitch = false;
-
-            alarmDone = (wasSelect || (wasEnter && menuWaitForRelease()));
-
-            if(!alarmDone) {
-
-                if(wasEnter || !dirDown) {
-                    newAlarmWeekday++;
-                    if(newAlarmWeekday > 9) newAlarmWeekday = wasEnter ? 0 : 9;
-                } else {
-                    if(newAlarmWeekday > 0) newAlarmWeekday--;
-                }
-
-                displaySet->showTextDirect(getAlWD(newAlarmWeekday));
-
-            }
-
-        } else {
-
-            menuDelay(50);
-
-            if(!blinkSwitch) {
-                displaySet->onBlink(2);
-                blinkSwitch = true;
-            }
-
-        }
-
-    }
-
-    keypadMode = 0;
-
-    waitAudioDoneMenu();    // For keypad sounds
-    allOff();
-
-    if(alarmDone & (!wasQuit)) {
-
-        displaySet->showTextDirect(StrSaving);
-        displaySet->on();
-
         // Save it
-        alarmOnOff = newAlarmOnOff;
-        alarmHour = newAlarmHour;
-        alarmMinute = newAlarmMinute;
-        alarmWeekday = newAlarmWeekday;
-
-        saveAlarm();
-
-        cancelSnooze();
+        saveMusFoldNum();
+        
+        if(folderState == -1) {
+            // We do not do processing (=renaming) here.
+            // This is more or less a blocking activity,
+            // not suitable for our "multitasking" (with
+            // regard to speedo action, especially).
+            menuDelay(1000);
+            prepareReboot();
+            delay(1000);
+            esp_restart();
+        } else {
+            mp_init();
+        }
 
         menuDelay(1000);
+
+        return 0;
+
     }
+
+    musFolderNum = oldmsfx;
+        
+    return 1;
 }
+
 
 /*
  *  Time-cycling Interval (aka "autoInterval") #################
  */
-
 
 static void displayAI(int interval, bool blink, bool doComment)
 {
@@ -1704,7 +1628,7 @@ static void displayAI(int interval, bool blink, bool doComment)
 /*
  * Adjust the autoInverval and save
  */
-static void doSetAutoInterval()
+static int doSetAutoInterval()
 {
     bool autoDone = false;
     int newAutoInterval = autoInterval;
@@ -1713,38 +1637,28 @@ static void doSetAutoInterval()
     bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
     displayAI(autoTimeIntervals[newAutoInterval], false, true);
-    dt_on();
-    pt_on();
-    lt_off();
+    sw_sel(D_P|D_D);
 
     prepareForInput();
 
-    // Wait for enter
     while(!checkTimeOut() && !autoDone) {
 
-        scanKeypad();
-
-        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+        if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
             if(wasQuit) break;
-
-            resetTimeOut();  // button pressed, reset timeout
 
             if(blinkSwitch) {
                 displayAI(autoTimeIntervals[newAutoInterval], false, false);
             }
 
-            autoDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+            autoDone = (wasSelect || (wasEnter && menuWaitForReleaseNC()));
 
             if(!autoDone) {
 
                 if(dirDown) {
-                    newAutoInterval++;
-                    if(newAutoInterval > 5)
-                        newAutoInterval = wasEnter ? 0 : 5;
+                    if(newAutoInterval > 0) newAutoInterval--;
                 } else {
-                    if(newAutoInterval > 0)
-                        newAutoInterval--;
+                    if(newAutoInterval < 5) newAutoInterval++;
                 }
 
                 displayAI(autoTimeIntervals[newAutoInterval], false, true);
@@ -1777,11 +1691,9 @@ static void doSetAutoInterval()
         dt_showTextDirect(StrSaving);
         sw_sel(D_D);
 
-        // Save it (if changed)
-        if(autoInterval != newAutoInterval) {
-            autoInterval = newAutoInterval;
-            saveBeepAutoInterval();
-        }
+        // Save it
+        autoInterval = newAutoInterval;
+        saveBeepAutoInterval();
 
         // End pause if current setting != off
         if(autoTimeIntervals[autoInterval]) 
@@ -1789,14 +1701,18 @@ static void doSetAutoInterval()
 
         menuDelay(1000);
 
+        return 0;
+
     }
+        
+    return 1;
 }
 
 /*
  * Brightness ##################################################
  */
 
-static void displayBri(clockDisplay* displaySet, int8_t number, bool blink)
+static void displayBri(tcdDisplay* displaySet, int8_t number, bool blink)
 {
     uint16_t flags = 0;
     if(blink) flags |= CDT_BLINK;
@@ -1808,11 +1724,10 @@ static void displayBri(clockDisplay* displaySet, int8_t number, bool blink)
     #endif
 }
 
-
-static bool doSetBrightness(clockDisplay* displaySet)
+static int doSetBrightness(tcdDisplay* displaySet, uint8_t& newbri)
 {
-    int8_t oldBri = displaySet->getBrightness();
-    int8_t number;
+    uint8_t oldBri = displaySet->getBrightness();
+    uint8_t number;
     bool briDone = false;
     bool blinkSwitch = false;
     unsigned long blinkNow = millis();
@@ -1828,30 +1743,24 @@ static bool doSetBrightness(clockDisplay* displaySet)
 
     prepareForInput();
 
-    // Wait for enter
     while(!checkTimeOut() && !briDone) {
 
-        scanKeypad();
-
-        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+        if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
             if(wasQuit) break;
-
-            resetTimeOut();  // button pressed, reset timeout
 
             if(blinkSwitch) {
                 displayBri(displaySet, number, false);
             }
 
-            briDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+            briDone = (wasSelect || (wasEnter && menuWaitForReleaseNC()));
 
             if(!briDone) {
 
                 if(dirDown) {
-                    number++;
-                    if(number > 15) number = wasEnter ? 0 : 15;
-                } else {
                     if(number > 0) number--;
+                } else {
+                    if(number < 15) number++;
                 }
 
                 displaySet->setBrightness(number);
@@ -1885,15 +1794,23 @@ static bool doSetBrightness(clockDisplay* displaySet)
 
     if(!(briDone & (!wasQuit))) {
         displaySet->setBrightness(oldBri);
-        return false;
+        return 1;
     }
 
-    return true;
+    newbri = number;
+
+    return 0;
 }
 
 /*
  * Show sensor info ############################################
  */
+
+static void sensWait()
+{
+    dt_showTextDirect("WAIT...");
+    pt_showTextDirect("");
+}
 
 #if defined(TC_HAVETEMP) || defined(TC_HAVELIGHT)
 static void doShowSensors()
@@ -1908,10 +1825,10 @@ static void doShowSensors()
     bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
     #ifdef TC_HAVELIGHT
-    if(useLight) numberArr[numIdx++] = 0;
+    if(sgf & SGF_ULightSens) numberArr[numIdx++] = 0;
     #endif
     #ifdef TC_HAVETEMP
-    if(useTemp) {  
+    if(sgf & SGF_UTemp) {  
         numberArr[numIdx++] = 1;
         if(tempSens.haveHum()) numberArr[numIdx++] = 2;
     }
@@ -1919,11 +1836,8 @@ static void doShowSensors()
     maxIdx = numIdx - 1;
     numIdx = 0;
 
-    dt_showTextDirect("WAIT");
-    dt_on();
-    pt_showTextDirect("");
-    pt_on();
-    lt_off();
+    sensWait();
+    sw_sel(D_P|D_D);
 
     prepareForInput();
 
@@ -1932,27 +1846,24 @@ static void doShowSensors()
     // Don't use timeOut here, user might want to keep
     // sensor data displayed for a longer period.
 
-    // Wait for enter
     while(!luxDone) {
 
-        scanKeypad();
-
-        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+        if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
             if(wasQuit) break;
 
-            luxDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+            luxDone = (wasSelect || (wasEnter && menuWaitForReleaseNC()));
 
             if(!luxDone) {
                 if(maxIdx > 0) {
-                    if(wasEnter || !dirDown) {
+                    if(dirDown) {
                         numIdx++;
-                        if(numIdx > maxIdx) numIdx = wasEnter ? 0 : maxIdx;
+                        if(numIdx > maxIdx) numIdx = 0;
                     } else {
-                        if(numIdx > 0) numIdx--;
+                        if(!numIdx) numIdx = maxIdx;
+                        else numIdx--;
                     }
-                    dt_showTextDirect("WAIT");
-                    pt_showTextDirect("");
+                    sensWait();
                 }
             }
             
@@ -1978,11 +1889,11 @@ static void doShowSensors()
                 case 1:
                     #ifdef TC_HAVETEMP
                     dt_showTextDirect("TEMPERATURE");
-                    temp = tempSens.readTemp(tempUnit);
+                    temp = tempSens.readTemp();
                     if(isnan(temp)) {
-                        sprintf(buf, "--.--~%c", tempUnit ? 'C' : 'F');
+                        sprintf(buf, "--.--~%c", (sgf & SGF_TempCelsius) ? 'C' : 'F');
                     } else {
-                        sprintf(buf, "%.2f~%c", temp, tempUnit ? 'C' : 'F');
+                        sprintf(buf, "%.2f~%c", temp, (sgf & SGF_TempCelsius) ? 'C' : 'F');
                     }
                     #else
                     buf[0] = 0;
@@ -1990,7 +1901,7 @@ static void doShowSensors()
                     break;
                 case 2:
                     #ifdef TC_HAVETEMP
-                    tempSens.readTemp(tempUnit);
+                    tempSens.readTemp();
                     dt_showTextDirect("HUMIDITY");
                     hum = tempSens.readHum();
                     if(hum < 0) {
@@ -2037,9 +1948,7 @@ static void displayIP()
     presentTime.showHalfIPDirect(a, b, CDT_CLEAR);
     departedTime.showHalfIPDirect(c, d, CDT_CLEAR);
     
-    dt_on();
-    pt_on();
-    lt_on();
+    sw_sel(D_L|D_P|D_D);
 }
 
 static void doShowNetInfo()
@@ -2048,6 +1957,7 @@ static void doShowNetInfo()
     bool netDone = false;
     char macBuf[16];
     int maxMI = 2;
+    int w;
     bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
     #ifdef TC_HAVEMQTT
@@ -2060,89 +1970,78 @@ static void doShowNetInfo()
 
     prepareForInput();
 
-    // Wait for enter
     while(!checkTimeOut() && !netDone) {
 
-        scanKeypad();
-
-        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+        if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
             if(wasQuit) break;
 
-            resetTimeOut();  // button pressed, reset timeout
-
-            netDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+            netDone = (wasSelect || (wasEnter && menuWaitForReleaseNC()));
 
             if(!netDone) {
 
-                if(wasEnter || !dirDown) {
+                if(dirDown) {
                     number++;
-                    if(number > maxMI) number = wasEnter ? 0 : maxMI;
+                    if(number > maxMI) number = 0;
                 } else {
-                    if(number > 0) number--;
+                    if(!number) number = maxMI;
+                    else number--;
                 }
+
                 switch(number) {
                 case 0:
                     displayIP();
                     break;
                 case 1:
                     dt_showTextDirect("WIFI");
-                    dt_on();
+                    w = D_D|D_P;
                     switch(wifi_getStatus()) {
                     case WL_IDLE_STATUS:
                         pt_showTextDirect("IDLE");
-                        lt_off();
                         break;
                     case WL_SCAN_COMPLETED:
                         pt_showTextDirect("SCAN");
                         lt_showTextDirect("COMPLETE");
-                        lt_on();
+                        w |= D_L;
                         break;
                     case WL_NO_SSID_AVAIL:
                         pt_showTextDirect("SSID NOT");
                         lt_showTextDirect("AVAILABLE");
-                        lt_on();
+                        w |= D_L;
                         break;
                     case WL_CONNECTED:
                         pt_showTextDirect("CONNECTED");
-                        lt_off();
                         break;
                     case WL_CONNECT_FAILED:
                         pt_showTextDirect("CONNECT");
                         lt_showTextDirect("FAILED");
-                        lt_on();
+                        w |= D_L;
                         break;
                     case WL_CONNECTION_LOST:
                         pt_showTextDirect("CONNECTION");
                         lt_showTextDirect("LOST");
-                        lt_on();
+                        w |= D_L;
                         break;
                     case WL_DISCONNECTED:
                         pt_showTextDirect("DISCONNECTED");
-                        lt_off();
                         break;
                     case 0x10000:
                     case 0x10003:   // AP-STA, treat as AP (=AP with conn.config'd but not connected)
                         pt_showTextDirect("AP MODE");
-                        lt_off();
                         break;
                     case 0x10001:
                         pt_showTextDirect("OFF");
-                        lt_off();
                         break;
                     //case 0x10002:     // UNKNOWN
                     default:
                         pt_showTextDirect("UNKNOWN");
-                        lt_off();
                     }
-                    pt_on();
+                    sw_sel(w);
                     break;
                 case 2:
                     dt_showTextDirect("MAC");
-                    dt_on();
                     pt_showTextDirect(macBuf, CDT_CLEAR|CDT_CORR6);
-                    pt_on();
-                    lt_off();
+                    sw_sel(D_P|D_D);
                     break;
                 #ifdef TC_HAVEMQTT
                 case 3:
@@ -2151,14 +2050,12 @@ static void doShowNetInfo()
                     #else
                     dt_showTextDirect("HOMEASSISTANT");
                     #endif
-                    dt_on();
                     if(useMQTT) {
                         pt_showTextDirect(mqttState() ? "CONNECTED" : "DISCONNECTED");
                     } else {
                         pt_showTextDirect("OFF");
                     }
-                    pt_on();
-                    lt_off();
+                    sw_sel(D_P|D_D);
                     break;
                 #endif
                 }
@@ -2205,8 +2102,7 @@ static void displayClient(int numCli, int number)
     
     if(!numCli) {
         dt_showTextDirect("NO CLIENTS");
-        pt_off();
-        lt_off();
+        sw_sel(D_D);
         return;
     }
 
@@ -2242,15 +2138,13 @@ static void displayClient(int numCli, int number)
         
         presentTime.showHalfIPDirect(ip[0], ip[1], CDT_CLEAR);
         departedTime.showHalfIPDirect(ip[2], ip[3], CDT_CLEAR);
-        pt_on();
-        lt_on();
+        sw_sel(D_D|D_P|D_L);
         #ifdef TC_DBG_NET
         Serial.printf("BTTFN client type %d\n", type);
         #endif
     } else {
         dt_showTextDirect("EXPIRED");
-        pt_off();
-        lt_off();
+        sw_sel(D_D);
     }
 }
 
@@ -2264,16 +2158,11 @@ void doShowBTTFNInfo()
 
     oldNumCli = numCli;
 
-    dt_showTextDirect("");
-    dt_on();
     displayClient(numCli, number);
 
     prepareForInput();
 
-    // Wait for enter
     while(!checkTimeOut() && !netDone) {
-
-        scanKeypad();
 
         if(oldNumCli != numCli) {
             number = 0;
@@ -2281,24 +2170,22 @@ void doShowBTTFNInfo()
             oldNumCli = numCli;
         }
 
-        if(waitForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
+        if(checkForMenuControl(wasEnter, dirDown, wasQuit, wasSelect)) {
 
             if(wasQuit) break;
 
-            resetTimeOut();  // button pressed, reset timeout
-
-            netDone = (wasSelect || (wasEnter && menuWaitForRelease()));
+            netDone = (wasSelect || (wasEnter && menuWaitForReleaseNC()));
 
             if(!netDone) {
 
                 if(numCli > 1) {
-                    if(wasEnter || !dirDown) {
+                    if(dirDown) {
                         number++;
                         if(number >= numCli) number = 0;
                     } else {
-                        if(number > 0) number--;
+                        if(!number) number = numCli - 1;
+                        else number--;
                     }
-                        
                 } else
                     number = 0;
 
@@ -2318,91 +2205,19 @@ void doShowBTTFNInfo()
     keypadMode = 0;
 }
 
-/*
- * Install sound pack from SD to flash FS #############
- */
-
-void doCopyAudioFiles()
-{
-    bool delIDfile = false;
-
-    if((!copy_audio_files(delIDfile)) && !FlashROMode) {
-        // If copy fails because of a write error, re-format flash FS
-        lt_showTextDirect("FORMATTING");
-        reInstallFlashFS();
-        copy_audio_files(delIDfile);  // Retry copy
-    }
-
-    if(delIDfile) {
-        delete_ID_file();
-    } else {
-        menuDelay(3000);
-    }
-    
-    menuDelay(2000);
-
-    allOff();
-    dt_showTextDirect("REBOOTING");
-    dt_on();
-
-    unmount_fs();
-    delay(500);
-
-    esp_restart();
-}
 
 /* *** Helpers ################################################### */
 
-void start_file_copy()
-{
-    mp_stop();
-    stopAudio();
-  
-    dt_showTextDirect("INSTALLING");
-    pt_showTextDirect("SOUND PACK");
-    lt_showTextDirect("PLEASE");
-    dt_on();
-    pt_on();
-    lt_on();
-    destinationTime.resetBrightness();
-    presentTime.resetBrightness();
-    departedTime.resetBrightness();
-    
-    fcprog = false;
-    fcstart = millis();
-}
-
-void file_copy_progress()
-{
-    if(millis() - fcstart >= 1000) {
-        lt_showTextDirect(fcprog ? "PLEASE" : "WAIT");
-        fcprog = !fcprog;
-        fcstart = millis();
-    }
-}
-
-void file_copy_done(int err)
-{
-    lt_showTextDirect(err ? "ERROR" : "DONE");
-}
 
 /*
- * Wait for ENTER to be released
- * Returns 
- * - true if ENTER was pressed long enough to be considered HELD
- * - false if ENTER released before considered "held"
- */
-static bool menuWaitForRelease()
+ * Wait for ENTER to be released 
+*/
+static bool menuWaitForReleaseNC()
 {
     while(checkEnterPress()) {
         menuLoops();
-        if(isEnterKeyHeld) {
-            isEnterKeyHeld = false;
-            return true;
-        }
     }
-
-    return false;
+    return true;
 }
 
 /*
@@ -2435,9 +2250,6 @@ static void waitForEnterRelease()
         if(!digitalRead(ENTER_BUTTON_PIN))
             break;
     }
-    
-    isEnterKeyPressed = false;
-    isEnterKeyHeld = false;
 }
 
 static void waitAudioDoneMenu()
@@ -2449,36 +2261,65 @@ static void waitAudioDoneMenu()
     }
 }
 
-static bool waitForMenuControl(bool &wasEnter, bool& dirDown, bool& wasQuit, bool& wasSelect)
+static int checkForMenuControl(bool &wasEnter, bool& dirDown, bool& wasQuit, bool& wasSelect)
 {
+    int ret = 0;
     wasEnter = wasQuit = wasSelect = false;
+
+    scanKeypad();
     
     if(checkEnterPress()) {
-        wasEnter = dirDown = true;
-        return true;
+        wasEnter = true;
+        ret++;
     } else if(keypadKeyPressed) {
         char c = keypadKeyPressed;
         keypadKeyPressed = 0;
         switch(c) {
-        case '1':
         case '2':
-            dirDown = true;
-            return true;
-        case '7':
-        case '8':
             dirDown = false;
-            return true;
-        case '4':
+            ret++;
+            break;
+        case '8':
+            dirDown = true;
+            ret++;
+            break;
         case '5':
             wasSelect = true;
-            return true;
+            ret++;
+            break;
         case '9':
             wasQuit = true;
-            return true;
+            ret++;
         }
+        
     }
 
-    return false;
+    if(ret) resetTimeOut();
+
+    return ret;
+}
+
+static int checkForMenuInput(bool &wasEnter, char& key)
+{
+    int ret = 0;
+    
+    wasEnter = false;
+    key = 0;
+
+    scanKeypad();
+    
+    if(checkEnterPress()) {
+        wasEnter = true;
+        ret++;
+    } else if(keypadKeyPressed) {
+        key = keypadKeyPressed;
+        keypadKeyPressed = 0;
+        ret++;
+    }
+
+    if(ret) resetTimeOut();
+
+    return ret;
 }
 
 /*
@@ -2517,8 +2358,6 @@ static void menuDelay(unsigned long mydel)
  */
 static void menuLoops()
 {
-    audio_loop();
-    enterkeyScan();
     audio_loop();
     wifi_loop();
     audio_loop();

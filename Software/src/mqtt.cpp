@@ -635,19 +635,21 @@ void PubSubClient::disconnect()
 
 bool PubSubClient::subscribe_int(bool unsubscribe, const char *topic, const char *topic2, uint8_t qos)
 {
-    size_t  topicLength = strnlen(topic, this->bufferSize);
+    size_t  topicLength = topic ? strnlen(topic, this->bufferSize) : 0;
     size_t  topicLength2 = topic2 ? strnlen(topic2, this->bufferSize) : 0;
     uint8_t header = unsubscribe ? MQTTUNSUBSCRIBE : MQTTSUBSCRIBE;
     
-    if(!topic)
-        return false;
+    if(!topicLength && !topicLength2)
+        return true;
     
     if(!unsubscribe) {
         if(qos > 1)
             return false;
-        if(this->bufferSize < mqtt_max_header_size+2 + 2+topicLength+1 + (topicLength2 ? 2+topicLength2+1 : 0))
+        if(this->bufferSize < mqtt_max_header_size+2 + (topicLength ? 2+topicLength+1 : 0) + (topicLength2 ? 2+topicLength2+1 : 0))
             return false;
     } else {
+        if(!topicLength)
+            return true;
         if(this->bufferSize < mqtt_max_header_size+2 + 2+topicLength)
             return false;
     }
@@ -667,11 +669,13 @@ bool PubSubClient::subscribe_int(bool unsubscribe, const char *topic, const char
             this->buffer[length++] = 0;     // no properties
             qos |= 4;                       // "no local" - don't need our message sent back to us
         }
-        
-        length = writeString((char*)topic, this->buffer, length);
-        if(!unsubscribe) this->buffer[length++] = qos;
 
-        if(topic2 && topicLength2) {
+        if(topicLength) {
+            length = writeString((char*)topic, this->buffer, length);
+            if(!unsubscribe) this->buffer[length++] = qos;
+        }
+
+        if(topicLength2) {
             length = writeString((char*)topic2, this->buffer, length);
             this->buffer[length++] = qos;
         }

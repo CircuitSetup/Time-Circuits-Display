@@ -7,7 +7,7 @@
  * https://tcd.out-a-ti.me
  *
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -19,6 +19,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not
+ * be changed or removed.
  * 
  * In addition, the following restrictions apply:
  *
@@ -125,8 +128,8 @@
  *   Portal.
  *   
  * - Install the sound-pack: 
- *   - Go to Config Portal, click "Update" and upload the sound-pack (TCDA.bin, extracted
- *     from install/sound-pack-xxxx.zip) through the bottom file selector.
+ *   - Go to Config Portal, click "Update & Upload" and upload the sound-pack (TCDA.bin,
+ *     extracted from install/sound-pack-twXX.zip) through the bottom file selector.
  *     A FAT32 (not ExFAT!) formatted SD card must be present in the slot during this 
  *     operation.
  *   Alternatively:
@@ -137,23 +140,71 @@
  */
 
 /*  Changelog
-  *  
+ *          
+ *  2026/04/19 (A10001986) [3.22]
+ *    **********************************************************************************
+ *    ** If updating from below 3.20, please install 3.20 or 3.20.1 first to have     **
+ *    ** your settings converted. If 3.20(.1) is skipped, many of your settings       **
+ *    ** will be restored to default values. It suffices to install 3.20 or 3.20.1    **
+ *    ** and boot once; you can then immediately update to a later version.           **
+ *    ** https://github.com/realA10001986/Time-Circuits-Display/releases/tag/V3.20.1  **
+ *    **********************************************************************************
+ *    - "Persistent" time travels no longer overwrite stored user-programmed dates
+ *      for red and yellow displays. User times can be brought back by 998 at any time.
+ *    - Keypad menu: Navigation is now only through 2 (up/+), 5 (select), 8 (down/-),
+ *      9 (cancel). Pressing Enter is now equal to "select", no longer used to cycle
+ *      through items. Holding the Enter key is no longer part of any menu navigation,
+ *      apart from initially entering the keypad menu. When digits are expected to be
+ *      entered, ENTER must now be pressed to proceed. Entering the expected number of 
+ *      digits no longer automatically proceeds to the next field.
+ *    - Alarm: Add "user days" option to select any combination of weekdays.
+ *      Pressing 1-7 toggles days, ENTER proceeds, 9 cancels.
+ *    - World Clock: Add option to keep location name permanently; only honored if
+ *      location name is short enough to fit next to time (9 chars; 8 chars for A-Car)
+ *    - Extend MQTT message display feature to all three displays, with separate
+ *      topics for each display
+ *    - New nightmode schedule preset "Night Owl" (aka "Mancave"). Operating times:
+ *      Sun-Thu 8pm-1am, Fri/Sat 8pm-4am.
+ *    - Forward Remote's new "REFILL" command from the Remote to the Dash Gauges 
+ *      (Remote 1.22)
+ *    - Refactor alarm/reminder/timer/SotH logic regarding priorities, concurrency,
+ *      locking sequences, etc.
+ *    - Fix nightmode weekday selection
+ *    - Code optimizations and fixes
  *  2026/03/27 (A10001986) [3.21]
+ *    **********************************************************************************
+ *    ** If updating from below 3.20, please install 3.20 or 3.20.1 first to have     **
+ *    ** your settings converted. If 3.20(.1) is skipped, many of your settings       **
+ *    ** will be restored to default values. It suffices to install 3.20 or 3.20.1    **
+ *    ** and boot once; you can then immediately update to a later version.           **
+ *    ** https://github.com/realA10001986/Time-Circuits-Display/releases/tag/V3.20.1  **
+ *    **********************************************************************************
  *    - New sound-pack (TW06/CS06)
- *    - New "extended" alarm function: Pressing ENTER optionally snoozes, holding ENTER stop the alarm. User-provided sound can be looped. Old legacy mode still supported.
- *    - 117 toggles new "minimal mode": Present time shows weekday instead of year when displaying actual present time, red and yellow displays are off.
+ *    - New "extended" alarm function: Pressing ENTER optionally snoozes, holding 
+ *      ENTER stop the alarm. User-provided sound can be looped. Old legacy mode
+ *      still supported.
+ *    - 117 toggles new "minimal mode": Present time shows weekday instead of year
+ *      when displaying actual present time, red and yellow displays are off.
  *    - 110 restores display mode to default (disables RC, WC, Geo, mini modes)
- *    - 91mmddyyyyhhMM/92mmddyyyyhhMM are short-cuts to enter and save user-defined dates for the Destination Time/Last Time Departed displays, just like using the keypad menu. Time-cycling is paused for 30 mins.
- *    - Programming the Destination Time/Last Time Departed displays through the keypad menu no longer disables time cycling, it only pauses it for 30 mins.
- *    - MQTT: Add 10 user defined topics and messages for publishing through keypad commands 600-609.
- *    - WiFi: Allow defining a BSSID (AP MAC address) to connect to a specific AP if multiple APs with identical SSID are available.
- *    - A-Car version can now swap red and yellow displays to emulate B-Car as seen in part 3.
+ *    - 91mmddyyyyhhMM/92mmddyyyyhhMM are short-cuts to enter and save user-defined
+ *      dates for the Destination Time/Last Time Departed displays, just like using
+ *      the keypad menu. Time-cycling is paused for 30 mins.
+ *    - Programming the Destination Time/Last Time Departed displays through the 
+ *      keypad menu no longer disables time cycling, it only pauses it for 30 mins.
+ *    - MQTT: Add 10 user defined topics and messages for publishing through keypad 
+ *      codes 600-609.
+ *    - WiFi: Allow defining a BSSID (AP MAC address) to connect to a specific AP
+ *      if multiple APs with identical SSID are available.
+ *    - A-Car version can now swap red and yellow displays to emulate B-Car as seen
+ *      in part 3.
  *    - New Easter Egg
  *    - Music player: Fix off-by-one bug in ID3 decoding
  *    - MQTT: Disable if server can't be resolved
  *    - WiFi: Do not power down AP long as a client is connected
  *    - Brush up Config Portal a bit
  *    - Code optimizations and fixes.
+ *  2026/03/04 (A10001986) [3.20.1]
+ *    - Fix saving display times
  *  2026/02/16 (A10001986) [3.20]
  *    - New file format for secondary and IP settings. This version of the firmware 
  *      converts old to new.
@@ -961,7 +1012,7 @@
  *      function calls; don't read RTC too often, update dt instead, etc)
  *  2023/05/18 (A10001986)
  *    - Internal optimizations (data entry doesn't show leading 0; blink logic; Audio, 
- *      ClockDisplay: Get rid of bools, use flags; etc)
+ *      tcdDisplay: Get rid of bools, use flags; etc)
  *  2023/05/17 (A10001986)
  *    - Add yearly/monthly reminder: Type 77mmddhhMM to set a timer that will play a 
  *      sound yearly on given date, or, if the month is 00, every month on given day. 
@@ -1185,7 +1236,7 @@
  *    - GPS: Check NMEA length before other tests
  *  2023/01/09 (A10001986)
  *    - Settings: Add some more checks for validity, code simplifications
- *    - Clockdisplay: Make loadLastYear() return impossible values on error to force 
+ *    - tcddisplay: Make loadLastYear() return impossible values on error to force 
  *      comparisons to fail
  *    - [Prepare Flash-RO (read-only) mode]
  *  2023/01/07 (A10001986)
@@ -1288,7 +1339,7 @@
  *  2022/11/22 (A10001986) [released by CS as 2.4]
  *    - Audio: SPIFFS does not adhere to POSIX standards and returns a file object
  *      even if a file does not exist. Fix by work-around (SPIFFS only).
- *    - clockdisplay: lampTest(), as part of the display disruption sequence, might 
+ *    - tcddisplay: lampTest(), as part of the display disruption sequence, might 
  *      be the reason for some red displays to go dark after time travel; reduce 
  *      the number of segments lit.
  *    - Rename "tempSensor" to "sensors" and add light sensor support. Three models
@@ -1502,7 +1553,7 @@
  *      switched off in night mode
  *    - Fix logic screw-up in autoTimes, changed intervals to 5, 10, 15, 30, 60.
  *    - More Config Portal beauty enhancements
- *    - Clockdisplay: Remove dependency on settings.h
+ *    - tcddisplay: Remove dependency on settings.h
  *    - Fix static ip parameter handling (make sure strings are 0-terminated)
  *    - [I2C-Speedo integration; still inactive]
  *  2022/08/31 (A10001986)
@@ -1554,7 +1605,7 @@
  *    - Audio: Less logging; fix pot resolution for esp32 2.x; reduce "noise
  *      reduction" to 4 values to make knob react faster
  *    - Network info now functional in AP mode
- *    - Proper check for day validity in clockdisplay
+ *    - Proper check for day validity in tcddisplay
  *  2022/08/21 (A10001986)
  *    - Added software volume: Volume can now be set by the volume knob, or by
  *      setting a value in the new keymap Volume menu.
@@ -1571,7 +1622,7 @@
  *    - audio cleanup
  *    - clean up sound/animation delay definitions
  *    - audio: vol knob delivers inconsistent values, do some "noise reduction"
- *    - clean up clockdisplay, add generic text routine, scrap unused stuff
+ *    - clean up tcddisplay, add generic text routine, scrap unused stuff
  *  2022/08/18 (A10001986)
  *    - Destination time/date can now be entered in mmddyyyy, mmddyyyyhhmm or hhmm
  *      format.
@@ -1682,7 +1733,6 @@
 
 #include "tc_audio.h"
 #include "tc_keypad.h"
-#include "tc_menus.h"
 #include "tc_settings.h"
 #include "tc_time.h"
 #include "tc_wifi.h"

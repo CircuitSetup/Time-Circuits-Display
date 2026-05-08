@@ -9,7 +9,7 @@
  * Sound handling
  *
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -56,38 +59,47 @@
 // By default, use the volume knob
 #define DEFAULT_VOLUME 255
 
-#define PA_CHECKNM 0x0001
-#define PA_INTRMUS 0x0002
-#define PA_ALLOWSD 0x0004
-#define PA_DYNVOL  0x0008
-#define PA_DOID3TS 0x0010
-#define PA_DOOR    0x0020
-#define PA_LINEOUT 0x0040
-#define PA_INTSPKR 0x0000
-#define PA_ISWAV   0x0080
+#define PA_CHECKNM 0x000001
+#define PA_INTRMUS 0x000002
+#define PA_ALLOWSD 0x000004
+#define PA_DYNVOL  0x000008
+#define PA_DOID3TS 0x000010
+#define PA_DOOR    0x000020
+#define PA_LINEOUT 0x000040
+#define PA_INTSPKR 0x000000
+#define PA_ISWAV   0x000080
 // upper 8 bits all taken for key ID
-#define PA_KEYMASK 0x1ff00
-#define PA_DOORL   0x0100
-#define PA_DOORR   0x0200
-#define PA_LOOP    0x20000
-#define PA_ALARM   0x40000
+#define PA_KEYMASK 0x01ff00
+#define PA_DOORL   0x000100
+#define PA_DOORR   0x000200
+#define PA_LOOP    0x020000
+#define PA_SIGNAL  0x100000
+#define PA_ALARM   0x200000
+#define PA_REM     0x400000
+#define PA_TMR     0x800000
+#define PA_SIGMASK (PA_SIGNAL|PA_ALARM|PA_REM|PA_TMR)
 
 void  audio_setup();
 void  audio_loop();
 
-void      play_file(const char *audio_file, uint32_t flags, float volumeFactor = 1.0f);
-uint32_t  play_keypad_sound(char key);
-void      play_hour_sound(int hour);
-void      play_beep();
-void      play_key(int k, uint32_t preDTMFkp);
-void      play_door_snd(int doorNum, int state, uint32_t doorFlags);
+void     play_file(const char *audio_file, uint32_t flags, float volumeFactor = 1.0f);
+uint32_t play_keypad_sound(char key);
+void     play_hour_sound(int hour);
+void     play_beep();
+void     play_key(int k, uint32_t preDTMFkp);
+void     play_door_snd(int doorNum, int state, uint32_t doorFlags);
 
-bool  check_file_SD(const char *audio_file);
+bool         check_file_SD(const char *audio_file);
 unsigned int check_file_len_SD(const char *audio_file, bool& file_exists);
-int   getSWVolFromHWVol();
-bool  checkAudioDone();
-bool  checkAudioFree();
-bool  checkMP3Running();
+
+int      getSWVolFromHWVol();
+
+bool     checkAudioDone();
+bool     checkAudioFree();
+bool     checkMP3Running();
+uint32_t isSignalPlaying();
+bool     isUISignalPlaying();
+
 void  stopAudio();
 void  stop_key();
 void  stopAlarm(bool force);

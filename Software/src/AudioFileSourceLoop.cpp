@@ -12,10 +12,6 @@
 #include "tc_global.h"
 #include "AudioFileSourceLoop.h"
 
-AudioFileSourceLoop::AudioFileSourceLoop()
-{
-}
-
 AudioFileSourceLoop::~AudioFileSourceLoop()
 {
     if(f) f.close();
@@ -38,50 +34,18 @@ bool AudioFileSourceLoop::seek(int32_t pos, int dir)
     return false;
 }
 
-bool AudioFileSourceLoop::close()
-{
-    f.close();
-    return true;
-}
-
-bool AudioFileSourceLoop::isOpen()
-{
-    return f ? true : false;
-}
-
-uint32_t AudioFileSourceLoop::getSize()
-{
-    if(!f) return 0;
-    return f.size();
-}
-
-uint32_t AudioFileSourceLoop::getPos()
-{
-    if(!f) return 0;
-    return f.position();
-}
-
-void AudioFileSourceLoop::setStartPos(int32_t newStartPos)
-{
-    startPos = newStartPos;
-}
-
-void AudioFileSourceLoop::setPlayLoop(bool playLoop)
-{
-    doPlayLoop = playLoop;
-}
-
-
 // SD -----------------------------------------------
 
 AudioFileSourceSDLoop::AudioFileSourceSDLoop()
 {
 }
 
+/*
 AudioFileSourceSDLoop::AudioFileSourceSDLoop(const char *filename)
 {
     open(filename);
 }
+*/
 
 bool AudioFileSourceSDLoop::open(const char *filename)
 {
@@ -95,10 +59,12 @@ AudioFileSourceFSLoop::AudioFileSourceFSLoop()
 {
 }
 
+/*
 AudioFileSourceFSLoop::AudioFileSourceFSLoop(const char *filename)
 {
     open(filename);
 }
+*/
 
 bool AudioFileSourceFSLoop::open(const char *filename)
 {

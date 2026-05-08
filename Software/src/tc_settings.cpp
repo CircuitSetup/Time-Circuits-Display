@@ -9,7 +9,7 @@
  * Settings & file handling
  *
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -73,17 +76,16 @@
 #include <Update.h>
 
 #include "tc_settings.h"
-#include "tc_menus.h"
 #include "tc_audio.h"
 #include "tc_time.h"
 #include "tc_wifi.h"
 
 // If defined, old settings files will be used
 // and converted if no new settings file is found.
-#define SETTINGS_TRANSITION
+//#define SETTINGS_TRANSITION
 // Stage 2: Assume new settings are present, but
 // still delete obsolete files.
-//#define SETTINGS_TRANSITION_2
+#define SETTINGS_TRANSITION_2
 
 #ifdef SETTINGS_TRANSITION
 #undef SETTINGS_TRANSITION_2
@@ -103,20 +105,20 @@
 #define NUM_AUDIOFILES 24
 #define AC_FMTV 2
 #define AC_OHSZ (14 + ((10+NUM_AUDIOFILES+1)*(32+4)))
-#ifdef V_A10001986
-#define SND_REQ_VERSION "TW06"
-#define AC_TS 1174312
-#define SND_NON_ALIEN "CS"
-#else
+#ifdef CS_EDITION
 #define SND_REQ_VERSION "CS06"
 #define AC_TS 1179025
 #define SND_NON_ALIEN "TW"
+#else
+#define SND_REQ_VERSION "TW06"
+#define AC_TS 1174312
+#define SND_NON_ALIEN "CS"
 #endif
 
 static const char *CONFN  = "/TCDA.bin";
 static const char *CONFND = "/TCDA.old";
 static const char *CONID  = "TCDA";
-const char        rspv[]  = SND_REQ_VERSION;
+const  char       rspv[]  = SND_REQ_VERSION;
 static uint32_t   soa = AC_TS;
 static bool       ic = false;
 static uint8_t*   f(uint8_t *d, uint32_t m, int y) { return d; }
@@ -135,10 +137,10 @@ static struct [[gnu::packed]] {
     uint8_t alarmHour       = DEF_ALARM_HOUR;
     uint8_t alarmMinute     = DEF_ALARM_MINUTE;
     uint8_t alarmWeekday    = DEF_ALARM_WD;
-    uint8_t remMonth        = DEF_REM_MONTH;
-    uint8_t remDay          = DEF_REM_DAY;
-    uint8_t remHour         = DEF_REM_HOUR;
-    uint8_t remMin          = DEF_REM_MIN;
+    uint8_t remMonth        = 0;
+    uint8_t remDay          = 0;
+    uint8_t remHour         = 0;
+    uint8_t remMin          = 0;
     uint8_t carMode         = 0;
     uint8_t useLineOut      = 0;
     uint8_t remoteAllowed   = 0;
@@ -186,13 +188,16 @@ static struct [[gnu::packed]] {
     dateStruct dDate          = { 0, 0, 0, 0, 0 };
     dateStruct lDate          = { 0, 0, 0, 0, 0 };
     uint8_t    timeDiffUp     = 0;
+    uint8_t    unused1        = 0;
+    dateStruct dUDate         = { 0, 0, 0, 0, 0 };
+    dateStruct lUDate         = { 0, 0, 0, 0, 0 };
 } clockData;
 
 static int      clkValidBytes  = 0;
 static uint32_t clockHash      = 0;
 static bool     haveClockState = false;
 
-uint32_t        mainConfigHash = 0;
+static uint32_t mainConfigHash = 0;
 static uint32_t ipHash = 0;
 
 static const char *cfgName     = "/config.json"; // Main config (flash)
@@ -235,10 +240,10 @@ static const char *obsFiles[] = {
 static const char fwfn[]      = "/tcdfw.bin";
 static const char fwfnold[]   = "/tcdfw.old";
 
-static const char *fsNoAvail = "File System not available";
+static const char *fsNoAvail     = "File System not available";
 static const char *failFileWrite = "Failed to open file for writing";
 #ifdef TC_DBG_BOOT
-static const char *badConfig = "Settings bad/missing/incomplete; writing new file";
+static const char *badConfig     = "Settings bad/missing/incomplete; writing new file";
 #endif
 
 #ifdef TC_HAVEMQTT
@@ -264,7 +269,7 @@ static bool allowCPA = false;
 bool haveAudioFiles = false;
 
 // Music Folder Number
-uint8_t musFolderNum = 0;
+unsigned int musFolderNum = 0;
 
 int sspeedopin = 0;
 int stachopin = 0;
@@ -293,10 +298,10 @@ static void loadRemoteAllowed();
 static void loadUpdAvail();
 uint16_t    loadClockState(int16_t& yoffs);
 bool        saveClockState(uint16_t curYear, int16_t yearoffset);
-dateStruct *getClockDataDL(uint8_t did);
+dateStruct *getClockDataDL(unsigned int did, int slot = 0);
 void        getClockDataP(uint64_t& timeDifference, bool &timeDiffUp);
-void        updateClockDataDL(uint8_t did, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
-bool        saveClockDataDL(bool force, uint8_t did, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
+void        updateClockDataDL(unsigned int did, int slot, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
+bool        saveClockDataDL(bool force, unsigned int did, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
 void        updateClockDataP();
 bool        saveClockDataP(bool force);
 static void loadAllClockData();
@@ -323,21 +328,22 @@ static void removeOldFiles(const char *oldfn);
 
 static bool formatFlashFS(bool userSignal);
 
+static void firmware_update();
+
+// Helpers from tc_keypad
 extern void start_file_copy();
 extern void file_copy_progress();
 extern void file_copy_done(int err);
-
-static void firmware_update();
 
 #ifdef TC_HAVEMQTT
 static void preAllocMQTTTopMsg()
 {
     for(int i = 0; i < 10; i++) {
         if(settings.mqmt[i]) free(settings.mqmt[i]);
-        if(settings.mqmm[i]) free(settings.mqmm[i]);
         if((settings.mqmt[i] = (char *)malloc(128))) {
             memset(settings.mqmt[i], 0, 128);
         }
+        if(settings.mqmm[i]) free(settings.mqmm[i]);
         if((settings.mqmm[i] = (char *)malloc(64))) {
             memset(settings.mqmm[i], 0, 64);
         }
@@ -350,6 +356,7 @@ static void freeUnusedMQTTTopMsg()
         if(settings.mqmt[i]) {
             if(!*settings.mqmt[i]) {
                 free(settings.mqmt[i]);
+                settings.mqmt[i] = NULL;
                 #ifdef TC_DBG_BOOT
                 Serial.printf("MQTT: Freeing topic %d\n", i);
                 #endif
@@ -358,6 +365,7 @@ static void freeUnusedMQTTTopMsg()
         if(settings.mqmm[i]) {
             if(!*settings.mqmm[i]) {
                 free(settings.mqmm[i]);
+                settings.mqmm[i] = NULL;
                 #ifdef TC_DBG_BOOT
                 Serial.printf("MQTT: Freeing msg %d\n", i);
                 #endif
@@ -370,7 +378,7 @@ static void freeUnusedMQTTTopMsg()
 /*
  * settings_setup()
  * 
- * Mount SPIFFS/LittleFS and SD (if available).
+ * Mount LittleFS/SPIFFS and SD (if available).
  * Read configuration from JSON config file
  * If config file not found, create one with default settings
  *
@@ -715,6 +723,13 @@ void unmount_fs()
     }
 }
 
+void clearWiFiCredentials()
+{
+    memset(settings.ssid, 0, sizeof(settings.ssid));
+    memset(settings.pass, 0, sizeof(settings.pass));
+    memset(settings.bssid, 0, sizeof(settings.bssid));
+}
+
 static bool read_settings(File configFile, int cfgReadCount)
 {
     #ifdef TC_DBG_BOOT
@@ -746,15 +761,11 @@ static bool read_settings(File configFile, int cfgReadCount)
         // WiFi Configuration
 
         if(!cfgReadCount) {
-            memset(settings.ssid, 0, sizeof(settings.ssid));
-            memset(settings.pass, 0, sizeof(settings.pass));
-            memset(settings.bssid, 0, sizeof(settings.bssid));
+            clearWiFiCredentials();
         }
 
         if(json["ssid"]) {
-            memset(settings.ssid, 0, sizeof(settings.ssid));
-            memset(settings.pass, 0, sizeof(settings.pass));
-            memset(settings.bssid, 0, sizeof(settings.bssid));
+            clearWiFiCredentials();
             strncpy(settings.ssid, json["ssid"], sizeof(settings.ssid) - 1);
             if(json["pass"]) {
                 strncpy(settings.pass, json["pass"], sizeof(settings.pass) - 1);
@@ -814,9 +825,6 @@ static bool read_settings(File configFile, int cfgReadCount)
         #ifndef IS_ACAR_DISPLAY
         wd |= CopyCheckValidNumParm(json["p3an"], NULL, settings.p3anim, sizeof(settings.p3anim), 0, 1, DEF_P3ANIM);
         #endif
-        #ifdef IS_ACAR_DISPLAY
-        wd |= CopyCheckValidNumParm(json["swapDL"], NULL, settings.swapDL, sizeof(settings.swapDL), 0, 1, DEF_SWPDL);
-        #endif
         wd |= CopyCheckValidNumParm(json["pTTs"], json["playTTsnds"], settings.playTTsnds, sizeof(settings.playTTsnds), 0, 1, DEF_PLAY_TT_SND);
         wd |= CopyCheckValidNumParm(json["alRTC"], json["alarmRTC"], settings.alarmRTC, sizeof(settings.alarmRTC), 0, 1, DEF_ALARM_RTC);
         wd |= CopyCheckValidNumParm(json["md24"], json["mode24"], settings.mode24, sizeof(settings.mode24), 0, 1, DEF_MODE24);
@@ -831,6 +839,7 @@ static bool read_settings(File configFile, int cfgReadCount)
         wd |= CopyTextParm(json["tZDep"], json["timeZoneDep"], settings.timeZoneDep, sizeof(settings.timeZoneDep));
         wd |= CopyTextParm(json["tZNDest"], json["timeZoneNDest"], settings.timeZoneNDest, sizeof(settings.timeZoneNDest));
         wd |= CopyTextParm(json["tZNDep"], json["timeZoneNDep"], settings.timeZoneNDep, sizeof(settings.timeZoneNDep));
+        wd |= CopyCheckValidNumParm(json["WCNP"], NULL, settings.WCNamePerm, sizeof(settings.WCNamePerm), 0, 1, DEF_WCSHOWNAME);
 
         wd |= CopyCheckValidNumParm(json["almT"], NULL, settings.alarmType, sizeof(settings.alarmType), 0, 1, DEF_ALARM_TYPE);
         wd |= CopyCheckValidNumParm(json["aSz"], NULL, settings.doSnooze, sizeof(settings.doSnooze), 0, 1, DEF_SNOOZE);
@@ -853,6 +862,9 @@ static bool read_settings(File configFile, int cfgReadCount)
         //wd |= CopyCheckValidNumParm(json["sdFreq"], NULL, settings.sdFreq, sizeof(settings.sdFreq), 0, 1, DEF_SD_FREQ);
         wd |= CopyCheckValidNumParm(json["ttps"], json["timeTrPers"], settings.timesPers, sizeof(settings.timesPers), 0, 1, DEF_TIMES_PERS);
 
+        #ifdef IS_ACAR_DISPLAY
+        wd |= CopyCheckValidNumParm(json["swapDL"], NULL, settings.swapDL, sizeof(settings.swapDL), 0, 1, DEF_SWPDL);
+        #endif
         wd |= CopyCheckValidNumParm(json["rAPM"], NULL, settings.revAmPm, sizeof(settings.revAmPm), 0, 1, DEF_REVAMPM);
 
         wd |= CopyCheckValidNumParm(json["fPwr"], json["fakePwrOn"], settings.fakePwrOn, sizeof(settings.fakePwrOn), 0, 1, DEF_FAKE_PWR);
@@ -880,7 +892,6 @@ static bool read_settings(File configFile, int cfgReadCount)
         #endif
 
         wd |= CopyCheckValidNumParm(json["ettDl"], json["ettDelay"], settings.ettDelay, sizeof(settings.ettDelay), 0, ETT_MAX_DEL, DEF_ETT_DELAY);
-        //wd |= CopyCheckValidNumParm(json["ettLong"], NULL, settings.ettLong, sizeof(settings.ettLong), 0, 1, DEF_ETT_LONG);
         
         wd |= CopyCheckValidNumParm(json["ETTOc"], NULL, settings.ETTOcmd, sizeof(settings.ETTOcmd), 0, 1, DEF_ETTO_CMD);
         wd |= CopyCheckValidNumParm(json["ETTOPU"], NULL, settings.ETTOpus, sizeof(settings.ETTOpus), 0, 1, DEF_ETTO_PUS);
@@ -902,16 +913,11 @@ static bool read_settings(File configFile, int cfgReadCount)
         #else // SETTINGS_TRANSITION  --------------------------------------------
         
         wd |= CopyCheckValidNumParm(json["pI"], settings.playIntro, sizeof(settings.playIntro), 0, 1, DEF_PLAY_INTRO);
-        // Beep now in separate file, so it missing is ok
-        CopyCheckValidNumParm(json["bep"], settings.beep, sizeof(settings.beep), 0, 3, DEF_BEEP);
-        // Time cycling saved in separate file
+        // Beep, Time cycling saved in separate file
         wd |= CopyCheckValidNumParm(json["sARA"], settings.autoRotAnim, sizeof(settings.autoRotAnim), 0, 1, 1);
         wd |= CopyCheckValidNumParm(json["skpTTA"], settings.skipTTAnim, sizeof(settings.skipTTAnim), 0, 1, DEF_SKIP_TTANIM);
         #ifndef IS_ACAR_DISPLAY
         wd |= CopyCheckValidNumParm(json["p3an"], settings.p3anim, sizeof(settings.p3anim), 0, 1, DEF_P3ANIM);
-        #endif
-        #ifdef IS_ACAR_DISPLAY
-        wd |= CopyCheckValidNumParm(json["swapDL"],settings.swapDL, sizeof(settings.swapDL), 0, 1, DEF_SWPDL);
         #endif
         wd |= CopyCheckValidNumParm(json["pTTs"], settings.playTTsnds, sizeof(settings.playTTsnds), 0, 1, DEF_PLAY_TT_SND);
         wd |= CopyCheckValidNumParm(json["alRTC"], settings.alarmRTC, sizeof(settings.alarmRTC), 0, 1, DEF_ALARM_RTC);
@@ -927,6 +933,7 @@ static bool read_settings(File configFile, int cfgReadCount)
         wd |= CopyTextParm(json["tZDep"], settings.timeZoneDep, sizeof(settings.timeZoneDep));
         wd |= CopyTextParm(json["tZNDest"], settings.timeZoneNDest, sizeof(settings.timeZoneNDest));
         wd |= CopyTextParm(json["tZNDep"], settings.timeZoneNDep, sizeof(settings.timeZoneNDep));
+        wd |= CopyCheckValidNumParm(json["WCNP"], settings.WCNamePerm, sizeof(settings.WCNamePerm), 0, 1, DEF_WCSHOWNAME);
 
         wd |= CopyCheckValidNumParm(json["almT"], settings.alarmType, sizeof(settings.alarmType), 0, 1, DEF_ALARM_TYPE);
         wd |= CopyCheckValidNumParm(json["aSz"], settings.doSnooze, sizeof(settings.doSnooze), 0, 1, DEF_SNOOZE);
@@ -949,6 +956,9 @@ static bool read_settings(File configFile, int cfgReadCount)
         //wd |= CopyCheckValidNumParm(json["sdFreq"], settings.sdFreq, sizeof(settings.sdFreq), 0, 1, DEF_SD_FREQ);
         wd |= CopyCheckValidNumParm(json["ttps"], settings.timesPers, sizeof(settings.timesPers), 0, 1, DEF_TIMES_PERS);
 
+        #ifdef IS_ACAR_DISPLAY
+        wd |= CopyCheckValidNumParm(json["swapDL"],settings.swapDL, sizeof(settings.swapDL), 0, 1, DEF_SWPDL);
+        #endif
         wd |= CopyCheckValidNumParm(json["rAPM"], settings.revAmPm, sizeof(settings.revAmPm), 0, 1, DEF_REVAMPM);
 
         wd |= CopyCheckValidNumParm(json["fPwr"], settings.fakePwrOn, sizeof(settings.fakePwrOn), 0, 1, DEF_FAKE_PWR);
@@ -976,7 +986,6 @@ static bool read_settings(File configFile, int cfgReadCount)
         #endif
 
         wd |= CopyCheckValidNumParm(json["ettDl"], settings.ettDelay, sizeof(settings.ettDelay), 0, ETT_MAX_DEL, DEF_ETT_DELAY);
-        //wd |= CopyCheckValidNumParm(json["ettLong"], settings.ettLong, sizeof(settings.ettLong), 0, 1, DEF_ETT_LONG);
         
         wd |= CopyCheckValidNumParm(json["ETTOc"], settings.ETTOcmd, sizeof(settings.ETTOcmd), 0, 1, DEF_ETTO_CMD);
         wd |= CopyCheckValidNumParm(json["ETTOPU"], settings.ETTOpus, sizeof(settings.ETTOpus), 0, 1, DEF_ETTO_PUS);
@@ -1013,6 +1022,8 @@ static bool read_settings(File configFile, int cfgReadCount)
         wd |= CopyCheckValidNumParm(json["mqttV"], settings.mqttVers, sizeof(settings.mqttVers), 0, 1, 0);
         wd |= CopyTextParm(json["mqttU"], settings.mqttUser, sizeof(settings.mqttUser));
         wd |= CopyTextParm(json["mqttT"], settings.mqttTopic, sizeof(settings.mqttTopic));
+        wd |= CopyTextParm(json["mqttTP"], settings.mqttTopicP, sizeof(settings.mqttTopicP));
+        wd |= CopyTextParm(json["mqttTL"], settings.mqttTopicL, sizeof(settings.mqttTopicL));
         wd |= CopyCheckValidNumParm(json["pMQTT"], settings.pubMQTT, sizeof(settings.pubMQTT), 0, 1, 0);
         wd |= CopyCheckValidNumParm(json["vMQTT"], settings.MQTTvarLead, sizeof(settings.MQTTvarLead), 0, 1, DEF_MQTT_VTT);
         wd |= CopyCheckValidNumParm(json["mqP"], settings.mqttPwr, sizeof(settings.mqttPwr), 0, 1, 0);
@@ -1096,9 +1107,6 @@ void write_settings()
     #ifndef IS_ACAR_DISPLAY
     json["p3an"] = (const char *)settings.p3anim;
     #endif
-    #ifdef IS_ACAR_DISPLAY
-    json["swapDL"] = (const char *)settings.swapDL;
-    #endif
     json["pTTs"] = (const char *)settings.playTTsnds;
     json["alRTC"] = (const char *)settings.alarmRTC;
     json["md24"] = (const char *)settings.mode24;
@@ -1113,6 +1121,7 @@ void write_settings()
     json["tZDep"] = (const char *)settings.timeZoneDep;
     json["tZNDest"] = (const char *)settings.timeZoneNDest;
     json["tZNDep"] = (const char *)settings.timeZoneNDep;
+    json["WCNP"] = (const char *)settings.WCNamePerm;
 
     json["almT"] = (const char *)settings.alarmType;
     json["aSz"] = (const char *)settings.doSnooze;
@@ -1135,6 +1144,9 @@ void write_settings()
     //json["sdFreq"] = (const char *)settings.sdFreq;
     json["ttps"] = (const char *)settings.timesPers;
 
+    #ifdef IS_ACAR_DISPLAY
+    json["swapDL"] = (const char *)settings.swapDL;
+    #endif
     json["rAPM"] = (const char *)settings.revAmPm;
 
     json["fPwr"] = (const char *)settings.fakePwrOn;
@@ -1162,7 +1174,6 @@ void write_settings()
     #endif
 
     json["ettDl"] = (const char *)settings.ettDelay;
-    //json["ettLong"] = (const char *)settings.ettLong;
     
     #ifdef TC_HAVEGPS
     json["qGPS"] = (const char *)settings.provGPS2BTTFN;
@@ -1186,6 +1197,8 @@ void write_settings()
     json["mqttV"] = (const char *)settings.mqttVers;
     json["mqttU"] = (const char *)settings.mqttUser;
     json["mqttT"] = (const char *)settings.mqttTopic;
+    json["mqttTP"] = (const char *)settings.mqttTopicP;
+    json["mqttTL"] = (const char *)settings.mqttTopicL;
     json["pMQTT"] = (const char *)settings.pubMQTT;
     json["vMQTT"] = (const char *)settings.MQTTvarLead;
     json["mqP"] = (const char *)settings.mqttPwr;
@@ -1377,6 +1390,16 @@ bool evalBool(char *s)
     return true;
 }
 
+bool evalBoolSetClear(char *s, uint32_t& ff, uint32_t fl)
+{
+    if(*s == '0') {
+        ff &= ~fl;
+        return false;
+    }
+    ff |= fl;
+    return true;
+}
+
 static bool openCfgFileRead(const char *fn, File& f)
 {
     bool haveConfigFile = false;
@@ -1556,7 +1579,7 @@ void loadAlarm()
             alarmMinute = secSettings.alarmMinute;
             alarmOnOff = !!secSettings.alarmOnOff;
             alarmWeekday = secSettings.alarmWeekday;
-            if(alarmWeekday > 9) alarmWeekday = 0;
+            if(alarmWeekday > 9 && (!(alarmWeekday & 0x80))) alarmWeekday = 0;
         }
     } else {
         #ifdef SETTINGS_TRANSITION
@@ -1641,10 +1664,10 @@ void loadReminder()
             } 
             configFile.close();
             if(writedefault) {
-                remMonth = DEF_REM_MONTH;
-                remDay = DEF_REM_DAY;
-                remHour = DEF_REM_HOUR;
-                remMin = DEF_REM_MIN;
+                remMonth = 0;
+                remDay = 0;
+                remHour = 0;
+                remMin = 0;
             } else {
                 saveReminder();
             }
@@ -1656,12 +1679,13 @@ void loadReminder()
 
 void saveReminder()
 {
-    secSettings.remMonth = remMonth;
     secSettings.remDay = remDay;
-    if(!remMonth && !remDay) {
+    if(!remDay) {
+        secSettings.remMonth = 0;
         secSettings.remHour = 0;
         secSettings.remMin = 0;
     } else {
+        secSettings.remMonth = remMonth;
         secSettings.remHour = remHour;
         secSettings.remMin = remMin;
     }
@@ -2154,23 +2178,26 @@ bool saveClockState(uint16_t curYear, int16_t yearoffset)
     return true;  // fs access
 }
 
-dateStruct *getClockDataDL(uint8_t did)
-{    
-    dateStruct *myDate;
-
+static dateStruct *getClockDataPtr(unsigned int did, int slot)
+{
     switch(did) {
     case DISP_DEST:
-        myDate = &clockData.dDate;
+        return slot ? &clockData.dUDate : &clockData.dDate;
         break;
     case DISP_LAST:
-        myDate = &clockData.lDate;
+        return slot ? &clockData.lUDate : &clockData.lDate;
         break;
     default:
         return NULL;
     }
+}
+
+dateStruct *getClockDataDL(unsigned int did, int slot)
+{    
+    dateStruct *myDate = getClockDataPtr(did, slot);
 
     // See if "virgin"
-    if(myDate->month > 0 && myDate->day > 0)
+    if(myDate && (myDate->month > 0) && (myDate->day > 0))
         return myDate;
 
     return NULL;
@@ -2199,19 +2226,22 @@ static bool saveClockData(bool force)
     return true;  // fs access
 }
 
-void updateClockDataDL(uint8_t did, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute)
+void updateClockDataDL(unsigned int did, int slot, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute)
 {
-    dateStruct *myDate = (did == DISP_DEST) ? &clockData.dDate : &clockData.lDate;
-    myDate->year = year;
-    myDate->month = month;
-    myDate->day = day;
-    myDate->hour = hour;
-    myDate->minute = minute;
+    dateStruct *myDate = getClockDataPtr(did, slot);
+
+    if(myDate) {
+        myDate->year = year;
+        myDate->month = month;
+        myDate->day = day;
+        myDate->hour = hour;
+        myDate->minute = minute;
+    }
 }
 
-bool saveClockDataDL(bool force, uint8_t did, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute)
+bool saveClockDataDL(bool force, unsigned int did, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute)
 {
-    updateClockDataDL(did, year, month, day, hour, minute);
+    updateClockDataDL(did, 0, year, month, day, hour, minute);
     return saveClockData(force);
 }
 
