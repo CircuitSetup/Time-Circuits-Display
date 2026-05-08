@@ -9,7 +9,7 @@
  * Settings & file handling
  *
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -53,22 +56,110 @@
 #ifndef _TC_SETTINGS_H
 #define _TC_SETTINGS_H
 
-#include "clockdisplay.h"
+#include "tcddisplay.h"
 
-extern bool haveFS;
-extern bool haveSD;
-extern bool FlashROMode;
-extern bool configOnSD;
+void settings_setup();
+
+void unmount_fs();
+
+void clearWiFiCredentials();
+
+void write_settings();
+bool checkConfigExists();
+
+bool evalBool(char *s);
+bool evalBoolSetClear(char *s, uint32_t& ff, uint32_t fl);
+
+void saveBrightness();
+
+void saveBeepAutoInterval();
+
+void loadAlarm();
+void saveAlarm();
+
+void loadReminder();
+void saveReminder();
+
+void saveCarMode();
+
+void loadCurVolume();
+void storeCurVolume();
+void saveCurVolume();
+
+void loadStaleTime(void *target, bool& currentOn);
+void saveStaleTime(void *source, bool currentOn);
+void initDefaultStaleTime(void *src);
+
+void loadLineOut();
+void saveLineOut();
+
+#ifdef TC_HAVE_REMOTE
+void saveRemoteAllowed();
+#endif
+
+#ifdef SERVOSPEEDO
+void loadServoCorr(int& scorr, int& tcorr);
+void saveServoCorr(int scorr, int tcorr);
+#endif
+
+void saveUpdAvail();
+
+void loadUpdVers(int &v, int& r);
+void saveUpdVers(int v, int r);
+
+void loadMusFoldNum();
+void saveMusFoldNum();
+
+void loadShuffle();
+void saveShuffle();
+
+uint8_t loadBootMode();
+void    storeBootMode();
+void    saveBootMode();
+
+bool loadIpSettings();
+void writeIpSettings();
+void deleteIpSettings();
+
+bool check_if_default_audio_present();
+bool copy_audio_files(bool& delIDfile);
+
+bool check_allow_CPA();
+void delete_ID_file();
+
+void reInstallFlashFS();
+void moveSettings();
+
+#define MAX_SIM_UPLOADS 16
+#define UPL_OPENERR 1
+#define UPL_NOSDERR 2
+#define UPL_WRERR   3
+#define UPL_BADERR  4
+#define UPL_MEMERR  5
+#define UPL_UNKNOWN 6
+#define UPL_DPLBIN  7
+#include <FS.h>
+bool   openUploadFile(String& fn, File& file, int idx, bool haveAC, int& opType, int& errNo);
+size_t writeACFile(File& file, uint8_t *buf, size_t len);
+void   closeACFile(File& file);
+void   removeACFile(int idx);
+void   renameUploadFile(int idx);
+char   *getUploadFileName(int idx);
+int    getUploadFileNameLen(int idx);
+void   freeUploadFileNames();
+
+extern bool       haveFS;
+extern bool       haveSD;
+extern bool       FlashROMode;
+extern bool       configOnSD;
 extern const char rspv[];
 
-extern bool haveAudioFiles;
+extern bool       haveAudioFiles;
 
-extern uint8_t musFolderNum;
+extern unsigned int musFolderNum;
 
-extern int sspeedopin;
-extern int stachopin;
-
-extern uint32_t mainConfigHash;
+extern int        sspeedopin;
+extern int        stachopin;
 
 #define MS(s) XMS(s)
 #define XMS(s) #s
@@ -94,6 +185,7 @@ extern uint32_t mainConfigHash;
 #define DEF_TIMEZONE        ""    // Default: UTC; Posix format
 #define DEF_NTP_SERVER      "pool.ntp.org"
 #define DEF_USE_GPS_TIME    1     // Use GPS time (if available)
+#define DEF_WCSHOWNAME      1     // WC Mode: 1: Show name permanently (if short enough), 0: alternate name <> date
 #define DEF_ALARM_TYPE      0     // 0: Simple/legacy, 1: Advanced
 #define DEF_SNOOZE          1
 #define DEF_SNOOZE_TIME     9
@@ -151,10 +243,6 @@ extern uint32_t mainConfigHash;
 #define DEF_ALARM_HOUR    255
 #define DEF_ALARM_MINUTE  255
 #define DEF_ALARM_WD        0
-#define DEF_REM_MONTH       0
-#define DEF_REM_DAY         0
-#define DEF_REM_HOUR        0
-#define DEF_REM_MIN         0
 
 struct Settings {
     char ssid[34]           = "";
@@ -193,6 +281,7 @@ struct Settings {
     char timeZoneDep[64]    = "";
     char timeZoneNDest[16]  = "";
     char timeZoneNDep[16]   = "";
+    char WCNamePerm[2]      = MS(DEF_WCSHOWNAME);
     char alarmType[2]       = MS(DEF_ALARM_TYPE);
     char doSnooze[2]        = MS(DEF_SNOOZE);
     char snoozeTime[4]      = MS(DEF_SNOOZE_TIME);
@@ -233,7 +322,6 @@ struct Settings {
     char tempOffs[6]        = MS(DEF_TEMP_OFFS);
 #endif
     char ettDelay[8]        = MS(DEF_ETT_DELAY);
-    char ettLong[2]         = MS(DEF_ETT_LONG);
     char ETTOcmd[2]         = MS(DEF_ETTO_CMD);
     char useETTO[2]         = MS(DEF_USE_ETTO);
     char ETTOalm[2]         = MS(DEF_ETTO_ALM);
@@ -249,15 +337,17 @@ struct Settings {
 #endif
 
 #ifdef TC_HAVEMQTT  
-    char useMQTT[2]         = "0";
-    char mqttVers[2]        = "0"; // 0 = 3.1.1, 1 = 5.0
-    char mqttServer[80]     = "";  // ip or domain [:port]  
-    char mqttUser[64]       = "";  // user[:pass] (UTF8) [limited to 63 bytes through WM]
-    char mqttTopic[128]     = "";  // topic (UTF8)       [limited to 127 bytes through WM]
-    char pubMQTT[2]         = "0";              // publish to broker (timetravel, alarm)
-    char MQTTvarLead[2]     = MS(DEF_MQTT_VTT); // publish TIMETRAVEL with lead and P1 duration appended (default to on)
-    char mqttPwr[2]         = "0"; // Do not start with MQTT having control over fake-power
-    char mqttPwrOn[2]       = "0"; // Do not wait for POWER_ON at startup
+    char useMQTT[2]        = "0";
+    char mqttVers[2]       = "0"; // 0 = 3.1.1, 1 = 5.0
+    char mqttServer[80]    = "";  // ip or domain [:port]  
+    char mqttUser[64]      = "";  // user[:pass] (UTF8) [limited to 63 bytes through WM]
+    char mqttTopic[64]     = "";  // topic (UTF8)       [limited to 63 bytes through WM]
+    char mqttTopicP[64]    = "";  // topic (UTF8)       [limited to 63 bytes through WM]
+    char mqttTopicL[64]    = "";  // topic (UTF8)       [limited to 63 bytes through WM]
+    char pubMQTT[2]        = "0";              // publish to broker (timetravel, alarm)
+    char MQTTvarLead[2]    = MS(DEF_MQTT_VTT); // publish TIMETRAVEL with lead and P1 duration appended (default to on)
+    char mqttPwr[2]        = "0"; // Do not start with MQTT having control over fake-power
+    char mqttPwrOn[2]      = "0"; // Do not wait for POWER_ON at startup
     char *mqmt[10];
     char *mqmm[10];
 #endif // TC_HAVEMQTT
@@ -278,95 +368,8 @@ struct IPSettings {
     char dns[20]      = "";
 };
 
-extern struct Settings settings;
-extern struct IPSettings ipsettings;
+extern struct Settings    settings;
+extern struct IPSettings  ipsettings;
 
-void settings_setup();
-
-void unmount_fs();
-
-void write_settings();
-bool checkConfigExists();
-
-bool evalBool(char *s);
-
-void saveBrightness();
-
-void saveBeepAutoInterval();
-
-void loadAlarm();
-void saveAlarm();
-
-void loadReminder();
-void saveReminder();
-
-void saveCarMode();
-
-void loadCurVolume();
-void storeCurVolume();
-void saveCurVolume();
-
-void loadStaleTime(void *target, bool& currentOn);
-void saveStaleTime(void *source, bool currentOn);
-void initDefaultStaleTime(void *src);
-
-void loadLineOut();
-void saveLineOut();
-
-#ifdef TC_HAVE_REMOTE
-void saveRemoteAllowed();
-#endif
-
-#ifdef SERVOSPEEDO
-void loadServoCorr(int& scorr, int& tcorr);
-void saveServoCorr(int scorr, int tcorr);
-#endif
-
-void saveUpdAvail();
-
-void loadUpdVers(int &v, int& r);
-void saveUpdVers(int v, int r);
-
-void loadMusFoldNum();
-void saveMusFoldNum();
-
-void loadShuffle();
-void saveShuffle();
-
-uint8_t loadBootMode();
-void storeBootMode();
-void saveBootMode();
-
-bool loadIpSettings();
-void writeIpSettings();
-void deleteIpSettings();
-
-bool check_if_default_audio_present();
-void doCopyAudioFiles();
-bool copy_audio_files(bool& delIDfile);
-
-bool check_allow_CPA();
-void delete_ID_file();
-
-void reInstallFlashFS();
-void moveSettings();
-
-#define MAX_SIM_UPLOADS 16
-#define UPL_OPENERR 1
-#define UPL_NOSDERR 2
-#define UPL_WRERR   3
-#define UPL_BADERR  4
-#define UPL_MEMERR  5
-#define UPL_UNKNOWN 6
-#define UPL_DPLBIN  7
-#include <FS.h>
-bool   openUploadFile(String& fn, File& file, int idx, bool haveAC, int& opType, int& errNo);
-size_t writeACFile(File& file, uint8_t *buf, size_t len);
-void   closeACFile(File& file);
-void   removeACFile(int idx);
-void   renameUploadFile(int idx);
-char   *getUploadFileName(int idx);
-int    getUploadFileNameLen(int idx);
-void   freeUploadFileNames();
 
 #endif

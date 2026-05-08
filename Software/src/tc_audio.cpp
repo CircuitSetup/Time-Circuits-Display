@@ -9,7 +9,7 @@
  * Sound handling
  *
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -166,17 +169,17 @@ static int     sampleCnt  = 0;
 static int     mutechannels = 0;
 
 static uint32_t key_playing = 0;
-static bool     alarm_playing = 0;
-static bool     alarm_looped = false;
+static uint32_t sig_playing = 0;
+static int      alarmCanRunOut = 0;
 
-static int      lastDoorNum = 0;
+static int           lastDoorNum = 0;
 static unsigned long lastDoorSoundNow = 0;
 
 bool          haveLineOut = false;
 bool          useLineOut  = false;
 static bool   playLineOut = false;
 
-static char   keySnd[] = "/key3.mp3";   // not const
+static char     keySnd[] = "/key3.mp3";   // not const
 static uint32_t haveKeySnd = 0;
 
 static const char *tcdrdone = "/TCD_DONE.TXT";
@@ -184,19 +187,25 @@ bool          headLineShown = false;
 bool          blinker       = true;
 unsigned long renNow1, renNow2;
 
+static const uint16_t klens[10] = {
+    11780-44, 11772-44, 11776-44, 11818-44, 11804-44,
+    11804-44, 11744-44, 11698-44, 11790-44, 11818-44
+};
+
 static char       dtmfBuf[] = "/Dtmf-0.wav";    // Not const
+
+#define HHS_HAVEHRSOUND 0x80000000
 static const char *hsnd     = "/hour.mp3";
 static char       shsnd[]   = "/hour-00.mp3";   // Not const
-static bool       haveHrSnd = false;
 static uint32_t   haveSpHrSnd = 0;
 
 char id3artist[16] = { 0 };
-char id3track[16] = { 0 };
+char id3track[16]  = { 0 };
 
 static float  getVolume();
 static void   setLineOut(bool doLineOut);
 
-static void clear_alarm_playing();
+static void   clear_sig_playing(int ranOut = 0);
 
 static int    mp_findMaxNum();
 static void   mp_nextprev(bool forcePlay, bool next);
@@ -269,7 +278,7 @@ void audio_setup()
         if(check_file_SD(keySnd)) haveKeySnd |= bm;
     }
 
-    haveHrSnd = check_file_SD(hsnd);
+    if(check_file_SD(hsnd)) haveSpHrSnd |= HHS_HAVEHRSOUND;
 
     for(int i = 0; i <= 23; i++) {
         shsnd[6] = (i / 10) + '0';
@@ -299,7 +308,7 @@ void audio_loop()
         if(!mp3->loop()) {
             mp3->stop();
             key_playing = 0;
-            clear_alarm_playing();
+            clear_sig_playing(alarmCanRunOut);
             if(mpActive) {
                 mp_next(true);
             }
@@ -338,6 +347,11 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
     char buf[10];
     int32_t pos = 0;
 
+    // Only signals can interrupt signals
+    if(sig_playing & PA_SIGNAL) {
+        if(!(flags & PA_SIGNAL)) return;
+    }
+    
     if(flags & PA_INTRMUS) {
         mpActive = false;
     } else {
@@ -354,7 +368,7 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
     stopAudio();
     beepRunning = false;
 
-    mutechannels = 0;
+    mutechannels = alarmCanRunOut = 0;
 
     playLineOut = (haveLineOut && useLineOut && (flags & PA_LINEOUT)) ? true : false;
     setLineOut(playLineOut);
@@ -373,8 +387,10 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
         }
     }
     key_playing = flags & PA_KEYMASK;
-    if((alarm_playing = !!(flags & PA_ALARM))) {
-        alarm_looped = !!(flags & PA_LOOP);
+    sig_playing = flags & PA_SIGMASK;
+    if(sig_playing & PA_ALARM) {
+        if(flags & PA_LOOP) sig_playing |= PA_LOOP;
+        else                alarmCanRunOut = 1;
     }
 
     curVolFact = volumeFactor;
@@ -384,7 +400,7 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
     rawVolIdx = 0;
     anaReadCount = 0;
 
-    id3artist[0] = id3track[0] = 0;
+    *id3artist = *id3track = 0;
 
     out->SetGain(getVolume(), mutechannels);
 
@@ -443,7 +459,7 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
         #endif
     } else {
         key_playing = 0;
-        clear_alarm_playing();
+        clear_sig_playing();
         #ifdef TC_DBG_AUDIO
         Serial.println("Audio file not found");
         #endif
@@ -457,20 +473,16 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
 
 uint32_t play_keypad_sound(char key)
 {
-    const uint16_t klens[10] = {
-        11780-44, 11772-44, 11776-44, 11818-44, 11804-44,
-        11804-44, 11744-44, 11698-44, 11790-44, 11818-44
-    };
     uint32_t kp = key_playing;
     AudioFileSource *src = NULL;
     
     dtmfBuf[6] = key;
 
-    if(mpActive) return kp;
+    if(mpActive || sig_playing) return kp;
 
     pwrNeedFullNow();
 
-    stopAudio();    // Clears key_playing, alarm_playing, id3
+    stopAudio();    // Clears key_playing, sig_playing, id3
     beepRunning = playLineOut = false;
     setLineOut(playLineOut);
     mutechannels = 0;
@@ -504,7 +516,7 @@ void play_hour_sound(int hour)
         shsnd[6] = (hour / 10) + '0';
         shsnd[7] = (hour % 10) + '0';
         play_file(shsnd, PA_INTSPKR|PA_ALLOWSD);
-    } else if(haveHrSnd) {
+    } else if(haveSpHrSnd & HHS_HAVEHRSOUND) {
         play_file(hsnd, PA_INTSPKR|PA_ALLOWSD);
     }
 }
@@ -513,10 +525,10 @@ void play_beep()
 {
     bool wavRunning = wav->isRunning();
     
-    if((csf & (CSF_NM|CSF_OFF|CSF_AL)) ||
-       muteBeep         ||
-       mpActive         ||
-       mp3->isRunning() ||
+    if(muteBeep                               ||
+       mp3->isRunning()                       ||
+       (csf & (CSF_NM|CSF_OFF|CSF_AL|CSF_AE)) ||
+       mpActive                               ||
        (wavRunning && !beepRunning)) {
         return;
     }
@@ -539,7 +551,8 @@ void play_beep()
     out->SetGain(getVolume());
 
     key_playing = 0;
-    id3artist[0] = id3track[0] = 0;
+    clear_sig_playing();
+    *id3artist = *id3track = 0;
 
     myPM->open(data_beep_wav, data_beep_wav_len);
     wav->beginQuick(myPM, out, 1, 32000, 44, data_beep_wav_len - 44);
@@ -559,7 +572,7 @@ void play_key(int k, uint32_t preDTMFkp)
         return;
     }
     if(pa_key == key_playing) {
-        stopAudio();  // Clears key_playing, alarm_playing, id3
+        stopAudio();  // Clears key_playing, sig_playing, id3
         return;
     }
     
@@ -577,7 +590,8 @@ void play_door_snd(int doorNum, int state, uint32_t doorFlags)
     unsigned long now = millis();
     if((!(csf & CSF_ST)) && ((!(csf & (CSF_P0|CSF_P1|CSF_RE))) || !playTTsounds || checkAudioFree())) {
         if((lastDoorNum == doorNum) || !lastDoorNum || (now - lastDoorSoundNow > 750)) {
-            play_file((state < 0) ? "/doorclose.mp3" : "/dooropen.mp3", doorFlags|PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD);
+            play_file((state < 0) ? "/doorclose.mp3" : "/dooropen.mp3", 
+                        doorFlags|PA_LINEOUT|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD);
             lastDoorSoundNow = now;
             lastDoorNum = doorNum;
         }
@@ -751,6 +765,16 @@ bool checkMP3Running()
     return mp3->isRunning();
 }
 
+uint32_t isSignalPlaying()
+{
+    return sig_playing;
+}
+
+bool isUISignalPlaying()
+{
+    return !!(sig_playing & PA_SIGNAL);
+}
+
 void stopAudio()
 {
     if(mp3->isRunning()) {
@@ -759,8 +783,8 @@ void stopAudio()
         wav->stop();
     }
     key_playing = 0;    
-    id3artist[0] = id3track[0] = 0;
-    clear_alarm_playing();
+    clear_sig_playing();
+    *id3artist = *id3track = 0;
 }
 
 void stop_key()
@@ -772,8 +796,8 @@ void stop_key()
 
 void stopAlarm(bool force)
 {
-    if(alarm_playing) {
-        if(!force && alarm_looped) {
+    if(sig_playing & PA_ALARM) {
+        if(!force && (sig_playing & PA_LOOP)) {
             if(haveSD) mySD0->setPlayLoop(false);
             if(haveFS) myFS0->setPlayLoop(false);
         } else {
@@ -782,21 +806,29 @@ void stopAlarm(bool force)
     }
 
     // Cancel timeout in time_loop().
-    // Do not do that in clear_alarm_playing; if the alarm
+    // Do not do that in clear_sig_playing; if the alarm
     // is interrupted by another sound, stopAudio() calls
-    // clear_alarm_playing(), which clears CSF_AL and thereby
+    // clear_sig_playing(), which clears CSF_AL and thereby
     // releases the keypad. The timeout-loop in time_loop() 
     // (controlled by alarmPlaying) can continue to run and
-    // eventually initiate auto-snooze.
+    // eventually initiate auto-snooze. (Note that this does
+    // not work for non-looped alarm sounds.)
+    // Also, we use the duality of alarmPlaying vs CSF_AL 
+    // to handle interruptions of the alarm by the Timer.
     alarmPlaying = 0;
+    alf &= ~ALF_RANOUT;
 }
 
-static void clear_alarm_playing()
+static void clear_sig_playing(int ranOut)
 {
-    if(alarm_playing) {
-        alarm_playing = false;
-        csf &= ~CSF_AL;
+    if(sig_playing & PA_ALARM) {
+        // Check CSF_AL so we only ever set ALF_RANOUT in Extended Mode
+        if(csf & CSF_AL) {
+            csf &= ~CSF_AL;
+            if(ranOut) alf |= ALF_RANOUT;
+        }
     }
+    sig_playing = 0;
 }
 
 /*
@@ -1081,7 +1113,7 @@ void mp_play(bool forcePlay)
 {
     int oldIdx = mpCurrIdx;
 
-    if(!haveMusic) return;
+    if(!haveMusic || isSignalPlaying()) return;
     
     do {
         if(mp_play_int(forcePlay)) {
@@ -1100,7 +1132,7 @@ bool mp_stop()
     if(mpActive) {
         mp3->stop();
         mpActive = false;
-        id3artist[0] = id3track[0] = 0;
+        *id3artist = *id3track = 0;
     }
     
     return ret;
@@ -1120,7 +1152,7 @@ static void mp_nextprev(bool forcePlay, bool next)
 {
     int oldIdx = mpCurrIdx;
 
-    if(!haveMusic) return;
+    if(!haveMusic || isSignalPlaying()) return;
     
     do {
         if(next) {
@@ -1321,9 +1353,7 @@ static void mpren_looper(bool isSetup, bool checking, int fileNum)
         mpren_showBlinker(blinker, fileNum);
         if(!headLineShown) {
             mpren_showHeadLine(checking);
-            destinationTime.on();
-            presentTime.on();
-            departedTime.on();
+            allOn();
             headLineShown = true;
         }
         blinker = !blinker;

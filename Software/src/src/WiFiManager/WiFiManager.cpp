@@ -10,10 +10,45 @@
  * Adapted by Thomas Winischhofer (A10001986)
  */
 
+// prep string concat vars
+#define WM_STRING2(x) #x
+#define WM_STRING(x) WM_STRING2(x)
+
 #include "WiFiManager.h"
+
+#ifdef WM_PARAM2
+#ifndef WM_PARAM2_CAPTION
+#define WM_PARAM2_CAPTION   "Settings 2"
+#endif
+#ifndef WM_PARAM2_TITLE
+#define WM_PARAM2_TITLE     "Settings 2"
+#endif
+#ifdef WM_PARAM3
+#ifndef WM_PARAM3_CAPTION
+#define WM_PARAM3_CAPTION   "Settings 3"
+#endif
+#ifndef WM_PARAM3_TITLE
+#define WM_PARAM3_TITLE     "Settings 3"
+#endif
+#endif
+#endif
+
+#ifndef WM_PARAM2_TITLE
+#define WM_PARAM2_TITLE     ""
+#endif
+#ifndef WM_PARAM3_TITLE
+#define WM_PARAM3_TITLE     ""
+#endif
+
 #include "wm_strings_en.h"
 
 //#include <freertos/atomic.h>
+
+// params will autoincrement and realloc by this amount when max is reached
+// can (and should) be overruled by allocParms()
+#ifndef WIFI_MANAGER_MAX_PARAMS
+#define WIFI_MANAGER_MAX_PARAMS 5
+#endif
 
 // Internal event bits (converted from system WiFi events)
 #define WM_EVB_APSTART      (1<<0)
@@ -35,6 +70,21 @@
 #define incUPLF    0x40
 
 #define STRLEN(x) (sizeof(x)-1)
+
+#define WM_WIFI_SCAN_BUSY -133
+
+#define DNS_PORT           53
+
+// Maximum buffer for scan list on WiFi Config page
+#define MAX_SCAN_OUTPUT_SIZE  6144
+
+#if defined(ESP_ARDUINO_VERSION) && defined(ESP_ARDUINO_VERSION_VAL)
+    #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2,0,0)
+        #define WM_NOCOUNTRY
+    #endif
+#else
+    #define WM_NOCOUNTRY
+#endif
 
 /**********************************************************************************
  * --------------------------------------------------------------------------------

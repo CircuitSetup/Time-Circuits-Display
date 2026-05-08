@@ -23,41 +23,41 @@
 class AudioFileSourceLoop : public AudioFileSource
 {
   public:
-    AudioFileSourceLoop();
-    virtual ~AudioFileSourceLoop() override;
+    AudioFileSourceLoop() {};
+    ~AudioFileSourceLoop();
     
-    //virtual bool open(const char *filename) override;
-    virtual uint32_t read(void *data, uint32_t len) override;
-    virtual bool seek(int32_t pos, int dir) override;
-    virtual bool close() override;
-    virtual bool isOpen() override;
-    virtual uint32_t getSize() override;
-    virtual uint32_t getPos() override;
-    void setStartPos(int32_t newStartPos);
-    void setPlayLoop(bool playLoop);
+    virtual bool open(const char *filename) = 0;
+    uint32_t read(void *data, uint32_t len) override;
+    bool seek(int32_t pos, int dir) override;
+    bool close() override                 { f.close(); return true; }
+    bool isOpen() override                { return f ? true : false; }
+    uint32_t getSize() override           { return f ? f.size() : 0; }
+    uint32_t getPos() override            { return f ? f.position() : 0; }
+    void setStartPos(int32_t newStartPos) { startPos = newStartPos; }
+    void setPlayLoop(bool playLoop)       { doPlayLoop = playLoop; }
 
   protected:
-    File f;
+    File    f;
     int32_t startPos = 0;
-    bool doPlayLoop = false;
+    bool    doPlayLoop = false;
 };
 
 class AudioFileSourceSDLoop : public AudioFileSourceLoop
 {
   public:
     AudioFileSourceSDLoop();
-    AudioFileSourceSDLoop(const char *filename);
+    //AudioFileSourceSDLoop(const char *filename);
     
-    virtual bool open(const char *filename) override;
+    bool open(const char *filename) override;
 };
 
 class AudioFileSourceFSLoop : public AudioFileSourceLoop
 {
   public:
     AudioFileSourceFSLoop();
-    AudioFileSourceFSLoop(const char *filename);
+    //AudioFileSourceFSLoop(const char *filename);
     
-    virtual bool open(const char *filename) override;
+    bool open(const char *filename) override;
 };
 
 #endif

@@ -9,7 +9,7 @@
  * WiFi and Config Portal handling
  *
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -53,23 +56,6 @@
 #ifndef _TC_WIFI_H
 #define _TC_WIFI_H
 
-extern bool wifiIsOff;
-extern bool wifiAPIsOff;
-extern bool wifiInAPMode;
-
-extern bool wifiHaveSTAConf;
-
-extern bool blockWiFiSTAPS;
-
-extern bool carMode;
-
-extern bool pubMQTT;
-#ifdef TC_HAVEMQTT
-extern bool useMQTT;
-extern const char *mqttAudioFile;
-extern bool MQTTvarLead;
-#endif
-
 void wifi_setup();
 void wifi_loop();
 void wifiOn(unsigned long newDelay = 0, bool alsoInAPMode = false, bool deferConfigPortal = false);
@@ -89,6 +75,23 @@ int16_t filterOutUTF8(char *src, char *dst, int srcLen, int maxChars);
 #ifdef TC_HAVEMQTT
 bool mqttState();
 void mqttPublish(const char *topic, const char *pl, unsigned int len);
+#endif
+
+extern bool wifiIsOff;
+extern bool wifiAPIsOff;
+extern bool wifiInAPMode;
+
+extern bool wifiHaveSTAConf;
+
+extern bool blockWiFiSTAPS;
+
+extern bool carMode;
+
+extern bool pubMQTT;
+#ifdef TC_HAVEMQTT
+extern bool useMQTT;
+extern const char *mqttAudioFile[];
+extern bool MQTTvarLead;
 #endif
 
 #endif

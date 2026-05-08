@@ -13,7 +13,7 @@
  * - BH1750, TSL2561, TSL2591, LTR303/329 and VEML7700/VEML6030 light 
  *   sensors.
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -25,6 +25,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -97,9 +100,9 @@ class tempSensor : tcSensor {
     public:
 
         tempSensor(int numTypes, const uint8_t *addrArr);
-        bool begin(void (*myDelay)(unsigned long));
+        bool begin(void (*myDelay)(unsigned long), bool InCelsius);
 
-        float readTemp(bool celsius = true);
+        float readTemp();
         float readLastTemp() { return _lastTemp; };
         bool lastTempNan() { return _lastTempNan; };
 
@@ -112,6 +115,8 @@ class tempSensor : tcSensor {
 
         int     _numTypes = 0;
         const uint8_t *_addrArr;
+
+        bool    _tempInCelsius = false;
         int8_t  _st = -1;
         int8_t  _hum = -1;
         bool    _haveHum = false;

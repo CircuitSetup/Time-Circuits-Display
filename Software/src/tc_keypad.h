@@ -9,7 +9,7 @@
  * Keypad handling
  *
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -53,18 +56,6 @@
 #ifndef _TC_KEYPAD_H
 #define _TC_KEYPAD_H
 
-extern bool p3anim;
-
-extern bool isEnterKeyPressed;
-extern bool isEnterKeyHeld;
-extern bool isEttKeyPressed;
-extern bool isEttKeyHeld;
-extern bool isEttKeyImmediate;
-extern bool menuActive;
-
-extern char timeBuffer[];
-extern char keypadKeyPressed;
-
 void keypad_setup();
 bool scanKeypad();
 
@@ -90,17 +81,44 @@ bool keypadIsIdle();
 void setBeepMode(int mode);
 void startBeepTimer();
 
+void allNightmode(bool nm);
 void nightModeOn();
 void nightModeOff();
 int  toggleNightMode();
+
+void alarmOff();
+int  alarmOn();
 
 void leds_on();
 void leds_off();
 
 void enterkeyScan();
 
+void displayTmrString();
+void s5(bool b);
+
+void doCopyAudioFiles();
+void start_file_copy();
+void file_copy_progress();
+void file_copy_done(int err);
+
 void prepareReboot();
 
-void s5(bool b);
+extern bool p3anim;
+
+extern int  keypadMode;
+
+extern uint32_t eef;
+#define EEF_EnterPressed    0x0001
+#define EEF_EnterHeld       0x0002
+#define EEF_EttPressed      0x0010
+#define EEF_EttHeld         0x0020
+#define EEF_EttImmediate    0x0040  // Ignore configured ett delay (also, do lead on speedo-less time travel)
+#define EEF_InputInjected   0x0100
+
+extern char timeBuffer[];
+extern unsigned int timeBufferSize;
+
+extern char keypadKeyPressed;
 
 #endif

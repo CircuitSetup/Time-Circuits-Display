@@ -28,11 +28,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION_REV   "V3.21"      // 7 chars max. Do NOT change format.
+#define TC_VERSION_REV   "V3.22"      // 7 chars max. Do NOT change format.
 #ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "MAR272026"  // 13 chars max
+#define TC_VERSION_EXTRA "APR192026"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "03272026"   // 12 chars max
+#define TC_VERSION_EXTRA "04192026"   // 12 chars max
 #endif
 
 /*************************************************************************
@@ -123,14 +123,18 @@
  ***                           Customization                           ***
  *************************************************************************/
 
-//#define V_A10001986     // Define A10001986 edition (sound-pack)
+//#define CS_EDITION    // Compile CircuitSetup edition
 
+//#define SERVOSPEEDO
+
+#ifndef CS_EDITION
 //#define TWPRIVATE       // A10001986's private customizations
-
 #ifdef TWPRIVATE
+#undef SERVOSPEEDO
 #define SERVOSPEEDO
 //#define TC_PROFILER
-#endif
+#endif  // TWPRIVATE
+#endif  // CS_EDITION
 
 /*************************************************************************
  ***                               Debug                               ***
@@ -172,10 +176,10 @@
 #endif
 #ifdef TWPRIVATE
 #define TC_VERSION TC_VERSION_REV " P" V_ACAR V_GTE V_SS
-#elif defined(V_A10001986)
-#define TC_VERSION TC_VERSION_REV " A" V_ACAR V_GTE V_SS
-#else
+#elif defined(CS_EDITION)
 #define TC_VERSION TC_VERSION_REV " C" V_ACAR V_GTE V_SS
+#else
+#define TC_VERSION TC_VERSION_REV " A" V_ACAR V_GTE V_SS
 #endif
 
 #if !defined(HAVE_PCF2129) && !defined(HAVE_DS3231)

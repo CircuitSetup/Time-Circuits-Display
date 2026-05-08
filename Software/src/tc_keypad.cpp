@@ -9,7 +9,7 @@
  * Keypad handling
  *
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -21,6 +21,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -60,9 +63,7 @@
 #include "tc_audio.h"
 #include "tc_time.h"
 #include "tc_keypad.h"
-#include "tc_menus.h"
 #include "tc_settings.h"
-#include "tc_time.h"
 #include "tc_wifi.h"
 
 #define KEYPAD_ADDR     0x20    // I2C address of the PCF8574 port expander (keypad)
@@ -78,19 +79,20 @@
 // When ENTER button is pressed, turn off display for this many ms
 // Must be sync'd to the sound file used (enter.mp3)
 #define BADDATE_DELAY 400
-#ifdef V_A10001986
-#define ENTER_DELAY   500
-#else
+#ifdef CS_EDITION
 #define ENTER_DELAY   600
+#else
+#define ENTER_DELAY   500
 #endif
 
 #define SPEC_DELAY   3000
+#define TMR_DELAY    5000
 
 #define EE1_DELAY2   3000
 #define EE1_DELAY3   2000
 #define EE2_DELAY     600
 #define EE3_DELAY     500
-#define EE4_DELAY    7500 //3000
+#define EE4_DELAY    7500
 #define EE4_DELAY2    500
 #define EE4_DELAY3    500
 #define EE4_DELAY4    500
@@ -99,19 +101,19 @@
 #define EEXSP1 70667637
 #define EEXSP2 59572453
 #define EEXSP3 97681642
-#define EEXSP4 59769333 //65998071
+#define EEXSP4 59769333
 #define EEXSP5 8765917
 #elif !defined(JSWITCH_1582)
 #define EEXSP1 119882773
 #define EEXSP2 125110405
 #define EEXSP3 105941666
-#define EEXSP4 124258709  //118949015
+#define EEXSP4 124258709
 #define EEXSP5 1753125
 #else
 #define EEXSP1 119882773
 #define EEXSP2 125110677
 #define EEXSP3 105941666
-#define EEXSP4 124258437  //118949255
+#define EEXSP4 124258437
 #define EEXSP5 1753125
 #endif
 
@@ -157,24 +159,20 @@ static char snoozeString[14];
 
 static Keypad_I2C keypad((char *)keys, rowPins, colPins, 4, 3, KEYPAD_ADDR);
 
-bool        isEnterKeyPressed = false;
-bool        isEnterKeyHeld = false;
-static bool enterWasPressed = false;
+int         keypadMode = 0;
 
-static bool needDepTime = false;
+uint32_t    eef = 0;
+
+static int  needDepTime = 0;
+
 #ifndef IS_ACAR_DISPLAY
 bool        p3anim = false;
 #endif
 
-bool                 isEttKeyPressed = false;
-bool                 isEttKeyHeld = false;
-bool                 isEttKeyImmediate = false;
 static unsigned long ettNow = 0;
-static bool          ettDelayed = false;
 static unsigned long ettDelay = 0; // ms
-static bool          ettLong = DEF_ETT_LONG;
 
-static unsigned long timeNow = 0;
+static unsigned long enterTimerNow = 0;
 
 static unsigned long lastKeyPressed = 0;
 
@@ -197,21 +195,19 @@ static char binBuf[DATELEN_MAX + 2];
 char        timeBuffer[8];
 char        keypadKeyPressed = 0;
 
-static int dateIndex = 0;
-static int timeIndex = 0;
+static int   dateIndex = 0;
+static int   timeIndex = 0;
+unsigned int timeBufferSize = 2;
 
 static char injectBuffer[DATELEN_MAX + 2];
-static bool inputInjected = false;
-
-bool menuActive = false;
 
 static bool     doKey = false;
 static uint32_t preDTMFkeyplayed = 0;
 
 static unsigned long enterDelay = 0;
 
-static char btxt[32];
-static char ctxt[32];
+static char mp3Track[16];
+static char mp3Artist[16];
 
 static TCButton enterKey = TCButton(ENTER_BUTTON_PIN,
     false,    // Button is active HIGH
@@ -223,10 +219,13 @@ static TCButton ettKey = TCButton(EXTERNAL_TIMETRAVEL_IN_PIN,
     true      // Enable internal pull-up resistor
 );
 
-static void keypadEvent(char key, KeyState kstate);
-static void recordKey(char key);
-static void recordForMenu(char key, bool isYear);
+// File copy progress
+static bool          fcprog = false;
+static unsigned long fcstart = 0;
 
+static void keypadEvent(char key, KeyState kstate);
+
+static void enterKeyPushedDown();
 static void enterKeyPressed();
 static void enterKeyHeld();
 
@@ -235,19 +234,32 @@ static void ettKeyHeld();
 
 static void resetEnterAnim();
 
+static void enterPressedPrepare();
+
 static void resetDisplayMode(bool setDep = false);
 static void setupWCMode();
-static void buildRemString(char *buf);
-static void buildRemOffString(char *buf);
-static void buildStalePTStatus(char *buf);
+static void displayTmrOff();
+static void displayRemString(char *buf);
+static void displayRemOffString();
+static void displayStalePTStatus();
 static void displayAlarmOff(bool snooze);
+static void doAnddisplayMPNext(int num, char *buf);
 
 static void waitAudioDone();
 
-static void dt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR)
-{
-    destinationTime.showTextDirect(text, flags);
-}
+static int toggleAlarm();
+static int getAlarm();
+
+// Short-cuts from tc_menus
+extern void dt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR);
+extern void pt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR);
+extern void lt_showTextDirect(const char *text, uint16_t flags = CDT_CLEAR);
+extern void dt_off();
+extern void pt_off();
+extern void lt_off();
+extern void dt_on();
+extern void pt_on();
+extern void lt_on();
 
 static void handleTTrefusal(int reason)
 {
@@ -255,6 +267,11 @@ static void handleTTrefusal(int reason)
     case 1:
         bttfnSendRemCmd(REM_BRAKE);
         break;
+    /*
+    case 2:
+        // Alarm is active - no reaction
+        break;
+    */
     }
 }
 
@@ -291,6 +308,7 @@ void keypad_setup()
     enterKey.setTiming(ENTER_DEBOUNCE, ENTER_PRESS_TIME, ENTER_HOLD_TIME);
     enterKey.attachPress(enterKeyPressed);
     enterKey.attachLongPressStart(enterKeyHeld);
+    enterKey.attachPressStart(enterKeyPushedDown);
 
     // Set up External time travel button
     if(!ttinpin) {
@@ -302,8 +320,6 @@ void keypad_setup()
 
     ettDelay = atoi(settings.ettDelay);
     if(ettDelay > ETT_MAX_DEL) ettDelay = ETT_MAX_DEL;
-
-    ettLong = evalBool(settings.ettLong);
 
     dateBuffer[0] = 0;
     timeBuffer[0] = 0;
@@ -330,9 +346,9 @@ static void keypadEvent(char key, KeyState kstate)
 {
     bool mpWasActive = false;
     bool playBad = false;
-    int i;
+    int  i;
 
-    if(csf & (CSF_OFF|CSF_ST|CSF_P0|CSF_P1|CSF_RE|CSF_AL)) {
+    if(csf & (CSF_OFF|CSF_ST|CSF_P0|CSF_P1|CSF_RE|CSF_AL|CSF_AE)) {
         doKey = false;
         return;
     }
@@ -352,14 +368,12 @@ static void keypadEvent(char key, KeyState kstate)
 
         switch(key) {
         case '0':    // "0" held down -> time travel
-            doKey = false;
             // Complete timeTravel, with speedo, with lead
             if((i = timeTravel(true, true, false))) {
                 handleTTrefusal(i);
             }
             break;
         case '9':    // "9" held down -> return from time travel
-            doKey = false;
             if(currentlyOnTimeTravel()) {
                 resetPresentTime();
             } else {
@@ -367,7 +381,6 @@ static void keypadEvent(char key, KeyState kstate)
             }
             break;
         case '1':    // "1" held down -> toggle alarm on/off
-            doKey = false;
             if((i = toggleAlarm()) >= 0) {
                 play_file(i ? "/alarmon.mp3" : "/alarmoff.mp3", PA_INTSPKR|PA_CHECKNM|PA_ALLOWSD|PA_DYNVOL);
             } else {
@@ -375,18 +388,15 @@ static void keypadEvent(char key, KeyState kstate)
             }
             break;
         case '4':    // "4" held down -> toggle night-mode on/off
-            doKey = false;
             manualNightMode = toggleNightMode();
             play_file(manualNightMode ? "/nmon.mp3" : "/nmoff.mp3", PA_INTSPKR|PA_ALLOWSD|PA_DYNVOL);
             manualNMNow = millis();
             break;
         case '3':    // "3" held down -> play audio file "key3.mp3"
         case '6':    // "6" held down -> play audio file "key6.mp3"
-            doKey = false;
             play_key(key - '0', preDTMFkeyplayed);
             break;
         case '7':    // "7" held down -> re-enable/re-connect WiFi
-            doKey = false;
             if(!wifiOnWillBlock()) {
                 play_file("/ping.mp3", PA_INTSPKR|PA_CHECKNM|PA_ALLOWSD);
             } else {
@@ -402,13 +412,10 @@ static void keypadEvent(char key, KeyState kstate)
             if(mpWasActive) mp_play();   
             break;
         case '2':    // "2" held down -> musicplayer prev
-            doKey = false;
-            if(haveMusic) {
-                mp_prev(mpActive);
-            } else playBad = true;
+            if(haveMusic) mp_prev(mpActive);
+            else          playBad = true;
             break;
         case '5':    // "5" held down -> musicplayer start/stop
-            doKey = false;
             if(haveMusic) {
                 if(mpActive) {
                     mp_stop();
@@ -418,10 +425,8 @@ static void keypadEvent(char key, KeyState kstate)
             } else playBad = true;
             break;
         case '8':   // "8" held down -> musicplayer next
-            doKey = false;
-            if(haveMusic) {
-                mp_next(mpActive);
-            } else playBad = true;
+            if(haveMusic) mp_next(mpActive);
+            else          playBad = true;
             break;
         }
 
@@ -430,9 +435,8 @@ static void keypadEvent(char key, KeyState kstate)
         }
 
         // When holding a key, the input buffer is cleared
-        if(!doKey) {
-            discardKeypadInput();
-        }
+        doKey = false;
+        discardKeypadInput();
 
         break;
         
@@ -440,10 +444,16 @@ static void keypadEvent(char key, KeyState kstate)
         if(doKey) {
             switch(keypadMode) {
             case 0:
-                recordKey(key);
+                dateBuffer[dateIndex++] = key;
+                dateBuffer[dateIndex] = 0;
+                // Don't wrap around, overwrite end of date instead
+                if(dateIndex >= DATELEN_MAX) dateIndex = DATELEN_MAX - 1;  
+                lastKeyPressed = millisNonZero();
                 break;
             case 1:
-                recordForMenu(key, isYearUpdate);
+                timeBuffer[timeIndex++] = key;
+                timeBuffer[timeIndex] = 0;
+                timeIndex &= (timeBufferSize - 1);
                 break;
             case 2:
                 keypadKeyPressed = key;
@@ -461,50 +471,45 @@ void resetKeypadState()
 
 void discardKeypadInput()
 {
-    dateBuffer[0] = 0;
+    *dateBuffer = 0;
     dateIndex = 0;
+}
+
+/*
+ * Callbacks
+ */
+
+static void enterKeyPushedDown()
+{
+    if(csf & CSF_AL) csf |= CSF_AE;
+    else             csf &= ~CSF_AE;
 }
 
 static void enterKeyPressed()
 {
-    isEnterKeyPressed = true;
+    eef |= EEF_EnterPressed;
     pwrNeedFullNow();
 }
 
 static void enterKeyHeld()
 {
-    isEnterKeyHeld = true;
+    eef |= EEF_EnterHeld;
     pwrNeedFullNow();
 }
 
 static void ettKeyPressed()
 {
-    isEttKeyPressed = true;
-    // Do not touch isEttKeyImmediate here
+    eef |= EEF_EttPressed;
+    // Do not touch EEF_EttImmediate here
     pwrNeedFullNow();
 }
 
 static void ettKeyHeld()
 {
-    isEttKeyHeld = true;
+    eef |= EEF_EttHeld;
     pwrNeedFullNow();
 }
 
-static void recordKey(char key)
-{
-    dateBuffer[dateIndex++] = key;
-    dateBuffer[dateIndex] = 0;
-    // Don't wrap around, overwrite end of date instead
-    if(dateIndex >= DATELEN_MAX) dateIndex = DATELEN_MAX - 1;  
-    lastKeyPressed = millisNonZero();
-}
-
-static void recordForMenu(char key, bool isYear)
-{
-    timeBuffer[timeIndex++] = key;
-    timeBuffer[timeIndex] = 0;
-    timeIndex &= (isYear ? 0x03 : 0x1);
-}
 
 void resetTimebufIndices()
 {
@@ -518,9 +523,9 @@ bool injectInput(const char *s)
     int i = 0;
 
     // No new command until the prev one is done
-    if(inputInjected) return false;
+    if(eef & EEF_InputInjected) return false;
 
-    // status flags (eg menuActive) checked in caller function
+    // status flags (eg CSF_MA) checked in caller function
     
     for( ; *s; ++s) {
         if(*s >= '0' && *s <= '9') injectBuffer[i++] = *s;
@@ -530,7 +535,7 @@ bool injectInput(const char *s)
     
     if(!i) return false;
 
-    inputInjected = true;
+    eef |= EEF_InputInjected;
     return true;
 }
 #endif
@@ -547,7 +552,7 @@ void enterkeyScan()
         ettKey.scan();
 }
 
-static unsigned int read2digs(unsigned int idx)
+static int read2digs(unsigned int idx)
 {
     return (binBuf[idx] * 10) + binBuf[idx+1];
 }
@@ -555,20 +560,27 @@ static unsigned int read2digs(unsigned int idx)
 #ifdef TC_HAVE_REMOTE
 void injectKeypadKey(char key, int kaction)
 {
-    if(menuActive) return;
+    if(csf & CSF_MA) return;
     
     if(key == 'E') {
         switch(kaction) {
         case BTTFN_KP_KS_PRESSED:
-            isEnterKeyPressed = true;
-            isEnterKeyHeld = false;
+            // Ignore if physical ENTER button pushed down during Alarm already
+            if(!(csf & CSF_AE)) {
+                enterKeyPushedDown();   // set/clr CSF_AE depending on CSF_AL
+                eef |= EEF_EnterPressed;
+                eef &= ~EEF_EnterHeld;
+            }
             break;
         case BTTFN_KP_KS_HOLD:
             // We don't enter the keypad menu remotely,
             // but we allow stopping the alarm.
-            if(csf & CSF_AL) {
-                stopAlarm(true);
-                cancelSnooze();
+            // Ignore if physical ENTER button pushed down during Alarm already
+            if(!(csf & CSF_AE)) {
+                if(csf & CSF_AL) {
+                    stopAlarm(true);
+                    cancelSnooze();
+                }
             }
             break;
         }
@@ -596,19 +608,20 @@ void injectKeypadKey(char key, int kaction)
  */
 void keypad_loop()
 {
-    const char *tmr = "TIMER   ";
     char *keyBuffer = dateBuffer;
     char spTxt[16];
 
-    if(!inputInjected) {
+    if(!(eef & EEF_InputInjected)) {
         enterkeyScan();
-        if((csf & CSF_OFF) && (csf & CSF_AL)) {
-            if(isEnterKeyHeld) {
+        if((csf & CSF_OFF) && (csf & CSF_AE)) {
+            if(eef & EEF_EnterHeld) {
                 stopAlarm(true);
                 cancelSnooze();
-            } else if(isEnterKeyPressed) {
+                csf &= ~CSF_AE;
+            } else if(eef & EEF_EnterPressed) {
                 stopAlarm(true);
                 startSnooze();
+                csf &= ~CSF_AE;
             }
         }
     } else {
@@ -616,97 +629,87 @@ void keypad_loop()
     }
 
     // Discard keypad input after 2 minutes of inactivity
-    if(millis() - lastKeyPressed >= 2*60*1000) {
+    if(lastKeyPressed && (millis() - lastKeyPressed >= 2*60*1000)) {
         discardKeypadInput();
+        lastKeyPressed = 0;
     }
 
     // Bail out if sequence played or device is fake-"off"
     if(csf & (CSF_OFF|CSF_ST|CSF_P0|CSF_P1|CSF_RE)) {
 
-        isEnterKeyHeld = false;
-        isEnterKeyPressed = false;
-        inputInjected = false;
-        isEttKeyPressed = isEttKeyImmediate = false;
-        isEttKeyHeld = false;
+        if(eef & (EEF_EnterHeld|EEF_EnterPressed)) {
+            eef &= ~(EEF_EnterHeld|EEF_EnterPressed);
+            csf &= ~CSF_AE; // ?
+        }
+        eef &= ~(EEF_InputInjected|EEF_EttPressed|EEF_EttHeld|EEF_EttImmediate);
+
         cancelETTAnim();
 
         return;
     }
 
-    if(isEttKeyHeld) {
+    if(eef & EEF_EttHeld) {
         resetPresentTime();
-        isEttKeyPressed = isEttKeyHeld = isEttKeyImmediate = false;
-    } else if(isEttKeyPressed) {
+        eef &= ~(EEF_EttPressed|EEF_EttHeld|EEF_EttImmediate);
+    } else if(eef & EEF_EttPressed) {
         int res = 0;
-        if(!ettDelay || isEttKeyImmediate) {
-            // 3rd parameter: MQTT/BTTFN-induced with lead; external button without lead
-            if((res = timeTravel(ettLong, true, isEttKeyImmediate ? false : true))) {
+        bool temp = true;
+        if(!ettDelay || (eef & EEF_EttImmediate)) {
+            // 3rd parameter [forceNoLead]: MQTT/BTTFN-induced with lead; external button without lead
+            if((res = timeTravel(true, true, (eef & EEF_EttImmediate) ? false : true))) {
                 handleTTrefusal(res);
             }
-            ettDelayed = false;
-        } else if((res = timeTravelProbe(ettLong, true, true))) {
+            ettNow = 0;
+        } else if((res = timeTravelProbe(true, temp, true))) {
             handleTTrefusal(res);
         } else {
-            ettNow = millis();
-            ettDelayed = true;
+            ettNow = millisNonZero();
             startBeepTimer();
             send_wakeup_msg();
         }
-        isEttKeyPressed = isEttKeyHeld = isEttKeyImmediate = false;
+        eef &= ~(EEF_EttPressed|EEF_EttHeld|EEF_EttImmediate);
     }
-    if(ettDelayed) {
-        if(millis() - ettNow >= ettDelay) {
-            int res = 0;
-            if((res = timeTravel(ettLong, true, true))) {
-                handleTTrefusal(res);
-            }
-            ettDelayed = false;
+    if(ettNow && (millis() - ettNow >= ettDelay)) {
+        int res = 0;
+        if((res = timeTravel(true, true, true))) {
+            handleTTrefusal(res);
         }
+        ettNow = 0;
     }
 
     // If enter key is held, go into keypad menu
-    if(!inputInjected && isEnterKeyHeld) {
+    if((!(eef & EEF_InputInjected)) && (eef & EEF_EnterHeld)) {
 
-        isEnterKeyHeld = false;
-        isEnterKeyPressed = false;
+        eef &= ~(EEF_EnterHeld|EEF_EnterPressed);
         cancelEnterAnim();
         cancelETTAnim();
 
-        if(csf & CSF_AL) {
+        if(csf & CSF_AE) {
 
+            csf &= ~CSF_AE;
             stopAlarm(true);
             cancelSnooze();
 
             // Simulate pressing ENTER
-            enterWasPressed = true;
-            cancelETTAnim();
-            digitalWrite(WHITE_LED_PIN, HIGH);
-            destinationTime.off();
-            timeNow = millis();
-            enterDelay = ENTER_DELAY;
+            // cancel ETT, LED on, dest off, init timer
+            enterPressedPrepare();
             
-            displayAlarmOff(false);
-            specDisp = 10;
+            displayAlarmOff(false); // Sets specDisp = 10;
             
         } else {
 
             timeIndex = 0;
-            timeBuffer[0] = 0;
+            *timeBuffer = 0;
     
-            menuActive = true;
             csf |= CSF_MA;
             bttfn_notify_info();
     
             enter_menu();
+
+            // No enter handling and no external tt while in menu mode,
+            // so reset flags upon menu exit
+            eef &= ~(EEF_EnterHeld|EEF_EnterPressed|EEF_EttPressed|EEF_EttHeld|EEF_EttImmediate);
     
-            isEnterKeyHeld = false;
-            isEnterKeyPressed = false;
-    
-            // No external tt while in menu mode,
-            // so reset flag upon menu exit
-            isEttKeyPressed = isEttKeyHeld = isEttKeyImmediate = false;
-    
-            menuActive = false;
             csf &= ~CSF_MA;
             bttfn_notify_info();
 
@@ -715,44 +718,34 @@ void keypad_loop()
     }
 
     // if enter key is merely pressed, handle input
-    if(inputInjected || isEnterKeyPressed) {
+    if(eef & (EEF_EnterPressed|EEF_InputInjected)) {
 
-        int  strLen = strlen(keyBuffer);
-        bool invalidEntry = false;
-        bool validEntry = false;
+        int strLen = strlen(keyBuffer);
+        int validEntry = 2;
+        
         uint16_t enterInterruptsMusic = 0;
+        char atxt[16];
 
         strcpy(binBuf, keyBuffer);
         for(char *s = binBuf; *s ; ++s) {
             *s -= '0';
         }
         
-        if(!inputInjected) {
-            isEnterKeyPressed = false;
+        if(!(eef & EEF_InputInjected)) {
+            eef &= ~EEF_EnterPressed;
         }
-        enterWasPressed = true;
 
-        cancelETTAnim();
+        // cancel ETT, LED on, dest off, init timer
+        enterPressedPrepare();
 
-        // Turn on white LED
-        digitalWrite(WHITE_LED_PIN, HIGH);
+        if((!(eef & EEF_InputInjected)) && (csf & CSF_AE)) {
 
-        // Turn off destination time
-        destinationTime.off();
-
-        timeNow = millis();
-
-        enterDelay = ENTER_DELAY;
-
-        if(!inputInjected && (csf & CSF_AL)) {
-
+            csf &= ~CSF_AE;
             stopAlarm(true);
-            displayAlarmOff(startSnooze());
-            specDisp = 10;
+            displayAlarmOff(startSnooze()); // Sets specDisp = 10;
 
         } else if(strLen == DATELEN_ALSH) {
 
-            char atxt[16];
             uint16_t flags = 0;
             uint8_t code = atoi(keyBuffer);
             
@@ -766,18 +759,17 @@ void keypad_loop()
                     #else
                     sprintf(atxt, "%-8s %02d%02d", alwd, al >> 8, al & 0xff);
                     #endif
-                    flags = CDT_COLON;
+                    dt_showTextDirect(atxt, CDT_CLEAR|CDT_COLON);
                 } else {
                     #ifdef IS_ACAR_DISPLAY
-                    strcpy(atxt, "ALARM  UNSET");
+                    dt_showTextDirect("ALARM  UNSET");
                     #else
-                    strcpy(atxt, "ALARM   UNSET");
+                    dt_showTextDirect("ALARM   UNSET");
                     #endif
                 }
-
-                dt_showTextDirect(atxt, CDT_CLEAR|flags);
+                
                 specDisp = 10;
-                validEntry = true;
+                validEntry = 1;
 
             } else if(code == 12) {
 
@@ -785,133 +777,111 @@ void keypad_loop()
                     dt_showTextDirect("ALARM STOP", CDT_CLEAR);
                     cancelSnooze();
                     specDisp = 10;
-                    validEntry = true;
-                } else 
-                    invalidEntry = true;
+                    validEntry = 1;
+                }
 
             } else if(code == 44) {
 
                 if(!ctDown) {
-                    #ifdef IS_ACAR_DISPLAY
-                    sprintf(atxt, "%s OFF", tmr);
-                    #else
-                    sprintf(atxt, "%s  OFF", tmr);
-                    #endif
+                    displayTmrOff();  // sets specDisp = 10
                 } else {
-                    unsigned long el = ctDown - (millis() - ctDownNow);
-                    int mins = el / (1000 * 60);
-                    int secs = (el - (mins * 1000 * 60)) / 1000;
-                    if((long)el < 0) mins = secs = 0;
-                    #ifdef IS_ACAR_DISPLAY
-                    sprintf(atxt, "%s%02d%02d", tmr, mins, secs);
-                    #else
-                    sprintf(atxt, "%s %02d%02d", tmr, mins, secs);
-                    #endif
-                    flags = CDT_COLON;
+                    displayTmrString();
+                    specDisp = 30;
                 }
 
-                dt_showTextDirect(atxt, CDT_CLEAR|flags);
-                specDisp = 10;
-                validEntry = true;
+                validEntry = 1;
 
             } else if(code == 77) {
 
                 uint16_t flags = 0;
 
-                if(!remMonth && !remDay) {
-                    buildRemOffString(atxt);
+                if(!remDay) {
+                    displayRemOffString();   // Sets specDisp = 10;
                 } else {
-                    buildRemString(atxt);
-                    flags = CDT_COLON;
+                    displayRemString(atxt);  // Sets specDisp = 10;
                 }
 
-                dt_showTextDirect(atxt, CDT_CLEAR|flags);
-                specDisp = 10;
-                validEntry = true;
+                validEntry = 1;
 
-            } else if((code == 55) && haveMusic) {
+            } else if(code == 55) {
 
-                specDisp = 10;
-                if(mpActive) {
-                    #ifdef IS_ACAR_DISPLAY
-                    sprintf(atxt, "PLAYING  %03d", mp_get_currently_playing());
-                    #else
-                    sprintf(atxt, "PLAYING   %03d", mp_get_currently_playing());
-                    #endif
-                    if(*id3artist || *id3track) {
-                        strcpy(ctxt, *id3artist ? id3artist : "UNKNOWN");
-                        strcpy(btxt, *id3track ? id3track : "UNKNOWN");
-                        specDisp = 20;
+                if(haveMusic) {
+                    specDisp = 10;
+                    if(mpActive) {
+                        #ifdef IS_ACAR_DISPLAY
+                        sprintf(atxt, "PLAYING  %03d", mp_get_currently_playing());
+                        #else
+                        sprintf(atxt, "PLAYING   %03d", mp_get_currently_playing());
+                        #endif
+                        if(*id3artist || *id3track) {
+                            strcpy(mp3Artist, *id3artist ? id3artist : "UNKNOWN");
+                            strcpy(mp3Track, *id3track ? id3track : "UNKNOWN");
+                            specDisp = 20;
+                        }
+                        dt_showTextDirect(atxt);
+                    } else {
+                        dt_showTextDirect("STOPPED");
                     }
-                } else {
-                    strcpy(atxt, "STOPPED");
+                    validEntry = 1;
                 }
-                dt_showTextDirect(atxt, CDT_CLEAR);
-                validEntry = true;
 
             } else if(code == 33) {
               
                 dt_showTextDirect(
-                    weekDays[dayOfWeek(presentTime.getDay(), presentTime.getMonth(), presentTime.getYear())], 
-                    CDT_CLEAR
+                    weekDays[dayOfWeek(presentTime.getDay(), presentTime.getMonth(), presentTime.getYear())]
                 );
                 specDisp = 10;
-                validEntry = true;
+                validEntry = 1;
 
             #ifdef SERVOSPEEDO
             } else if(code == 49) {
                 int scorr, tcorr;
                 loadServoCorr(scorr, tcorr);
                 sprintf(atxt, "S%4d T%4d", scorr, tcorr);
-                dt_showTextDirect(atxt, CDT_CLEAR);
+                dt_showTextDirect(atxt);
                 specDisp = 10;
-                validEntry = true;
+                validEntry = 1;
             #endif
 
-            } else
-                invalidEntry = true;
+            }
 
         } else if(strLen == DATELEN_CODE) {
 
             uint16_t code = atoi(keyBuffer);
             bool rcModeState;
-            char atxt[16];
             uint16_t flags = 0;
-            
-            if(code == 113 && (!haveRcMode || !haveWcMode)) {
-                code = haveRcMode ? 111 : 112;
+
+            if((code == 113) && ((wcf & (WCF_HaveRCM|WCF_HaveWCM)) != (WCF_HaveRCM|WCF_HaveWCM))) {
+                code = (wcf & WCF_HaveRCM) ? 111 : 112;
             }
 
             if((code >= 300 && code <= 319) || code == 399) {
-
-                int oldVol = curVolume;
                 
                 curVolume = (code == 399) ? 255 : (code - 300);
-                
-                validEntry = true;
 
                 // Re-set RotEnc for current level
                 #ifdef TC_HAVE_RE
                 re_vol_reset();
                 #endif
-                
-                if(oldVol != curVolume) {
-                    saveCurVolume();
-                }
+
+                saveCurVolume();
+                validEntry = 1;
               
             } else if(code >= 501 && code <= 509) {
 
                 play_key(code - 500, 0xffff);
 
-                // Play no sound, ie no xxvalidEntry
+                validEntry = 0;   // Play no sound
 
             #ifdef TC_HAVEMQTT
             } else if(code >= 600 && code <= 609) {
+            
                 int idx = code - 600;
                 if(settings.mqmt[idx] && settings.mqmm[idx]) {
                     mqttPublish(settings.mqmt[idx], settings.mqmm[idx], strlen(settings.mqmm[idx]));
                 }
-                // Play no sound, ie no xxvalidEntry
+                
+                validEntry = 0;   // Play no sound
             #endif
 
             } else {
@@ -921,18 +891,15 @@ void keypad_loop()
                     if(isRcMode() || isWcMode() || isNavMode() || isMiniMode()) {
                         bool needDep = isMiniMode();
                         if(!needDep) {
-                            if(isWcMode() && (WcHaveTZ2 || isRcMode())) needDep = true;
+                            if(isWcMode() && ((wcf & WCF_HaveTZ2) || isRcMode())) needDep = true;
                             #ifdef TC_HAVETEMP
-                            else if(isRcMode() && tempSens.haveHum())   needDep = true;
+                            else if(isRcMode() && tempSens.haveHum()) needDep = true;
                             #endif
                             #ifdef TC_HAVEGPS
                             else if(isNavMode()) needDep = true;
                             #endif
                         }
-                        if(needDep) {
-                            //departedTime.off();
-                            needDepTime = true;
-                        }
+                        if(needDep) needDepTime = 1;
                         if(isMiniMode()) enableMiniMode(false);
                         #ifdef TC_HAVEGPS
                         else if(isNavMode()) enableNavMode(false);
@@ -945,46 +912,39 @@ void keypad_loop()
                             setupWCMode();
                         }
                     }
-                    validEntry = true;
+                    validEntry = 1;
                     break;
                 #ifdef TC_HAVETEMP
                 case 111:               // 111+ENTER: Toggle rc-mode
-                    if(haveRcMode) {
+                    if(wcf & WCF_HaveRCM) {
                         toggleRcMode();
                         if(tempSens.haveHum() || isWcMode()) {
-                            //departedTime.off();
-                            needDepTime = true;
+                            needDepTime = 1;
                         }
-                        validEntry = true;
-                    } else {
-                        invalidEntry = true;
+                        validEntry = 1;
                     }
                     break;
                 #endif
                 case 112:               // 112+ENTER: Toggle wc-mode
-                    if(haveWcMode) {
+                    if(wcf & WCF_HaveWCM) {
                         toggleWcMode();
-                        if(WcHaveTZ2 || isRcMode()) {
-                            //departedTime.off();
-                            needDepTime = true;
+                        if((wcf & WCF_HaveTZ2) || isRcMode()) {
+                            needDepTime = 1;
                         }
                         setupWCMode();
                         destShowAlt = depShowAlt = 0; // Reset TZ-Name-Animation
-                        validEntry = true;
-                    } else {
-                        invalidEntry = true;
+                        validEntry = 1;
                     }
                     break;
                 case 113:               // 113+ENTER: Toggle rc+wc mode
                     // Dep Time display needed in any case:
                     // Either for TZ2 or TEMP
-                    //departedTime.off();
-                    needDepTime = true;
                     rcModeState = toggleRcMode();
                     enableWcMode(rcModeState);
                     setupWCMode();
                     destShowAlt = depShowAlt = 0; // Reset TZ-Name-Animation
-                    validEntry = true;
+                    needDepTime = 1;
+                    validEntry = 1;
                     break;
                 #ifdef TC_HAVEGPS
                 case 114:
@@ -997,11 +957,9 @@ void keypad_loop()
                             (code - 114 == dmMode) ) {
                             toggleNavMode();
                         }
-                        //departedTime.off();
-                        needDepTime = true;
-                        validEntry = true;
-                    } else
-                        invalidEntry = true;
+                        needDepTime = 1;
+                        validEntry = 1;
+                    }
                     break;
                 #endif
                 case 117:
@@ -1010,39 +968,26 @@ void keypad_loop()
                         setupWCMode();
                     }
                     toggleMiniMode();
-                    //departedTime.off();
-                    needDepTime = true;
-                    validEntry = true;
+                    needDepTime = 1;
+                    validEntry = 1;
                     break;
                 case 222:               // 222+ENTER: Turn shuffle off
                 case 555:               // 555+ENTER: Turn shuffle on
-                    mp_makeShuffle((code == 555));
+                    mp_makeShuffle((code == 555));  // Make regardless of haveMusic to save requested setting
                     if(haveMusic) {
                         #ifdef IS_ACAR_DISPLAY
-                        sprintf(atxt, "SHUFFLE  %s", (code == 555) ? " ON" : "OFF");
+                        dt_showTextDirect((code == 555) ? "SHUFFLE   ON"  : "SHUFFLE  OFF");
                         #else
-                        sprintf(atxt, "SHUFFLE   %s", (code == 555) ? " ON" : "OFF");
+                        dt_showTextDirect((code == 555) ? "SHUFFLE    ON" : "SHUFFLE   OFF");
                         #endif
-                        dt_showTextDirect(atxt);
                         specDisp = 10;
-                        validEntry = true;
-                    } else {
-                        invalidEntry = true;
+                        validEntry = 1;
                     }
                     break;
                 case 888:               // 888+ENTER: Goto song #0
                     if(haveMusic) {
-                        mp_gotonum(0, mpActive);
-                        #ifdef IS_ACAR_DISPLAY
-                        strcpy(atxt, "NEXT     000");
-                        #else
-                        strcpy(atxt, "NEXT      000");
-                        #endif
-                        dt_showTextDirect(atxt);
-                        specDisp = 10;
-                        validEntry = true;
-                    } else {
-                        invalidEntry = true;
+                        doAnddisplayMPNext(0, atxt);  // Sets specDisp = 10
+                        validEntry = 1;
                     }
                     break;
                 case 350:
@@ -1053,37 +998,24 @@ void keypad_loop()
                         if(rcModeState != useLineOut) {
                             saveLineOut();
                         }
-                        validEntry = true;
-                    } else {
-                        invalidEntry = true;
+                        validEntry = 1;
                     }
                     break;
                 case 440:
-                    #ifdef IS_ACAR_DISPLAY
-                    sprintf(atxt, "%s OFF", tmr);
-                    #else
-                    sprintf(atxt, "%s  OFF", tmr);
-                    #endif
-                    dt_showTextDirect(atxt);
                     ctDown = 0;
-                    specDisp = 10;
-                    validEntry = true;
+                    displayTmrOff();    // Sets specDisp = 10
+                    validEntry = 1;
                     break;
                 case 770:
-                    remMonth = DEF_REM_MONTH;
-                    remDay = DEF_REM_DAY;
-                    remHour = DEF_REM_HOUR;
-                    remMin = DEF_REM_MIN;
+                    remMonth = remDay = remHour = remMin = 0;
                     saveReminder();
-                    buildRemOffString(atxt);
-                    dt_showTextDirect(atxt);
-                    specDisp = 10;
-                    validEntry = true;
+                    displayRemOffString();    // Sets specDisp = 10
+                    validEntry = 1;
                     break;
                 case 777:
-                    if(!remMonth && !remDay) {
+                    if(!remDay) {
                       
-                        buildRemOffString(atxt);
+                        displayRemOffString();    // Sets specDisp = 10
                         
                     } else {
                       
@@ -1113,20 +1045,20 @@ void keypad_loop()
                         }
                         tgtMins -= locMins;
                         
-                        uint16_t days = tgtMins / (24*60);
-                        uint16_t hours = (tgtMins % (24*60)) / 60;
-                        uint16_t minutes = tgtMins - (days*24*60) - (hours*60);
+                        int days = tgtMins / (24*60);
+                        tgtMins -= (days*24*60);
+                        int hours = tgtMins / 60;
+                        int minutes = tgtMins - (hours*60);
     
                         #ifdef IS_ACAR_DISPLAY
                         sprintf(atxt, "    %3dd%2d%02d", days, hours, minutes);
                         #else
                         sprintf(atxt, "     %3dd%2d%02d", days, hours, minutes);
                         #endif
-                        flags = CDT_COLON;
+                        dt_showTextDirect(atxt, CDT_CLEAR|CDT_COLON);
+                        specDisp = 10;
                     }
-                    dt_showTextDirect(atxt, CDT_CLEAR|flags);
-                    specDisp = 10;
-                    validEntry = true;
+                    validEntry = 1;
                     break;
                 case 0:
                 case 1:
@@ -1140,22 +1072,22 @@ void keypad_loop()
                     #endif
                     dt_showTextDirect(atxt);
                     specDisp = 10;
-                    // Play no sound, ie no xxvalidEntry
+                    validEntry = 0;   // Play no sound
                     break;
                 case 9:
                     send_refill_msg();
-                    // Play no sound, ie no xxvalidEntry
+                    validEntry = 0;   // Play no sound
                     break;
                 case 900:
                 case 901:
                     if(ETTOcommands) {
                         setTTOUTpin((code == 901) ? HIGH : LOW);
-                        // Play no sound, ie no xxvalidEntry
-                    } else invalidEntry = true;
+                        validEntry = 0;   // Play no sound
+                    }
                     break;
                 case 990:
                 case 991:
-                    if(!inputInjected) {
+                    if(!(eef & EEF_InputInjected)) {
                         rcModeState = carMode;
                         carMode = (code == 991);
                         if(rcModeState != carMode) {
@@ -1164,13 +1096,13 @@ void keypad_loop()
                             delay(1000);
                             esp_restart();
                         }
-                        validEntry = true;
-                    } else invalidEntry = true;
+                        validEntry = 1;
+                    }
                     break;
                 #ifdef TC_HAVE_REMOTE
                 case 992:
                 case 993:
-                    if(!inputInjected) {
+                    if(!(eef & EEF_InputInjected)) {
                         rcModeState = remoteAllowed;
                         remoteAllowed = (code == 993);
                         if(rcModeState != remoteAllowed) {
@@ -1180,12 +1112,12 @@ void keypad_loop()
                                 bttfn_notify_info();
                             }
                         }
-                        validEntry = true;
-                    } else invalidEntry = true;
+                        validEntry = 1;
+                    }
                     break;
                 case 994:
                 case 995:
-                    if(!inputInjected) {
+                    if(!(eef & EEF_InputInjected)) {
                         rcModeState = remoteKPAllowed;
                         remoteKPAllowed = (code == 995);
                         if(rcModeState != remoteKPAllowed) {
@@ -1195,73 +1127,63 @@ void keypad_loop()
                                 bttfn_notify_info();
                             }
                         }
-                        validEntry = true;
-                    } else invalidEntry = true;
+                        validEntry = 1;
+                    }
                     break;
                 #endif  // TC_HAVE_REMOTE
                 #ifdef TC_HAVEMQTT
                 case 996:
-                    if(!inputInjected) {
+                    if(!(eef & EEF_InputInjected)) {
                         mqttFakePowerControl(false);
-                        validEntry = true;
-                    } else invalidEntry = true;
+                        validEntry = 1;
+                    }
                     break;
                 #endif  // TC_HAVEMQTT
                 case 998:
-                    if(timetravelPersistent) {
-                        invalidEntry = true;
-                    } else {
-                        //departedTime.off();
-                        needDepTime = true;
-                        pauseAuto();
-                        enableRcMode(false);
-                        enableWcMode(false);
-                        #ifdef TC_HAVEGPS
-                        enableNavMode(false);
-                        #endif
-                        enableMiniMode(false);
-                        destinationTime.load();
-                        departedTime.load();
-                        backupDestTime();
-                        backupLastTime();
-                        validEntry = true;
-                    }
+                    pauseAuto();
+                    enableRcMode(false);
+                    enableWcMode(false);
+                    #ifdef TC_HAVEGPS
+                    enableNavMode(false);
+                    #endif
+                    enableMiniMode(false);
+                    loadUserDLTimes();
+                    backupDestTime();
+                    backupLastTime();
+                    departedTime.savePending();
+                    destinationTime.save();
+                    needDepTime = 1;
+                    validEntry = 1;
                     break;
                 case 999:
                     stalePresent = !stalePresent;
-                    buildStalePTStatus(atxt);
-                    dt_showTextDirect(atxt);
-                    specDisp = 10;
+                    displayStalePTStatus();   // Sets specDisp = 10
                     saveStaleTime((void *)&stalePresentTime[0], stalePresent);
-                    validEntry = true;
+                    validEntry = 1;
                     break;
-                default:
-                    invalidEntry = true;
                 }
             }
 
         } else if(strLen == DATELEN_INT) {
 
-            if(!strncmp(keyBuffer, "64738", 5) && !inputInjected) {
+            if(!strncmp(keyBuffer, "64738", 5) && (!(eef & EEF_InputInjected))) {
                 prepareReboot();
                 delay(1000);
                 esp_restart();
             } else if(!strncmp(keyBuffer, "53281", 5)) {
                 showUpdAvail = !showUpdAvail;
                 saveUpdAvail();
-                validEntry = true;
-            } else
-                invalidEntry = true;
+                validEntry = 1;
+            }
 
         } else if(strLen == DATELEN_QALM) {
 
-            char atxt[16];
             int code = read2digs(0);
 
             if(code == 11) {
 
-                uint8_t aHour = read2digs(2);
-                uint8_t aMin = read2digs(4);
+                int aHour = read2digs(2);
+                int aMin = read2digs(4);
 
                 if(aHour <= 23 && aMin <= 59) {
                     const char *alwd = getAlWD(alarmWeekday);
@@ -1277,15 +1199,13 @@ void keypad_loop()
                     #endif
                     dt_showTextDirect(atxt, CDT_COLON);
                     specDisp = 10;
-                    validEntry = true;
-                } else {
-                    invalidEntry = true;
+                    validEntry = 1;
                 }
 
             } else if(code == 77) {
 
-                uint8_t sMon  = read2digs(2);
-                uint8_t sDay  = read2digs(4);
+                int sMon  = read2digs(2);
+                int sDay  = read2digs(4);
 
                 if((sMon <= 12) && (sDay >= 1 && sDay <= 31)) {
 
@@ -1296,46 +1216,29 @@ void keypad_loop()
 
                         // If current hr and min are zero
                         // assume unset, set default 9am.
-                        if(!remHour && !remMin) {
-                            remHour = 9;
-                        }
+                        if(!remHour && !remMin) remHour = 9;
                         
                         saveReminder();
 
-                        buildRemString(atxt);
+                        displayRemString(atxt); // Sets specdisp = 10
 
-                        dt_showTextDirect(atxt, CDT_CLEAR|CDT_COLON);
-                        specDisp = 10;
-
-                        validEntry = true;
+                        validEntry = 1;
                     }
-                } 
-
-                invalidEntry = !validEntry;
+                }
             
             } else if(haveMusic && !strncmp(keyBuffer, "888", 3)) {
 
-                uint16_t num = (binBuf[3] * 100) + read2digs(4);
-                num = mp_gotonum(num, mpActive);
-                #ifdef IS_ACAR_DISPLAY
-                sprintf(atxt, "NEXT     %03d", num);
-                #else
-                sprintf(atxt, "NEXT      %03d", num);
-                #endif
-                dt_showTextDirect(atxt);
-                specDisp = 10;
-                validEntry = true;
+                int num = (binBuf[3] * 100) + read2digs(4);
+                
+                doAnddisplayMPNext(num, atxt); // Sets specDisp = 10
 
-            } else {
-
-                invalidEntry = true;
+                validEntry = 1;
 
             }
 
         } else if(strLen == DATELEN_TIME && binBuf[0] == 4) {
 
-            char atxt[16];
-            uint8_t mins;
+            int mins;
             uint16_t flags = 0;
             #ifdef SERVOSPEEDO
             int sfact = 1;
@@ -1345,26 +1248,15 @@ void keypad_loop()
             case 4:
                 mins = read2digs(2);
                 if(!mins) {
-                    #ifdef IS_ACAR_DISPLAY
-                    sprintf(atxt, "%s OFF", tmr);
-                    #else
-                    sprintf(atxt, "%s  OFF", tmr);
-                    #endif
                     ctDown = 0;
+                    displayTmrOff();  // sets specDisp = 10
                 } else {
-                    #ifdef IS_ACAR_DISPLAY
-                    sprintf(atxt, "%s%02d00", tmr, mins);
-                    #else
-                    sprintf(atxt, "%s %02d00", tmr, mins);
-                    #endif
                     ctDown = mins * 60 * 1000;
                     ctDownNow = millis();
-                    flags = CDT_COLON;
+                    displayTmrString();
+                    specDisp = 30;
                 }
-    
-                dt_showTextDirect(atxt, CDT_CLEAR|flags);
-                specDisp = 10;
-                validEntry = true;
+                validEntry = 1;
                 break;
             #ifdef SERVOSPEEDO    // Servo speedo calibration:
             case 5:               // 45xx: Set Tacho negative offset (in degrees times 10)
@@ -1373,7 +1265,7 @@ void keypad_loop()
                 // fall through   // 48xx: Set Speedo positive offset
             case 6:
             case 8:
-                if(useSpeedoDisplay) {
+                if(sgf & SGF_USpeedoDisp) {
                     int val = read2digs(2) * sfact;
                     bool doSave;
                     if(binBuf[1] <= 6) {
@@ -1385,21 +1277,19 @@ void keypad_loop()
                         int scorr, tcorr;
                         speedo.getCorr(scorr, tcorr);
                         saveServoCorr(scorr, tcorr);
-                        validEntry = true;
+                        validEntry = 1;
                     }
                 }
                 break;
             case 9:     // 49xx: Servo speedo calib mode. 4999 quits, 49xx (xx<=95) sets speed (mph)
-                if(useSpeedoDisplay) {
+                if(sgf & SGF_USpeedoDisp) {
                     int val = read2digs(2);
                     speedo.setCalib((val > 95) ? -1 : val);
-                    validEntry = true;
+                    validEntry = 1;
                 }
                 break;
             #endif
             }
-
-            invalidEntry = !validEntry;
 
         } else if((strLen == DATELEN_TIME || strLen == DATELEN_ECMD) && (binBuf[0] >= 3)) {
                       
@@ -1408,7 +1298,8 @@ void keypad_loop()
                 cmd = (binBuf[1] * 100) + read2digs(2);
             else
                 cmd = (read2digs(1) * 10000) + (read2digs(3) * 100) + read2digs(5);
-            
+
+            validEntry = 1;
             switch(binBuf[0]) {
             case 3:
                 bttfnSendFluxCmd(cmd);
@@ -1429,21 +1320,17 @@ void keypad_loop()
                 bttfnSendPCGCmd(cmd);
                 break;
             default:
-                invalidEntry = true;
+                validEntry = 2;
             }
-
-            validEntry = !invalidEntry;
         
         } else if(strLen == DATELEN_REM) {
-
+           
             if(read2digs(0) == 77) {
 
-                char atxt[16];
-
-                uint8_t sMon  = read2digs(2);
-                uint8_t sDay  = read2digs(4);
-                uint8_t sHour = read2digs(6);
-                uint8_t sMin  = read2digs(8);
+                int sMon  = read2digs(2);
+                int sDay  = read2digs(4);
+                int sHour = read2digs(6);
+                int sMin  = read2digs(8);
 
                 if((sMon <= 12) && (sDay >= 1 && sDay <= 31) && (sHour <= 23) && (sMin <= 59)) {
 
@@ -1456,24 +1343,18 @@ void keypad_loop()
                     
                         saveReminder();
 
-                        buildRemString(atxt);
+                        displayRemString(atxt);   // Sets specDisp = 10
 
-                        dt_showTextDirect(atxt, CDT_CLEAR|CDT_COLON);
-                        specDisp = 10;
-
-                        validEntry = true;
+                        validEntry = 1;
                     }
                 } 
             } 
-            
-            invalidEntry = !validEntry;
 
         } else if(strLen == DATELEN_STPR) {
 
             int code = read2digs(0);
 
             if(code == 91 || code == 92 || code == 99) {
-                char atxt[16];
                 int tm = read2digs(2);
                 int td = read2digs(4);
                 int y = ((int)read2digs(6) * 100) + read2digs(8);
@@ -1481,7 +1362,7 @@ void keypad_loop()
 
                 if(tm < 1) tm = 1;
                 else if(tm > 12) tm = 12;
-                if(td < 1)  td = 1;
+                if(td < 1) td = 1;
                 else {
                     int tdd = daysInMonth(tm, y);
                     if(td > tdd) td = tdd;
@@ -1502,16 +1383,17 @@ void keypad_loop()
                     // Disable nav&rc&wc&mini modes
                     resetDisplayMode();
                     destinationTime.setFromParms(y, tm, td, th, tmi);
+                    destinationTime.copyToUserTimes();
                     destinationTime.save();
                     backupDestTime();
                     pauseAuto();
                     break;
                 case 92:
-                    //departedTime.off();
-                    needDepTime = true;
                     // Disable nav&rc&wc&mini modes
+                    needDepTime = 1;
                     resetDisplayMode(true);
                     departedTime.setFromParms(y, tm, td, th, tmi);
+                    departedTime.copyToUserTimes();
                     departedTime.save();
                     backupLastTime();
                     pauseAuto();
@@ -1525,14 +1407,10 @@ void keypad_loop()
                     memcpy((void *)&stalePresentTime[1], (void *)&stalePresentTime[0], sizeof(dateStruct));
                     stalePresent = true;
                     saveStaleTime((void *)&stalePresentTime[0], stalePresent);
-                    buildStalePTStatus(atxt);
-                    dt_showTextDirect(atxt);
-                    specDisp = 10;
+                    displayStalePTStatus();   // Sets specDisp = 10
                 }
 
-                validEntry = true;
-            } else {
-                invalidEntry = true;
+                validEntry = 1;
             }
 
         } else if((strLen == DATELEN_TIME) || (strLen == DATELEN_DATE) || (strLen == DATELEN_ALL)) {
@@ -1552,7 +1430,7 @@ void keypad_loop()
             } else {
                 _setMonth = temp1;
                 _setDay   = temp2;
-                _setYear  = ((int)read2digs(4) * 100) + read2digs(6);
+                _setYear  = (read2digs(4) * 100) + read2digs(6);
                 if(strLen == DATELEN_ALL) {
                     _setHour = read2digs(8);
                     _setMin  = read2digs(10);
@@ -1590,11 +1468,10 @@ void keypad_loop()
                     special = 3;
                 } else if((spTmp ^ getHrs1KYrs(8)) == EEXSP4)  {
                     special = 4;
-                    
                 }
             }
 
-            // Hour and min are checked in clockdisplay
+            // Hour and min are checked in tcddisplay
 
             // Normal date/time: ENTER-sound interrupts musicplayer
             enterInterruptsMusic = PA_INTRMUS;
@@ -1603,15 +1480,17 @@ void keypad_loop()
             case 1:
                 dt_showTextDirect(spTxt, CDT_CLEAR|CDT_COLON);
                 specDisp = 1;
-                validEntry = true;
+                validEntry = 1;
                 break;
             case 2:
                 play_file("/ee2.mp3", PA_LINEOUT|PA_CHECKNM|PA_INTRMUS);
                 enterDelay = EE2_DELAY;
+                validEntry = 0;
                 break;
             case 3:
                 play_file("/ee3.mp3", PA_INTSPKR|PA_CHECKNM|PA_INTRMUS);
                 enterDelay = EE3_DELAY;
+                validEntry = 0;
                 break;
             case 4:
                 destinationTime.clearDisplay();
@@ -1619,9 +1498,10 @@ void keypad_loop()
                 play_file("/ee4.mp3", PA_LINEOUT|PA_CHECKNM|PA_INTRMUS);
                 enterDelay = EE4_DELAY;
                 specDisp = 5;
+                validEntry = 0;
                 break;
             default:
-                validEntry = true;
+                validEntry = 1;
             }
 
             // Copy date to destination time
@@ -1634,8 +1514,7 @@ void keypad_loop()
             backupDestTime();
 
             // We only save the new time if user wants persistence.
-            // Might not be preferred; this messes with the user's custom
-            // times. Secondly, it wears the flash memory.
+            // Might not be preferred; wears the flash memory.
             if(timetravelPersistent) {
                 destinationTime.save();
             }
@@ -1652,41 +1531,37 @@ void keypad_loop()
             // Send "wakeup" to network clients
             send_wakeup_msg();
 
-        } else {
-
-            invalidEntry = true;
-
         }
 
-        if(needDepTime) {
-            departedTime.off();
-        }
+        if(needDepTime) lt_off();
 
-        if(validEntry) {
+        if(validEntry == 1) {
             play_file("/enter.mp3", PA_INTSPKR|PA_CHECKNM|enterInterruptsMusic|PA_ALLOWSD);
-        } else if(invalidEntry) {
-            play_file("/baddate.mp3", PA_INTSPKR|PA_CHECKNM|enterInterruptsMusic|PA_ALLOWSD);
+        } else if(validEntry == 2) {
             enterDelay = BADDATE_DELAY;
             specDisp = 0;
-            if(!enterInterruptsMusic && mpActive) {
+            if((!enterInterruptsMusic && mpActive) || isUISignalPlaying()) {
                 dt_showTextDirect("ERROR", CDT_CLEAR);
                 specDisp = 10;
+            } else {
+                play_file("/baddate.mp3", PA_INTSPKR|PA_CHECKNM|PA_INTRMUS|PA_ALLOWSD);
             }
         }
 
         // Prepare for next input
-        if(!inputInjected) {
+        if(!(eef & EEF_InputInjected)) {
             dateIndex = 0;
             keyBuffer[0] = 0;
         }
-        inputInjected = false;
+
+        eef &= ~EEF_InputInjected;
         
     }
 
     // Turn everything back on after entering date
     // (happens in later iteration of loop)
 
-    if(enterWasPressed && (millis() - timeNow > enterDelay)) {
+    if(enterTimerNow && (millis() - enterTimerNow > enterDelay)) {
 
         switch(specDisp) {
         case 0:
@@ -1695,9 +1570,11 @@ void keypad_loop()
         case 5:
         case 10:
         case 20:
+        case 30:
             specDisp++;
             digitalWrite(WHITE_LED_PIN, LOW);
-            timeNow = millis();
+            enterTimerNow = millisNonZero();
+            enterDelay = SPEC_DELAY;
             switch(specDisp) {
             case 2:
                 destinationTime.onCond();
@@ -1708,10 +1585,13 @@ void keypad_loop()
                 dt_showTextDirect(spTxt);
                 enterDelay = EE4_DELAY2;
                 break;
+            case 31:
+                displayTmrString();
+                enterDelay = TMR_DELAY;
+                // Fall through
             default:
                 destinationTime.resetBrightness(); 
-                destinationTime.on();
-                enterDelay = SPEC_DELAY;
+                dt_on();
             }
             break;
         case 2:
@@ -1719,7 +1599,7 @@ void keypad_loop()
             prepareSpecText(spTxtS2, spTxt, sizeof(spTxtS2));            
             dt_showTextDirect(spTxt);
             play_file("/ee1.mp3", PA_LINEOUT|PA_CHECKNM|PA_INTRMUS);
-            timeNow = millis();
+            enterTimerNow = millisNonZero();
             enterDelay = EE1_DELAY3;
             break;
         case 6:
@@ -1733,19 +1613,20 @@ void keypad_loop()
             }
             specDisp++;
             dt_showTextDirect(spTxt);
-            timeNow = millis();
+            enterTimerNow = millisNonZero();
             break;
         case 21:
         case 22:
-            dt_showTextDirect(specDisp == 21 ? btxt : ctxt);
+            dt_showTextDirect(specDisp == 21 ? mp3Track : mp3Artist);
             specDisp++;
-            timeNow = millis();
+            enterTimerNow = millisNonZero();
             enterDelay = SPEC_DELAY;
             break;
         case 3:
         case 8:
         case 11:
         case 23:
+        case 31:
             specDisp = 0;
             break;
         default:
@@ -1757,8 +1638,13 @@ void keypad_loop()
             #ifdef TC_HAVEMQTT
             // We overwrite dest time display here, so restart 
             // MQTT message afterwards.
-            if(mqttDisp) {
-                mqttOldDisp = mqttIdx = 0;
+            if(mqttDisp & MQ_DISP_D) {
+                mqttOldDisp &= ~MQ_DISP_D;
+                mqttIdx[0] = 0;
+            }
+            if((mqttDisp & MQ_DISP_L) && needDepTime) {
+                mqttOldDisp &= ~MQ_DISP_L;
+                mqttIdx[2] = 0;
             }
             #endif
 
@@ -1791,18 +1677,18 @@ void keypad_loop()
             } else {
             #endif
                 #ifdef TC_HAVETEMP
-                if(isRcMode() && (!isWcMode() || !WcHaveTZ1 || needDepTime)) {
+                if(isRcMode() && (!isWcMode() || (!(wcf & WCF_HaveTZ1)) || needDepTime)) {
 
                     #ifndef TC_NO_MONTH_ANIM // -----------------------------------
                     for(bool i : { true, false }) {
-                        if(!isWcMode() || !WcHaveTZ1) {
-                            destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit, i);
+                        if(!isWcMode() || (!(wcf & WCF_HaveTZ1))) {
+                            destinationTime.showTempDirect(tempSens.readLastTemp(), i);
                         } else {
                             destinationTime.showAnimate(i);
                         }
                         if(needDepTime) {
-                            if(isWcMode() && WcHaveTZ1) {
-                                departedTime.showTempDirect(tempSens.readLastTemp(), tempUnit, i);
+                            if(isWcMode() && (wcf & WCF_HaveTZ1)) {
+                                departedTime.showTempDirect(tempSens.readLastTemp(), i);
                             } else if(!isWcMode() && tempSens.haveHum()) {
                                 departedTime.showHumDirect(tempSens.readHum(), i);
                             } else {
@@ -1812,14 +1698,14 @@ void keypad_loop()
                         if(i) mydelay(80);
                     }
                     #else // TC_NO_MONTH_ANIM -------------------------------------
-                    if(!isWcMode() || !WcHaveTZ1) {
-                        destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit, false);
+                    if(!isWcMode() || (!(wcf & WCF_HaveTZ1))) {
+                        destinationTime.showTempDirect(tempSens.readLastTemp(), false);
                     } else {
                         destinationTime.show();
                     }
                     if(needDepTime) {
-                        if(isWcMode() && WcHaveTZ1) {
-                            departedTime.showTempDirect(tempSens.readLastTemp(), tempUnit, false);
+                        if(isWcMode() && (wcf & WCF_HaveTZ1)) {
+                            departedTime.showTempDirect(tempSens.readLastTemp(), false);
                         } else if(!isWcMode() && tempSens.haveHum()) {
                             departedTime.showHumDirect(tempSens.readHum(), false);
                         } else {
@@ -1894,7 +1780,7 @@ void keypad_loop()
 
 void cancelEnterAnim(bool reenableDT)
 {
-    if(enterWasPressed) {
+    if(enterTimerNow) {
 
         if(reenableDT) {
             #ifdef TC_HAVEGPS
@@ -1906,8 +1792,8 @@ void cancelEnterAnim(bool reenableDT)
             } else
             #endif
             #ifdef TC_HAVETEMP
-            if(isRcMode() && (!isWcMode() || !WcHaveTZ1)) {
-                destinationTime.showTempDirect(tempSens.readLastTemp(), tempUnit);
+            if(isRcMode() && (!isWcMode() || (!(wcf & WCF_HaveTZ1)))) {
+                destinationTime.showTempDirect(tempSens.readLastTemp());
             } else
             #endif
             if(isMiniMode())
@@ -1923,8 +1809,8 @@ void cancelEnterAnim(bool reenableDT)
                 #endif
                 #ifdef TC_HAVETEMP
                 if(isRcMode()) {
-                    if(isWcMode() && WcHaveTZ1) {
-                        departedTime.showTempDirect(tempSens.readLastTemp(), tempUnit);
+                    if(isWcMode() && (wcf & WCF_HaveTZ1)) {
+                        departedTime.showTempDirect(tempSens.readLastTemp());
                     } else if(!isWcMode() && tempSens.haveHum()) {
                         departedTime.showHumDirect(tempSens.readHum());
                     } else {
@@ -1953,23 +1839,39 @@ void cancelEnterAnim(bool reenableDT)
 
 static void resetEnterAnim()
 {
-    enterWasPressed = false;
+    enterTimerNow = 0;
+    
     digitalWrite(WHITE_LED_PIN, LOW);
 
     // Reset TZ-Name-Animation
     destShowAlt = depShowAlt = 0;
 
-    needDepTime = false;
+    needDepTime = 0;
 }
 
 void cancelETTAnim()
 {
-    ettDelayed = false;
+    ettNow = 0;
+}
+
+static void enterPressedPrepare()
+{        
+    cancelETTAnim();
+
+    // Turn on white LED
+    digitalWrite(WHITE_LED_PIN, HIGH);
+
+    // Turn off destination time
+    dt_off();
+
+    enterTimerNow = millisNonZero();
+
+    enterDelay = ENTER_DELAY;
 }
 
 bool keypadIsIdle()
 {
-    return (!lastKeyPressed || (millis() - lastKeyPressed >= 2*60*1000));
+    return (!lastKeyPressed);
 }
 
 static void resetDisplayMode(bool setDep)
@@ -1982,13 +1884,13 @@ static void resetDisplayMode(bool setDep)
 
     if(isMiniMode()) {
         enableMiniMode(false);
-        needDepTime = true;
+        needDepTime = 1;
     }
 
     #ifdef TC_HAVEGPS
     if(isNavMode()) {
         enableNavMode(false);
-        needDepTime = true;
+        needDepTime = 1;
     }
     #endif
 
@@ -2000,11 +1902,11 @@ static void resetDisplayMode(bool setDep)
         // If setting the red display, disable RC mode, and
         // reset yellow display if used for RC or RC+WC mode.
         #ifdef TC_HAVETEMP
-        if(rcUsesLT) needDepTime = true;
+        if(rcUsesLT) needDepTime = 1;
         enableRcMode(false);
         #endif
 
-        if(isWcMode() && WcHaveTZ1) {
+        if(isWcMode() && (wcf & WCF_HaveTZ1)) {
             // If WC mode is enabled and we have a TZ for red display,
             // we need to disable WC mode in order to keep the new dest
             // time on display. When disabling WC mode we need to reset
@@ -2014,18 +1916,18 @@ static void resetDisplayMode(bool setDep)
             // time would remain but become stale, which is confusing.
             // If there is no TZ for red display, no need to disable WC
             // mode at this point.
-            if(WcHaveTZ2) {
+            if(wcf & WCF_HaveTZ2) {
                 // Restore backed up time
                 restoreLastTime();
-                needDepTime = true;
+                needDepTime = 1;
             }
             enableWcMode(false);
         }
         
     } else {
 
-        // Since the caller explicitly wants to reset the yellow
-        // display, it needs to set needDepTime to true.
+        // If the caller explicitly wants to reset the yellow
+        // display, he needs to set needDepTime to true beforehand.
       
         // If setting the yellow display, check if it used by RC
         // or RC+WC mode, and only disable either one if yes.
@@ -2033,9 +1935,9 @@ static void resetDisplayMode(bool setDep)
         if(rcUsesLT) enableRcMode(false);
         #endif
 
-        if(isWcMode() && WcHaveTZ2) {
+        if(isWcMode() && (wcf & WCF_HaveTZ2)) {
             // As above but vice versa.
-            if(WcHaveTZ1) restoreDestTime();
+            if(wcf & WCF_HaveTZ1) restoreDestTime();
             enableWcMode(false);
         }
         
@@ -2050,13 +1952,41 @@ static void setupWCMode()
         setDatesTimesWC(dtu);
     } else {
         // Restore backed up times
-        if(WcHaveTZ1) restoreDestTime();
-        if(WcHaveTZ2) restoreLastTime();
+        if(wcf & WCF_HaveTZ1) restoreDestTime();
+        if(wcf & WCF_HaveTZ2) restoreLastTime();
     }
 }
 
-static void buildRemString(char *buf)
+static void displayTmrOff()
 {
+    #ifdef IS_ACAR_DISPLAY
+    dt_showTextDirect("TIMER    OFF");
+    #else
+    dt_showTextDirect("TIMER     OFF");
+    #endif
+    specDisp = 10;
+}
+
+void displayTmrString()
+{
+    char atxt[16];
+    int mins = 0, secs = 0;
+    unsigned long el = millis() - ctDownNow;
+    if(ctDown > el) {
+        unsigned long res = ((ctDown - el + 999U) / 1000);
+        mins = res / 60;
+        secs = res - (mins * 60);
+    }
+    #ifdef IS_ACAR_DISPLAY
+    sprintf(atxt, "TIMER   %02d%02d", mins, secs);
+    #else
+    sprintf(atxt, "TIMER    %02d%02d", mins, secs);
+    #endif
+    dt_showTextDirect(atxt, CDT_CLEAR|CDT_COLON);
+}
+
+static void displayRemString(char *buf)
+{   
     if(remMonth) {
         #ifdef IS_ACAR_DISPLAY
         sprintf(buf, "%02d%02d    %02d%02d", remMonth, remDay, remHour, remMin);
@@ -2071,61 +2001,46 @@ static void buildRemString(char *buf)
         sprintf(buf, "   %02d    %02d%02d", remDay, remHour, remMin);
         #endif
     }
+    dt_showTextDirect(buf, CDT_CLEAR|CDT_COLON);
+    specDisp = 10;
 }
 
-static void buildRemOffString(char *buf)
+static void displayRemOffString()
 {
     #ifdef IS_ACAR_DISPLAY
-    strcpy(buf, "REMINDER OFF");
+    dt_showTextDirect("REMINDER OFF", CDT_CLEAR);
     #else
-    strcpy(buf, "REMINDER  OFF");
+    dt_showTextDirect("REMINDER  OFF", CDT_CLEAR);
     #endif
+    specDisp = 10;
 }
 
-static void buildStalePTStatus(char *buf)
+static void displayStalePTStatus()
 {
     #ifdef IS_ACAR_DISPLAY
-    sprintf(buf, "EXH MODE %s", stalePresent ? " ON" : "OFF");
+    dt_showTextDirect(stalePresent ? "EXH MODE  ON" : "EXH MODE OFF");
     #else
-    sprintf(buf, "EXH MODE  %s", stalePresent ? " ON" : "OFF");
+    dt_showTextDirect(stalePresent ? "EXH MODE   ON" : "EXH MODE  OFF");
     #endif
+    specDisp = 10;
 }
 
 static void displayAlarmOff(bool snooze)
 {
     dt_showTextDirect(snooze ? snoozeString : "ALARM STOP", CDT_CLEAR);
+    specDisp = 10;
 }
 
-void prepareReboot()
+static void doAnddisplayMPNext(int num, char *buf)
 {
-    mp_stop();
-    stopAudio();
-    ettoPulseEnd();
-    allOff();
-    flushDelayedSave();
-    if(useSpeedoDisplay) speedo.off();
-    destinationTime.resetBrightness();
-    dt_showTextDirect("REBOOTING");
-    destinationTime.on();
-    delay(ENTER_DELAY);
-    digitalWrite(WHITE_LED_PIN, LOW);
-    delay(500);
-    unmount_fs();
-    delay(100);
-}
-
-// Wait for audio to finish.
-// This is only used before stuff that blocks.
-// ATM only used before a (blocking) WiFi reconnect.
-static void waitAudioDone()
-{
-    unsigned long startNow = millis();
-
-    while(!checkAudioDone() && (millis() - startNow < 3000)) {
-        mydelay(50);
-        wifi_loop();
-        audio_loop(); // audio after wifi is always a good idea
-    }
+    num = mp_gotonum(num, mpActive);
+    #ifdef IS_ACAR_DISPLAY
+    sprintf(buf, "NEXT     %03d", num);
+    #else
+    sprintf(buf, "NEXT      %03d", num);
+    #endif
+    dt_showTextDirect(buf);
+    specDisp = 10;
 }
 
 /*
@@ -2192,12 +2107,17 @@ void startBeepTimer()
  * Night mode
  */
 
-static void setNightMode(bool nm)
+void allNightmode(bool nm)
 {
     destinationTime.setNightMode(nm);
     presentTime.setNightMode(nm);
     departedTime.setNightMode(nm);
-    if(useSpeedoDisplay) speedo.setNightMode(nm);
+}
+
+static void setNightMode(bool nm)
+{
+    allNightmode(nm);
+    if(sgf & SGF_USpeedoDisp) speedo.setNightMode(nm);
     bttfn_notify_info();
 }
 
@@ -2231,6 +2151,47 @@ int toggleNightMode()
 }
 
 /*
+ * Alarm
+ *
+ */
+
+void alarmOff()
+{
+    alarmOnOff = false;
+    cancelSnooze();
+    saveAlarm();
+}
+
+int alarmOn()
+{
+    cancelSnooze();
+    if(alarmHour <= 23 && alarmMinute <= 59) {
+        alarmOnOff = true;
+        saveAlarm();
+        return 1;
+    }
+    
+    return 0;
+}
+
+static int toggleAlarm()
+{
+    if(alarmOnOff) {
+        alarmOff();
+        return 0;
+    }
+    return alarmOn() ? 1 : -1;
+}
+
+static int getAlarm()
+{
+    if(alarmHour <= 23 && alarmMinute <= 59) {
+        return (alarmHour << 8) | alarmMinute;
+    }
+    return -1;
+}
+
+/*
  * LEDs (TCD control board 1.3+)
  */
  
@@ -2244,4 +2205,93 @@ void leds_on()
 void leds_off()
 {
     digitalWrite(LEDS_PIN, LOW);
+}
+
+/*
+ * Other helpers
+ *
+ */
+
+void doCopyAudioFiles()
+{
+    bool delIDfile = false;
+
+    if((!copy_audio_files(delIDfile)) && !FlashROMode) {
+        // If copy fails because of a write error, re-format flash FS
+        lt_showTextDirect("FORMATTING");
+        reInstallFlashFS();
+        copy_audio_files(delIDfile);  // Retry copy
+    }
+
+    if(delIDfile) {
+        delete_ID_file();
+    } else {
+        delay(3000);
+    }
+    
+    delay(2000);
+
+    prepareReboot();
+    delay(1000);
+    esp_restart();
+}
+
+void start_file_copy()
+{
+    mp_stop();
+    stopAudio();
+  
+    dt_showTextDirect("INSTALLING");
+    pt_showTextDirect("SOUND PACK");
+    lt_showTextDirect("PLEASE");
+    allOn();
+    allresetBrightness();
+    
+    fcprog = false;
+    fcstart = millis();
+}
+
+void file_copy_progress()
+{
+    if(millis() - fcstart >= 1000) {
+        lt_showTextDirect(fcprog ? "PLEASE" : "WAIT");
+        fcprog = !fcprog;
+        fcstart = millis();
+    }
+}
+
+void file_copy_done(int err)
+{
+    lt_showTextDirect(err ? "ERROR" : "DONE");
+}
+
+
+void prepareReboot()
+{
+    mp_stop();
+    stopAudio();
+    ettoPulseEnd();
+    allOff();
+    flushDelayedSave();
+    if(sgf & SGF_USpeedoDisp) speedo.off();
+    destinationTime.resetBrightness();
+    dt_showTextDirect("REBOOTING");
+    dt_on();
+    digitalWrite(WHITE_LED_PIN, LOW);
+    unmount_fs();
+    delay(ENTER_DELAY + 600);
+}
+
+// Wait for audio to finish.
+// This is only used before stuff that blocks.
+// ATM only used before a (blocking) WiFi reconnect.
+static void waitAudioDone()
+{
+    unsigned long startNow = millis();
+
+    while(!checkAudioDone() && (millis() - startNow < 3000)) {
+        mydelay(50);
+        wifi_loop();
+        audio_loop(); // audio after wifi is always a good idea
+    }
 }

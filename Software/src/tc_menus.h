@@ -6,12 +6,12 @@
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
- * Keypad Menu handling
+ * Keypad Menu
  *
- * Based on code by John Monaco, Marmoset Electronics
+ * Based on ideas by John Monaco, Marmoset Electronics
  * https://www.marmosetelectronics.com/time-circuits-clock
  * -------------------------------------------------------------------
- * License: MIT NON-AI
+ * License: Modified MIT NON-AI
  * 
  * Permission is hereby granted, free of charge, to any person 
  * obtaining a copy of this software and associated documentation 
@@ -23,6 +23,9 @@
  *
  * The above copyright notice and this permission notice shall be 
  * included in all copies or substantial portions of the Software.
+ * 
+ * Links inside the Software pointing to the original source must not 
+ * be changed or removed.
  *
  * In addition, the following restrictions apply:
  * 
@@ -55,32 +58,8 @@
 #ifndef _TC_MENUS_H
 #define _TC_MENUS_H
 
-extern int  keypadMode;
-extern bool isYearUpdate;
+void        enter_menu();
 
-extern uint8_t        autoInterval;
-extern const uint8_t  autoTimeIntervals[6];
-
-extern bool    alarmOnOff;
-extern uint8_t alarmHour;
-extern uint8_t alarmMinute;
-extern uint8_t alarmWeekday;
-
-extern uint8_t remMonth;
-extern uint8_t remDay;
-extern uint8_t remHour;
-extern uint8_t remMin;
-
-void enter_menu();
-
-void alarmOff();
-bool alarmOn();
-int  toggleAlarm();
-int  getAlarm();
-const char *getAlWD(int wd);
-
-void start_file_copy();
-void file_copy_progress();
-void file_copy_done(int err);
+const char  *getAlWD(unsigned int wd, bool menuMode = false);
 
 #endif
