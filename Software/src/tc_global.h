@@ -123,7 +123,7 @@
  ***                           Customization                           ***
  *************************************************************************/
 
-//#define CS_EDITION    // Compile CircuitSetup edition
+#define CS_EDITION    // Compile CircuitSetup edition
 
 //#define SERVOSPEEDO
 
