@@ -63,8 +63,10 @@
 #include "tcddisplay.h"
 #include "tc_font.h"
 
+#define STRLEN(x) (sizeof(x)-1)
+
 #define CD_MONTH_POS  0
-#ifdef IS_ACAR_DISPLAY      // A-Car (2-digit-month) ---------------------
+#ifdef ACAR_DISPLAY         // A-Car (2-digit-month) ---------------------
 #define CD_MONTH_SIZE 1     //      number of words
 #define CD_MONTH_DIGS 2     //      number of digits/letters
 #else                       // All others (3-char month) -----------------
@@ -81,12 +83,12 @@
 
 extern bool     alarmOnOff;
 extern bool     snoozeRunning();
-#ifdef TC_HAVEGPS
+#ifdef HAVE_GPS
 extern bool     gpsHaveFix();
 extern int      gpsGetDM();
 #endif
-#ifdef TC_HAVETEMP
-extern bool     tempInCelsius();
+#ifdef HAVE_TEMP
+extern char     tempUnitChar();
 #endif
 
 extern uint64_t timeDifference;
@@ -100,10 +102,10 @@ extern void        getClockDataP(uint64_t& timeDifference, bool &timeDiffUp);
 extern dateStruct *getClockDataDL(unsigned int did, int slot = 0);
 extern void        updateClockDataP();
 extern bool        saveClockDataP(bool force);
-extern void        updateClockDataDL(unsigned int did, int slot, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
-extern bool        saveClockDataDL(bool force, unsigned int did, uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
+extern void        updateClockDataDL(unsigned int did, int slot, dateStruct *givenDate);
+extern bool        saveClockDataDL(bool force, unsigned int did, dateStruct *givenDate);
 
-#ifndef IS_ACAR_DISPLAY
+#ifndef ACAR_DISPLAY
 static const char months[13][4] = {
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
     "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
@@ -119,15 +121,49 @@ static const uint8_t idxtbl[] = {
     CD_HOUR_POS, CD_HOUR_POS, 
     CD_MIN_POS, CD_MIN_POS
 };
+
+static const char *nullStr = "";
 #endif
 
 static const char weekdays[7][4] = {
     "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"
 };
 
-static const char *nullStr = "";
+#ifdef HAVE_TEMP
+static const char *nilTH    = "  ----";
+#ifdef ACAR_DISPLAY
 static const char tempStr[] = "TEMP";
 static const char humStr[]  = "HUMIDITY";
+#else
+static const char tempStr[] = "TEMP ";
+static const char humStr[]  = "HUMIDITY ";
+#endif
+
+static void makeTemperature(char *buf, float temp)
+{
+    char unit[3];
+    unit[0] = '~';
+    unit[1] = tempUnitChar();
+    unit[2] = 0;
+    
+    if(isnan(temp)) {
+        strcpy(buf, nilTH);
+    } else {
+        sprintf(buf, "%4d%02d", (int)temp, abs((int)(temp * 100.0f) - ((int)temp * 100)));
+    }
+    strcat(buf, unit);
+}
+
+static void makeHumidity(char *buf, int hum)
+{    
+    if(hum < 0) {
+        strcpy(buf, nilTH + 4);
+    } else {
+        sprintf(buf, "%2d", hum);
+    }
+    strcat(buf, "\x7f\x80");
+}
+#endif
 
 /*
  * tcdDisplay class
@@ -278,13 +314,8 @@ void tcdDisplay::getToParms(int& year, int& month, int& day, int& hour, int& min
 
 void tcdDisplay::getToStruct(dateStruct *s)
 {
-    s->year = getYear();
-    s->month = getMonth();
-    s->day = getDay();
-    s->hour = getHour();
-    s->minute = getMinute();
+    memcpy((void *)s, (void *)&_cd, sizeof(_cd));
 }
-
 
 // Show data in display --------------------------------------------------------
 
@@ -296,7 +327,7 @@ void tcdDisplay::show()
 }
 
 // Show all but month
-#ifndef TC_NO_MONTH_ANIM
+#ifndef NO_MONTH_ANIM
 void tcdDisplay::showAnimate(bool firstStage)
 {
     if(firstStage) showInt(true);
@@ -304,7 +335,7 @@ void tcdDisplay::showAnimate(bool firstStage)
 }
 #endif
 
-#ifndef IS_ACAR_DISPLAY
+#ifndef ACAR_DISPLAY
 bool tcdDisplay::showAnimate3(int mystep)
 {
     uint16_t buf;
@@ -337,7 +368,7 @@ bool tcdDisplay::showAnimate3(int mystep)
         break;
     case 7:
         if(!_mode24) {
-            (_hour < 12) ? AM() : PM();
+            (_cd.hour < 12) ? AM() : PM();
         }
         // fall through
     default:
@@ -346,7 +377,7 @@ bool tcdDisplay::showAnimate3(int mystep)
 
     return true;
 }
-#endif // IS_ACAR_DISPLAY
+#endif // ACAR_DISPLAY
 
 void tcdDisplay::showAlt()
 {
@@ -367,13 +398,12 @@ bool tcdDisplay::setAltText(const char *text)
 
 void tcdDisplay::setMonth(int monthNum)
 {
-    if(monthNum < 1 || monthNum > 12) {
-        monthNum = (monthNum > 12) ? 12 : 1;
-    }
+    if(monthNum < 1)       monthNum = 1;
+    else if(monthNum > 12) monthNum = 12;
 
-    _month = monthNum;
+    _cd.month = monthNum;
 
-#ifdef IS_ACAR_DISPLAY
+#ifdef ACAR_DISPLAY
     _displayBuffer[CD_MONTH_POS] = makeNum(monthNum);
 #else
     monthNum--;
@@ -385,16 +415,15 @@ void tcdDisplay::setMonth(int monthNum)
 
 void tcdDisplay::setDay(int dayNum)
 {
-    int maxDay = daysInMonth(_month, _year);
+    int maxDay = daysInMonth(_cd.month, _cd.year);
 
     // It is essential that setDay is called AFTER year
     // and month have been set!
 
-    if(dayNum < 1 || dayNum > maxDay) {
-        dayNum = (dayNum < 1) ? 1 : maxDay;
-    }
+    if(dayNum < 1)           dayNum = 1;
+    else if(dayNum > maxDay) dayNum = maxDay;
 
-    _day = dayNum;
+    _cd.day = dayNum;
 
     _displayBuffer[CD_DAY_POS] = makeNum(dayNum);
 }
@@ -403,12 +432,12 @@ void tcdDisplay::setYear(uint16_t yearNum)
 {
     uint16_t seg = 0;
 
-    #ifdef TC_HAVEGPS
+    #ifdef HAVE_GPS
     if((_did == DISP_PRES) && gpsHaveFix())
         seg = 0x8000;
     #endif
 
-    _year = yearNum;
+    _cd.year = yearNum;
 
     while(yearNum >= 10000)
         yearNum -= 10000;
@@ -422,7 +451,7 @@ void tcdDisplay::setHour(uint16_t hourNum)
     if(hourNum > 23)
         hourNum = 23;
 
-    _hour = hourNum;
+    _cd.hour = hourNum;
 
     if(!_mode24) {
         if(hourNum == 0) {
@@ -445,12 +474,11 @@ void tcdDisplay::setMinute(int minNum)
         if(snoozeRunning()) seg = _beat ? 0x8000 : 0x0000;
         else if(alarmOnOff) seg = 0x8000;
     }
-    
-    if(minNum < 0 || minNum > 59) {
-        minNum = (minNum > 59) ? 59 : 0;
-    }
 
-    _minute = minNum;
+    if(minNum < 0)       minNum = 0;
+    else if(minNum > 59) minNum = 59;
+
+    _cd.minute = minNum;
 
     _displayBuffer[CD_MIN_POS] = makeNum(minNum) | seg;
 }
@@ -482,7 +510,7 @@ void tcdDisplay::setWeekDay(int wd)
 // Query data ------------------------------------------------------------------
 
 
-#ifndef IS_ACAR_DISPLAY
+#ifndef ACAR_DISPLAY
 const char * tcdDisplay::getMonthString(uint8_t mon)
 {
     if(mon >= 1 && mon <= 12)
@@ -491,16 +519,6 @@ const char * tcdDisplay::getMonthString(uint8_t mon)
         return nullStr;
 }
 #endif
-
-void tcdDisplay::getCompressed(uint8_t *buf, uint8_t& over)
-{
-    buf[0] = (_year << 2) | (_month >> 2);
-    buf[1] = (_year >> 6);
-    buf[2] = (_month << 6) | (_day << 1) | (_hour >> 4);
-    buf[3] = (_hour << 4) | (_minute >> 2);
-    over |= _minute & 0x03;
-}
-
 
 // Put data directly on display (bypass buffer) --------------------------------
 
@@ -512,7 +530,7 @@ void tcdDisplay::showMonthDirect(int monthNum, uint16_t dflags)
     if(monthNum > 12)
         monthNum = 12;
 
-#ifdef IS_ACAR_DISPLAY
+#ifdef ACAR_DISPLAY
     db[CD_MONTH_POS] = makeNum(monthNum, dflags);
 #else
     if(monthNum > 0) {
@@ -605,11 +623,11 @@ void tcdDisplay::showTextDirect(const char *text, uint16_t flags)
 void tcdDisplay::showHalfIPDirect(int a, int b, uint16_t flags)
 {
     char buf[16];
-    #ifdef IS_ACAR_DISPLAY
-    const char *fmt1 = "%3d  %3d";
-    const char *fmt2 = "%2d   %3d";
+    #ifdef ACAR_DISPLAY
+    static const char *fmt1 = "%3d  %3d";
+    static const char *fmt2 = "%2d   %3d";
     #else
-    const char *fmt = "%3d   %3d";
+    static const char *fmt = "%3d   %3d";
     #endif
 
     if(a > 255) a = 255;    // Avoid buf overflow if numbers too high
@@ -617,7 +635,7 @@ void tcdDisplay::showHalfIPDirect(int a, int b, uint16_t flags)
     if(b > 255) b = 255;
     else if(b < 0) b = 0;
 
-    #ifdef IS_ACAR_DISPLAY
+    #ifdef ACAR_DISPLAY
     sprintf(buf, (a >= 100) ? fmt1 : fmt2, a, b);
     #else
     sprintf(buf, fmt, a, b);
@@ -638,31 +656,21 @@ void tcdDisplay::showSettingValDirect(const char* setting, int8_t val, uint16_t 
          directCol(field, 0);
 }
 
-#ifdef TC_HAVETEMP
+#ifdef HAVE_TEMP
 void tcdDisplay::showTempDirect(float temp, bool animate)
 {
-    char buf[32];
-    const char *ttem = animate ? nullStr : tempStr;
-    int t2;
-    char u = tempInCelsius() ? 'C' : 'F';
-
     if(!handleNM())
         return;
+        
+    char buf[16];
 
-    if(isnan(temp)) {
-        #ifdef IS_ACAR_DISPLAY
-        sprintf(buf, "%4.4s  ----~%c", ttem, u);
-        #else
-        sprintf(buf, "%4.4s   ----~%c", ttem, u);
-        #endif
+    if(animate) {
+        memset(buf, 0x20, STRLEN(tempStr));
     } else {
-        t2 = abs((int)(temp * 100.0f) - ((int)temp * 100));
-        #ifdef IS_ACAR_DISPLAY
-        sprintf(buf, "%4.4s%4d%02d~%c", ttem, (int)temp, t2, u);
-        #else
-        sprintf(buf, "%4.4s %4d%02d~%c", ttem, (int)temp, t2, u);
-        #endif
+        strcpy(buf, tempStr);
     }
+
+    makeTemperature(buf + STRLEN(tempStr), temp);
     
     showTextDirect(buf, CDT_CLEAR|CDT_YRDOT);
 
@@ -671,33 +679,52 @@ void tcdDisplay::showTempDirect(float temp, bool animate)
 
 void tcdDisplay::showHumDirect(int hum, bool animate)
 {
-    char buf[16];
-    const char *thum = animate ? nullStr : humStr;
-
     if(!handleNM())
         return;
+        
+    char buf[16];
 
-    if(hum < 0) {
-        #ifdef IS_ACAR_DISPLAY
-        sprintf(buf, "%8.8s--\x7f\x80", thum);
-        #else
-        sprintf(buf, "%8.8s --\x7f\x80", thum);
-        #endif
+    if(animate) {
+        memset(buf, 0x20, STRLEN(humStr));
     } else {
-        #ifdef IS_ACAR_DISPLAY
-        sprintf(buf, "%8.8s%2d\x7f\x80", thum, hum);
-        #else
-        sprintf(buf, "%8.8s %2d\x7f\x80", thum, hum);
-        #endif
+        strcpy(buf, humStr);
     }
+
+    makeHumidity(buf + STRLEN(humStr), hum);
 
     showTextDirect(buf);
 
     showIntTail(animate);
 }
+
+void tcdDisplay::showTempHumDirect(float temp, int hum, bool animate)
+{
+    if(animate) {
+        showTempDirect(temp, animate);
+        return;
+    }
+
+    if(!handleNM())
+        return;
+
+    char buf[16];
+    char *bufp = buf;
+     
+    #ifndef ACAR_DISPLAY
+    *bufp++ = ' ';
+    #endif
+
+    makeHumidity(bufp, hum);
+    
+    makeTemperature(bufp + 4, temp);
+
+    showTextDirect(buf, CDT_CLEAR|CDT_YRDOT);
+
+    showIntTail(animate);
+}
 #endif
 
-#ifdef TC_HAVEGPS
+#ifdef HAVE_GPS
 void tcdDisplay::showNavDirect(char *msg, bool animate)
 {
     char buf[16];
@@ -709,7 +736,7 @@ void tcdDisplay::showNavDirect(char *msg, bool animate)
 
     if(animate) {
         strcpy(buf, msg);
-        #ifdef IS_ACAR_DISPLAY
+        #ifdef ACAR_DISPLAY
         buf[0] = buf[1] = ' ';
         #else
         buf[0] = buf[1] = buf[2] = ' ';
@@ -789,7 +816,7 @@ bool tcdDisplay::load(int slot)
 void tcdDisplay::copyToUserTimes()
 {
     if(_did != DISP_PRES) {
-        updateClockDataDL(_did, 1, _year, _month, _day, _hour, _minute);
+        updateClockDataDL(_did, 1, &_cd);
     }
 }
 
@@ -809,7 +836,7 @@ void tcdDisplay::savePending()
         return updateClockDataP();
     }
     
-    updateClockDataDL(_did, 0, _year, _month, _day, _hour, _minute);
+    updateClockDataDL(_did, 0, &_cd);
 }
 
 // Returns true if FS was accessed
@@ -830,7 +857,7 @@ bool tcdDisplay::save(bool force)
         return saveClockDataP(force);
     }
 
-    return saveClockDataDL(force, _did, _year, _month, _day, _hour, _minute);
+    return saveClockDataDL(force, _did, &_cd);
 }
 
 // Private functions ###########################################################
@@ -842,7 +869,7 @@ bool tcdDisplay::save(bool force)
 // Returns bit pattern for provided character for display on 7 segment display
 uint8_t tcdDisplay::getLED7AlphaChar(uint8_t value)
 {
-    if(value < 32 || value >= 127 + 4)
+    if(value < 32 || value >= 127 + 10)
         return 0;
     
     // For text, use common "6" pattern if requested
@@ -852,7 +879,7 @@ uint8_t tcdDisplay::getLED7AlphaChar(uint8_t value)
 }
 
 // Returns bit pattern for provided character for display on 14 segment display
-#ifndef IS_ACAR_DISPLAY
+#ifndef ACAR_DISPLAY
 uint16_t tcdDisplay::getLEDAlphaChar(uint8_t value)
 {
     if(value < 32 || value >= 127 + 4)
@@ -890,7 +917,7 @@ int tcdDisplay::textToSegments(uint16_t *segBuf, const char *text, uint16_t flag
 
     _corr6 = flags & CDT_CORR6;
 
-#ifdef IS_ACAR_DISPLAY
+#ifdef ACAR_DISPLAY
     while(text[idx] && pos < (CD_MONTH_POS+CD_MONTH_SIZE)) {
         temp = getLED7AlphaChar(text[idx++]);
         if(text[idx]) {
@@ -958,8 +985,8 @@ bool tcdDisplay::handleNM()
     return true;
 }
 
-#ifdef IS_ACAR_DISPLAY
-#ifndef TC_NO_MONTH_ANIM
+#ifdef ACAR_DISPLAY
+#ifndef NO_MONTH_ANIM
 void tcdDisplay::showAnimate2()
 {
     if(_nightmode && _NmOff)
@@ -968,7 +995,7 @@ void tcdDisplay::showAnimate2()
     directBuf(_displayBuffer);
 }
 #endif
-#else // IS_ACAR_DISPLAY
+#else // ACAR_DISPLAY
 void tcdDisplay::showAnimate2(int until)
 {
     if(_nightmode && _NmOff)
@@ -1005,7 +1032,7 @@ void tcdDisplay::showInt(bool animate, bool Alt)
     }
 
     if(!_mode24) {
-        (_hour < 12) ? AM() : PM();
+        (_cd.hour < 12) ? AM() : PM();
     } else {
         _displayBuffer[CD_AMPM_POS] &= 0x7F7F;
     }

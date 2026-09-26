@@ -78,7 +78,7 @@
 // i2c compatible as it has no slave address, and therefore cannot be part
 // of a i2c chain.
 //
-// The display's i2c slave address is 0x70 (defined in tc_time.h).
+// The display's i2c slave address is 0x70 (defined in tc_main.h).
 
 #define SP_NUM_TYPES 13  // Number of speedo display types supported (excl "none")
 
@@ -96,7 +96,6 @@ enum dispTypes : uint8_t {
     SP_ADAF1911_L,    // Like SP_ADAF_14x4L, but with only left-hand side tube soldered on
     SP_ADAF878L,      // Like SP_ADAF_7x4L, but only left 2 digits soldered on
     SP_BTTFN,         // BTTFN-connected speedo, or "blind-speedo-simulation"
-    SP_CIRCSETUP3,    // For future use: CircuitSetup speedo w/ complete 3rd digit, BTTF3-style (left digit covered, 00, no dot)
     SP_NONE = 99
 };
 
@@ -108,29 +107,28 @@ class speedDisplay {
 
         speedDisplay(uint8_t address);
         bool begin(int dispType, int sSpeedoPin = 0, int sTachopin = 0, int sSpeedoCorr = 0, int sTachoCorr = 0);
-        void validateSetup();
+        void finishSetup(bool rAligned);
+        void setupBrightness(uint8_t normLevel, uint8_t tempLevel);
         bool haveSpeedoDisplay();
-        #ifdef TC_HAVETEMP
+        #ifdef HAVE_TEMP
         bool supportsTemperature();
         #endif
         void on();
         void off();
         bool getOnOff() { return !!_onCache; }
 
-        uint8_t setBrightness(uint8_t level, bool isInitial = false);
-        uint8_t setBrightnessDirect(uint8_t level) ;
-        uint8_t getBrightness() { return _brightness; }
+        //uint8_t getBrightness() { return _brightness; }
 
         void setNightMode(bool mymode)  { _nightmode = mymode; }
         bool getNightMode()             { return _nightmode; }
 
         void show();
 
-        void setText(const char *text);
         void setSpeed(int speedNum);
-        #ifdef TC_HAVETEMP
+        #ifdef HAVE_TEMP
         void setTemperature(float temp);
         #endif
+
         #ifdef SERVOSPEEDO
         void setCalib(int calib);
         bool setSCorr(int corr);
@@ -152,7 +150,13 @@ class speedDisplay {
 
     private:
 
+        void setupSData(int dispType);
+
+        uint8_t setBrightness(uint8_t level) ;
+        
         void clearBuf();
+
+        void setText(const char *text);
 
         //void handleColon();
         uint16_t getLEDChar(uint8_t value);
@@ -195,10 +199,11 @@ class speedDisplay {
         unsigned long _posSpdNow = 0;
         int8_t        _lastPosSpd = 5;
 
-        uint8_t _brightness = 15;
-        uint8_t _origBrightness = 15;
+        uint8_t _currBrightness = 15;
+        uint8_t _normBrightness = 15;
+        uint8_t _tempBrightness = 15;
+        
         bool    _nightmode = false;
-        int     _oldnm = -1;
 
         uint8_t  _dispType;
         bool     _is7seg;           //      7- or 14-segment-display?

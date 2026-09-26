@@ -56,17 +56,22 @@
 #ifndef _TC_KEYPAD_H
 #define _TC_KEYPAD_H
 
+#ifdef HAVE_TEMP
+bool showRCDest(bool i);
+bool showRCDep(bool i);
+#endif
+
 void keypad_setup();
 bool scanKeypad();
 
 void resetKeypadState();
 void discardKeypadInput();
 
-#ifdef TC_HAVEMQTT
+#ifdef HAVE_MQTT
 bool injectInput(const char *src);
 #endif
 
-#ifdef TC_HAVE_REMOTE
+#ifdef HAVE_REMOTE
 void injectKeypadKey(char key, int kaction);
 #endif
 
@@ -96,25 +101,30 @@ void enterkeyScan();
 
 void displayTmrString();
 void s5(bool b);
+void s2(bool c);
 
 void doCopyAudioFiles();
 void start_file_copy();
-void file_copy_progress();
+void file_copy_progress(uint32_t ts, uint32_t tw);
 void file_copy_done(int err);
 
+void doUploadSpinner(int doStart);
+
 void prepareReboot();
+void orderlyReboot();
 
 extern bool p3anim;
 
 extern int  keypadMode;
 
 extern uint32_t eef;
-#define EEF_EnterPressed    0x0001
-#define EEF_EnterHeld       0x0002
-#define EEF_EttPressed      0x0010
-#define EEF_EttHeld         0x0020
-#define EEF_EttImmediate    0x0040  // Ignore configured ett delay (also, do lead on speedo-less time travel)
-#define EEF_InputInjected   0x0100
+#define EEF_EnterPressed        0x0001
+#define EEF_EnterHeld           0x0002
+#define EEF_EttPressed          0x0010
+#define EEF_EttHeld             0x0020
+#define EEF_EttImmediate        0x0040  // Ignore configured ett delay (also, do lead on speedo-less time travel)
+#define EEF_InputInjected       0x0100
+#define EEF_InjectionPostponed  0x0200
 
 extern char timeBuffer[];
 extern unsigned int timeBufferSize;

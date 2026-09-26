@@ -103,7 +103,9 @@ AudioOutputI2S::~AudioOutputI2S()
   /*
   #ifdef ESP32
     if (i2sOn) {
+      #ifdef HAVE_AUDIO_LOGGER
       audioLogger->printf("UNINSTALL I2S\n");
+      #endif
       i2s_driver_uninstall((i2s_port_t)portNo); //stop & destroy i2s driver
     }
   #elif defined(ESP8266)
@@ -232,10 +234,16 @@ bool AudioOutputI2S::begin(bool txDAC)
           .dma_buf_len = 64,
           .use_apll = use_apll // Use audio PLL
       };
+      #ifdef HAVE_AUDIO_LOGGER
       audioLogger->printf("+%d %p\n", portNo, &i2s_config_dac);
+      #endif
       if (i2s_driver_install((i2s_port_t)portNo, &i2s_config_dac, 0, NULL) != ESP_OK)
       {
-        audioLogger->println("ERROR: Unable to install I2S drives\n");
+        #ifdef HAVE_AUDIO_LOGGER
+        audioLogger->println("ERROR: Unable to install I2S driver\n");
+        #else
+        Serial.println("Unable to install I2S driver");
+        #endif
       }
       if (output_mode == INTERNAL_DAC || output_mode == INTERNAL_PDM)
       {
@@ -267,9 +275,11 @@ bool AudioOutputI2S::begin(bool txDAC)
       if (!i2s_rxtx_begin(false, true)) {
         return false;
       }
+      #ifdef HAVE_AUDIO_LOGGER
       if (!txDAC) {
         audioLogger->printf_P(PSTR("I2SNoDAC: esp8266 arduino core should be upgraded to avoid conflicts with SPI\n"));
       }
+      #endif
     #endif
     }
   #elif defined(ARDUINO_ARCH_RP2040)

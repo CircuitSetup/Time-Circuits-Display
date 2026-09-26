@@ -55,8 +55,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _TC_MENUS_H
-#define _TC_MENUS_H
+#ifndef _TC_KPMENU_H
+#define _TC_KPMENU_H
 
 void        enter_menu();
 

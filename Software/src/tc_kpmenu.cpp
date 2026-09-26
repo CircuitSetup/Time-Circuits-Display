@@ -69,23 +69,23 @@
  * case of multi-step menus (such as alarm or volume), 9 
  * cancels all changes in previous steps, too.
  * 
- * ***************  ***************  **************
- * **     1     **  **     2     **  **     3    **
- * **           **  **  UP or +  **  **          **
- * **           **  **           **  **          **
- * ***************  ***************  **************
+ * ***************  ***************  ***************
+ * **     1     **  **     2     **  **     3     **
+ * **           **  **  UP or +  **  **           **
+ * **           **  **           **  **           **
+ * ***************  ***************  ***************
  * 
- * ***************  ***************  **************
- * **     4     **  **     5     **  **     6    **
- * **           **  **  Select   **  **          **
- * **           **  **           **  **          **
- * ***************  ***************  **************
+ * ***************  ***************  ***************
+ * **     4     **  **     5     **  **     6     **
+ * **           **  **  Select   **  **           **
+ * **           **  **           **  **           **
+ * ***************  ***************  ***************
  * 
- * ***************  ***************  **************
- * **     7     **  **     8     **  **     9    **
- * **           **  ** DOWN or - **  **  Cancel/ **
- * **           **  **           **  **    Quit  **
- * ***************  ***************  **************
+ * ***************  ***************  ***************
+ * **     7     **  **     8     **  **     9     **
+ * **           **  ** DOWN or - **  **  Cancel/  **
+ * **           **  **           **  **    Quit   **
+ * ***************  ***************  ***************
  * 
  * When the menu expects numeric data to be entered, it displays "TYPE DIGITS". 
  * Data entry is then to be done by pressing the keypad's number keys, and this
@@ -220,12 +220,12 @@
 
 #include "tcddisplay.h"
 #include "tc_keypad.h"
-#include "tc_time.h"
+#include "tc_main.h"
 #include "tc_audio.h"
 #include "tc_settings.h"
 #include "tc_wifi.h"
 
-#include "tc_menus.h"
+#include "tc_kpmenu.h"
 
 #define MODE_ALRM 0
 #define MODE_VOL  1
@@ -266,13 +266,13 @@ static const char *StrCancel3 = "SAVED";
 static const char *alarmWDSel = "USER DAYS";
 static const char *alarmWDHelp = "1-7 FOR DAYS";
 
-#ifdef IS_ACAR_DISPLAY
+#ifdef ACAR_DISPLAY
 static const char *almFmt = "%3s     %02d%02d";
 #else
 static const char *almFmt = "%3s      %02d%02d";
 #endif
 static const char *alarmWD[10] = {
-      #ifdef IS_ACAR_DISPLAY
+      #ifdef ACAR_DISPLAY
       "MON-SUN", "MON-FRI", "SAT-SUN",
       #else
       "MON -SUN", "MON -FRI", "SAT -SUN",
@@ -287,7 +287,7 @@ static int  doSetMSfx();
 static int  doSetAlarm();
 static int  doSetAutoInterval();
 static int  doSetBrightness(tcdDisplay* displaySet, uint8_t& newbri);
-#if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+#if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
 static void doShowSensors();
 #endif
 static void doShowNetInfo();
@@ -407,7 +407,7 @@ static void menuShow(int number, tcdDisplay*& displayHelp)
         dt_showTextDirect("NETWORK");
         sw_sel(D_D);
         break;
-    #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+    #if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
     case MODE_SENS:
         dt_showTextDirect("SENSORS");
         sw_sel(D_D);
@@ -436,7 +436,7 @@ static void menuShow(int number, tcdDisplay*& displayHelp)
         }
         break;
     case MODE_CLI:
-        #ifdef IS_ACAR_DISPLAY
+        #ifdef ACAR_DISPLAY
         dt_showTextDirect("BTTFN");
         pt_showTextDirect("CLIENTS");
         sw_sel(D_P|D_D);
@@ -489,7 +489,7 @@ static int menuSelect(int& number, DateTime& dtu, DateTime& dtl, tcdDisplay*& di
                 else {
                     number++;
                     if(number == MODE_MSFX && !haveSD) number++;
-                    #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+                    #if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
                     if(number == MODE_SENS && (!(sgf & (SGF_UTemp|SGF_ULightSens)))) number++;
                     #else
                     if(number == MODE_SENS) number++;
@@ -499,7 +499,7 @@ static int menuSelect(int& number, DateTime& dtu, DateTime& dtl, tcdDisplay*& di
                 if(number == MODE_MIN) number = MODE_MAX;
                 else {
                     number--;
-                    #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+                    #if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
                     if(number == MODE_SENS && (!(sgf & (SGF_UTemp|SGF_ULightSens)))) number--;
                     #else
                     if(number == MODE_SENS) number--;
@@ -650,7 +650,7 @@ static int requestNumericInput(int& number, int field, int year = 0, int month =
     setNum = atoi(timeBuffer);
     if(setNum < lowerLimit)      setNum = lowerLimit;
     else if(setNum > upperLimit) setNum = upperLimit;
-    #ifdef TC_JULIAN_CAL
+    #ifdef JULIAN_CAL
     if(field == FIELD_DAY) {
         correctNonExistingDate(year, month, setNum);
     }
@@ -687,7 +687,7 @@ void enter_menu()
     allresetBrightness();
     // Do not propagate through BTTFN, menu is TCD-private
 
-    mpActive = mp_stop();
+    mpActive = mp_stop(true);
     stopAudio();
 
     flushDelayedSave();
@@ -934,7 +934,7 @@ void enter_menu()
         // Show client info
         doShowBTTFNInfo();
  
-    #if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+    #if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
     } else if(menuItemNum == MODE_SENS) {   // Show sensor info
 
         allOffWaitEnterRelease();
@@ -942,7 +942,7 @@ void enter_menu()
         doShowSensors();
     #endif
 
-    }                                      // LTS, VERSION: Bail out
+    }                                       // LTS, VERSION: Bail out
 
 quitMenu:
 
@@ -993,7 +993,7 @@ quitMenu:
     UTCtoLocal(gdtu, gdtl, 0);
     
     if(stalePresent)
-        updateStalePresent(1);  // presentTime.setFromStruct(&stalePresentTime[1]);
+        updateStalePresent(1);
     else
         updatePresentTime();    // Uses gdt{u,l}
 
@@ -1015,12 +1015,15 @@ quitMenu:
 
     // Re-set RotEnc for volume (ie ignore all
     // changes while in menu; adjust to cur level)
-    #ifdef TC_HAVE_RE
+    #ifdef HAVE_RE
     re_vol_reset();
     #endif
 
     // Restart mp if it was active before entering the menu
     if(mpActive) mp_play();
+    #ifdef HAVE_MQTT
+    else mp_sendStatus();
+    #endif
 }
 
 
@@ -1287,7 +1290,7 @@ static void showCurVolHWSW(bool blink)
     if(blink) {
         allOff();
     } else {
-        if(curVolume == 255) {
+        if(aud_state.curVolume == 255) {
             dt_showTextDirect("USE VOLUME");
             pt_showTextDirect("KNOB");
         } else {
@@ -1303,12 +1306,12 @@ static void showCurVol(bool blink, bool doComment)
     uint16_t flags = CDT_CLEAR;
     if(blink) flags |= CDT_BLINK;
     
-    destinationTime.showSettingValDirect("LEVEL", curVolume, flags);
+    destinationTime.showSettingValDirect("LEVEL", aud_state.curVolume, flags);
     dt_on();
 
     if(doComment) {
         int w = D_D;
-        if(!curVolume) {
+        if(!aud_state.curVolume) {
             pt_showTextDirect("MUTE");
             w |= D_P;
         }
@@ -1319,7 +1322,7 @@ static void showCurVol(bool blink, bool doComment)
 static int doSetVolume()
 {
     bool volDone = false;
-    int oldVol = curVolume;
+    int oldVol = aud_state.curVolume;
     unsigned long playNow;
     bool triggerPlay = false;
     bool blinkSwitch = false;
@@ -1344,10 +1347,10 @@ static int doSetVolume()
 
             if(!volDone) {
 
-                if(curVolume <= 19)
-                    curVolume = 255;
+                if(aud_state.curVolume < VOL_LEVELS)
+                    aud_state.curVolume = 255;
                 else
-                    curVolume = 0;
+                    aud_state.curVolume = 0;
 
                 showCurVolHWSW(false);
 
@@ -1374,13 +1377,13 @@ static int doSetVolume()
 
     keypadMode = 0;
 
-    if((volDone & (!wasQuit)) && curVolume != 255) {
+    if((volDone & (!wasQuit)) && aud_state.curVolume != 255) {
         
         if(oldVol == 255) {
-            curVolume = getSWVolFromHWVol();
+            aud_state.curVolume = getSWVolFromHWVol();
             triggerPlay = true;
         } else {
-            curVolume = oldVol;
+            aud_state.curVolume = oldVol;
         }
         
         showCurVol(false, true);
@@ -1411,9 +1414,9 @@ static int doSetVolume()
                 if(!volDone) {
 
                     if(dirDown) {
-                        if(curVolume > 0) curVolume--;
+                        if(aud_state.curVolume > 0) aud_state.curVolume--;
                     } else {
-                        if(curVolume < 19) curVolume++;
+                        if(aud_state.curVolume < VOL_LEVELS - 1) aud_state.curVolume++;
                     }
 
                     showCurVol(false, true);
@@ -1466,7 +1469,7 @@ static int doSetVolume()
 
     }
 
-    curVolume = oldVol;
+    aud_state.curVolume = oldVol;
 
     return 1;
 }
@@ -1485,9 +1488,7 @@ static void displayMSfx(int msfx, bool blink, bool doFolderChk, int& folderState
     dt_on();
     
     if(doFolderChk) {
-        pt_showTextDirect("WAIT...");
-        sw_sel(w);
-        folderState = mp_checkForFolder(msfx);
+        folderState = mfstatus[msfx];
         switch(folderState) {
         case 1:
             pt_showTextDirect("OK");
@@ -1586,9 +1587,7 @@ static int doSetMSfx()
             // not suitable for our "multitasking" (with
             // regard to speedo action, especially).
             menuDelay(1000);
-            prepareReboot();
-            delay(1000);
-            esp_restart();
+            orderlyReboot();
         } else {
             mp_init();
         }
@@ -1631,7 +1630,7 @@ static void displayAI(int interval, bool blink, bool doComment)
 static int doSetAutoInterval()
 {
     bool autoDone = false;
-    int newAutoInterval = autoInterval;
+    unsigned int newAutoInterval = autoInterval;
     bool blinkSwitch = false;
     unsigned long blinkNow = millis();
     bool wasEnter, dirDown, wasQuit = false, wasSelect;
@@ -1696,7 +1695,7 @@ static int doSetAutoInterval()
         saveBeepAutoInterval();
 
         // End pause if current setting != off
-        if(autoTimeIntervals[autoInterval]) 
+        if(autoInterval)
             endPauseAuto();
 
         menuDelay(1000);
@@ -1717,7 +1716,7 @@ static void displayBri(tcdDisplay* displaySet, int8_t number, bool blink)
     uint16_t flags = 0;
     if(blink) flags |= CDT_BLINK;
     
-    #ifdef IS_ACAR_DISPLAY
+    #ifdef ACAR_DISPLAY
     displaySet->showSettingValDirect("LV", number, flags);
     #else
     displaySet->showSettingValDirect("LVL", number, flags);
@@ -1812,7 +1811,7 @@ static void sensWait()
     pt_showTextDirect("");
 }
 
-#if defined(TC_HAVETEMP) || defined(TC_HAVELIGHT)
+#if defined(HAVE_TEMP) || defined(HAVE_LIGHT)
 static void doShowSensors()
 {
     char buf[13];
@@ -1824,13 +1823,13 @@ static void doShowSensors()
     float temp;
     bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
-    #ifdef TC_HAVELIGHT
+    #ifdef HAVE_LIGHT
     if(sgf & SGF_ULightSens) numberArr[numIdx++] = 0;
     #endif
-    #ifdef TC_HAVETEMP
+    #ifdef HAVE_TEMP
     if(sgf & SGF_UTemp) {  
         numberArr[numIdx++] = 1;
-        if(tempSens.haveHum()) numberArr[numIdx++] = 2;
+        if((sgf & SGF_HaveHum)) numberArr[numIdx++] = 2;
     }
     #endif
     maxIdx = numIdx - 1;
@@ -1874,7 +1873,7 @@ static void doShowSensors()
             if(millis() - sensNow > 3000) {
                 switch(numberArr[numIdx]) {
                 case 0:
-                    #ifdef TC_HAVELIGHT
+                    #ifdef HAVE_LIGHT
                     lightSens.loop();
                     dt_showTextDirect("LIGHT");
                     //#ifdef TC_DBG_SENS
@@ -1887,7 +1886,7 @@ static void doShowSensors()
                     #endif
                     break;
                 case 1:
-                    #ifdef TC_HAVETEMP
+                    #ifdef HAVE_TEMP
                     dt_showTextDirect("TEMPERATURE");
                     temp = tempSens.readTemp();
                     if(isnan(temp)) {
@@ -1900,18 +1899,18 @@ static void doShowSensors()
                     #endif
                     break;
                 case 2:
-                    #ifdef TC_HAVETEMP
+                    #ifdef HAVE_TEMP
                     tempSens.readTemp();
                     dt_showTextDirect("HUMIDITY");
                     hum = tempSens.readHum();
                     if(hum < 0) {
-                        #ifdef IS_ACAR_DISPLAY
+                        #ifdef ACAR_DISPLAY
                         sprintf(buf, "--\x7f\x80");
                         #else
                         sprintf(buf, "-- \x7f\x80");
                         #endif
                     } else {
-                        #ifdef IS_ACAR_DISPLAY
+                        #ifdef ACAR_DISPLAY
                         sprintf(buf, "%2d\x7f\x80", hum);
                         #else
                         sprintf(buf, "%2d \x7f\x80", hum);
@@ -1955,16 +1954,18 @@ static void doShowNetInfo()
 {
     int number = 0;
     bool netDone = false;
-    char macBuf[16];
-    int maxMI = 2;
+    char macBuf[18];
+    char bssidBuf[18];
+    int maxMI = 3;
     int w;
     bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
-    #ifdef TC_HAVEMQTT
-    maxMI = 3;
+    #ifdef HAVE_MQTT
+    maxMI = 4;
     #endif
 
-    wifi_getMAC(macBuf);
+    wifi_getMAC(macBuf, true, true);
+    wifi_getMAC(bssidBuf, false, true);
 
     displayIP();
 
@@ -2043,9 +2044,14 @@ static void doShowNetInfo()
                     pt_showTextDirect(macBuf, CDT_CLEAR|CDT_CORR6);
                     sw_sel(D_P|D_D);
                     break;
-                #ifdef TC_HAVEMQTT
                 case 3:
-                    #ifdef IS_ACAR_DISPLAY
+                    dt_showTextDirect("BSSID");
+                    pt_showTextDirect(bssidBuf, CDT_CLEAR|CDT_CORR6);
+                    sw_sel(D_P|D_D);
+                    break;
+                #ifdef HAVE_MQTT
+                case 4:
+                    #ifdef ACAR_DISPLAY
                     dt_showTextDirect("MQTT");
                     #else
                     dt_showTextDirect("HOMEASSISTANT");
@@ -2098,7 +2104,7 @@ static void displayClient(int numCli, int number)
     char *id;
     uint8_t type;
     char idbuf[16];
-    const char *tpArr[6] = { "[FLUX]", "[SID]", "[GAUGES]", "[VSR]", "[AUX]", "[REMOTE]" };
+    static const char *tpArr[6] = { "[FLUX]", "[SID]", "[GAUGES]", "[VSR]", "[AUX]", "[REMOTE]" };
     
     if(!numCli) {
         dt_showTextDirect("NO CLIENTS");
@@ -2365,7 +2371,7 @@ static void menuLoops()
     audio_loop();
     bttfn_loop();
     audio_loop();
-    #if defined(TC_HAVEGPS) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
+    #if defined(HAVE_GPS) || defined(HAVE_RE) || defined(HAVE_REMOTE)
     speedoUpdate_loop(true);  // GPS part: 6-12ms without delay, 8-13ms with delay
     audio_loop();
     #endif

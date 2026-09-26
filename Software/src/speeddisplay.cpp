@@ -310,6 +310,7 @@ enum speedoTypes : uint8_t {
     SPT_BTTFN
 };
 
+#define CS_SPD_3R_IDX 13
 static const struct dispConf {
     uint8_t  speedoType;     //   i2c-7, i2c-14, bttfn, ...
     uint8_t  speed_pos10;    //   Speed's 10s position in 16bit buffer
@@ -325,7 +326,7 @@ static const struct dispConf {
     uint8_t  bufPosArr[4];   //   The buffer positions of each of the digits from left to right (padded with 0)
     uint8_t  bufShftArr[4];  //   Shift-value for each digit from left to right
     const uint16_t *fontSeg; //   Pointer to font
-} displays[SP_NUM_TYPES] = {
+} displays[SP_NUM_TYPES+1] = {
   { SPT_I2C_7S,  0, 1, 0, 8, 1, 8, 255,      0, 2, 2, { 0, 1, 0, 0 }, { 0, 8 },       font7segGeneric },  // CircuitSetup Speedo+GPS add-on
   { SPT_I2C_7S,  3, 4, 0, 0, 4, 0,   2, 0x0002, 4, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4   0.56" (right) (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
   { SPT_I2C_7S,  0, 1, 0, 0, 1, 0,   2, 0x0002, 4, 4, { 0, 1, 3, 4 }, { 0, 0, 0, 0 }, font7segGeneric },  // SP_ADAF_7x4L  0.56" (left)  (ADA-878/877/5599;879/880/881/1002/5601/5602/5603/5604)
@@ -339,7 +340,8 @@ static const struct dispConf {
   { SPT_I2C_14S, 0, 1, 0, 0, 1, 0, 255,      0, 2, 1, { 0, 1, 0, 0 }, { 0, 0, 0, 0 }, font14segGeneric }, // like SP_ADAF_14x4L(ADA-1911), but left tube only (TW wall clock)
   { SPT_I2C_7S,  0, 1, 0, 0, 1, 0, 255,      0, 2, 1, { 0, 1, 0, 0 }, { 0, 0, 0, 0 }, font7segGeneric },  // like SP_ADAF_7x4L(ADA-878), but left tube only (TW speedo replica) - needs rewiring
   { SP_BTTFN,    0, 0, 0, 0, 0, 0,   0,      0, 0, 0, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, NULL            },  // BTTFN
-//{ SPT_I2C_7S,  1, 2, 8, 0, 3, 0, 255,      0, 2, 2, { 1, 2, 0, 0 }, { 8, 0 },       font7segGeneric },  // CircuitSetup Speedo+GPS, part-3-"wrong"-style (left dgt covered)
+  // Must be last (and match CS_SPD_3R_IDX):
+  { SPT_I2C_7S,  1, 2, 8, 0, 3, 0, 255,      0, 2, 2, { 1, 2, 0, 0 }, { 8, 0 },       font7segGeneric }   // CircuitSetup Speedo+GPS v2, part-3-"wrong"-style (left dgt covered)
 };
 
 // Grove 4-digit special handling
@@ -418,20 +420,8 @@ bool speedDisplay::begin(int dispType, int sSpeedoPin, int sTachopin, int sSpeed
 
     if(_i2c) {
         _is7seg = (_speedoType == SPT_I2C_7S);
-        _speed_pos10 = displays[dispType].speed_pos10;
-        _speed_pos01 = displays[dispType].speed_pos01;
-        _dig10_shift = displays[dispType].dig10_shift;
-        _dig01_shift = displays[dispType].dig01_shift;
-        _dot_pos01 = displays[dispType].dot_pos01;
-        _dot01_shift = displays[dispType].dot01_shift;
-        _colon_pos = displays[dispType].colon_pos;
-        _colon_bm = displays[dispType].colon_bit;
-        _num_digs = displays[dispType].num_digs;
-        _max_buf = displays[dispType].max_bufPos;
-        _bufPosArr = displays[dispType].bufPosArr;
-        _bufShftArr = displays[dispType].bufShftArr;
-        
-        _fontXSeg = displays[dispType].fontSeg;
+
+        setupSData(_dispType);
     
         directCmd(0x20 | 1); // turn on oscillator
     
@@ -446,20 +436,26 @@ bool speedDisplay::begin(int dispType, int sSpeedoPin, int sTachopin, int sSpeed
     return true;
 }
 
-void speedDisplay::validateSetup()
+void speedDisplay::finishSetup(bool rAligned)
 {
     if(_i2c) {
         switch(_dispType) {
         case SP_CIRCSETUP:
-            break;
-        case SP_CIRCSETUP3:
-            dispL0Spd = true;
-            setDot(false);
+            if(rAligned) {
+                setupSData(CS_SPD_3R_IDX);
+                thirdDig = false;
+            }
             break;
         default:
             thirdDig = false;
         }
     }
+}
+
+void speedDisplay::setupBrightness(uint8_t normLevel, uint8_t tempLevel)
+{
+    _normBrightness = _currBrightness = normLevel;
+    _tempBrightness = tempLevel;
 }
 
 bool speedDisplay::haveSpeedoDisplay()
@@ -471,7 +467,7 @@ bool speedDisplay::haveSpeedoDisplay()
     #endif
 }
 
-#ifdef TC_HAVETEMP
+#ifdef HAVE_TEMP
 bool speedDisplay::supportsTemperature()
 {
     if(_i2c)
@@ -512,34 +508,6 @@ void speedDisplay::off()
     _onCache = 0;
 }
 
-// Set display brightness
-// Valid brighness levels are 0 to 15. Default is 15.
-// 255 sets it to previous level
-uint8_t speedDisplay::setBrightness(uint8_t level, bool isInitial)
-{
-    if(level == 255)
-        level = _brightness;    // restore to old val
-
-    _brightness = setBrightnessDirect(level);
-
-    if(isInitial)
-        _origBrightness = _brightness;
-
-    return _brightness;
-}
-
-uint8_t speedDisplay::setBrightnessDirect(uint8_t level)
-{
-    level &= 0x0f;
-
-    if(level != _briCache) {
-        if(_i2c) directCmd(0xE0 | level);  // Dimming command
-        _briCache = level;
-    }
-
-    return level;
-}
-
 
 // Show data in display --------------------------------------------------------
 
@@ -549,17 +517,7 @@ void speedDisplay::show()
 {
     int i;
 
-    if(_nightmode) {
-        if(_oldnm < 1) {
-            setBrightness(0);
-            _oldnm = 1;
-        }
-    } else {
-        if(_oldnm > 0) {
-            setBrightness(_origBrightness);
-            _oldnm = 0;
-        }
-    }
+    setBrightness(_nightmode ? 0 : _currBrightness);
 
     if(_i2c) {
 
@@ -600,47 +558,6 @@ void speedDisplay::show()
 
 // Set data in buffer --------------------------------------------------------
 
-
-// Write given text to buffer
-// (including current colon setting; if the text contains a dot,
-// the dot between the adjacent letters is lit. dot01 setting is
-// ignored.)
-void speedDisplay::setText(const char *text)
-{
-    int idx = 0, pos = 0;
-    int temp = 0;
-
-    if(_i2c) {
-
-        clearBuf();
-    
-        if(_is7seg) {
-            while(text[idx] && (pos < _num_digs)) {
-                temp = getLEDChar(text[idx]) << (*(_bufShftArr + pos));
-                idx++;
-                if(text[idx] == '.') {
-                    temp |= (getLEDChar('.') << (*(_bufShftArr + pos)));
-                    idx++;
-                }
-                _displayBuffer[*(_bufPosArr + pos)] |= temp;
-                pos++;
-            }
-        } else {
-            while(text[idx] && pos < _num_digs) {
-                _displayBuffer[*(_bufPosArr + pos)] = getLEDChar(text[idx]);
-                idx++;
-                if(text[idx] == '.') {
-                    _displayBuffer[*(_bufPosArr + pos)] |= getLEDChar('.');
-                    idx++;
-                }
-                pos++;
-            }
-        }
-    
-        //handleColon();
-    }
-}
-
 // Write given speed to buffer
 // (including current dot01 setting; colon is cleared and ignored)
 void speedDisplay::setSpeed(int speedNum)
@@ -649,7 +566,7 @@ void speedDisplay::setSpeed(int speedNum)
 
     if(_i2c) {
         unsigned long b1 = 0, b2 = 0; 
-        uint8_t b3 = 0b00111111;
+        uint16_t b3 = 0b00111111;
         unsigned long now = millis();
     
         clearBuf();
@@ -694,23 +611,26 @@ void speedDisplay::setSpeed(int speedNum)
     #ifdef SERVOSPEEDO
     _secSpeed = speedNum;
     #endif
+
+    _currBrightness = _normBrightness;
 }
 
-#ifdef TC_HAVETEMP
+#ifdef HAVE_TEMP
 void speedDisplay::setTemperature(float temp)
 {
+    
     if(_i2c) {
 
         char buf[8];
         char alignBuf[20];
         int t, strlenBuf = 0;
-        const char *myNan = "----";
+        static const char *myNan = "----";
     
         bool tempNan = isnan(temp);
     
         switch(_num_digs) {
         case 2:
-            if(tempNan)            setText(myNan);
+            if(tempNan)             setText(myNan);
             else if(temp <= -10.0f) setText("Lo");
             else if(temp >= 100.0f) setText("Hi");
             else if(temp >= 10.0f || temp < 0.0f) {
@@ -723,7 +643,7 @@ void speedDisplay::setTemperature(float temp)
             }
             break;
         case 3:
-            if(tempNan)             setText(myNan);
+            if(tempNan)              setText(myNan);
             else if(temp <= -100.0f) setText("Low");
             else if(temp >= 1000.0f) setText("Hi");
             else if(temp >= 100.0f || temp <= -10.0f) {
@@ -757,6 +677,8 @@ void speedDisplay::setTemperature(float temp)
     #ifdef SERVOSPEEDO
     _secSpeed = -1;
     #endif
+
+    _currBrightness = _tempBrightness;
 }
 #endif
 
@@ -795,14 +717,87 @@ void speedDisplay::getCorr(int& scorr, int &tcorr)
 
 // Private functions ###########################################################
 
+void speedDisplay::setupSData(int dispType)
+{
+    _speed_pos10 = displays[dispType].speed_pos10;
+    _speed_pos01 = displays[dispType].speed_pos01;
+    _dig10_shift = displays[dispType].dig10_shift;
+    _dig01_shift = displays[dispType].dig01_shift;
+    _dot_pos01 = displays[dispType].dot_pos01;
+    _dot01_shift = displays[dispType].dot01_shift;
+    _colon_pos = displays[dispType].colon_pos;
+    _colon_bm = displays[dispType].colon_bit;
+    _num_digs = displays[dispType].num_digs;
+    _max_buf = displays[dispType].max_bufPos;
+    _bufPosArr = displays[dispType].bufPosArr;
+    _bufShftArr = displays[dispType].bufShftArr;
+    
+    _fontXSeg = displays[dispType].fontSeg;
+}
+
+uint8_t speedDisplay::setBrightness(uint8_t level)
+{
+    level &= 0x0f;
+    
+    if(level != _briCache) {
+        if(_i2c) directCmd(0xE0 | level);
+        _briCache = level;
+    }
+
+    return level;
+}
+
 // Clear the buffer
 void speedDisplay::clearBuf()
 {
-    // must call show() to actually clear display
-
     for(int i = 0; i < 8; i++) {
         _displayBuffer[i] = 0;
     }
+}
+
+// Write given text to buffer
+// If the text contains a dot, the dot between the 
+// adjacent letters is used (assuming there is one). 
+// dot01 setting is ignored.
+void speedDisplay::setText(const char *text)
+{
+    int idx = 0, pos = 0;
+    int temp = 0;
+
+    if(_i2c) {
+
+        clearBuf();
+    
+        if(_is7seg) {
+            while(text[idx] && (pos < _num_digs)) {
+                temp = getLEDChar(text[idx]) << (*(_bufShftArr + pos));
+                idx++;
+                if(text[idx] == '.') {
+                    temp |= (getLEDChar('.') << (*(_bufShftArr + pos)));
+                    idx++;
+                }
+                _displayBuffer[*(_bufPosArr + pos)] |= temp;
+                pos++;
+            }
+        } else {
+            while(text[idx] && pos < _num_digs) {
+                _displayBuffer[*(_bufPosArr + pos)] = getLEDChar(text[idx]);
+                idx++;
+                if(text[idx] == '.') {
+                    _displayBuffer[*(_bufPosArr + pos)] |= getLEDChar('.');
+                    idx++;
+                }
+                pos++;
+            }
+        }
+    
+        //handleColon();
+        
+    }
+
+    // Only called by setTemperature() which sets up its bri anyway
+    // If ever used for something else, below is needed.
+    //_currBrightness = _normBrightness;
 }
 
 /*

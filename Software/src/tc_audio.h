@@ -58,29 +58,36 @@
 
 // By default, use the volume knob
 #define DEFAULT_VOLUME 255
+#define VOL_LEVELS 21
 
-#define PA_CHECKNM 0x000001
-#define PA_INTRMUS 0x000002
-#define PA_ALLOWSD 0x000004
-#define PA_DYNVOL  0x000008
-#define PA_DOID3TS 0x000010
-#define PA_DOOR    0x000020
-#define PA_LINEOUT 0x000040
-#define PA_INTSPKR 0x000000
-#define PA_ISWAV   0x000080
+#define PA_CHECKNM 0x0000001
+#define PA_INTRMUS 0x0000002
+#define PA_ALLOWSD 0x0000004
+#define PA_DYNVOL  0x0000008
+#define PA_DOID3TS 0x0000010
+#define PA_DOOR    0x0000020
+#define PA_LINEOUT 0x0000040
+#define PA_INTSPKR 0x0000000
+#define PA_ISWAV   0x0000080
 // upper 8 bits all taken for key ID
-#define PA_KEYMASK 0x01ff00
-#define PA_DOORL   0x000100
-#define PA_DOORR   0x000200
-#define PA_LOOP    0x020000
-#define PA_SIGNAL  0x100000
-#define PA_ALARM   0x200000
-#define PA_REM     0x400000
-#define PA_TMR     0x800000
+#define PA_KEYMASK 0x001ff00
+#define PA_DOORL   0x0000100
+#define PA_DOORR   0x0000200
+#define PA_LOOP    0x0020000
+#define PA_TCSEGS  0x0040000
+#define PA_SIGNAL  0x0100000
+#define PA_ALARM   0x0200000
+#define PA_REM     0x0400000
+#define PA_TMR     0x0800000
+#define PA_MUSIC   0x1000000
 #define PA_SIGMASK (PA_SIGNAL|PA_ALARM|PA_REM|PA_TMR)
 
 void  audio_setup();
+void  audio_loopup_files();
 void  audio_loop();
+void  audio_loop_quick();
+
+//void     append_file(const char *audio_file, uint32_t flags, float volumeFactor = 1.0f);
 
 void     play_file(const char *audio_file, uint32_t flags, float volumeFactor = 1.0f);
 uint32_t play_keypad_sound(char key);
@@ -88,9 +95,14 @@ void     play_hour_sound(int hour);
 void     play_beep();
 void     play_key(int k, uint32_t preDTMFkp);
 void     play_door_snd(int doorNum, int state, uint32_t doorFlags);
+void     play_ts_snd(int16_t *s);
 
-bool         check_file_SD(const char *audio_file);
-unsigned int check_file_len_SD(const char *audio_file, bool& file_exists);
+bool     say_time(int pbt, int whichone, int gh, int gm);
+
+void     setBeepLevel(unsigned int levelIdx);
+
+bool     check_file_SD(const char *audio_file);
+void     checkForTCC();
 
 int      getSWVolFromHWVol();
 
@@ -106,22 +118,34 @@ void  stopAlarm(bool force);
 
 void  mp_init(bool isSetup = false);
 void  mp_play(bool forcePlay = true);
-bool  mp_stop();
+bool  mp_stop(bool forceStatus = false);
 void  mp_next(bool forcePlay = false);
 void  mp_prev(bool forcePlay = false);
 int   mp_gotonum(int num, bool force = false);
 void  mp_makeShuffle(bool enable);
 int   mp_checkForFolder(int num);
 int   mp_get_currently_playing();
+#ifdef HAVE_MQTT
+void  mp_sendStatus(int force = 0);
+#endif
+
+typedef struct {
+    int state;
+    int curVolume;
+    int curTrack;
+    int maxMusic;
+    int mpShuffle;
+} Aud_State;
+extern Aud_State aud_state;
 
 extern int  volumePin;
 
 extern bool audioInitDone;
 extern bool muteBeep;
 
-extern bool haveMusic;
 extern bool mpActive;
-extern bool mpShuffle;
+
+extern int8_t mfstatus[];
 
 extern char id3artist[];
 extern char id3track[]; 
@@ -129,6 +153,9 @@ extern char id3track[];
 extern bool haveLineOut;
 extern bool useLineOut;
 
-extern int  curVolume;
+#define TCC_VER 2
+extern bool haveTCC;
+
+extern unsigned int beepLvlIdx;
 
 #endif

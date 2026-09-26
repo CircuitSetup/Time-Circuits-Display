@@ -60,7 +60,7 @@
 #ifndef _TCSENSOR_H
 #define _TCSENSOR_H
 
-#if defined(TC_HAVETEMP) || defined(TC_HAVELIGHT)
+#if defined(HAVE_TEMP) || defined(HAVE_LIGHT)
 
 class tcSensor {
 
@@ -81,7 +81,7 @@ class tcSensor {
 
 #endif
 
-#ifdef TC_HAVETEMP    // -----------------------------------------
+#ifdef HAVE_TEMP    // -----------------------------------------
 
 enum {
     MCP9808 = 0,      // 0x18 (unsupported: 0x19-0x1f)
@@ -102,9 +102,10 @@ class tempSensor : tcSensor {
         tempSensor(int numTypes, const uint8_t *addrArr);
         bool begin(void (*myDelay)(unsigned long), bool InCelsius);
 
-        float readTemp();
-        float readLastTemp() { return _lastTemp; };
-        bool lastTempNan() { return _lastTempNan; };
+        float   readTemp();
+        float   readLastTemp()     { return _lastTemp;     };
+        bool    lastTempNan()      { return _lastTempNan;  };
+        int16_t readLastTempT100() { return _lastTempT100; };
 
         void setOffset(float myOffs) { _userOffset = myOffs; }
 
@@ -122,8 +123,9 @@ class tempSensor : tcSensor {
         bool    _haveHum = false;
         unsigned long _delayNeeded = 0;
 
-        float  _lastTemp = NAN;
-        bool   _lastTempNan = true;
+        float   _lastTemp = NAN;
+        bool    _lastTempNan = true;
+        int16_t _lastTempT100 = -32768;
 
         float  _userOffset = 0.0;
 
@@ -151,7 +153,7 @@ class tempSensor : tcSensor {
 };
 #endif
 
-#ifdef TC_HAVELIGHT   // -----------------------------------------
+#ifdef HAVE_LIGHT   // -----------------------------------------
 
 enum {
     LST_TSL2561 = 0,  // 0x29 (unsupported: 0x39, 0x49)

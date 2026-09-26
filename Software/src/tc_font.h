@@ -56,7 +56,7 @@
 #ifndef _TC_FONT_H
 #define _TC_FONT_H
 
-#ifndef IS_ACAR_DISPLAY
+#ifndef ACAR_DISPLAY
 static const uint16_t alphaChars[127-31-1+4] = {
     0b0000000000000000,  // <space>
     0b0000000000000110,  // !
@@ -160,7 +160,7 @@ static const uint16_t alphaChars[127-31-1+4] = {
 };
 #endif
 
-static const uint8_t numDigs[127-31-1+4] = {
+static const uint8_t numDigs[127-31-1+10] = {
     0b00000000, // space
     0b00000010, // !
     0b00100010, // "
@@ -259,7 +259,13 @@ static const uint8_t numDigs[127-31-1+4] = {
     0b01101011, // %1  (encoded as \x7f)
     0b01011101, // %2  (encoded as \x80)
     0b01101011, // ee4/1 (encoded as \x81)
-    0b00000000  // ee4/2 (encoded as \x82)
+    0b00000000, // ee4/2 (encoded as \x82)
+    0b00000001, // spinner (0x83-0x88)
+    0b00000010,
+    0b00000100,
+    0b00001000,
+    0b00010000,
+    0b00100000
 };
 
 #endif

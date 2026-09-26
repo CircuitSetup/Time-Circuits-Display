@@ -1,5 +1,5 @@
 /**
- * WiFiManager.h
+ * wm_local.h - TCD
  *
  * Based on:
  * WiFiManager, a library for the ESP32/Arduino platform
@@ -37,6 +37,8 @@
 
 // Show sound upload form (or "SD required" message")
 #define WM_UPLOAD
+
+#define WM_FWPROT "CIRCUITS"
 
 // #define WM_AP_STATIC_IP
 // #define WM_APCALLBACK

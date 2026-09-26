@@ -105,38 +105,41 @@
 
 class WiFiManagerParameter {
   public:
-    WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags = WFM_LABEL_DEFAULT);
-    WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, int length, uint8_t flags = WFM_LABEL_DEFAULT);
-    WiFiManagerParameter(const char *id, const char *label, const char *defaultValue, const char *custom, uint8_t flags = WFM_LABEL_DEFAULT);
+    WiFiManagerParameter(const char *label, const char *defaultValue, unsigned int length, const char *custom, uint8_t flags = WFM_LABEL_DEFAULT);
+    WiFiManagerParameter(const char *label, const char *defaultValue, unsigned int length, uint8_t flags = WFM_LABEL_DEFAULT);
+    WiFiManagerParameter(const char *label, const char *defaultValue, const char *custom, uint8_t flags = WFM_LABEL_DEFAULT);
     WiFiManagerParameter(const char *custom, uint8_t flags = 0);
     WiFiManagerParameter(const char *(*CustomHTMLGenerator)(const char *, int), uint8_t flags = 0);
     ~WiFiManagerParameter();
 
-    const char *getID() const                 { return _id; };
+    int         getID() const                 { return _id; };
     const char *getValue() const              { return _value; };
     const char *getLabel() const              { return _label; };
     int         getValueLength() const        { return _length; };
     uint8_t     getFlags() const              { return _flags; };
     virtual const char *getCustomHTML() const { return _customHTML; };
-    void        setValue(const char *defaultValue, int length);
-    void        setValue(const char *defaultValue);
+
+    void        setValue(const char *newValue);
+    void        updateValue();
 
   protected:
-    void init(const char *id, const char *label, const char *defaultValue, int length, const char *custom, uint8_t flags);
+    void init(const char *label, const char *defaultValue, unsigned int length, const char *custom, uint8_t flags);
     void initC(const char *custom, const char *(*CustomHTMLGenerator)(const char *, int), uint8_t flags);
 
   private:
     WiFiManagerParameter& operator=(const WiFiManagerParameter&);
-    const char *_id;
+    int16_t     _id;
     const char *_label;
+    const char *_source;
     union {
         char       *_value;
         const char *(*_customHTMLGenerator)(const char *, int);
     };
-    int         _length;
+    uint16_t    _length;
     uint8_t     _flags;
   protected:
     const char *_customHTML;
+
     friend class WiFiManager;
 };
 
@@ -164,6 +167,12 @@ class WiFiManager
                             const char *ssid = NULL, const char *pass = NULL, const char *bssid = NULL);
     bool          stopAPModeAndPortal();
 
+    // MDNS: Send "good bye" packet to let clients know we're gone. Only
+    //       ever send this before reboots.
+    #ifdef WM_MDNS
+    void          sendMDNSgoodBye();
+    #endif
+
     // loop() function: Run webserver and DNS processing. Param: Do handle web requests, or skip
     void          process(bool handleWeb = true);
 
@@ -175,6 +184,9 @@ class WiFiManager
 
     // adds a custom parameter, returns false on failure
     bool          addParameter(int idx, WiFiManagerParameter *p);
+
+    // updates all custom parameters from what was handed as "defaultValue" pointer at init()
+    void          updateParameters(int idx);
 
     // returns the list of Parameters
     WiFiManagerParameter** getParameters(int idx)       { return _params[idx];} ;
@@ -248,6 +260,15 @@ class WiFiManager
   	void          setPreWiFiScanCallback(bool(*func)())
   	                              { _prewifiscancallback = func; };
 
+    // Callback for changing client carmode
+    #ifdef WM_CCM
+    void          setCCarModeCallback(void(*func)(bool))
+  	                              { _setCCarMode = func; };
+    #endif
+
+    void          setWaitForWifiConnectCallback(void(*func)())
+  	                              { _waitforconnectcallback = func; };
+
   	// Set connection parameters
 
     // sets timeout for which to attempt connecting, useful if you get a lot of failed connects
@@ -307,7 +328,7 @@ class WiFiManager
 
     // show audio upload on Update page
     #ifdef WM_UPLOAD
-    void          showUploadContainer(bool enable, const char *contName, const char *contVer, bool isInstalled);
+    void          showUploadContainer(bool enable, const char *contName, const char *contVer, int isInstalled);
     #endif
 
     // set download link for updates
@@ -316,6 +337,11 @@ class WiFiManager
     // Custom
     void          setCarMode(bool enable)
                                   { _carMode = enable; };
+
+    #ifdef WM_CCM
+    void          setCCarMode(bool enable)
+                                  { _cCarMode = enable; };
+    #endif
 
     // add custom html at inside <head> for all pages
     void          setCustomHeadElement(const char* html)
@@ -433,7 +459,7 @@ class WiFiManager
     bool          _showUploadSnd          = false; // Show upload audio on Update page
     char          _sndContName[8]         = "";    // File name of BIN file to upload
     const char *  _sndContVer             = NULL;
-    bool          _sndIsInstalled         = false;
+    int8_t        _sndIsInstalled         = 0;     // 0=missing, 1=complete, -1=partly
     #endif
 
     #ifdef WM_FW_HW_VER
@@ -453,17 +479,20 @@ class WiFiManager
     bool          _autoforcerescan        = false; // automatically force rescan if scan networks is 0, ignoring cache
 
     bool          _carMode                = false; // Custom
+    #ifdef WM_CCM
+    bool          _cCarMode               = false;
+    #endif
 
     volatile bool _beginSemaphore         = false;
 
     #ifdef WM_MDNS
     bool          _mdnsStarted            = false;
+    bool          _mdnsGoodBye            = false;
     #endif
 
     void          _begin();
     void          _end();
 
-	  bool          CheckParmID(const char *id);
 	  bool          _addParameter(int idx, WiFiManagerParameter *p);
 
 	  uint8_t       connectWifi(const char *ssid, const char *pass, const char *bssid = NULL);
@@ -474,7 +503,12 @@ class WiFiManager
 
     void          setupDNSD();
     void          setupHTTPServer();
+    #ifdef WM_MDNS
     void          setupMDNS();
+    void          stopMDNS();
+    #endif
+
+    void          checkWiFiOffProgress();
 
     bool          shutdownWebPortal();
 
@@ -558,14 +592,14 @@ class WiFiManager
 
     // Wifi events
     void          WiFiEvent(WiFiEvent_t event, arduino_event_info_t info);
-    void          WiFi_installEventHandler();
+    void          installWiFiEventHandler();
     void          andWiFiEventMask(uint32_t to_and);
 
     // Flags
     bool          APPortalActive       = false;
     bool          STAPortalActive      = false;
 
-    bool          _uplError            = false;
+    int8_t        _uplError            = 0;
 
     // WiFiManagerParameters
     int           _paramsCount[WM_PARAM_ARRS]     = { 0 };
@@ -596,6 +630,10 @@ class WiFiManager
 	  #ifdef WM_EVENTCB
 	  void (_wifieventcallback)(WiFiEvent_t event)                        = NULL;
 	  #endif
+	  #ifdef WM_CCM
+	  void (*_setCCarMode)(bool)                                          = NULL;
+	  #endif
+	  void (*_waitforconnectcallback)(void)                               = NULL;
 
     #ifdef _A10001986_DBG
     // get a status as string

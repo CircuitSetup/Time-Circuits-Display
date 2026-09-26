@@ -16,7 +16,7 @@
  * - DFRobot Gravity 360: SW1 off, SW2 on (i2c address 0x55)
  * - DuPPA I2CEncoder 2.1: A0 and A1 closed (i2c address 0x03)
  * 
- * Keypad part inspired by "Keypad" library by M. Stanley & A. Brevig
+ * Keypad part based on concepts by M. Stanley & A. Brevig
  * -------------------------------------------------------------------
  * License: Modified MIT NON-AI
  * 
@@ -76,6 +76,7 @@
 #include <Arduino.h>
 
 #include "input.h"
+#include "tc_audio.h"
 
 #define OPEN    false
 #define CLOSED  true
@@ -93,7 +94,7 @@ static void defaultDelay(int iter, unsigned long mydelay)
  */
 
 Keypad_I2C::Keypad_I2C(char *userKeymap, const uint8_t *row, const uint8_t *col,
-                       uint8_t numRows, uint8_t numCols,
+                       unsigned int numRows, unsigned int numCols,
                        int address)
 {
     _keymap = userKeymap;
@@ -118,7 +119,6 @@ Keypad_I2C::Keypad_I2C(char *userKeymap, const uint8_t *row, const uint8_t *col,
 
     _key.kState = TCKS_IDLE;
     _key.kChar = 0;
-    _key.kCode = -1;
     _key.stateChanged = false;
 }
 
@@ -164,15 +164,15 @@ bool Keypad_I2C::scanKeypad()
 // Hardware scan & update key state
 bool Keypad_I2C::scanKeys()
 {
-    uint16_t pinVals[3][MAX_COLS], rm;
-    bool     repeat, haveKey;
+    uint32_t pinVals[3][MAX_COLS], rb;
+    int      repeat, haveKey;
     int      maxRetry = 5;
-    int      kc;
-    uint8_t  c, r, d;
+    int      c, r, d;
 
     do {
 
-        repeat = haveKey = false;
+        repeat = 0;
+        haveKey = -1;
 
         for(d = 0; d < 3; d++) {
 
@@ -182,7 +182,7 @@ bool Keypad_I2C::scanKeys()
 
                 Wire.requestFrom(_i2caddr, (int)1);
                 if((pinVals[d][c] = Wire.read() & _rowMask) != _rowMask)
-                    haveKey = true;
+                    haveKey = c;
 
                 pin_write(_columnPins[c], HIGH);
 
@@ -193,47 +193,39 @@ bool Keypad_I2C::scanKeys()
         }
 
         for(c = 0; c < _columns; c++) {
-            if((pinVals[0][c] != pinVals[1][c]) || (pinVals[0][c] != pinVals[2][c])) 
-                repeat = true;
+            if((pinVals[0][c] != pinVals[1][c]) || (pinVals[0][c] != pinVals[2][c])) {
+                repeat = 1;
+            }
         }
 
-    } while(maxRetry-- && repeat);
+    } while(repeat && maxRetry--);
 
     _key.stateChanged = false;
 
     // If we currently have an active key, advance its state
-    if(_key.kCode >= 0) {
+    if(_key.kState != TCKS_IDLE) {
 
-        advanceState(!(pinVals[0][_key.kCode % _columns] & (1 << _rowPins[_key.kCode / _columns])));
+        advanceState(!(pinVals[0][_key.kCol] & _key.kRow));
 
     } 
 
     // If _key is idle, evaluate scanning result
-    if(haveKey && _key.kState == TCKS_IDLE) {
+    if(haveKey >= 0 && _key.kState == TCKS_IDLE) {
 
         for(r = 0; r < _rows; r++) {
-
-            rm = 1 << _rowPins[r];
-
-            for(c = 0, kc = r * _columns; c < _columns; c++, kc++) {
-
-                bool newstate = !(pinVals[0][c] & rm);
-
-                if(newstate == CLOSED) {
-
-                    // (New) key pressed, handle it
-                    _key.kCode = kc;
-                    _key.kChar = _keymap[kc];
-                    advanceState(newstate);
-                    goto quitScan;  // bail, _key is busy
-
-                }
+            rb = 1 << _rowPins[r];
+            if(!(pinVals[0][haveKey] & rb) == CLOSED) {
+                _key.kRow = rb;
+                _key.kCol = haveKey;
+                _key.kChar = _keymap[(r * _columns) + haveKey];
+                advanceState(CLOSED);
+                goto quitScan;  // bail, _key is busy
             }
         }
         
     }
+    
 quitScan:
-
     return _key.stateChanged;
 }
 
@@ -263,7 +255,6 @@ void Keypad_I2C::advanceState(bool newstate)
 
     case TCKS_RELEASED:
         _key.kState = TCKS_IDLE;
-        _key.kCode = -1;
         break;
     }
 }
@@ -300,32 +291,24 @@ void Keypad_I2C::port_write(uint8_t val)
 }
 
 
-
 /*
  * TCButton class
  */
 
-/* pin: The pin to be used
- * activeLow: Set to true when the input level is LOW when the button is pressed, Default is true.
- * pullupActive: Activate the internal pullup when available. Default is true.
- */
-TCButton::TCButton(const int pin, const bool activeLow, const bool pullupActive)
+TCButton::TCButton(const uint8_t pin)
 {
     _pin = pin;
-    _buttonPressed = activeLow ? LOW : HIGH;
-    _pullupActive = pullupActive;
-}
-
-void TCButton::begin()
-{
-    pinMode(_pin, _pullupActive ? INPUT_PULLUP : INPUT);
 }
 
 // debounce: Number of millisec that have to pass by before a click is assumed stable
 // press:    Number of millisec that have to pass by before a short press is detected
 // lPress:   Number of millisec that have to pass by before a long press is detected
-void TCButton::setTiming(const int debounceDur, const int pressDur, const int lPressDur)
+void TCButton::begin(int button_pressed, uint8_t pu_mode, const int debounceDur, const int pressDur, const int lPressDur)
 {
+    _buttonPressed = button_pressed;
+
+    pinMode(_pin, pu_mode);
+
     _debounceDur = debounceDur;
     _pressDur = pressDur;
     _longPressDur = lPressDur;
@@ -348,7 +331,7 @@ void TCButton::scan()
         break;
 
     case TCBS_PRESSED:
-        if((!active) && (waitTime < _debounceDur)) {  // de-bounce
+        if((!active) && (waitTime < _debounceDur)) {
             transitionTo(_lastState);
         } else if(!active) {
             transitionTo(TCBS_RELEASED);
@@ -360,7 +343,7 @@ void TCButton::scan()
         break;
 
     case TCBS_RELEASED:
-        if((active) && (waitTime < _debounceDur)) {  // de-bounce
+        if((active) && (waitTime < _debounceDur)) {
             transitionTo(_lastState);
         } else if((!active) && (waitTime > _pressDur)) {
             if(_pressFunc) _pressFunc();
@@ -376,7 +359,7 @@ void TCButton::scan()
         break;
 
     case TCBS_LONGPRESSEND:
-        if((active) && (waitTime < _debounceDur)) { // de-bounce
+        if((active) && (waitTime < _debounceDur)) {
             transitionTo(_lastState);
         } else if(waitTime >= _debounceDur) {
             if(_longPressStopFunc) _longPressStopFunc();
@@ -409,7 +392,7 @@ void TCButton::transitionTo(ButtonState nextState)
 }
 
 
-#ifdef TC_HAVE_RE
+#ifdef HAVE_RE
 
 /*
  * TCRotEnc class
@@ -494,7 +477,7 @@ enum DUV2_CONF2_PARAM {
 #define DFR_PID_L     0xf6
 
 #define DFR_GAIN_SPD  (1023 / (88 + OFF_SLOTS))
-#define DFR_GAIN_VOL  (1023 / 20)
+#define DFR_GAIN_VOL  (1023 / VOL_LEVELS)
 
 
 TCRotEnc::TCRotEnc(int numTypes, const uint8_t *addrArr)
@@ -734,8 +717,8 @@ int TCRotEnc::updateVolume(int curVol, bool force)
 
         curVol += (rotEncPos - t);
 
-        if(curVol < 0)        curVol = 0;
-        else if(curVol > 19)  curVol = 19;
+        if(curVol < 0) curVol = 0;
+        else if(curVol > VOL_LEVELS - 1) curVol = VOL_LEVELS - 1;
     }
     
     return curVol;

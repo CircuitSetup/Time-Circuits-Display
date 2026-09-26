@@ -32,7 +32,7 @@
  * VEML7700:      0x10
  * 
  * If a MT(K)333x-based GPS receiver or the CircuitSetup speedo is 
- * connected at the same time, 
+ * connected, 
  * - VEML7700 cannot be used;
  * - VEML6030 needs to be set to address 0x48.
  * -------------------------------------------------------------------
@@ -82,7 +82,7 @@
 
 #include "tc_global.h"
 
-#if defined(TC_HAVETEMP) || defined(TC_HAVELIGHT)
+#if defined(HAVE_TEMP) || defined(HAVE_LIGHT)
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -200,7 +200,7 @@ void tcSensor::write8(uint16_t regno, uint8_t value)
  * tempSensor Class
  ****************************************************************/
 
-#ifdef TC_HAVETEMP
+#ifdef HAVE_TEMP
 
 #define MCP9808_REG_CONFIG        0x01   // MCP9808 config register
 #define MCP9808_REG_UPPER_TEMP    0x02   // upper alert boundary
@@ -717,8 +717,10 @@ float tempSensor::readTemp()
         if(!_tempInCelsius) temp = temp * 9.0f / 5.0f + 32.0f;
         temp += _userOffset;
         _lastTempNan = false;
+        _lastTempT100 = (int16_t)(temp * 100.0f);
     } else {
         _lastTempNan = true;
+        _lastTempT100 = -32768;
     }
 
     // We use only 2 digits, so truncate
@@ -825,7 +827,7 @@ bool tempSensor::readAndCheck6(uint8_t *buf, uint16_t& t, uint16_t& h, uint8_t c
     return false;
 }
 
-#endif // TC_HAVETEMP
+#endif // HAVE_TEMP
 
 
 /*****************************************************************
@@ -839,7 +841,7 @@ bool tempSensor::readAndCheck6(uint8_t *buf, uint16_t& t, uint16_t& h, uint8_t c
  * 
  ****************************************************************/
 
-#ifdef TC_HAVELIGHT
+#ifdef HAVE_LIGHT
 
 #define TSL2561_CTRL    0x80
 #define TSL2561_TIM     0x81
@@ -1433,4 +1435,4 @@ static int32_t TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32
     //return (int32_t)max(lux1, lux2);
 }
 
-#endif // TC_HAVELIGHT
+#endif // HAVE_LIGHT

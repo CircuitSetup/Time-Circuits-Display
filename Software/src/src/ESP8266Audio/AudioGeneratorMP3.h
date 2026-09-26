@@ -17,7 +17,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-  Adapted by Thomas Winischhofer, 2023-2025
+  Adapted by Thomas Winischhofer, 2023-2026
 */
 
 #ifndef _AUDIOGENERATORMP3_H

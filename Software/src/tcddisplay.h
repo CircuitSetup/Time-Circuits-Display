@@ -60,7 +60,7 @@
 
 #include "rtc.h"
 
-struct dateStruct {
+struct [[gnu::packed]] dateStruct {
     uint16_t year;
     uint8_t month;
     uint8_t day;
@@ -89,7 +89,7 @@ class tcdDisplay {
     public:
 
         tcdDisplay(unsigned int did, uint8_t address);
-        #ifdef IS_ACAR_DISPLAY
+        #ifdef ACAR_DISPLAY
         void setAddress(uint8_t address) { _address = address; }
         #endif
         void begin();
@@ -119,10 +119,10 @@ class tcdDisplay {
         bool isRTC() { return _rtc; }
 
         void show();
-        #ifndef TC_NO_MONTH_ANIM
+        #ifndef NO_MONTH_ANIM
         void showAnimate(bool firstStage);
         #endif
-        #ifndef IS_ACAR_DISPLAY
+        #ifndef ACAR_DISPLAY
         bool showAnimate3(int mystep);
         #endif
 
@@ -144,22 +144,21 @@ class tcdDisplay {
         void setWeekDay(int wd);
 
         void setColon(bool col) { _colon = _nightmode ? true : col; _beat ^= col; } // colon is on in night mode
+        bool getColon() { return _colon; }
 
         void setYearOffset(int16_t yearOffs);
 
-        uint8_t  getMonth()  { return _month; }
-        uint8_t  getDay()    { return _day;  }
-        uint16_t getYear()   { return _year; }
-        uint8_t  getHour()   { return _hour; }
-        uint8_t  getMinute() { return _minute; }
+        uint8_t  getMonth()  { return _cd.month; }
+        uint8_t  getDay()    { return _cd.day;  }
+        uint16_t getYear()   { return _cd.year; }
+        uint8_t  getHour()   { return _cd.hour; }
+        uint8_t  getMinute() { return _cd.minute; }
 
-        #ifndef IS_ACAR_DISPLAY
+        #ifndef ACAR_DISPLAY
         const char* getMonthString(uint8_t month);
         #endif
 
         int16_t getYearOffset() { return _yearoffset; }
-
-        void getCompressed(uint8_t *buf, uint8_t& over);
 
         void showMonthDirect(int monthNum, uint16_t dflags = 0);
         void showDayDirect(int dayNum, uint16_t dflags = 0);
@@ -171,12 +170,13 @@ class tcdDisplay {
         void showHalfIPDirect(int a, int b, uint16_t flags = 0);
         void showSettingValDirect(const char* setting, int8_t val = -1, uint16_t flags = 0);
 
-        #ifdef TC_HAVETEMP
+        #ifdef HAVE_TEMP
         void showTempDirect(float temp, bool animate = false);
         void showHumDirect(int hum, bool animate = false);
+        void showTempHumDirect(float temp, int hum, bool animate = false);
         #endif
 
-        #ifdef TC_HAVEGPS
+        #ifdef HAVE_GPS
         void showNavDirect(char *msg, bool animate);
         #endif
 
@@ -194,7 +194,7 @@ class tcdDisplay {
     private:
 
         uint8_t  getLED7AlphaChar(uint8_t value);
-        #ifndef IS_ACAR_DISPLAY
+        #ifndef ACAR_DISPLAY
         uint16_t getLEDAlphaChar(uint8_t value);
         #endif
 
@@ -204,8 +204,8 @@ class tcdDisplay {
 
         bool handleNM();
         
-        #ifdef IS_ACAR_DISPLAY
-        #ifndef TC_NO_MONTH_ANIM
+        #ifdef ACAR_DISPLAY
+        #ifndef NO_MONTH_ANIM
         void showAnimate2();
         #endif
         #else
@@ -227,13 +227,10 @@ class tcdDisplay {
         unsigned int _did = 0;
         uint8_t  _address = 0;
 
-        uint16_t _year = 2021;          // keep track of these
         int16_t  _yearoffset = 0;       // Offset for faking years > 2098
 
-        uint8_t _month = 1;
-        uint8_t _day = 1;
-        uint8_t _hour = 0;
-        uint8_t _minute = 0;
+        dateStruct _cd = { 2021, 1, 1, 0, 0 };
+        
         bool    _colon = false;         // should colon be on?
         bool    _beat = false;
 

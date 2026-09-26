@@ -141,13 +141,79 @@
 
 /*  Changelog
  *          
+ *  2026/09/18 (A10001986) [3.27]
+ *    **********************************************************************************
+ *    ** If updating from below 3.20, please see boxed note at version 3.21 below     **
+ *    **********************************************************************************
+ *    - New sound-pack (TW09/CS09)
+ *    - Add option to play a default sound-on-the-hour (clock tower bell plus spoken
+ *      time; requires fully installed sound-pack; only played if not user-overridden by 
+ *      "hour[-xx].mp3" sounds on SD card)
+ *    - MQTT: Split "Publish time travel and alarm events" option into two options, 
+ *      "Time Travel" and "Alarm".can now go different MQTT/BTTFN routes.
+ *    - Keypad command "9" sends "refill" command to Dash Gauges ("009" is also still
+ *      supported).
+ *    - Add support for forwarding "refill" command from FC's and SID's IR remote control
+ *      to the Dash Gauges. (FC 1.107+, SID 1.76+)
+ *    - Fix minor issues with ID3v1 and ID3v2.4-UTF8 tags.
+ *    - Speed up booting with music folders containing many files
+ *    - Music Player: The "TCD_DONE.TXT" file is now obsolete. The firmware instead uses
+ *      a cache file in the top-most folder of the SD card ("musicXc") which needs to be
+ *      deleted when files are added to the respective folder.
+ *    - Protect the TCD from uploading a wrong firmware by accident. The filename of
+ *      the firmware binary now must contain the word "circuits". The check is case-
+ *      insensitive.
+ *    - Add option to configure speedo as briefly shown in part 3 with the left-most
+ *      digit covered by gaffer tape. Only supported on upcoming CircuitSetup speedo v2 
+ *      (featuring a complete third digit).
+ *    - Bonjour/mDNS: Send good-bye packet on controlled reboots
+ *    - Minor tweaks and fixes
+ *  2026/08/19 (A10001986) [3.26]
+ *    **********************************************************************************
+ *    ** If updating from below 3.20, please see boxed note at version 3.21 below     **
+ *    **********************************************************************************
+ *    - New sound-pack (TW08/CS08)
+ *    - WC/RC-hybrid display mode: Show both temperature and humidity on same display
+ *    - Door sound playback: Fix regression introduced in 3.25 
+ *    - More robust error handling in case of malformed config files
+ *    - SD: More compatibility fixes
+ *    - Fix typos in Config Portal: TT_OUT is switched by 900/901 (not 990/991).
+ *    - "Time Cycling": Correct some times of tt
+ *    - Internal BTTFN enhancements
+ *    - Code optimizations
+ *  2026/07/16 (A10001986) [3.25]
+ *    **********************************************************************************
+ *    ** If updating from below 3.20, please see boxed note at version 3.21 below     **
+ *    **********************************************************************************
+ *    - Bugfix: Year in BTTFN-broadcast time stamp was truncated
+ *    - Bugfix: Fix SD initialization in ESP32-Arduino to conform to specs.
+ *      Sandisk Ultra 32GB cards (and possibly others that previously were not usable) 
+ *      are now recognized.
+ *    - Internal BTTFN changes
+ *  2026/06/25 (A10001986) [3.24]
+ *    **********************************************************************************
+ *    ** If updating from below 3.20, please see boxed note at version 3.21 below     **
+ *    **********************************************************************************
+ *    - MQTT: Add "VOLUME_UP"/"VOLUME_DOWN"/"VOLUME_SET_xxx" commands
+ *    - MQTT: Add publishing Music Player status to bttf/tcd/mpstatus
+ *    - Music Player: Use new sorting algorithm as the old one caused a crash on a 
+ *      large number of already sorted files (due to excessive recursion).
+ *  2026/05/21 (A10001986) [3.23]
+ *    **********************************************************************************
+ *    ** If updating from below 3.20, please see boxed note at version 3.21 below     **
+ *    **********************************************************************************
+ *    - New Sound-Pack (TW07/CS07). Marty will tell you the displayed time whenever
+ *      pressing ENTER without entering a command.
+ *    - Add keypad commands 30-33 to set relative beep volume level
+ *    - Remap keypad command 33 (show weekday) to 39
+ *    - Remap keypad commands 000/001/002/003 to 20/21/22/23 to match FC's flux mode
+ *      (000-003 still supported)
+ *    - Refactor logic when toggling world clock & room condition hybrid mode
+ *    - Display TCD-AP BSSID on WiFi Settings page in Config Portal
+ *    - Internal BTTFN enhancements
  *  2026/04/19 (A10001986) [3.22]
  *    **********************************************************************************
- *    ** If updating from below 3.20, please install 3.20 or 3.20.1 first to have     **
- *    ** your settings converted. If 3.20(.1) is skipped, many of your settings       **
- *    ** will be restored to default values. It suffices to install 3.20 or 3.20.1    **
- *    ** and boot once; you can then immediately update to a later version.           **
- *    ** https://github.com/realA10001986/Time-Circuits-Display/releases/tag/V3.20.1  **
+ *    ** If updating from below 3.20, please see boxed note at version 3.21 below     **
  *    **********************************************************************************
  *    - "Persistent" time travels no longer overwrite stored user-programmed dates
  *      for red and yellow displays. User times can be brought back by 998 at any time.
@@ -192,7 +258,7 @@
  *    - Programming the Destination Time/Last Time Departed displays through the 
  *      keypad menu no longer disables time cycling, it only pauses it for 30 mins.
  *    - MQTT: Add 10 user defined topics and messages for publishing through keypad 
- *      codes 600-609.
+ *      commands 600-609.
  *    - WiFi: Allow defining a BSSID (AP MAC address) to connect to a specific AP
  *      if multiple APs with identical SSID are available.
  *    - A-Car version can now swap red and yellow displays to emulate B-Car as seen
@@ -202,7 +268,7 @@
  *    - MQTT: Disable if server can't be resolved
  *    - WiFi: Do not power down AP long as a client is connected
  *    - Brush up Config Portal a bit
- *    - Code optimizations and fixes.
+ *    - Code optimizations and fixes
  *  2026/03/04 (A10001986) [3.20.1]
  *    - Fix saving display times
  *  2026/02/16 (A10001986) [3.20]
@@ -225,11 +291,11 @@
  *    - World Clock mode: Display location name with time if both fit
  *    - Config files are now only written if actually changed which prolongs
  *      Flash life-span.
- *    - Add TC_NO_MONTH_ANIM compile-time option to skip the date-entry animation.
+ *    - Add NO_MONTH_ANIM compile-time option to skip the date-entry animation.
  *      Might be desirable when using A-car displays: Given the "month" is just
  *      an ordinary 2-digit number (and no back-lit gel) the real thing probably
  *      switched on the entire line at once.
- *    - Code optimizations and fixes.
+ *    - Code optimizations and fixes
  *  2026/01/11 (A10001986) [3.11]
  *    - New sound pack (TW05/CS05)
  *    - Keypad menu: Add navigation using keypad keys 2 (up), 5 (select), 8 (down), 
@@ -318,7 +384,7 @@
  *  2025/11/08 (A10001986)
  *    - Move HA/MQTT settings to separate config portal page
  *    - Allocate MQTT buffer only if MQTT is actually used
- *    - Re-order time_loop(): Handle timers in loop iteration following second
+ *    - Re-order main_loop(): Handle timers in loop iteration following second
  *      change
  *    - Minor code cleanups
  *    - Put beep in flash now that there is space
@@ -353,7 +419,7 @@
  *    - [Broken in 3.7] Add "Remote fake power controls TCD fake power" feature. 
  *      While Remote is Master, TFC switch changes are tracked but ignored. When 
  *      Remote releases fake power control, TFC switch state becomes immediately
- *       effective. Configuration of this feature is done solely on the Remote.
+ *      effective. Configuration of this feature is done solely on the Remote.
  *      Requires firmware >= 1.12 on Remote. 
  *    - Save beep mode when changed on-the-fly so it's restored on power-up.
  *    - Fix deleting a bad .bin file after upload
@@ -1055,7 +1121,7 @@
  *    * [Pre-compiled binary: Patch WiFiManager::HTTPSend (avoid duplication of String)]
  *    - HA/MQTT: Publish "REENTRY" for external props; fix error in topic scanning;
  *      subscribe two topics at a time.
- *    - time_loop(): Move less timing critical stuff to when there is no half-
+ *    - main_loop(): Move less timing critical stuff to when there is no half-
  *      second switch.
  *  2023/05/01 (A10001986)
  *    - HA/MQTT changes: More commands supported; commands can be in lower case; 
@@ -1734,7 +1800,7 @@
 #include "tc_audio.h"
 #include "tc_keypad.h"
 #include "tc_settings.h"
-#include "tc_time.h"
+#include "tc_main.h"
 #include "tc_wifi.h"
 
 void setup()
@@ -1749,12 +1815,12 @@ void setup()
     // Also, speedo cable is usually quite long, play it safe.
     Wire.begin(-1, -1, 100000);
 
-    time_boot();
+    main_boot();
     settings_setup();
     wifi_setup();
     audio_setup();
     keypad_setup();
-    time_setup();
+    main_setup();
 }
 
 #ifdef TC_PROFILER
@@ -1769,7 +1835,7 @@ void loop()
     audio_loop();
     bttfn_loop(BNLP_SK_MC|BNLP_SK_NOTDATA|BNLP_SK_EXPIRE);
     audio_loop();
-    time_loop();
+    main_loop();
     audio_loop();
     wifi_loop();
     audio_loop();
@@ -1779,6 +1845,6 @@ void loop()
 }
 #endif
 
-#if defined(TC_DBG_TIME) || defined(TC_DBG_NET) || defined(TC_DBG_GPS)
+#if defined(TC_DBG_TIME) || defined(TC_DBG_NET) || defined(TC_DBG_GPS) || defined(TC_DBG_GEN)
 #warning "Debug output is enabled. Binary not suitable for release."
 #endif

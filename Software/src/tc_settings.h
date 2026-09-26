@@ -56,23 +56,34 @@
 #ifndef _TC_SETTINGS_H
 #define _TC_SETTINGS_H
 
+#include <FS.h>
 #include "tcddisplay.h"
 
-void settings_setup();
+#define MS(s) XMS(s)
+#define XMS(s) #s
 
 void unmount_fs();
 
-void clearWiFiCredentials();
-
-void write_settings();
-bool checkConfigExists();
+void deleteFileFromSD(const char *fn);
+bool readFileFromSD(const char *fn, uint8_t *buf, int len);
+bool writeFileToSD(const char *fn, uint8_t *buf, int len);
 
 bool evalBool(char *s);
 bool evalBoolSetClear(char *s, uint32_t& ff, uint32_t fl);
 
+void clearWiFiCredentials();
+
+void write_settings();
+
+void settings_setup();
+
 void saveBrightness();
 
 void saveBeepAutoInterval();
+
+void loadCurVolume();
+void storeCurVolume();
+void saveCurVolume();
 
 void loadAlarm();
 void saveAlarm();
@@ -82,10 +93,6 @@ void saveReminder();
 
 void saveCarMode();
 
-void loadCurVolume();
-void storeCurVolume();
-void saveCurVolume();
-
 void loadStaleTime(void *target, bool& currentOn);
 void saveStaleTime(void *source, bool currentOn);
 void initDefaultStaleTime(void *src);
@@ -93,7 +100,7 @@ void initDefaultStaleTime(void *src);
 void loadLineOut();
 void saveLineOut();
 
-#ifdef TC_HAVE_REMOTE
+#ifdef HAVE_REMOTE
 void saveRemoteAllowed();
 #endif
 
@@ -121,14 +128,13 @@ bool loadIpSettings();
 void writeIpSettings();
 void deleteIpSettings();
 
-bool check_if_default_audio_present();
-bool copy_audio_files(bool& delIDfile);
-
-bool check_allow_CPA();
-void delete_ID_file();
-
 void reInstallFlashFS();
 void moveSettings();
+
+bool check_allow_CPA();
+bool check_if_default_audio_present();
+bool copy_audio_files(bool& delIDfile);
+void delete_ID_file();
 
 #define MAX_SIM_UPLOADS 16
 #define UPL_OPENERR 1
@@ -138,8 +144,8 @@ void moveSettings();
 #define UPL_MEMERR  5
 #define UPL_UNKNOWN 6
 #define UPL_DPLBIN  7
-#include <FS.h>
 bool   openUploadFile(String& fn, File& file, int idx, bool haveAC, int& opType, int& errNo);
+extern uint32_t (*t)(uint8_t *, uint32_t, uint32_t);
 size_t writeACFile(File& file, uint8_t *buf, size_t len);
 void   closeACFile(File& file);
 void   removeACFile(int idx);
@@ -147,22 +153,6 @@ void   renameUploadFile(int idx);
 char   *getUploadFileName(int idx);
 int    getUploadFileNameLen(int idx);
 void   freeUploadFileNames();
-
-extern bool       haveFS;
-extern bool       haveSD;
-extern bool       FlashROMode;
-extern bool       configOnSD;
-extern const char rspv[];
-
-extern bool       haveAudioFiles;
-
-extern unsigned int musFolderNum;
-
-extern int        sspeedopin;
-extern int        stachopin;
-
-#define MS(s) XMS(s)
-#define XMS(s) #s
 
 // Default settings
 #define DEF_HOSTNAME        "timecircuits"
@@ -180,6 +170,7 @@ extern int        stachopin;
 #define DEF_P3ANIM          0     // 0: P1/P2 anim, 1: P3 anim on destination date entry
 #define DEF_SWPDL           0     // 0: Red is red displays, y is y; 1: swap (for b-car replica)
 #define DEF_PLAY_TT_SND     1     // 1: Play time travel sounds, 0: Do not; for use with external gear
+#define DEF_PLAY_TOTH       0     // 1: Say time on the hour (if soth not user-overridden), 0 Don't
 #define DEF_ALARM_RTC       1     // 0: Alarm is presentTime-based; 1: Alarm is RTC-based
 #define DEF_MODE24          0     // 0: 12 hour clock; 1: 24 hour clock
 #define DEF_TIMEZONE        ""    // Default: UTC; Posix format
@@ -187,10 +178,10 @@ extern int        stachopin;
 #define DEF_USE_GPS_TIME    1     // Use GPS time (if available)
 #define DEF_WCSHOWNAME      1     // WC Mode: 1: Show name permanently (if short enough), 0: alternate name <> date
 #define DEF_ALARM_TYPE      0     // 0: Simple/legacy, 1: Advanced
-#define DEF_SNOOZE          1
-#define DEF_SNOOZE_TIME     9
-#define DEF_ASNOOZE         1
-#define DEF_LOOP_USER_SND   0
+#define DEF_SNOOZE          1     // 1:Snooze, 0:No Snooze
+#define DEF_SNOOZE_TIME     9     // Snooze time (minutes)
+#define DEF_ASNOOZE         1     // 1:Do Auto-Snooze, 0:Don't
+#define DEF_LOOP_USER_SND   0     // Loop user sound: 1:yes, 0:no
 #define DEF_BRIGHT_DEST     10    // 1-15
 #define DEF_BRIGHT_PRES     10
 #define DEF_BRIGHT_DEPA     10
@@ -204,13 +195,12 @@ extern int        stachopin;
 #define DEF_LUX_LIMIT       3     // Lux threshold for night mode
 #define DEF_CFG_ON_SD       1     // 1: Save secondary settings on SD, 0: Do not (use internal Flash)
 #define DEF_TIMES_PERS      0     // 0: Timetravels not persistent; 1: TT persistent
-#define DEF_SD_FREQ         0     // 0: SD/SPI frequency: Default 16MHz
 #define DEF_REVAMPM         0     // 0: AM/PM like in P1, 1: AM/PM like in P2/P3
 
 #define DEF_FAKE_PWR        0     // 0: Do not use external fake "power" switch, 1: Do
 #define DEF_SPEEDO_TYPE     99    // 99: None
 #define DEF_BRIGHT_SPEEDO   15    // Brightness for speedo
-#ifdef SP_ALWAYS_ON
+#ifdef CS_EDITION
 #define DEF_SPEEDO_AO       0     // Speedo: 0: Keep on when idle, do not switch off, 1: switch off when idle (=old behavior)
 #else
 #define DEF_SPEEDO_AO       1     // Speedo: 0: Keep on when idle, do not switch off, 1: switch off when idle (=old behavior)
@@ -220,7 +210,7 @@ extern int        stachopin;
 #define DEF_SPEEDO_P3       0     // Speedo: 1: Like part 3 (leading 0 < 10, no dot) / 0: like parts 1/2 (single digit < 10, dot)
 #define DEF_SPEEDO_3RDD     0     // Speedo: 1: Enable third digit (always 0) on CircuitSetup speedo, 0: Do not
 #define DEF_USE_GPS_SPEED   0     // 0: Do not show GPS speed on speedo display; 1: Do
-#define DEF_SPD_UPD_RATE    1     // 0: 1Hz, 1: 2Hz (default), 2: 4Hz, 3: 5Hz
+#define DEF_SPD_UPD_RATE    1     // 0: 1Hz, 1: 2Hz, 2: 4Hz, 3: 5Hz
 #define DEF_DISP_TEMP       1     // 1: Display temperature (if available) on speedo; 0: do not (speedo off)
 #define DEF_TEMP_BRIGHT     3     // Temperature brightness
 #define DEF_TEMP_OFF_NM     1     // 1: temperature off in night mode; 0: dimmed
@@ -263,18 +253,19 @@ struct Settings {
     char autoRotateTimes[2] = MS(DEF_AUTOROTTIMES);
     char autoRotAnim[2]     = MS(DEF_ANIM_AUTOROT);
     char skipTTAnim[2]      = MS(DEF_SKIP_TTANIM);
-#ifndef IS_ACAR_DISPLAY
+#ifndef ACAR_DISPLAY
     char p3anim[2]          = MS(DEF_P3ANIM);
 #endif
-#ifdef IS_ACAR_DISPLAY
+#ifdef ACAR_DISPLAY
     char swapDL[2]          = MS(DEF_SWPDL);
 #endif
     char playTTsnds[2]      = MS(DEF_PLAY_TT_SND);
+    char sayTOTH[2]         = MS(DEF_PLAY_TOTH);
     char alarmRTC[2]        = MS(DEF_ALARM_RTC);
     char mode24[2]          = MS(DEF_MODE24);
     char timeZone[64]       = DEF_TIMEZONE;
     char ntpServer[64]      = DEF_NTP_SERVER;
-#ifdef TC_HAVEGPS    
+#ifdef HAVE_GPS    
     char useGPSTime[2]      = MS(DEF_USE_GPS_TIME);
 #endif
     char timeZoneDest[64]   = "";
@@ -293,13 +284,12 @@ struct Settings {
     char autoNMPreset[4]    = MS(DEF_AUTONM_PRESET);
     char autoNMOn[4]        = MS(DEF_AUTONM_ON);
     char autoNMOff[4]       = MS(DEF_AUTONM_OFF);
-#ifdef TC_HAVELIGHT
+#ifdef HAVE_LIGHT
     char useLight[2]        = MS(DEF_USE_LIGHT);
     char luxLimit[8]        = MS(DEF_LUX_LIMIT);
 #endif
     char CfgOnSD[2]         = MS(DEF_CFG_ON_SD);
     char timesPers[2]       = MS(DEF_TIMES_PERS);
-    //char sdFreq[2]          = MS(DEF_SD_FREQ);
     char revAmPm[4]         = MS(DEF_REVAMPM);
 
     char fakePwrOn[2]       = MS(DEF_FAKE_PWR);
@@ -309,12 +299,13 @@ struct Settings {
     char speedoAF[2]        = MS(DEF_SPEEDO_ACCELFIG);
     char speedoFact[6]      = MS(DEF_SPEEDO_FACT);
     char speedoP3[2]        = MS(DEF_SPEEDO_P3);
+    char speedoP3R[2]       = "0";
     char speedo3rdD[2]      = MS(DEF_SPEEDO_3RDD);
-#ifdef TC_HAVEGPS
+#ifdef HAVE_GPS
     char dispGPSSpeed[2]    = MS(DEF_USE_GPS_SPEED);
     char spdUpdRate[2]      = MS(DEF_SPD_UPD_RATE);
 #endif
-#ifdef TC_HAVETEMP
+#ifdef HAVE_TEMP
     char dispTemp[2]        = MS(DEF_DISP_TEMP);
     char tempBright[4]      = MS(DEF_TEMP_BRIGHT);
     char tempOffNM[2]       = MS(DEF_TEMP_OFF_NM);
@@ -332,11 +323,11 @@ struct Settings {
     char ttinpin[4]         = "0";
     char ttoutpin[4]        = "0";
 #endif
-#ifdef TC_HAVEGPS
+#ifdef HAVE_GPS
     char provGPS2BTTFN[2]   = MS(DEF_GPS4BTTFN);
 #endif
 
-#ifdef TC_HAVEMQTT  
+#ifdef HAVE_MQTT  
     char useMQTT[2]        = "0";
     char mqttVers[2]       = "0"; // 0 = 3.1.1, 1 = 5.0
     char mqttServer[80]    = "";  // ip or domain [:port]  
@@ -344,13 +335,15 @@ struct Settings {
     char mqttTopic[64]     = "";  // topic (UTF8)       [limited to 63 bytes through WM]
     char mqttTopicP[64]    = "";  // topic (UTF8)       [limited to 63 bytes through WM]
     char mqttTopicL[64]    = "";  // topic (UTF8)       [limited to 63 bytes through WM]
-    char pubMQTT[2]        = "0";              // publish to broker (timetravel, alarm)
-    char MQTTvarLead[2]    = MS(DEF_MQTT_VTT); // publish TIMETRAVEL with lead and P1 duration appended (default to on)
+    char pubMQTT[2]        = "0";              // publish to broker (timetravel)
+    char pubMQTTAl[2]      = "0";              // publish to broker (alarm)
+    char MQTTvarLead[2]    = MS(DEF_MQTT_VTT); // publish TIMETRAVEL with lead and P1 duration appended
     char mqttPwr[2]        = "0"; // Do not start with MQTT having control over fake-power
     char mqttPwrOn[2]      = "0"; // Do not wait for POWER_ON at startup
+    char pubMP[2]          = "0"; // 1:Publish music player status to bttf/tcd/mpstatus, 0: Don't
     char *mqmt[10];
     char *mqmm[10];
-#endif // TC_HAVEMQTT
+#endif // HAVE_MQTT
 
     // Kludge
     uint8_t destTimeBright  = DEF_BRIGHT_DEST;
@@ -368,8 +361,20 @@ struct IPSettings {
     char dns[20]      = "";
 };
 
-extern struct Settings    settings;
-extern struct IPSettings  ipsettings;
+extern struct     Settings    settings;
+extern struct     IPSettings  ipsettings;
 
+extern bool       haveFS;
+extern bool       haveSD;
+extern bool       FlashROMode;
+extern bool       configOnSD;
+extern const char rspv[];
+
+extern bool       haveAudioFiles;
+
+extern unsigned int musFolderNum;
+
+extern int        sspeedopin;
+extern int        stachopin;
 
 #endif

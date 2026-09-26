@@ -56,7 +56,7 @@
 
 #include "tc_global.h"
 
-#ifdef TC_HAVEGPS
+#ifdef HAVE_GPS
 
 #include <Arduino.h>
 #include <Wire.h>

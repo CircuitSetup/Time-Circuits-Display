@@ -6,7 +6,7 @@
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
  *
- * Time and Main Controller
+ * Main Controller
  *
  * -------------------------------------------------------------------
  * License: Modified MIT NON-AI
@@ -53,22 +53,22 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _TC_TIME_H
-#define _TC_TIME_H
+#ifndef _TC_MAIN_H
+#define _TC_MAIN_H
 
 #include "rtc.h"
 #include "tcddisplay.h"
-#ifdef TC_HAVEGPS
+#ifdef HAVE_GPS
 #include "gps.h"
 #endif
 #include "speeddisplay.h"
-#if defined(TC_HAVELIGHT) || defined(TC_HAVETEMP)
+#if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
 #include "sensors.h"
 #endif
 
-void      time_boot();
-void      time_setup();
-void      time_loop();
+void      main_boot();
+void      main_setup();
+void      main_loop();
 
 int       timeTravelProbe(bool doComplete, bool& withSpeedo, bool forceNoLead = false);
 int       timeTravel(bool doComplete, bool withSpeedo, bool forceNoLead = false);
@@ -81,12 +81,7 @@ void      send_abort_msg();
 void      setTTOUTpin(uint8_t val);
 void      ettoPulseEnd();
 
-void      bttfnSendFluxCmd(uint32_t payload);
-void      bttfnSendSIDCmd(uint32_t payload);
-void      bttfnSendPCGCmd(uint32_t payload);
-void      bttfnSendVSRCmd(uint32_t payload);
-void      bttfnSendAUXCmd(uint32_t payload);
-void      bttfnSendRemCmd(uint32_t payload);
+void      bttfnSendPropCmd(int kt, uint32_t p);
 
 void      resetPresentTime();
 
@@ -100,11 +95,13 @@ void      restoreLastTime();
 void      updatePresentTime(uint8_t wdplus1 = 0);
 void      updateStalePresent(int index);
 
+void      get_time_segs(int pbt, int whichone, int16_t *sL, int gh, int gm);
+
 void      pauseAuto();
 bool      checkIfAutoPaused();
 void      endPauseAuto(void);
 
-#ifdef TC_HAVEMQTT
+#ifdef HAVE_MQTT
 void      mqttFakePowerControl(bool);
 void      mqttFakePowerOn();
 void      mqttFakePowerOff();
@@ -138,14 +135,15 @@ void      enableRcMode(bool onOff);
 bool      toggleRcMode();
 bool      isRcMode();
 
-#ifdef TC_HAVETEMP
-bool      tempInCelsius();
+#ifdef HAVE_TEMP
+char      tempUnitChar();
 #endif
 
-#ifdef TC_HAVE_RE
+#ifdef HAVE_RE
 void      re_vol_reset();
 #endif
 
+void      triggerDelayedVolSave();
 void      flushDelayedSave();
 
 void      animate(bool withLEDs = false);
@@ -155,7 +153,7 @@ void      allOn();
 void      allresetBrightness();
 void      loadUserDLTimes();
 
-#ifdef TC_HAVEGPS
+#ifdef HAVE_GPS
 bool      gpsHaveFix();
 bool      gpsMakePos(char *lat, char *lon);
 bool      haveNavMode();
@@ -166,7 +164,7 @@ void      setNavDisplayMode(int dm);
 #endif
 bool      isNavMode();
 
-#if defined(TC_HAVEGPS) || defined(TC_HAVE_RE) || defined(TC_HAVE_REMOTE)
+#if defined(HAVE_GPS) || defined(HAVE_RE) || defined(HAVE_REMOTE)
 void      speedoUpdate_loop(bool async);
 #endif
 
@@ -176,7 +174,7 @@ uint8_t   dayOfWeek(int d, int m, int y);
 int       daysInMonth(int month, int year);
 bool      isLeapYear(int year);
 uint32_t  getHrs1KYrs(int index);
-#ifdef TC_JULIAN_CAL
+#ifdef JULIAN_CAL
 void      correctNonExistingDate(int year, int month, int& day);
 #endif
 uint8_t*  e(uint8_t *, uint32_t, int);
@@ -191,14 +189,15 @@ void      ntp_setup(bool doUseNTP, IPAddress& ntpServer, bool couldHaveNTP, bool
 void      ntp_loop();
 void      ntp_short_loop();
 int       ntp_status();
+void      ntp_cancel();
 
 int       bttfnNumClients();
 bool      bttfnGetClientInfo(int c, char **id, uint8_t **ip, uint8_t *type);
 bool      bttfn_loop(uint32_t taskMask = 0);
 bool      bttfn_loop_ex();
-void      bttfn_notify_info();
+int       bttfn_notify_info();
 
-#ifdef TC_HAVE_REMOTE
+#ifdef HAVE_REMOTE
 void      removeRemote();
 void      removeKPRemote();
 #endif
@@ -208,7 +207,7 @@ void      removeKPRemote();
 #define BTTFN_TYPE_SID     2    // SID
 #define BTTFN_TYPE_PCG     3    // Dash gauges
 #define BTTFN_TYPE_VSR     4    // VSR
-#define BTTFN_TYPE_AUX     5    // Aux (user custom device)
+#define BTTFN_TYPE_AUX     5    // Aux (user custom device, Jukebox)
 #define BTTFN_TYPE_REMOTE  6    // Futaba remote control
 #define BTTFN_TYPE__MIN    1
 #define BTTFN_TYPE__MAX    BTTFN_TYPE_REMOTE
@@ -225,7 +224,6 @@ extern bool showUpdAvail;
 extern uint16_t lastYear;
 
 extern DateTime gdtu, gdtl;
-extern bool couldDST[3];
 
 extern uint32_t wcf;
 #define WCF_HaveWCM     0x0001
@@ -235,12 +233,21 @@ extern uint32_t wcf;
 #define WCF_showName1   0x0040
 #define WCF_showName2   0x0080
 #define WCF_HaveRCM     0x8000
+
+#define WCFM_HaveBothTZ (WCF_HaveTZ1|WCF_HaveTZ2)
 extern int destShowAlt, depShowAlt;
 
-extern bool syncTrigger;
-extern unsigned long syncTriggerNow;
+extern uint32_t schf;
+#define SCHF_STARTUP    0x0001
+#define SCHF_STARTUP2   0x0002
+#define SCHF_DEFERREDCP 0x0004
+#define SCHF_SENDINFO   0x0008
+#define SCHF_DOOR1      0x0010
+#define SCHF_DOOR2      0x0020
+#define SCHF_TS         0x0040
+
+extern unsigned long syncTrigger;
 extern bool doAPretry;
-extern bool deferredCP;
 
 extern uint64_t lastAuthTime64;
 
@@ -274,20 +281,17 @@ extern uint32_t sgf;
 #define SGF_UGPSTime      0x0100    // useGPSTime
 #define SGF_DispGPSSpd    0x0200    // dispGPSSpeed
 #define SGF_GPS2BTTFN     0x0400    // provGPS2BTTFN
+#define SGF_HaveHum       0x1000    // tempSens.haveHum()
 #define SGF_TempCelsius   0x2000    // tempUnit
 #define SGF_ULightSens    0x4000    // useLight
 #define SGF_URotEncVol    0x8000    // useRotEncVol
 
 extern speedDisplay speedo;
-#ifdef TC_HAVETEMP
+#ifdef HAVE_TEMP
 extern tempSensor tempSens;
 #endif
-#ifdef TC_HAVELIGHT
+#ifdef HAVE_LIGHT
 extern lightSensor lightSens;
-#endif
-#ifdef TC_HAVE_REMOTE
-extern bool remoteAllowed;
-extern bool remoteKPAllowed;
 #endif
 
 extern tcRTC rtc;
@@ -320,7 +324,7 @@ extern uint32_t      alf;
 
 extern bool          ETTOcommands;
 
-extern uint8_t          autoInterval;
+extern unsigned int     autoInterval;
 extern const uint8_t    autoTimeIntervals[6];
 extern int              autoIntAnimRunning;
 #define NUM_AUTOTIMES 11
@@ -333,24 +337,31 @@ extern dateStruct stalePresentTime[2];
 extern int  specDisp;
 
 extern uint32_t csf;
-#define CSF_P0        0x00000001    // Time Travel sequence stages
-#define CSF_P1        0x00000002
-#define CSF_RE        0x00000004
-#define CSF_P2        0x00000008
-#define CSF_ST        0x00000010    // "startup" sequence running
-#define CSF_OFF       0x00000020    // We are fake-off (if bit set)
-#define CSF_MA        0x00000040    // Menu active = busy
-#define CSF_NS        0x00000080    // No scan: Suppress WiFi Scan (so we don't have to abuse any other flag)
-#define CSF_NM        0x00000100    // Night mode
-#define CSF_AL        0x00000200    // Alarm (Extended mode only)
-#define CSF_AE        0x00000400    // Enter pressed during Alarm, extends AL period (Extended mode only)
-#define CSF_HAVEREM   0x00000800    // Remote present
-#define CSF_RSM       0x00001000    // Remote is speed-master
-#define CSF_RPM       0x00002000    // Remote is power-master
-#define CSF_MQTTPM    0x00004000    // MQTT is power-master (MQTTPwrMaster)
-#define CSF_RESTOREFP 0x00008000    // restore fake-power
-#define CSF_PWRLOW    0x40000000    // CPU in power-safe
-#define CSF_BOOTSTRAP 0x80000000    // We are in boot-stap
+#define CSF_NM         0x00000001    // DO NOT CHANGE - MUST MATCH BTTFN BITS. Night mode
+#define CSF_OFF        0x00000002    // DO NOT CHANGE. We are fake-off (if bit set)
+#define CSF_REMALLOW   0x00000004    // DO NOT CHANGE. Remote allowed
+#define CSF_REMKPALLOW 0x00000008    // DO NOT CHANGE. Remote Keypad allowed
+#define CSF_MA         0x00000010    // DO NOT CHANGE. Menu active = busy
+#define CSF_NS         0x00000020    // No scan: Suppress WiFi Scan (so we don't have to abuse any other flag)
+#define CSF_REBOOT     0x00000040    // Reboot ahead
+#define CSF_P0         0x00000100    // Time Travel sequence stages
+#define CSF_P1         0x00000200
+#define CSF_RE         0x00000400
+#define CSF_P2         0x00000800
+#define CSF_ST         0x00001000    // "startup" sequence running
+#define CSF_AL         0x00010000    // Alarm (Extended mode only)
+#define CSF_AE         0x00020000    // Enter pressed during Alarm, extends AL period (Extended mode only)
+#define CSF_HAVEREM    0x00100000    // Remote present
+#define CSF_RSM        0x00200000    // Remote is speed-master
+#define CSF_RPM        0x00400000    // Remote is power-master
+#define CSF_MQTTPM     0x00800000    // MQTT is power-master (MQTTPwrMaster)
+#define CSF_NOMUSIC    0x01000000    // Current music folder contrains no music
+#define CSF_INFOUPD    0x04000000    // Send INFO on account of changed times
+#define CSF_RESTOREFP  0x20000000    // restore fake-power
+#define CSF_PWRLOW     0x40000000    // CPU in power-safe
+#define CSF_BOOTSTRAP  0x80000000    // We are in boot-stap
+
+#define CSF_BTTFN_STATUS_MASK   (CSF_NM|CSF_OFF|CSF_REMALLOW|CSF_REMKPALLOW|CSF_MA)
 
 // bttfn_loop() taskMask
 #define BNLP_SK_MC      1   // skip MC socket poll
@@ -359,7 +370,7 @@ extern uint32_t csf;
 #define BNLP_SK_EXPIRE  8   // skip client expiry
 
 extern uint32_t  mqttDisp;
-#ifdef TC_HAVEMQTT
+#ifdef HAVE_MQTT
 #define MQ_DISP_D 1
 #define MQ_DISP_P 2
 #define MQ_DISP_L 4
@@ -370,7 +381,7 @@ extern int16_t  mqttMaxIdx[];
 extern bool     mqttST[];
 #endif
 
-extern bool bttfnHaveClients;
+extern int bttfnHaveClients;  // This is a bool by nature
 
 // Time Travel difference to RTC
 extern uint64_t timeDifference;
@@ -381,8 +392,7 @@ extern bool timetravelPersistent;
 extern bool MQTTWaitForOn;
 
 extern uint8_t beepMode;
-extern bool beepTimer;
+extern unsigned long beepTimer;
 extern unsigned long beepTimeout;
-extern unsigned long beepTimerNow;
 
 #endif

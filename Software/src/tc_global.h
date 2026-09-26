@@ -16,8 +16,8 @@
  *************************************************************************/
 
 // Uncomment if using A-Car displays (numeric month)
-// See TC_NO_MONTH_ANIM for more "A-carness".
-//#define IS_ACAR_DISPLAY
+// See NO_MONTH_ANIM for more "A-carness".
+//#define ACAR_DISPLAY
 
 // Uncomment if using a GTE keypad control board
 //#define GTE_KEYPAD
@@ -28,11 +28,11 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION_REV   "V3.22"      // 7 chars max. Do NOT change format.
-#ifndef IS_ACAR_DISPLAY
-#define TC_VERSION_EXTRA "APR192026"  // 13 chars max
+#define TC_VERSION_REV   "V3.27"      // 7 chars max. Do NOT change format.
+#ifndef ACAR_DISPLAY
+#define TC_VERSION_EXTRA "SEP182026"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "04192026"   // 12 chars max
+#define TC_VERSION_EXTRA "09182026"   // 12 chars max
 #endif
 
 /*************************************************************************
@@ -43,7 +43,7 @@
 // (0x10). Can be used as time source and/or to display actual speed on 
 // speedometer display and/or to display geolocation. Needs to be #defined
 // for using CircuitSetup's speedo with integrated GPS receiver.
-//#define TC_HAVEGPS
+//#define HAVE_GPS
 
 // Uncomment for rotary encoder support
 // Currently Adafruit 4991/5880, DFRobot Gravity 360 and DuPPA I2CEncoder 2.1
@@ -54,11 +54,11 @@
 // to 88. Turning the knob a few notches below 0 switches the speedo off (or
 // allows temperature to be shown, if so configured).
 // A secondary rotary encoder is used for audio volume.
-//#define TC_HAVE_RE
+//#define HAVE_RE
 
 // Uncomment for Remote control support
 // "Remote" is a modified Futaba remote control. See https://remote.out-a-ti.me
-//#define TC_HAVE_REMOTE
+//#define HAVE_REMOTE
 
 // Uncomment to trigger a time travel when reaching a (real) GPS speed of 88. 
 // Use at own risk.
@@ -70,14 +70,14 @@
 // speedometer display when idle (GPS speed has higher priority, ie if "Display 
 // GPS speed" is checked in the Config Portal, temperature will not be shown on 
 // speedo). See sensors.cpp for supported i2c slave addresses
-//#define TC_HAVETEMP
+//#define HAVE_TEMP
 
 // Uncomment for support of a light sensor (TSL2561/2591, BH1750, VEML7700/6030
 // or LTR303/329) connected via i2c. Used for night-mode-switching. VEML7700  
 // and GPS cannot be present at the same time since they share the same 
 // i2c slave address. VEML6030 needs to be set to 0x48 if GPS is present.
 // See sensors.cpp for supported i2c slave addresses.
-//#define TC_HAVELIGHT
+//#define HAVE_LIGHT
 
 // (Un)comment for RTC chip selection. At least one MUST be defined.
 #define HAVE_DS3231
@@ -88,7 +88,7 @@
  *************************************************************************/
 
 // Uncomment for HomeAssistant MQTT protocol support
-#define TC_HAVEMQTT
+#define HAVE_MQTT
 
 // Uncomment to allow "persistent time travels" only if an SD card is
 // present and option "Save secondary setting to SD" is checked. 
@@ -100,7 +100,7 @@
 // If this is commented, the TCD uses the Gregorian calendar all the way,
 // ie since year 1. If this is uncommented, the Julian calendar is used
 // until either Sep 2, 1752 or Oct 4, 1582, depending on JSWITCH_1582.
-#define TC_JULIAN_CAL
+#define JULIAN_CAL
 // If this is uncommented, the switch from Julian to Gregorian calendar is
 // after Oct 4, 1582 (at which point most of Europe, plus the Spanish 
 // colonies switched); if commented, the date is Sep 2, 1752 (when USA, UK, 
@@ -112,18 +112,15 @@
 // Might be desirable when using A-car displays: Given the "month" is
 // just an ordinary 2-digit number (and no back-lit gel) the real thing
 // probably switched on the entire line at once.
-#ifdef IS_ACAR_DISPLAY
-#define TC_NO_MONTH_ANIM
+#ifdef ACAR_DISPLAY
+#define NO_MONTH_ANIM
 #endif
-
-// Use SPIFFS (if defined) or LittleFS (if undefined; esp32-arduino 2.x)
-//#define USE_SPIFFS
 
 /*************************************************************************
  ***                           Customization                           ***
  *************************************************************************/
 
-#define CS_EDITION    // Compile CircuitSetup edition
+//#define CS_EDITION    // Compile CircuitSetup edition
 
 //#define SERVOSPEEDO
 
@@ -131,7 +128,7 @@
 //#define TWPRIVATE       // A10001986's private customizations
 #ifdef TWPRIVATE
 #undef SERVOSPEEDO
-#define SERVOSPEEDO
+//#define SERVOSPEEDO
 //#define TC_PROFILER
 #endif  // TWPRIVATE
 #endif  // CS_EDITION
@@ -147,7 +144,7 @@
 //#define TC_DBG_BOOT           // Boot strap & settings
 //#define TC_DBG_WIFI           // WiFi-related
 //#define TC_DBG_MQTT           // MQTT-related
-//#define TC_DBG_AUDIO          // Audio-related
+#define TC_DBG_AUDIO          // Audio-related
 //#define TC_DBG_TIME           // Time handling
 //#define TC_DBG_NET            // Prop network
 //#define TC_DBG_TT             // Time travel
@@ -159,7 +156,7 @@
  ***                             Sanitation                            ***
  *************************************************************************/
 
-#ifdef IS_ACAR_DISPLAY
+#ifdef ACAR_DISPLAY
 #define V_ACAR "A"
 #else
 #define V_ACAR ""
@@ -193,8 +190,8 @@
 #if defined __has_include && __has_include(<esp_arduino_version.h>)
 #include <esp_arduino_version.h>
 #ifdef ESP_ARDUINO_VERSION_MAJOR
-    #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(2,0,8)
-    #define HAVE_GETNEXTFILENAME
+    #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2,0,8)
+    #error "ESP-arduino >= 2.0.8 required"
     #endif
 #endif
 #endif
@@ -240,7 +237,7 @@
 #define DISP_LAST     2
 
 // Num of characters on display
-#ifdef IS_ACAR_DISPLAY
+#ifdef ACAR_DISPLAY
 #define DISP_LEN      12
 #else
 #define DISP_LEN      13
