@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Keypad Menu
  *
@@ -237,9 +238,10 @@
 #define MODE_DEST 7
 #define MODE_DEPT 8
 #define MODE_SENS 9
-#define MODE_LTS  10
-#define MODE_CLI  11
-#define MODE_VER  12
+#define MODE_GPS  10
+#define MODE_LTS  11
+#define MODE_CLI  12
+#define MODE_VER  13
 
 #define MODE_MIN  MODE_ALRM
 #define MODE_MAX  MODE_VER
@@ -271,7 +273,7 @@ static const char *almFmt = "%3s     %02d%02d";
 #else
 static const char *almFmt = "%3s      %02d%02d";
 #endif
-static const char *alarmWD[10] = {
+static const char * const alarmWD[10] = {
       #ifdef ACAR_DISPLAY
       "MON-SUN", "MON-FRI", "SAT-SUN",
       #else
@@ -287,9 +289,7 @@ static int  doSetMSfx();
 static int  doSetAlarm();
 static int  doSetAutoInterval();
 static int  doSetBrightness(tcdDisplay* displaySet, uint8_t& newbri);
-#if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
 static void doShowSensors();
-#endif
 static void doShowNetInfo();
 static void doShowBTTFNInfo();
 static bool menuWaitForReleaseNC();
@@ -407,12 +407,10 @@ static void menuShow(int number, tcdDisplay*& displayHelp)
         dt_showTextDirect("NETWORK");
         sw_sel(D_D);
         break;
-    #if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
     case MODE_SENS:
         dt_showTextDirect("SENSORS");
         sw_sel(D_D);
         break;
-    #endif
     case MODE_LTS:    // Last time sync info
         dt_showTextDirect("TIME SYNC");
         if(!lastAuthTime64) {
@@ -434,6 +432,11 @@ static void menuShow(int number, tcdDisplay*& displayHelp)
             lt_showTextDirect("AGO");
             sw_sel(D_L|D_P|D_D);
         }
+        break;
+    case MODE_GPS:
+        dt_showTextDirect("GPS RECEIVER");
+        pt_showTextDirect((sgf & SGF_UGPS) ? "DETECTED" : "NOT DETECTED");
+        sw_sel(D_P|D_D);
         break;
     case MODE_CLI:
         #ifdef ACAR_DISPLAY
@@ -489,21 +492,13 @@ static int menuSelect(int& number, DateTime& dtu, DateTime& dtl, tcdDisplay*& di
                 else {
                     number++;
                     if(number == MODE_MSFX && !haveSD) number++;
-                    #if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
                     if(number == MODE_SENS && (!(sgf & (SGF_UTemp|SGF_ULightSens)))) number++;
-                    #else
-                    if(number == MODE_SENS) number++;
-                    #endif
                 }
             } else {
                 if(number == MODE_MIN) number = MODE_MAX;
                 else {
                     number--;
-                    #if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
                     if(number == MODE_SENS && (!(sgf & (SGF_UTemp|SGF_ULightSens)))) number--;
-                    #else
-                    if(number == MODE_SENS) number--;
-                    #endif
                     if(number == MODE_MSFX && !haveSD) number--;
                 }
             }
@@ -815,6 +810,12 @@ void enter_menu()
             // time after setting the RTC
             timeDifference = 0;
 
+            // If GPS does not have a fix at this point,
+            // tell the GPS receiver our (new) time.
+            if(!gpsHaveFix()) {
+                setGPStime();
+            }
+
         } else {
 
             // Non-RTC: Setting a static display, turn off autoInverval
@@ -934,13 +935,11 @@ void enter_menu()
         // Show client info
         doShowBTTFNInfo();
  
-    #if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
     } else if(menuItemNum == MODE_SENS) {   // Show sensor info
 
         allOffWaitEnterRelease();
 
         doShowSensors();
-    #endif
 
     }                                       // LTS, VERSION: Bail out
 
@@ -1015,9 +1014,7 @@ quitMenu:
 
     // Re-set RotEnc for volume (ie ignore all
     // changes while in menu; adjust to cur level)
-    #ifdef HAVE_RE
     re_vol_reset();
-    #endif
 
     // Restart mp if it was active before entering the menu
     if(mpActive) mp_play();
@@ -1811,7 +1808,6 @@ static void sensWait()
     pt_showTextDirect("");
 }
 
-#if defined(HAVE_TEMP) || defined(HAVE_LIGHT)
 static void doShowSensors()
 {
     char buf[13];
@@ -1823,15 +1819,13 @@ static void doShowSensors()
     float temp;
     bool wasEnter, dirDown, wasQuit = false, wasSelect;
 
-    #ifdef HAVE_LIGHT
     if(sgf & SGF_ULightSens) numberArr[numIdx++] = 0;
-    #endif
-    #ifdef HAVE_TEMP
+
     if(sgf & SGF_UTemp) {  
         numberArr[numIdx++] = 1;
         if((sgf & SGF_HaveHum)) numberArr[numIdx++] = 2;
     }
-    #endif
+
     maxIdx = numIdx - 1;
     numIdx = 0;
 
@@ -1873,7 +1867,6 @@ static void doShowSensors()
             if(millis() - sensNow > 3000) {
                 switch(numberArr[numIdx]) {
                 case 0:
-                    #ifdef HAVE_LIGHT
                     lightSens.loop();
                     dt_showTextDirect("LIGHT");
                     //#ifdef TC_DBG_SENS
@@ -1881,12 +1874,8 @@ static void doShowSensors()
                     //#else
                     sprintf(buf, "%d LUX", lightSens.readLux());
                     //#endif
-                    #else
-                    buf[0] = 0;
-                    #endif
                     break;
                 case 1:
-                    #ifdef HAVE_TEMP
                     dt_showTextDirect("TEMPERATURE");
                     temp = tempSens.readTemp();
                     if(isnan(temp)) {
@@ -1894,12 +1883,8 @@ static void doShowSensors()
                     } else {
                         sprintf(buf, "%.2f~%c", temp, (sgf & SGF_TempCelsius) ? 'C' : 'F');
                     }
-                    #else
-                    buf[0] = 0;
-                    #endif
                     break;
                 case 2:
-                    #ifdef HAVE_TEMP
                     tempSens.readTemp();
                     dt_showTextDirect("HUMIDITY");
                     hum = tempSens.readHum();
@@ -1916,9 +1901,6 @@ static void doShowSensors()
                         sprintf(buf, "%2d \x7f\x80", hum);
                         #endif
                     }
-                    #else
-                    buf[0] = 0;
-                    #endif
                     break;
                 }
                 pt_showTextDirect(buf);
@@ -1931,7 +1913,6 @@ static void doShowSensors()
 
     keypadMode = 0;
 }
-#endif
 
 /*
  * Show network info ###########################################
@@ -2371,8 +2352,6 @@ static void menuLoops()
     audio_loop();
     bttfn_loop();
     audio_loop();
-    #if defined(HAVE_GPS) || defined(HAVE_RE) || defined(HAVE_REMOTE)
     speedoUpdate_loop(true);  // GPS part: 6-12ms without delay, 8-13ms with delay
     audio_loop();
-    #endif
 }

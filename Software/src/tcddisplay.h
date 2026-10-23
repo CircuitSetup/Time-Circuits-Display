@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * tcdDisplay Class: Handles the TC LED segment displays
  *
@@ -170,15 +171,11 @@ class tcdDisplay {
         void showHalfIPDirect(int a, int b, uint16_t flags = 0);
         void showSettingValDirect(const char* setting, int8_t val = -1, uint16_t flags = 0);
 
-        #ifdef HAVE_TEMP
         void showTempDirect(float temp, bool animate = false);
         void showHumDirect(int hum, bool animate = false);
         void showTempHumDirect(float temp, int hum, bool animate = false);
-        #endif
 
-        #ifdef HAVE_GPS
         void showNavDirect(char *msg, bool animate);
-        #endif
 
         void clearDisplay();
 

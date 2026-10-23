@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Settings & file handling
  *
@@ -75,6 +76,8 @@ void clearWiFiCredentials();
 
 void write_settings();
 
+void resettofactorydefault();
+
 void settings_setup();
 
 void saveBrightness();
@@ -100,9 +103,7 @@ void initDefaultStaleTime(void *src);
 void loadLineOut();
 void saveLineOut();
 
-#ifdef HAVE_REMOTE
 void saveRemoteAllowed();
-#endif
 
 #ifdef SERVOSPEEDO
 void loadServoCorr(int& scorr, int& tcorr);
@@ -113,6 +114,12 @@ void saveUpdAvail();
 
 void loadUpdVers(int &v, int& r);
 void saveUpdVers(int v, int r);
+
+bool loadGPSLive();
+void saveGPSLive(bool live);
+
+bool loadGPSFixIndicator();
+void saveGPSFixIndicator(bool onOff);
 
 void loadMusFoldNum();
 void saveMusFoldNum();
@@ -132,8 +139,9 @@ void reInstallFlashFS();
 void moveSettings();
 
 bool check_allow_CPA();
-bool check_if_default_audio_present();
-bool copy_audio_files(bool& delIDfile);
+bool check_for_new_sp();
+size_t idSpCallback(uint8_t *buf, size_t len);
+bool install_sp(bool& delIDfile);
 void delete_ID_file();
 
 #define MAX_SIM_UPLOADS 16
@@ -198,19 +206,14 @@ void   freeUploadFileNames();
 #define DEF_REVAMPM         0     // 0: AM/PM like in P1, 1: AM/PM like in P2/P3
 
 #define DEF_FAKE_PWR        0     // 0: Do not use external fake "power" switch, 1: Do
-#define DEF_SPEEDO_TYPE     99    // 99: None
+#define DEF_SPEEDO_TYPE     0     // 0 = SP_CIRCSETUP (breaks MS macro)
 #define DEF_BRIGHT_SPEEDO   15    // Brightness for speedo
-#ifdef CS_EDITION
 #define DEF_SPEEDO_AO       0     // Speedo: 0: Keep on when idle, do not switch off, 1: switch off when idle (=old behavior)
-#else
-#define DEF_SPEEDO_AO       1     // Speedo: 0: Keep on when idle, do not switch off, 1: switch off when idle (=old behavior)
-#endif
 #define DEF_SPEEDO_ACCELFIG 0     // Accel figures: 0: Movie (approximated), 1: Real-life
 #define DEF_SPEEDO_FACT     2.0f  // Real-life acceleration factor (1.0 actual DeLorean figures; >1.0 faster, <1.0 slower)
 #define DEF_SPEEDO_P3       0     // Speedo: 1: Like part 3 (leading 0 < 10, no dot) / 0: like parts 1/2 (single digit < 10, dot)
 #define DEF_SPEEDO_3RDD     0     // Speedo: 1: Enable third digit (always 0) on CircuitSetup speedo, 0: Do not
-#define DEF_USE_GPS_SPEED   0     // 0: Do not show GPS speed on speedo display; 1: Do
-#define DEF_SPD_UPD_RATE    1     // 0: 1Hz, 1: 2Hz, 2: 4Hz, 3: 5Hz
+#define DEF_SPD_UPD_RATE    0     // 0: GPS speed disabled, 1: 1Hz, 2: 2Hz, 3: 4Hz, 4: 5Hz
 #define DEF_DISP_TEMP       1     // 1: Display temperature (if available) on speedo; 0: do not (speedo off)
 #define DEF_TEMP_BRIGHT     3     // Temperature brightness
 #define DEF_TEMP_OFF_NM     1     // 1: temperature off in night mode; 0: dimmed
@@ -265,9 +268,7 @@ struct Settings {
     char mode24[2]          = MS(DEF_MODE24);
     char timeZone[64]       = DEF_TIMEZONE;
     char ntpServer[64]      = DEF_NTP_SERVER;
-#ifdef HAVE_GPS    
     char useGPSTime[2]      = MS(DEF_USE_GPS_TIME);
-#endif
     char timeZoneDest[64]   = "";
     char timeZoneDep[64]    = "";
     char timeZoneNDest[16]  = "";
@@ -284,10 +285,10 @@ struct Settings {
     char autoNMPreset[4]    = MS(DEF_AUTONM_PRESET);
     char autoNMOn[4]        = MS(DEF_AUTONM_ON);
     char autoNMOff[4]       = MS(DEF_AUTONM_OFF);
-#ifdef HAVE_LIGHT
+    
     char useLight[2]        = MS(DEF_USE_LIGHT);
     char luxLimit[8]        = MS(DEF_LUX_LIMIT);
-#endif
+    
     char CfgOnSD[2]         = MS(DEF_CFG_ON_SD);
     char timesPers[2]       = MS(DEF_TIMES_PERS);
     char revAmPm[4]         = MS(DEF_REVAMPM);
@@ -301,17 +302,14 @@ struct Settings {
     char speedoP3[2]        = MS(DEF_SPEEDO_P3);
     char speedoP3R[2]       = "0";
     char speedo3rdD[2]      = MS(DEF_SPEEDO_3RDD);
-#ifdef HAVE_GPS
-    char dispGPSSpeed[2]    = MS(DEF_USE_GPS_SPEED);
     char spdUpdRate[2]      = MS(DEF_SPD_UPD_RATE);
-#endif
-#ifdef HAVE_TEMP
+
     char dispTemp[2]        = MS(DEF_DISP_TEMP);
     char tempBright[4]      = MS(DEF_TEMP_BRIGHT);
     char tempOffNM[2]       = MS(DEF_TEMP_OFF_NM);
     char tempUnit[2]        = MS(DEF_TEMP_UNIT);
     char tempOffs[6]        = MS(DEF_TEMP_OFFS);
-#endif
+
     char ettDelay[8]        = MS(DEF_ETT_DELAY);
     char ETTOcmd[2]         = MS(DEF_ETTO_CMD);
     char useETTO[2]         = MS(DEF_USE_ETTO);
@@ -322,9 +320,6 @@ struct Settings {
 #ifdef SERVOSPEEDO
     char ttinpin[4]         = "0";
     char ttoutpin[4]        = "0";
-#endif
-#ifdef HAVE_GPS
-    char provGPS2BTTFN[2]   = MS(DEF_GPS4BTTFN);
 #endif
 
 #ifdef HAVE_MQTT  

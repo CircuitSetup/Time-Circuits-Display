@@ -1156,7 +1156,7 @@ y_final:
         }
       }
       else {
-        /* x (0..1) */
+        /* x (0..15) */
 
         value = pair->value.x;
 
@@ -1174,7 +1174,8 @@ y_final:
                      -requantized : requantized;
         }
 
-        /* y (0..1) */
+
+        /* y (0..15) */
 
         value = pair->value.y;
 
@@ -1191,6 +1192,7 @@ y_final:
           xrptr[1] = MASK1BIT(bitcache, cachesz--) ?
                      -requantized : requantized;
         }
+
       }
 
       xrptr += 2;

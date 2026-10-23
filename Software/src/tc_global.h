@@ -4,6 +4,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Global definitions
  */
@@ -28,56 +29,16 @@
 
 // These must not contain any characters other than
 // '0'-'9', 'A'-'Z', '(', ')', '.', '_', '-' or space
-#define TC_VERSION_REV   "V3.27"      // 7 chars max. Do NOT change format.
+#define TC_VERSION_REV   "V4.00"      // 7 chars max. Do NOT change format.
 #ifndef ACAR_DISPLAY
-#define TC_VERSION_EXTRA "SEP182026"  // 13 chars max
+#define TC_VERSION_EXTRA "OCT172026"  // 13 chars max
 #else   // A-Car
-#define TC_VERSION_EXTRA "09182026"   // 12 chars max
+#define TC_VERSION_EXTRA "10172026"   // 12 chars max
 #endif
 
 /*************************************************************************
  ***                 Configuration for peripherals                     ***
  *************************************************************************/
-
-// Uncomment for support of GPS receiver (MT3333-based) connected via i2c 
-// (0x10). Can be used as time source and/or to display actual speed on 
-// speedometer display and/or to display geolocation. Needs to be #defined
-// for using CircuitSetup's speedo with integrated GPS receiver.
-//#define HAVE_GPS
-
-// Uncomment for rotary encoder support
-// Currently Adafruit 4991/5880, DFRobot Gravity 360 and DuPPA I2CEncoder 2.1
-// are supported.
-// The primary rotary encoder is used to manually select a speed to be
-// displayed on a speed display, and/or to be sent to wirelessly connected
-// props (BTTFN); also, time travels can be triggered by turning the knob up
-// to 88. Turning the knob a few notches below 0 switches the speedo off (or
-// allows temperature to be shown, if so configured).
-// A secondary rotary encoder is used for audio volume.
-//#define HAVE_RE
-
-// Uncomment for Remote control support
-// "Remote" is a modified Futaba remote control. See https://remote.out-a-ti.me
-//#define HAVE_REMOTE
-
-// Uncomment to trigger a time travel when reaching a (real) GPS speed of 88. 
-// Use at own risk.
-//#define NOT_MY_RESPONSIBILITY
-
-// Uncomment for support of a temperature/humidity sensor (MCP9808, BMx280, 
-// SI7021, SHT4x, TMP117, AHT20, HTU31D, MS8607, HDC302x) connected via i2c. 
-// Will be used for room condition mode and to display ambient temperature on 
-// speedometer display when idle (GPS speed has higher priority, ie if "Display 
-// GPS speed" is checked in the Config Portal, temperature will not be shown on 
-// speedo). See sensors.cpp for supported i2c slave addresses
-//#define HAVE_TEMP
-
-// Uncomment for support of a light sensor (TSL2561/2591, BH1750, VEML7700/6030
-// or LTR303/329) connected via i2c. Used for night-mode-switching. VEML7700  
-// and GPS cannot be present at the same time since they share the same 
-// i2c slave address. VEML6030 needs to be set to 0x48 if GPS is present.
-// See sensors.cpp for supported i2c slave addresses.
-//#define HAVE_LIGHT
 
 // (Un)comment for RTC chip selection. At least one MUST be defined.
 #define HAVE_DS3231
@@ -141,10 +102,10 @@
 //#define TCD_DBG_NONE
 
 #if !defined(TCD_DBG_NONE)
-//#define TC_DBG_BOOT           // Boot strap & settings
+#define TC_DBG_BOOT           // Boot strap & settings
 //#define TC_DBG_WIFI           // WiFi-related
 //#define TC_DBG_MQTT           // MQTT-related
-#define TC_DBG_AUDIO          // Audio-related
+//#define TC_DBG_AUDIO          // Audio-related
 //#define TC_DBG_TIME           // Time handling
 //#define TC_DBG_NET            // Prop network
 //#define TC_DBG_TT             // Time travel

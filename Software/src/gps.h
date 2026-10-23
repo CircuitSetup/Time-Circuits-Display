@@ -4,6 +4,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * GPS Class: GPS receiver handling and data parsing
  *
@@ -69,9 +70,14 @@ class tcGPS {
     public:
 
         tcGPS(const uint8_t *addrArr);
-        bool    begin(int numTypes, int quickUpdates, int speedRate, void (*myDelay)(unsigned long));
+        bool    begin(int numTypes, int opMode, int speedRate, int bootMode, 
+                      unsigned long& freqNonLive, unsigned long& freqLive,
+                      void (*myDelay)(unsigned long));
+
+        void    setupGPSRate(int opMode);
 
         void    loop(bool doDelay);
+        void    readGPSBuffer(int times, bool doDelay);
 
         int     getSpeed();
         bool    haveTime() { return (_haveDateTime || _haveDateTime2); }
@@ -83,10 +89,11 @@ class tcGPS {
         void    requestVersion();
         
         bool    fix = false;
+        uint8_t rmcZdaCollector = 0;  // For collecting one RMC and one ZDA during boot
 
     private:
 
-        bool    readAndParse(bool doDelay = true);
+        void    readAndParse(bool doDelay = true);
 
         void    sendCommand(const char *, const char *);
 
@@ -102,10 +109,9 @@ class tcGPS {
 
         #define GPS_LENBUFLIMIT 0x03
         uint8_t _lenArr[4] = { 64, 64, 64, 63 };
-        //#define GPS_LENBUFLIMIT 0x07
-        //uint8_t _lenArr[8] = { 32, 32, 32, 32, 32, 32, 32, 31 };
         int     _lenIdx = 0;
         int     _lenLimit = GPS_LENBUFLIMIT;
+        int     _newLenLimit = GPS_LENBUFLIMIT;
 
         char    *_buffer = NULL; 
         char    _last_char = 0;
@@ -139,6 +145,10 @@ class tcGPS {
         bool triedQ = false;
         char qfw[20] = { 0 };
 
+        int _initIdx = 0;
+        int _lastOpMode = -2;
+
+        bool _initAckd = false;
 };
 
 #endif

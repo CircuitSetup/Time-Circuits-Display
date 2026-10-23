@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * tcdDisplay Class: Handles the TC LED segment displays
  *
@@ -83,13 +84,9 @@
 
 extern bool     alarmOnOff;
 extern bool     snoozeRunning();
-#ifdef HAVE_GPS
-extern bool     gpsHaveFix();
+extern bool     gpsShowFix();
 extern int      gpsGetDM();
-#endif
-#ifdef HAVE_TEMP
 extern char     tempUnitChar();
-#endif
 
 extern uint64_t timeDifference;
 extern bool     timeDiffUp;
@@ -129,7 +126,6 @@ static const char weekdays[7][4] = {
     "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"
 };
 
-#ifdef HAVE_TEMP
 static const char *nilTH    = "  ----";
 #ifdef ACAR_DISPLAY
 static const char tempStr[] = "TEMP";
@@ -163,7 +159,6 @@ static void makeHumidity(char *buf, int hum)
     }
     strcat(buf, "\x7f\x80");
 }
-#endif
 
 /*
  * tcdDisplay class
@@ -432,10 +427,8 @@ void tcdDisplay::setYear(uint16_t yearNum)
 {
     uint16_t seg = 0;
 
-    #ifdef HAVE_GPS
-    if((_did == DISP_PRES) && gpsHaveFix())
+    if((_did == DISP_PRES) && gpsShowFix())
         seg = 0x8000;
-    #endif
 
     _cd.year = yearNum;
 
@@ -656,7 +649,6 @@ void tcdDisplay::showSettingValDirect(const char* setting, int8_t val, uint16_t 
          directCol(field, 0);
 }
 
-#ifdef HAVE_TEMP
 void tcdDisplay::showTempDirect(float temp, bool animate)
 {
     if(!handleNM())
@@ -722,9 +714,7 @@ void tcdDisplay::showTempHumDirect(float temp, int hum, bool animate)
 
     showIntTail(animate);
 }
-#endif
 
-#ifdef HAVE_GPS
 void tcdDisplay::showNavDirect(char *msg, bool animate)
 {
     char buf[16];
@@ -756,7 +746,6 @@ void tcdDisplay::showNavDirect(char *msg, bool animate)
 
     showIntTail(animate);
 }
-#endif
 
 
 // Load & save data ------------------------------------------------------------

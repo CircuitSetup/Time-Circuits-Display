@@ -7,6 +7,7 @@
  * Copyright (c) 2008-2020 Nicholas O'Leary
  * Minimized & adapted by Thomas Winischhofer (A10001986) in 2023
  * MQTT 5.0 support by Thomas Winischhofer (A10001986) in 2025
+ * This code was written without the use of artificial intelligence.
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the

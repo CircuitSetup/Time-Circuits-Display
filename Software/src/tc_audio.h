@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Sound handling
  *
@@ -83,7 +84,7 @@
 #define PA_SIGMASK (PA_SIGNAL|PA_ALARM|PA_REM|PA_TMR)
 
 void  audio_setup();
-void  audio_loopup_files();
+void  audio_lookup_files();
 void  audio_loop();
 void  audio_loop_quick();
 

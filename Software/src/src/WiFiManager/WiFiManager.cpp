@@ -7,7 +7,7 @@
  * Version 2.0.15
  * License MIT
  *
- * Adapted by Thomas Winischhofer (A10001986)
+ * Adapted/rewritten by Thomas Winischhofer (A10001986)
  */
 
 // prep string concat vars
@@ -535,8 +535,14 @@ uint8_t WiFiManager::connectWifi(const char *ssid, const char *pass, const char 
 
             // We try without a user-provided BSSID on the last connection attempt.
             // Still better than to fall-back to AP mode.
+            // Not in Car Mode though: We don't want to connect to other people's TCDs.
             if(retry == _connectRetries) {
-                if(pbssid) {
+                #ifdef WM_CCM
+                if(pbssid && !_cCarMode)
+                #else
+                if(pbssid)
+                #endif
+                {
                     _badBSSID = true;
                     pbssid = NULL;
                     #ifdef _A10001986_DBG
@@ -690,7 +696,7 @@ uint8_t WiFiManager::waitForConnectResult(bool haveStatic, unsigned long timeout
 
 bool WiFiManager::setStaticConfig()
 {
-    if(_sta_static_ip) {
+    if(_sta_static_ip && _use_sta_ip) {
         bool ret;
 
         #ifdef _A10001986_DBG
@@ -715,7 +721,7 @@ bool WiFiManager::setStaticConfig()
     } else {
 
         #ifdef _A10001986_DBG
-        Serial.println("No static IP configured");
+        Serial.println("Static IP unconfigured/ignored");
         #endif
     }
 
@@ -1616,9 +1622,10 @@ void WiFiManager::reportStatus(String& page, unsigned int estSize, bool withMac)
  ****************************************************************************/
 
 // Calc size of params (without 0-term)
-unsigned int WiFiManager::getParamOutSize(WiFiManagerParameter** params,
-                    int paramsCount, unsigned int& maxItemSize)
+unsigned int WiFiManager::getParamOutSize(int idx, unsigned int& maxItemSize)
 {
+    WiFiManagerParameter** params = _params[idx];
+    int paramsCount = _paramsCount[idx];
     unsigned int mysize = 0;
     unsigned int totalsize = 0;
 
@@ -1668,8 +1675,8 @@ unsigned int WiFiManager::getParamOutSize(WiFiManagerParameter** params,
                 }
 
                 // <label for='{i}'>{t}</label>
-                // <input id='{i}' name='{n}' {l} value='{v}' {c} {f}>
-                mysize += (5 * 3);    // "wmXX" - 2x{i}, 1x{n}
+                // <input id='{i}' name='{i}' {l} value='{v}' {c} {f}>
+                mysize += (5 * 3);    // "wYXX" - 3x{i}
                 if(haveLabel && params[i]->getLabel()) {
                     mysize += strlen(params[i]->getLabel());
                 }
@@ -1721,9 +1728,11 @@ unsigned int WiFiManager::getParamOutSize(WiFiManagerParameter** params,
     return totalsize;
 }
 
-void WiFiManager::getParamOut(String &page, WiFiManagerParameter** params,
-                    int paramsCount, unsigned int maxItemSize)
+void WiFiManager::getParamOut(String &page, int idx, unsigned int maxItemSize)
 {
+    WiFiManagerParameter** params = _params[idx];
+    int paramsCount = _paramsCount[idx];
+    char idxmarker = idx + 'A';
     char pids[6];
 
     if(paramsCount > 0) {
@@ -1746,7 +1755,7 @@ void WiFiManager::getParamOut(String &page, WiFiManagerParameter** params,
 
             // Input templating
             // <label for='{i}'>{t}</label>
-            // <input id='{i}' name='{n}' {l} value='{v}' {c} {f}>
+            // <input id='{i}' name='{i}' {l} value='{v}' {c} {f}>
             // if no ID, use customhtml for item, else generate from param string
 
             uint8_t pflags = params[i]->getFlags();
@@ -1763,7 +1772,7 @@ void WiFiManager::getParamOut(String &page, WiFiManagerParameter** params,
 
                 bool haveLabel = true;
 
-                sprintf(pids, "wm%02x", pid);
+                sprintf(pids, "w%c%02x", idxmarker, pid);
 
                 switch(pflags & WFM_LABEL_MASK) {
                 case WFM_LABEL_BEFORE:
@@ -1785,7 +1794,6 @@ void WiFiManager::getParamOut(String &page, WiFiManagerParameter** params,
                 }
 
                 pitem.replace(FPSTR(T_i), pids);     // T_i id name
-                pitem.replace(FPSTR(T_n), pids);     // T_n id name alias
                 if(haveLabel) {
                     if(params[i]->getLabel()) {
                         pitem.replace(FPSTR(T_t), params[i]->getLabel());  // T_t title/label
@@ -1848,8 +1856,11 @@ void WiFiManager::getParamOut(String &page, WiFiManagerParameter** params,
     }
 }
 
-void WiFiManager::doParamSave(WiFiManagerParameter** params, int paramsCount)
+void WiFiManager::doParamSave(int idx)
 {
+    WiFiManagerParameter** params = _params[idx];
+    int paramsCount = _paramsCount[idx];
+    char idxmarker = idx + 'A';
     char pids[6];
     int16_t pid;
 
@@ -1872,7 +1883,7 @@ void WiFiManager::doParamSave(WiFiManagerParameter** params, int paramsCount)
                 continue;
             }
 
-            sprintf(pids, "wm%02x", pid);
+            sprintf(pids, "w%c%02x", idxmarker, pid);
 
             // read parameter from server
             String value = server->arg(pids);
@@ -2286,8 +2297,8 @@ unsigned int WiFiManager::getScanItemsLen(int n, bool scanErr, int *indices, uns
 
             if(indices[i] == -1) continue;
 
-            // <div><a href='#p' onclick='return {t}(this)' data-ssid='{V}' title='{R}'>{v}</a>{c}
-            // <div role='img' aria-label='{r}dBm' title='{r}dBm' class='q q-{q} {i}'></div></div>
+            // <div><a href='#p' onclick='return %c(this)' data-ssid='%s' title='%s'>%s</a>%s
+            // <div role='img' aria-label='%ddBm' title='%ddBm' class='q q-%d%s'></div></div>
 
             int rssi = WiFi.RSSI(indices[i]);
 
@@ -2304,9 +2315,9 @@ unsigned int WiFiManager::getScanItemsLen(int n, bool scanErr, int *indices, uns
                     }
                 }
 
-                itemSize = STRLEN(HTTP_WIFI_ITEM) - (9*3);
+                itemSize = STRLEN(HTTP_WIFI_ITEM) - (9*2);
                 itemSize += (2 * htmlEntitiesLen(SSID, true));
-                itemSize += (4+4+1+1);     // rssi, rssi, qual class, enc class
+                itemSize += (1+4+4+1+2);   // func, rssi, rssi, qual class, enc class
                 if(showall) {
                     itemSize += (6 + 17);  // chnlnum, bssid
                 }
@@ -2343,10 +2354,6 @@ unsigned int WiFiManager::getScanItemsLen(int n, bool scanErr, int *indices, uns
 
 void WiFiManager::getScanItemsOut(String& page, int n, bool scanErr, int *indices, unsigned int maxItemSize, bool showall)
 {
-    char chnlnum[8];
-    uint8_t bssid[6];
-    char pbssid[20] = { 0 };
-
      if(scanErr) {
 
         page += FPSTR(HTTP_MSG_SCANFAIL);
@@ -2357,11 +2364,16 @@ void WiFiManager::getScanItemsOut(String& page, int n, bool scanErr, int *indice
 
     } else {
 
-        String item;
-        if(maxItemSize) item.reserve(maxItemSize + 8);
+        char chnlnum[8];
+        uint8_t bssid[6];
+        char pbssid[20] = { 0 };
 
-        // <div><a href='#p' onclick='return {t}(this)' data-ssid='{V}' title='{R}'>{v}</a>{c}
-        // <div role='img' aria-label='{r}dBm' title='{r}dBm' class='q q-{q} {i}'></div></div>
+        if(!maxItemSize) maxItemSize = 512;
+
+        char item[maxItemSize + 8];
+
+        // <div><a href='#p' onclick='return %c(this)' data-ssid='%s' title='%s'>%s</a>%s
+        // <div role='img' aria-label='%ddBm' title='%ddBm' class='q q-%d%s'></div></div>
 
         for(int i = 0; i < n; i++) {
             if(indices[i] == -1) continue;
@@ -2372,43 +2384,47 @@ void WiFiManager::getScanItemsOut(String& page, int n, bool scanErr, int *indice
 
                 uint8_t enc_type = WiFi.encryptionType(indices[i]);
                 String SSID = WiFi.SSID(indices[i]);
-                String func = "c";
+                char func = 'c';
 
                 if(SSID == "") {
                     continue;
                 } else if(!checkSSID(SSID)) {
                     if(showall) {
                         SSID = S_nonprintable;
-                        func = "d";
+                        func = 'd';
                     } else {
                         continue;
                     }
                 }
 
-                item = FPSTR(HTTP_WIFI_ITEM);
-
-                item.replace(FPSTR(T_t), func);
-                item.replace(FPSTR(T_V), htmlEntities(SSID));
-                item.replace(FPSTR(T_v), htmlEntities(SSID, true));
+                *pbssid = 0;
+                *chnlnum = 0;
                 if(showall) {
                     sprintf(chnlnum, " (%d)", WiFi.channel(indices[i]));
-                    item.replace(FPSTR(T_c), chnlnum);              // channel
                     if(WiFi.BSSID(indices[i])) {
                         memcpy(bssid, WiFi.BSSID(indices[i]), 6);
                         sprintf(pbssid, "%02x:%02x:%02x:%02x:%02x:%02x",
                             bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
                     }
-                    item.replace(FPSTR(T_R), pbssid);               // bssid
-                } else {
-                    item.replace(FPSTR(T_c), "");
-                    item.replace(FPSTR(T_R), "");
                 }
-                item.replace(FPSTR(T_r), String(rssi));             // rssi
-                item.replace(FPSTR(T_q), String(wmmap(rssi)));      // quality icon 1-4
-                item.replace(FPSTR(T_i), (enc_type != WIFI_AUTH_OPEN) ? "l" : "");
+
+                sprintf(item,
+                        HTTP_WIFI_ITEM,
+                        func,
+                        htmlEntities(SSID).c_str(),
+                        pbssid,
+                        htmlEntities(SSID, true).c_str(),
+                        chnlnum,
+                        rssi,
+                        rssi,
+                        wmmap(rssi),
+                        (enc_type != WIFI_AUTH_OPEN) ? " l" : "");
 
                 page += item;
-                delay(0);
+
+                #ifdef _A10001986_DBG
+                Serial.printf("WM: getScanItemsOut item size %d\n", strlen(item));
+                #endif
 
             }
 
@@ -2424,9 +2440,9 @@ void WiFiManager::getScanItemsOut(String& page, int n, bool scanErr, int *indice
 void WiFiManager::getIpForm(String& page, const char *id, const char *title, IPAddress& value, const char *placeholder)
 {
     // <label for='{i}'>{t}</label>
-    // <input id='{i}' name='{n}' {l} value='{v}' {c} {f}>
+    // <input id='{i}' name='{i}' {l} value='{v}' {c} {f}>
 
-    unsigned int s = STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3) + (2*STRLEN(HTTP_BR));
+    unsigned int s = STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3) + (2*STRLEN(HTTP_BR)) + STRLEN(HTTP_PAT_IP);
     s += (3*strlen(id)) + strlen(title);
     s += (12+2) + 15;
     if(placeholder) s += strlen(placeholder);
@@ -2439,12 +2455,11 @@ void WiFiManager::getIpForm(String& page, const char *id, const char *title, IPA
     item += FPSTR(HTTP_FORM_PARAM);
     item += FPSTR(HTTP_BR);
     item.replace(FPSTR(T_i), id);
-    item.replace(FPSTR(T_n), id);
     item.replace(FPSTR(T_t), title);
     item.replace(FPSTR(T_l), F("maxlength='15'"));
     item.replace(FPSTR(T_v), value ? value.toString() : "");
     item.replace(FPSTR(T_c), placeholder ? placeholder : "");
-    item.replace(FPSTR(T_f), "");
+    item.replace(FPSTR(T_f), HTTP_PAT_IP);
 
     page += item;
 }
@@ -2456,24 +2471,26 @@ unsigned int WiFiManager::getStaticLen()
     bool showDns = (_staShowDns || _sta_static_dns);
 
     // "<label for='{i}'>{t}</label>"
-    // "<input id='{i}' name='{n}' {l} value='{v}' {c} {f}>\n"
+    // "<input id='{i}' name='{i}' {l} value='{v}' {c} {f}>\n"
 
     if(showSta || showDns) {
         mySize += STRLEN(HTTP_FORM_SECT_HEAD);
     }
     if(showSta) {
-        mySize += (3 * (STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3) + (2*STRLEN(HTTP_BR))));
+        mySize += (3 * (STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3) + (2*STRLEN(HTTP_BR)) + STRLEN(HTTP_PAT_IP)));
         mySize += (3*STRLEN(S_ip)) + STRLEN(S_staticip) + (12+2) + 15;
         mySize += STRLEN(HTTP_FORM_WIFI_PH);
         mySize += (3*STRLEN(S_sn)) + STRLEN(S_subnet) + (12+2) + 15;
         mySize += (3*STRLEN(S_gw)) + STRLEN(S_staticgw) + (12+2) + 15;
     }
     if(showDns) {
-        mySize += STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3) + (2*STRLEN(HTTP_BR));
+        mySize += STRLEN(HTTP_FORM_LABEL) + STRLEN(HTTP_FORM_PARAM) - (8*3) + (2*STRLEN(HTTP_BR)) + STRLEN(HTTP_PAT_IP);
         mySize += (3*STRLEN(S_dns)) + STRLEN(S_staticdns) + (12+2) + 15;
     }
     if(showSta || showDns) {
-        mySize += STRLEN(HTTP_FORM_SECT_FOOT);
+        if(!_paramsCount[0] || !_params[0] || (_params[0][0]->getFlags() & (WFM_SECTS_HEAD|WFM_SECTS))) {
+            mySize += STRLEN(HTTP_FORM_SECT_FOOT);
+        }
     }
 
     return mySize;
@@ -2496,7 +2513,9 @@ void WiFiManager::getStaticOut(String& page)
         getIpForm(page, S_dns, S_staticdns, _sta_static_dns);
     }
     if(showSta || showDns) {
-        page += FPSTR(HTTP_FORM_SECT_FOOT);
+        if(!_paramsCount[0] || !_params[0] || (_params[0][0]->getFlags() & (WFM_SECTS_HEAD|WFM_SECTS))) {
+            page += FPSTR(HTTP_FORM_SECT_FOOT);
+        }
     }
 }
 
@@ -2509,10 +2528,10 @@ void WiFiManager::buildWifiPage(String& page, bool scan)
     unsigned int maxItemSize = 0;
     int numDupes = 0, maxDisplay;
     uint32_t incFlags = incSET|incSTA;
-    bool scanErr = false, scanallowed = true, showrefresh = false, haveShowAll = false;
+    bool scanErr = false, scanallowed = true, showrefresh = false; //, haveShowAll = false;
     bool force = server->hasArg(F("refresh"));
     bool showall = server->hasArg(F("showall"));
-    int n = 0;
+    int n = 0, btype = 0;
 
     String SSID = String(_ssid);
     unsigned int SSID_len = SSID.length();
@@ -2575,30 +2594,43 @@ void WiFiManager::buildWifiPage(String& page, bool scan)
 
     bufSize = getHTTPHeadLength(S_titlewifi, incFlags);
 
+    bufSize += (STRLEN(HTTP_FORM_START) - 3 + STRLEN(A_wifisave));
+
+    bufSize += STRLEN(HTTP_FORM_WIFI_HDR);
+
+    bufSize += STRLEN(HTTP_SCAN_COMMON);
     if(showrefresh) {
-        // No message
+        bufSize += STRLEN(HTTP_SCAN_LINK);
     } else if(!scanallowed) {
         bufSize += STRLEN(HTTP_MSG_NOSCAN);
+        bufSize += STRLEN(HTTP_SCAN_LINK);
+        btype = 1;
     } else if(scan) {
         bufSize += getScanItemsLen(n, scanErr, indices, maxScanItemSize, maxDisplay, showall);
         if(!showall && n > 0 && !scanErr) {
-            bufSize += STRLEN(HTTP_SHOWALL);
-            haveShowAll = true;
+            bufSize += STRLEN(HTTP_SCAN_AND_SHOWALL);
+            bufSize += STRLEN(HTTP_SHOWALL_FORM);
+            btype = 3;
+            //haveShowAll = true;
+        } else {
+            bufSize += STRLEN(HTTP_RESCAN_LINK);
+            btype = 2;
         }
     }
-    bufSize += (STRLEN(HTTP_FORM_START) - 3 + STRLEN(A_wifisave));
+
     bufSize += (STRLEN(HTTP_FORM_WIFI) - (4*3) + SSID_len + (2*STRLEN(S_passph))) + BSSID_len;
+
     if(SSID_len) {
         bufSize += STRLEN(HTTP_ERASE_BUTTON);
     }
     bufSize += getStaticLen();
     bufSize += STRLEN(HTTP_FORM_WIFI_END);
-    bufSize += getParamOutSize(_params[0], _paramsCount[0], maxItemSize);
+    bufSize += getParamOutSize(0, maxItemSize);
     bufSize += STRLEN(HTTP_FORM_END);
-    bufSize += STRLEN(HTTP_SCAN_LINK);
-    if(haveShowAll) {
-        bufSize += STRLEN(HTTP_SHOWALL_FORM);
-    }
+    bufSize += STRLEN(HTTP_SCAN_FORM);
+    //if(haveShowAll) {
+    //    bufSize += STRLEN(HTTP_SHOWALL_FORM);
+    //}
     repSize = reportStatusLen(true);
     bufSize += repSize;
     bufSize += STRLEN(HTTP_END);
@@ -2611,24 +2643,51 @@ void WiFiManager::buildWifiPage(String& page, bool scan)
 
     getHTTPHeadNew(page, S_titlewifi, incFlags);
 
-    if(showrefresh) {
-        // No message
-    } else if(!scanallowed) {
-        page += FPSTR(HTTP_MSG_NOSCAN);
-    } else if(scan) {
-        getScanItemsOut(page, maxDisplay, scanErr, indices, maxScanItemSize, showall);
-        if(haveShowAll) {
-            page += FPSTR(HTTP_SHOWALL);
-        }
-    }
-
     {
         String pitem;
-        pitem.reserve(STRLEN(HTTP_FORM_WIFI) - (4*3) + SSID_len + (2*STRLEN(S_passph)) + BSSID_len + 8); // +8 safety
-
+        pitem.reserve(STRLEN(HTTP_FORM_START) - 3 + STRLEN(A_wifisave));
         pitem = FPSTR(HTTP_FORM_START);
         pitem.replace(FPSTR(T_v), FPSTR(A_wifisave));
         page += pitem;
+    }
+
+    page += FPSTR(HTTP_FORM_WIFI_HDR);
+
+    if(btype == 1) {
+        page += FPSTR(HTTP_MSG_NOSCAN);
+    } else if(btype >= 2) {
+        getScanItemsOut(page, maxDisplay, scanErr, indices, maxScanItemSize, showall);
+    }
+    page += FPSTR(HTTP_SCAN_COMMON);
+    if(btype <= 1) {
+        page += FPSTR(HTTP_SCAN_LINK);
+    } else if(btype == 2) {
+        page += FPSTR(HTTP_RESCAN_LINK);
+    } else {
+        page += FPSTR(HTTP_SCAN_AND_SHOWALL);
+    }
+/*  Keep this to explain above
+    if(showrefresh) {
+        page += FPSTR(HTTP_SCAN_COMMON);      // 0
+        page += FPSTR(HTTP_SCAN_LINK);
+    } else if(!scanallowed) {
+        page += FPSTR(HTTP_MSG_NOSCAN);       // 1
+        page += FPSTR(HTTP_SCAN_COMMON);
+        page += FPSTR(HTTP_SCAN_LINK);
+    } else if(scan) {
+        getScanItemsOut(page, maxDisplay, scanErr, indices, maxScanItemSize, showall);
+        if(haveShowAll) {
+            page += FPSTR(HTTP_SCAN_COMMON);    // 3
+            page += FPSTR(HTTP_SCAN_AND_SHOWALL);
+        } else {
+            page += FPSTR(HTTP_SCAN_COMMON);    // 2
+            page += FPSTR(HTTP_RESCAN_LINK);
+        }
+    }
+*/
+    {
+        String pitem;
+        pitem.reserve(STRLEN(HTTP_FORM_WIFI) - (4*3) + SSID_len + (2*STRLEN(S_passph)) + BSSID_len + 8); // +8 safety
 
         pitem = FPSTR(HTTP_FORM_WIFI);
         pitem.replace(FPSTR(T_V), SSID);
@@ -2646,10 +2705,10 @@ void WiFiManager::buildWifiPage(String& page, bool scan)
     }
     getStaticOut(page);
     page += FPSTR(HTTP_FORM_WIFI_END);
-    getParamOut(page, _params[0], _paramsCount[0], maxItemSize);
+    getParamOut(page, 0, maxItemSize);
     page += FPSTR(HTTP_FORM_END);
-    page += FPSTR(HTTP_SCAN_LINK);
-    if(haveShowAll) {
+    page += FPSTR(HTTP_SCAN_FORM);
+    if(btype == 3) {  //if(haveShowAll) {
         page += FPSTR(HTTP_SHOWALL_FORM);
     }
     reportStatus(page, repSize, true);
@@ -2806,7 +2865,7 @@ void WiFiManager::handleWifiSave()
         }
 
         // Copy server parms to wifi params array
-        doParamSave(_params[0], _paramsCount[0]);
+        doParamSave(0);
 
         // callback for saving or grabbing other parameters from server
         if(_savewificallback) {
@@ -2873,7 +2932,7 @@ int WiFiManager::calcParmPageSize(int aidx, unsigned int& maxItemSize, const cha
 
     mySize += (STRLEN(HTTP_FORM_START) - 3 + strlen(action));
 
-    mySize += getParamOutSize(_params[aidx], _paramsCount[aidx], maxItemSize);
+    mySize += getParamOutSize(aidx, maxItemSize);
 
     mySize += STRLEN(HTTP_FORM_END);
     mySize += STRLEN(HTTP_END);
@@ -2909,7 +2968,7 @@ void WiFiManager::_handleParam(int aidx, const char *title, const char *action)
         page += pitem;
     }
 
-    getParamOut(page, _params[aidx], _paramsCount[aidx], maxItemSize);
+    getParamOut(page, aidx, maxItemSize);
 
     page += FPSTR(HTTP_FORM_END);
     page += FPSTR(HTTP_END);
@@ -2961,7 +3020,7 @@ void WiFiManager::_handleParamSave(int aidx, const char *title)
     }
     #endif
 
-    doParamSave(_params[aidx], _paramsCount[aidx]);
+    doParamSave(aidx);
 
     if(_saveparamscallback) {
         _saveparamscallback(aidx);
@@ -3055,21 +3114,22 @@ void WiFiManager::handleUpdate()
     }
     #endif
 
-#ifdef WM_UPLOAD
-    if(_showUploadSnd) {
-        mySize += STRLEN(HTTP_UPDATE_FORM) + STRLEN(HTTP_UPLOADSND1);
-        mySize += STRLEN(HTTP_UPLOADSND1A) + STRLEN(HTTP_UPLOADSND2) + STRLEN(HTTP_UPLOADSND3);
-    } else {
-        mySize += STRLEN(HTTP_UPLOADSND1A) + STRLEN(HTTP_UPLOAD_SDMSG);
-    }
-    mySize += strlen(_sndContName);
-    if(_sndContVer) {
+    #if defined(WM_UPLOAD) && !defined(WM_INSTALLER)
+    if(_sndContVer && (_sndIsInstalled <= 0)) {
         mySize += STRLEN(HTTP_UPLOAD_SLINK1) + STRLEN(HTTP_UPLOAD_SLINK1C) + STRLEN(HTTP_UPLOAD_SLINK2) + STRLEN(HTTP_UPLOAD_SLINK3);
         mySize += strlen(_sndContVer);
         if(!_sndIsInstalled)          mySize += STRLEN(HTTP_UPLOAD_SLINK1A) + STRLEN(HTTP_UPLOAD_SLINK2A);
         else if(_sndIsInstalled < 0)  mySize += STRLEN(HTTP_UPLOAD_SLINK1B) + STRLEN(HTTP_UPLOAD_SLINK2B);
+        if(_showUploadSnd) mySize += STRLEN(HTTP_DIV_END);
+        else               mySize += STRLEN(HTTP_UPLOAD_SDMSG);
     }
-#endif
+    if(_showUploadSnd) {
+        mySize += STRLEN(HTTP_UPDATE_FORM) + STRLEN(HTTP_UPLOADSND1);
+        mySize += STRLEN(HTTP_UPLOADSND1A) + STRLEN(HTTP_UPLOADSND3);
+    } else {
+        mySize += STRLEN(HTTP_UPLOADSND1A) + STRLEN(HTTP_UPLOAD_SDMSG);
+    }
+    #endif
 
     mySize += STRLEN(HTTP_END);
 
@@ -3111,17 +3171,8 @@ void WiFiManager::handleUpdate()
         page += FPSTR(HTTP_DIV_END);
     }
     #endif
-    page += FPSTR(HTTP_UPDATE2);
-
-#ifdef WM_UPLOAD
-    if(_showUploadSnd) {
-        page += FPSTR(HTTP_UPDATE_FORM);
-        page += FPSTR(HTTP_UPLOADSND1);
-    }
-    page += FPSTR(HTTP_UPLOADSND1A);
-    page += _sndContName;
-    page += FPSTR(HTTP_UPLOADSND2);
-    if(_sndContVer) {
+    #if defined(WM_UPLOAD) && !defined(WM_INSTALLER)
+    if(_sndContVer && (_sndIsInstalled <= 0)) {
         page += FPSTR(HTTP_UPLOAD_SLINK1);
         if(!_sndIsInstalled)          page += FPSTR(HTTP_UPLOAD_SLINK1A);
         else if(_sndIsInstalled < 0)  page += FPSTR(HTTP_UPLOAD_SLINK1B);
@@ -3131,13 +3182,25 @@ void WiFiManager::handleUpdate()
         if(!_sndIsInstalled)          page += FPSTR(HTTP_UPLOAD_SLINK2A);
         else if(_sndIsInstalled < 0)  page += FPSTR(HTTP_UPLOAD_SLINK2B);
         page += FPSTR(HTTP_UPLOAD_SLINK3);
+        if(_showUploadSnd) page += FPSTR(HTTP_DIV_END);
+        else               page += FPSTR(HTTP_UPLOAD_SDMSG);
     }
+    #endif
+
+    page += FPSTR(HTTP_UPDATE2);
+
+    #if defined(WM_UPLOAD) && !defined(WM_INSTALLER)
+    if(_showUploadSnd) {
+        page += FPSTR(HTTP_UPDATE_FORM);
+        page += FPSTR(HTTP_UPLOADSND1);
+    }
+    page += FPSTR(HTTP_UPLOADSND1A);
     if(_showUploadSnd) {
         page += FPSTR(HTTP_UPLOADSND3);
     } else {
         page += FPSTR(HTTP_UPLOAD_SDMSG);
     }
-#endif
+    #endif
 
     page += FPSTR(HTTP_END);
 
@@ -3155,13 +3218,20 @@ void WiFiManager::handleUpdate()
 // upload via /u POST
 void WiFiManager::handleUpdating()
 {
-    // handler for the file upload, get's the sketch bytes, and writes
-    // them through the Update object
     HTTPUpload& upload = server->upload();
+    #define CFHD 12
 
     if(upload.status == UPLOAD_FILE_START) {
 
-        _uplError = 0;
+        _uplError = _updError = 0;
+        _uploadIsCF = false;
+        #ifdef WM_UPLOAD
+        _uplStage = 0;
+        _uploadDataSize = 0;
+        #else
+        _uplStage = 2;
+        _uplError = -1;  // No Combo-Firmware
+        #endif
 
         // Callback for before OTA update
         if(_preotaupdatecallback) {
@@ -3173,50 +3243,204 @@ void WiFiManager::handleUpdating()
         #endif
 
         #ifdef WM_FWPROT
-        if(!mystrstr(upload.filename.c_str(), WM_FWPROT)) {
+        #ifdef WM_UPLOAD
+        if(!mystrstr(upload.filename.c_str(), WM_FWPROT) && !mystrstr(upload.filename.c_str(), WM_FWPROTSP))
+        #else
+        if(!mystrstr(upload.filename.c_str(), WM_FWPROT))
+        #endif
+        {
             #ifdef _A10001986_DBG
             Serial.println("[ERROR] OTA Update ERROR: Bad filename\n");
             #endif
-            _uplError = -1;
-        } else
-        #endif
-        if(!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-            #ifdef _A10001986_DBG
-            Serial.printf("[ERROR] OTA Update ERROR %d\n", Update.getError());
-            #endif
             _uplError = 1;
+        }
+        #endif
+
+        if(_uploadspinnercallback) {
+            _uploadspinnercallback(1, -1);
         }
 
     } else if(upload.status == UPLOAD_FILE_WRITE) {
 
-        if(!_uplError) {
+        uint8_t *buf = upload.buf;
+        size_t  currentSize = upload.currentSize, wlen;
+        int percent = -1;
 
-            if(Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-                #ifdef _A10001986_DBG
-                Serial.printf("[ERROR] OTA Update WRITE ERROR %d\n", Update.getError());
-                #endif
-                _uplError = 1;
+        if(_uplError != 1) {
+
+            #ifdef WM_UPLOAD
+
+            if(!_uplStage) {
+                if(_uploadDataSize < CFHD) {
+                    int len = (CFHD - _uploadDataSize) < currentSize ? (CFHD - _uploadDataSize) : currentSize;
+                    memcpy(_uplBuf + _uploadDataSize, buf, len);
+                    _uploadDataSize += len;
+                    currentSize -= len;
+                    buf += len;
+                }
+                if(_uploadDataSize >= CFHD) {
+                    size_t t = 0;
+                    if( (_uploadIdCf && (_uploadIsCF = _uploadIdCf(_uplBuf, CFHD))) ||
+                        (_uploadIdDf && (t = _uploadIdDf(_uplBuf, CFHD))) ) {
+                        _uplStage = 1;
+                        if(_potaopencb && _potawritecb && _potaclosecb) {
+                            if(!_potaopencb()) {
+                                _uplError = 3;   // Can't open data file on SD
+                            } else if(!_uploadIsCF) {
+                                // We detected a pure data file: Write out buffer first
+                                if(!_potawritecb(_uplBuf, CFHD)) {
+                                    #ifdef _A10001986_DBG
+                                    Serial.println("[ERROR] OTA data file write error");
+                                    #endif
+                                    _uplError = 4;   // Write error
+                                }
+                            }
+                        } else {
+                            _uplError = _uploadIsCF ? 12 : 2;  // No SD card
+                        }
+                        if(_uploadIsCF) {
+                            #ifdef ESP32
+                            _uploadDataSize = (size_t)(((uint32_t *)_uplBuf)[2]);
+                            _uploadTotalSize = (size_t)(((uint32_t *)_uplBuf)[1]);
+                            #else
+                            _uploadDataSize = _uplBuf[8] | (_uplBuf[9] << 8) | (_uplBuf[10] << 16) | (_uplBuf[11] << 24);
+                            _uploadTotalSize = _uplBuf[4] | (_uplBuf[5] << 8) | (_uplBuf[6] << 16) | (_uplBuf[7] << 24);
+                            #endif
+                            #ifdef _A10001986_DBG
+                            Serial.printf("Upload total size %d, data file size: %d, \n", _uploadTotalSize, _uploadDataSize);
+                            #endif
+                        } else {
+                            _uploadTotalSize = (t > 1) ? t : 0;
+                            _updError = -1;
+                        }
+                        _uploadProgress = 0;
+                    } else {
+                        // A pure firmware file, no Combo-Firmware
+                        _uplError = -1;
+                        _uplStage = 2;
+                    }
+                }
             }
 
+            if(_uplStage == 1) {
+                if(_uploadIsCF) {
+                    if(_uploadDataSize > currentSize) {
+                        wlen = currentSize;
+                        _uploadDataSize -= currentSize;
+                    } else {
+                        wlen = _uploadDataSize;
+                        currentSize -= wlen;
+                        _uploadDataSize = 0;
+                        _uplStage = 2;
+                    }
+                } else {
+                    wlen = currentSize;
+                }
+                if(wlen && !_uplError) {
+                    if(!_potawritecb(buf, wlen)) {
+                        #ifdef _A10001986_DBG
+                        Serial.println("[ERROR] OTA data file write error");
+                        #endif
+                        _uplError = 4;   // Write error
+                    }
+                }
+                if(_uplStage != 1) {
+                    if(_potaclosecb) _potaclosecb(!!_uplError);
+                    #ifdef _A10001986_DBG
+                    Serial.println("[OTA] Data file closed");
+                    #endif
+                }
+                buf += wlen;
+                if(_uploadTotalSize) {
+                    _uploadProgress += wlen;
+                    percent = _uploadProgress * 100 / _uploadTotalSize;
+                }
+            }
+
+            #endif
+
+            if(_uplStage == 2) {
+                #ifdef _A10001986_DBG
+                Serial.println("OTA Update begin");
+                #endif
+                if(!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+                    #ifdef _A10001986_DBG
+                    Serial.printf("[ERROR] OTA Update ERROR %d\n", Update.getError());
+                    #endif
+                    _updError = 1;
+                #ifdef WM_UPLOAD
+                } else if(_uploadDataSize) {
+                    // We detected a pure fw file: Write out buffer first
+                    if(Update.write(_uplBuf, CFHD) != CFHD) {
+                        #ifdef _A10001986_DBG
+                        Serial.printf("[ERROR] OTA Update WRITE ERROR %d\n", Update.getError());
+                        #endif
+                        _updError = 1;
+                    }
+                    _uploadTotalSize = 0; // No progress display
+                #endif
+                }
+                _uplStage = 3;
+            }
+
+            if(_uplStage == 3) {
+                if(!_updError) {
+                    if(currentSize) {
+                        if(Update.write(buf, currentSize) != currentSize) {
+                            #ifdef _A10001986_DBG
+                            Serial.printf("[ERROR] OTA Update WRITE ERROR %d\n", Update.getError());
+                            #endif
+                            _updError = 1;
+                        }
+                    }
+                    #ifdef WM_UPLOAD
+                    if(_uploadTotalSize) {
+                        _uploadProgress += currentSize;
+                        percent = _uploadProgress * 100 / _uploadTotalSize;
+                    }
+                    #endif
+                }
+            }
+
+        }
+
+        if(_uploadspinnercallback) {
+            _uploadspinnercallback(0, percent);
         }
 
     } else if(upload.status == UPLOAD_FILE_END) {
 
-        if(!_uplError) {
-
-            #ifdef _A10001986_V_DBG
-            Serial.printf("[OTA] OTA FILE END bytes: %d\n", upload.totalSize);
-            #endif
-
-            if(!Update.end(true)) {
-                _uplError = 1;
+        if(_uplStage == 3) {
+            if(!_updError) {
+                if(!Update.end(true)) {
+                    _updError = 1;
+                }
             }
-
+        #ifdef WM_UPLOAD
+        } else if(_uplStage == 1) {
+            // Close file only if it was opened
+            // which is the case when error is zero
+            // (in which case we keep it), or 4
+            // (which means a write error, and we
+            // delete it)
+            if(!_uplError || _uplError == 4) {
+                _potaclosecb((_uplError == 4));
+            }
+        #endif
         }
 
     } else if(upload.status == UPLOAD_FILE_ABORTED) {
 
-        Update.abort();
+        switch(_uplStage) {
+        #ifdef WM_UPLOAD
+        case 1:
+            _potaclosecb(true);
+            break;
+        #endif
+        case 3:
+            Update.abort();
+            break;
+        }
 
         #ifdef _A10001986_DBG
         Serial.println("[OTA] Update was aborted");
@@ -3236,6 +3460,7 @@ void WiFiManager::handleUpdating()
     }
 
     delay(0);
+    #undef CFHD
 }
 
 /*
@@ -3245,18 +3470,57 @@ void WiFiManager::handleUpdateDone()
 {
     unsigned int mySize = 0;
     uint32_t incFlags = 0;
-    bool res = (_uplError < 0) ? false : (!Update.hasError());
+    bool resUpl = (_uplError <= 0);
+    bool resUpd = (_updError > 0) ? (!Update.hasError()) : true;
 
     #ifdef _A10001986_V_DBG
     Serial.println("<- Handle update done");
     #endif
 
-    if(res) {
-        mySize += STRLEN(HTTP_UPDATE_SUCCESS);
+    if(resUpl && resUpd) {
+        mySize += STRLEN(HTTP_UPDATE_SUCCESS) + STRLEN(HTTP_UPDATE_SUCCESS_TL);
+        #ifdef WM_UPLOAD
+        if(!_uplError) mySize += STRLEN(HTTP_UPDATE_SUCCESS_I);
+        #endif
         incFlags = incGFXMSG;
+        #ifdef _A10001986_DBG
+        Serial.println("[OTA] update ok");
+        #endif
     } else {
-        mySize += STRLEN(HTTP_UPDATE_FAIL1) + STRLEN(HTTP_UPDATE_FAIL2);
-        mySize += ((_uplError < 0) ? STRLEN(HTTP_UPDATE_FAILF) : strlen(Update.errorString()));
+        mySize += STRLEN(HTTP_UPDATE_FAIL_HD) + STRLEN(HTTP_UPDATE_FAIL_TL);
+        if(_uplError == 1) {
+            mySize += STRLEN(HTTP_UPDATE_FAIL_CO) + STRLEN(HTTP_UPDATE_FAIL_FN);
+        } else {
+            if(_updError && _uplError) {
+                mySize += STRLEN(HTTP_UPDATE_FAIL_CO);
+            } else {
+                mySize += STRLEN(HTTP_UPDATE_FAIL_PA);
+            }
+            if(_updError > 0) {
+                mySize += strlen(Update.errorString());
+                if(_uplError) mySize += STRLEN(HTTP_BR);
+            }
+            #ifdef WM_UPLOAD
+            switch(_uplError) {
+            case 2:
+                mySize += STRLEN(HTTP_UPDATE_FAIL_SP) + STRLEN(HTTP_UPDATE_FAIL_NOSD);
+                break;
+            case 3:
+                mySize += STRLEN(HTTP_UPDATE_FAIL_SP) + STRLEN(HTTP_UPDATE_FAIL_OP);
+                break;
+            case 4:
+                mySize += STRLEN(HTTP_UPDATE_FAIL_SP) + STRLEN(HTTP_UPDATE_FAIL_WE);
+                break;
+            case 12:
+                mySize += STRLEN(HTTP_UPDATE_FAIL_NOSD);
+                break;
+            }
+            #endif
+        }
+        #ifdef _A10001986_DBG
+        Serial.println("[OTA] update failed");
+        Serial.printf("Upd: %d %d    Upl: %d %d\n", resUpd, _updError, resUpl, _uplError);
+        #endif
     }
 
     mySize += getHTTPHeadLength(S_titleupd, incFlags);
@@ -3272,22 +3536,54 @@ void WiFiManager::handleUpdateDone()
 
     getHTTPHeadNew(page, S_titleupd, incFlags);
 
-    if(res) {
+    if(resUpl && resUpd) {
         page += FPSTR(HTTP_UPDATE_SUCCESS);
-        #ifdef _A10001986_DBG
-        Serial.println("[OTA] update ok");
+        #ifdef WM_UPLOAD
+        if(!_uplError) page += FPSTR(HTTP_UPDATE_SUCCESS_I);
         #endif
+        page += FPSTR(HTTP_UPDATE_SUCCESS_TL);
     } else {
-        page += FPSTR(HTTP_UPDATE_FAIL1);
-        if(_uplError < 0) {
-            page += FPSTR(HTTP_UPDATE_FAILF);
+        page += FPSTR(HTTP_UPDATE_FAIL_HD);
+        if(_uplError == 1) {
+            page += FPSTR(HTTP_UPDATE_FAIL_CO);
+            page += FPSTR(HTTP_UPDATE_FAIL_FN);
         } else {
-            page += Update.errorString();
+            const char *err;
+            if(_updError && _uplError) {
+                err = HTTP_UPDATE_FAIL_CO;
+            } else {
+                err = HTTP_UPDATE_FAIL_PA;
+            }
+            page += err;
+            if(_updError > 0) {
+                page += Update.errorString();
+                if(_uplError) page += FPSTR(HTTP_BR);
+            }
+            #ifdef WM_UPLOAD
+            if(_uplError) {
+                err = NULL;
+                switch(_uplError) {
+                case 2:
+                    err = HTTP_UPDATE_FAIL_NOSD;
+                    break;
+                case 3:
+                    err = HTTP_UPDATE_FAIL_OP;
+                    break;
+                case 4:
+                    err = HTTP_UPDATE_FAIL_WE;
+                    break;
+                case 12:
+                    page += FPSTR(HTTP_UPDATE_FAIL_NOSD);
+                    break;
+                }
+                if(err) {
+                    page += FPSTR(HTTP_UPDATE_FAIL_SP);
+                    page += err;
+                }
+            }
+            #endif
         }
-        page += FPSTR(HTTP_UPDATE_FAIL2);
-        #ifdef _A10001986_DBG
-        Serial.println("[OTA] update failed");
-        #endif
+        page += FPSTR(HTTP_UPDATE_FAIL_TL);
     }
 
     page += FPSTR(HTTP_END);
@@ -3295,7 +3591,7 @@ void WiFiManager::handleUpdateDone()
     HTTPSend(page, false);
 
     if(_postotaupdatecallback) {
-        _postotaupdatecallback(res);
+        _postotaupdatecallback((resUpl && resUpd));
     }
 
     #ifdef WM_MDNS
@@ -3353,17 +3649,18 @@ void WiFiManager::setAPStaticIPConfig(IPAddress& ip, IPAddress& gw, IPAddress& s
 #endif
 
 // Set static IP for STA
-void WiFiManager::setSTAStaticIPConfig(IPAddress& ip, IPAddress& gw, IPAddress& sn)
+void WiFiManager::setSTAStaticIPConfig(bool use, IPAddress& ip, IPAddress& gw, IPAddress& sn)
 {
     _sta_static_ip = ip;
     _sta_static_gw = gw;
     _sta_static_sn = sn;
+    _use_sta_ip = use;
 }
 
 // Set static IP + DNS for STA
-void WiFiManager::setSTAStaticIPConfig(IPAddress& ip, IPAddress& gw, IPAddress& sn, IPAddress& dns)
+void WiFiManager::setSTAStaticIPConfig(bool use, IPAddress& ip, IPAddress& gw, IPAddress& sn, IPAddress& dns)
 {
-    setSTAStaticIPConfig(ip, gw, sn);
+    setSTAStaticIPConfig(use, ip, gw, sn);
     _sta_static_dns = dns;
 }
 

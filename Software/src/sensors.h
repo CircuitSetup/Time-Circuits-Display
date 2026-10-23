@@ -4,6 +4,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Sensor Class: Temperature/humidity and Light Sensor handling
  *
@@ -60,8 +61,6 @@
 #ifndef _TCSENSOR_H
 #define _TCSENSOR_H
 
-#if defined(HAVE_TEMP) || defined(HAVE_LIGHT)
-
 class tcSensor {
 
     protected:
@@ -78,10 +77,6 @@ class tcSensor {
         // Ptr to custom delay function
         void (*_customDelayFunc)(unsigned long) = NULL;
 };
-
-#endif
-
-#ifdef HAVE_TEMP    // -----------------------------------------
 
 enum {
     MCP9808 = 0,      // 0x18 (unsupported: 0x19-0x1f)
@@ -151,9 +146,6 @@ class tempSensor : tcSensor {
         void  HDC302x_setDefault(uint16_t reg, uint8_t val1, uint8_t val2);
         bool  readAndCheck6(uint8_t *buf, uint16_t& t, uint16_t& h, uint8_t crcinit, uint8_t crcpoly);
 };
-#endif
-
-#ifdef HAVE_LIGHT   // -----------------------------------------
 
 enum {
     LST_TSL2561 = 0,  // 0x29 (unsupported: 0x39, 0x49)
@@ -193,7 +185,5 @@ class lightSensor : tcSensor {
 
         uint16_t _con0 = 0;
 };
-
-#endif
 
 #endif  // _TCSENSOR_H

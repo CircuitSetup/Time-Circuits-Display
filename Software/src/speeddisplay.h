@@ -4,6 +4,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * speedDisplay Class: Speedo Display
  *
@@ -110,9 +111,7 @@ class speedDisplay {
         void finishSetup(bool rAligned);
         void setupBrightness(uint8_t normLevel, uint8_t tempLevel);
         bool haveSpeedoDisplay();
-        #ifdef HAVE_TEMP
         bool supportsTemperature();
-        #endif
         void on();
         void off();
         bool getOnOff() { return !!_onCache; }
@@ -125,9 +124,7 @@ class speedDisplay {
         void show();
 
         void setSpeed(int speedNum);
-        #ifdef HAVE_TEMP
         void setTemperature(float temp);
-        #endif
 
         #ifdef SERVOSPEEDO
         void setCalib(int calib);
@@ -195,9 +192,6 @@ class speedDisplay {
         //bool _colon = false;
 
         int  _speed = 0;
-
-        unsigned long _posSpdNow = 0;
-        int8_t        _lastPosSpd = 5;
 
         uint8_t _currBrightness = 15;
         uint8_t _normBrightness = 15;

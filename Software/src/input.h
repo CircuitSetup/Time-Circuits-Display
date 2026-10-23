@@ -4,6 +4,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Keypad_I2C Class, TCButton Class: I2C-Keypad and Button handling
  * 
@@ -191,7 +192,6 @@ class TCButton {
         unsigned long _startTime;
 };
 
-#ifdef HAVE_RE
 /*
  * TCRotEnc class
  */
@@ -237,6 +237,5 @@ class TCRotEnc {
         int           dfrgain;
         int           dfroffslots;
 };
-#endif  // HAVE_RE
 
 #endif

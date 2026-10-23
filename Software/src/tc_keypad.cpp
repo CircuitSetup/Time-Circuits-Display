@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Keypad handling
  *
@@ -139,7 +140,7 @@ static const uint8_t rowPins[4] = {1, 6, 5, 3};
 static const uint8_t colPins[3] = {2, 0, 4};
 #endif
 
-static const char *weekDays[7] = {
+static const char * const weekDays[7] = {
       "SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"
 };
 #ifdef ACAR_DISPLAY
@@ -208,6 +209,8 @@ static uint32_t preDTMFkeyplayed = 0;
 
 static unsigned long enterDelay = 0;
 
+static bool restoreToDefaults = false;
+
 static char mp3Track[16];
 static char mp3Artist[16];
 
@@ -243,6 +246,7 @@ static void displayRemOffString();
 static void displayStalePTStatus();
 static void displayAlarmOff(bool snooze);
 static void doAnddisplayMPGoto(int num, char *buf);
+static void displayGPSStatus();
 
 static void waitAudioDone();
 
@@ -296,7 +300,6 @@ void s5(bool b)
     dt_showTextDirect(b ? spTxtS5A : spTxtS5B, CDT_CLEAR);
 }
 
-#ifdef HAVE_TEMP
 bool showRCDest(bool i)
 {
     if(!isWcMode() || (!(wcf & WCF_HaveTZ1))) {
@@ -326,7 +329,6 @@ bool showRCDep(bool i)
 
     return true;
 }
-#endif
 
 /*
  * keypad_setup()
@@ -597,7 +599,6 @@ static int read2digs(unsigned int idx)
     return (binBuf[idx] * 10) + binBuf[idx+1];
 }
 
-#ifdef HAVE_REMOTE
 void injectKeypadKey(char key, int kaction)
 {
     if(csf & CSF_MA) return;
@@ -641,7 +642,6 @@ void injectKeypadKey(char key, int kaction)
         doKey = b;
     }
 }
-#endif
 
 /*
  * keypad_loop()
@@ -790,6 +790,9 @@ void keypad_loop()
         
         if(!(eef & EEF_InputInjected)) {
             eef &= ~EEF_EnterPressed;
+            if(strLen != DATELEN_REM) {
+                restoreToDefaults = false;
+            }
         }
 
         // cancel ETT, LED on, dest off, init timer
@@ -818,6 +821,23 @@ void keypad_loop()
             } else if(strLen == DATELEN_CODE1) {
     
                 switch(*binBuf) {
+                case 3:
+                    dt_showTextDirect(
+                        weekDays[dayOfWeek(presentTime.getDay(), presentTime.getMonth(), presentTime.getYear())]
+                    );
+                    specDisp = 10;
+                    validEntry = 1;
+                    break;
+                case 8:
+                    {
+                        bool t = !!(sgf & SGF_GPSLive);
+                        if(switchGPSLive(!(sgf & SGF_GPSLive)) != t) {
+                            saveGPSLive(!!(sgf & SGF_GPSLive));
+                            displayGPSStatus();
+                            validEntry = 1;
+                        }
+                    }
+                    break;
                 case 9:
                     send_refill_msg();
                     validEntry = 0;   // Play no sound
@@ -914,14 +934,6 @@ void keypad_loop()
                         }
                         break;
         
-                    case 39:
-                        dt_showTextDirect(
-                            weekDays[dayOfWeek(presentTime.getDay(), presentTime.getMonth(), presentTime.getYear())]
-                        );
-                        specDisp = 10;
-                        validEntry = 1;
-                        break;
-        
                     #ifdef SERVOSPEEDO
                     case 49:
                         int scorr, tcorr;
@@ -948,9 +960,7 @@ void keypad_loop()
                     aud_state.curVolume = (code == 399) ? 255 : (code - 300);
     
                     // Re-set RotEnc for current level
-                    #ifdef HAVE_RE
                     re_vol_reset();
-                    #endif
                     #ifdef HAVE_MQTT
                     mp_sendStatus();
                     #endif
@@ -987,21 +997,13 @@ void keypad_loop()
                             bool needDep = isMiniMode();
                             if(!needDep) {
                                 if(isWcMode() && ((wcf & WCF_HaveTZ2) || isRcMode())) needDep = true;
-                                #ifdef HAVE_TEMP
                                 else if(isRcMode() && (sgf & SGF_HaveHum)) needDep = true;
-                                #endif
-                                #ifdef HAVE_GPS
                                 else if(isNavMode()) needDep = true;
-                                #endif
                             }
                             if(needDep) needDepTime = 1;
                             if(isMiniMode()) enableMiniMode(false);
-                            #ifdef HAVE_GPS
                             else if(isNavMode()) enableNavMode(false);
-                            #endif
-                            #ifdef HAVE_TEMP
                             if(isRcMode()) enableRcMode(false);
-                            #endif
                             if(isWcMode()) {
                                 enableWcMode(false);
                                 setupWCMode();
@@ -1009,7 +1011,6 @@ void keypad_loop()
                         }
                         validEntry = 1;
                         break;
-                    #ifdef HAVE_TEMP
                     case 111:               // 111: Toggle rc-mode
                         if(wcf & WCF_HaveRCM) {
                             if(isWcMode()) {
@@ -1032,7 +1033,6 @@ void keypad_loop()
                             validEntry = 1;
                         }
                         break;
-                    #endif
                     case 112:               // 112: Toggle wc-mode
                         if(wcf & WCF_HaveWCM) {
                             if(isRcMode()) {
@@ -1071,7 +1071,6 @@ void keypad_loop()
                             validEntry = 1;
                         }
                         break;
-                    #ifdef HAVE_GPS
                     case 114:
                     case 115:
                     case 116:
@@ -1086,7 +1085,6 @@ void keypad_loop()
                             validEntry = 1;
                         }
                         break;
-                    #endif
                     case 117:
                         if(isWcMode()) {
                             enableWcMode(false);
@@ -1201,6 +1199,15 @@ void keypad_loop()
                             validEntry = 0;   // Play no sound
                         }
                         break;
+                    case 950:
+                    case 951:
+                        if(sgf & SGF_UGPS) {
+                            sgf &= ~SGF_GPSShowFix;
+                            if(code == 951) sgf |= SGF_GPSShowFix;
+                            saveGPSFixIndicator(!!(sgf & SGF_GPSShowFix));
+                            validEntry = 0;   // Play no sound
+                        }
+                        break;
                     case 990:
                     case 991:
                         if(!(eef & EEF_InputInjected)) {
@@ -1213,7 +1220,6 @@ void keypad_loop()
                             validEntry = 1;
                         }
                         break;
-                    #ifdef HAVE_REMOTE
                     case 992:
                     case 993:
                         if(!(eef & EEF_InputInjected)) {
@@ -1246,7 +1252,6 @@ void keypad_loop()
                             validEntry = 1;
                         }
                         break;
-                    #endif  // HAVE_REMOTE
                     #ifdef HAVE_MQTT
                     case 996:
                         if(!(eef & EEF_InputInjected)) {
@@ -1259,9 +1264,7 @@ void keypad_loop()
                         pauseAuto();
                         enableRcMode(false);
                         enableWcMode(false);
-                        #ifdef HAVE_GPS
                         enableNavMode(false);
-                        #endif
                         enableMiniMode(false);
                         loadUserDLTimes();
                         backupDestTime();
@@ -1446,8 +1449,23 @@ void keypad_loop()
 
                         validEntry = 1;
                     }
-                } 
-            } 
+                }
+
+                restoreToDefaults = false;
+
+            } else if(!strncmp(keyBuffer, "1971159357", 10)) {
+
+                if(!(eef & EEF_InputInjected)) {
+                    if(!restoreToDefaults) {
+                        restoreToDefaults = true;
+                        validEntry = 1;
+                    } else {
+                        resettofactorydefault();
+                        orderlyReboot();
+                    }
+                }
+
+            }
 
         } else if(strLen == DATELEN_STPR) {
 
@@ -1765,7 +1783,6 @@ void keypad_loop()
             // Fill audio buffer, avoid a pause in the actual animation
             audio_loop();
 
-            #ifdef HAVE_GPS
             if(isNavMode()) {
                 char destDisp[16];
                 char depDisp[16];
@@ -1787,8 +1804,6 @@ void keypad_loop()
                 destinationTime.onCond();
                 #endif // ------------------------------------
             } else {
-            #endif
-                #ifdef HAVE_TEMP
                 if(isRcMode() && (!isWcMode() || (!(wcf & WCF_HaveTZ1)) || needDepTime)) {
 
                     #ifndef NO_MONTH_ANIM // -----------------------------------
@@ -1808,60 +1823,51 @@ void keypad_loop()
                     destinationTime.onCond();
                     #endif  // NO_MONTH_ANIM -------------------------------------
                   
-                } else {
-                #endif  // HAVE_TEMP
-
-                    if(isMiniMode()) {
+                } else if(isMiniMode()) {
                         
-                        destinationTime.clearDisplay();
+                    destinationTime.clearDisplay();
+                    if(needDepTime) {
+                        departedTime.clearDisplay();
+                        departedTime.onCond();
+                    }
+                    destinationTime.onCond();
+                    
+                } else {
+
+                    #ifndef ACAR_DISPLAY
+                    if(p3anim) {
+                        for(int i = 0; i < 12; i++) {
+                            if(!destinationTime.showAnimate3(i))
+                                break;
+                            if(needDepTime) {
+                                departedTime.showAnimate3(i);
+                            }
+                            mydelay(5);
+                        }
+                    } else {
+                    #endif    // ACAR_DISPLAY
+                        #ifndef NO_MONTH_ANIM // ---------------------
+                        for(bool i : { true, false }) {
+                            destinationTime.showAnimate(i);
+                            if(needDepTime) {
+                                departedTime.showAnimate(i);
+                            }
+                            if(i) mydelay(80);
+                        }
+                        #else // NO_MONTH_ANIM -----------------------
+                        destinationTime.show();
                         if(needDepTime) {
-                            departedTime.clearDisplay();
+                            departedTime.show();
                             departedTime.onCond();
                         }
                         destinationTime.onCond();
-                        
-                    } else {
-    
-                        #ifndef ACAR_DISPLAY
-                        if(p3anim) {
-                            for(int i = 0; i < 12; i++) {
-                                if(!destinationTime.showAnimate3(i))
-                                    break;
-                                if(needDepTime) {
-                                    departedTime.showAnimate3(i);
-                                }
-                                mydelay(5);
-                            }
-                        } else {
-                        #endif    // ACAR_DISPLAY
-                            #ifndef NO_MONTH_ANIM // ---------------------
-                            for(bool i : { true, false }) {
-                                destinationTime.showAnimate(i);
-                                if(needDepTime) {
-                                    departedTime.showAnimate(i);
-                                }
-                                if(i) mydelay(80);
-                            }
-                            #else // NO_MONTH_ANIM -----------------------
-                            destinationTime.show();
-                            if(needDepTime) {
-                                departedTime.show();
-                                departedTime.onCond();
-                            }
-                            destinationTime.onCond();
-                            #endif  // NO_MONTH_ANIM ---------------------
-                        #ifndef ACAR_DISPLAY    
-                        }
-                        #endif  // ACAR_DISPLAY
-
+                        #endif  // NO_MONTH_ANIM ---------------------
+                    #ifndef ACAR_DISPLAY    
                     }
+                    #endif  // ACAR_DISPLAY
     
-                #ifdef HAVE_TEMP
                 }
-                #endif
-            #ifdef HAVE_GPS
             }
-            #endif
 
             // Turn off white LED, reset TZ-Name-Animation & flags
             resetEnterAnim();
@@ -1875,41 +1881,27 @@ void cancelEnterAnim(bool reenableDT)
     if(enterTimerNow) {
 
         if(reenableDT) {
-            #ifdef HAVE_GPS
             char destDisp[16];
             char depDisp[16];
             if(isNavMode()) {
                 gpsMakePos(destDisp, depDisp);
                 destinationTime.showNavDirect(destDisp, false);
-            } else
-            #endif
-            #ifdef HAVE_TEMP
-            if(!isRcMode() || !showRCDest(false)) {
-            #endif
+            } else if(!isRcMode() || !showRCDest(false)) {
                 if(isMiniMode())
                     destinationTime.clearDisplay();
                 else
                     destinationTime.show();
-            #ifdef HAVE_TEMP
             }
-            #endif
             
             if(needDepTime) {
-                #ifdef HAVE_GPS
                 if(isNavMode()) {
                     departedTime.showNavDirect(depDisp, false);
-                } else
-                #endif
-                #ifdef HAVE_TEMP
-                if(!isRcMode() || !showRCDep(false)) {
-                #endif
+                } else if(!isRcMode() || !showRCDep(false)) {
                     if(isMiniMode())
                         departedTime.clearDisplay();
                     else
                         departedTime.show();
-                #ifdef HAVE_TEMP
                 }
-                #endif
 
                 departedTime.onCond();
             }
@@ -1975,24 +1967,18 @@ static void resetDisplayMode(bool setDep)
         needDepTime = 1;
     }
 
-    #ifdef HAVE_GPS
     if(isNavMode()) {
         enableNavMode(false);
         needDepTime = 1;
     }
-    #endif
 
-    #ifdef HAVE_TEMP
     bool rcUsesLT = (isRcMode() && ((sgf & SGF_HaveHum) || isWcMode()));
-    #endif
 
     if(!setDep) {
         // If setting the red display, disable RC mode, and
         // reset yellow display if used for RC or RC+WC mode.
-        #ifdef HAVE_TEMP
         if(rcUsesLT) needDepTime = 1;
         enableRcMode(false);
-        #endif
 
         if(isWcMode() && (wcf & WCF_HaveTZ1)) {
             // If WC mode is enabled and we have a TZ for red display,
@@ -2019,9 +2005,7 @@ static void resetDisplayMode(bool setDep)
       
         // If setting the yellow display, check if it used by RC
         // or RC+WC mode, and only disable either one if yes.
-        #ifdef HAVE_TEMP
         if(rcUsesLT) enableRcMode(false);
-        #endif
 
         if(isWcMode() && (wcf & WCF_HaveTZ2)) {
             // As above but vice versa.
@@ -2141,6 +2125,16 @@ static void doAnddisplayMPGoto(int num, char *buf)
     sprintf(buf, "NEXT      %03d", num);
     #endif
     dt_showTextDirect(buf);
+    specDisp = 10;
+}
+
+static void displayGPSStatus()
+{
+    #ifdef ACAR_DISPLAY
+    dt_showTextDirect((sgf & SGF_GPSLive) ? "GPS SPEED ON"  : "GPS SPD  OFF");
+    #else
+    dt_showTextDirect((sgf & SGF_GPSLive) ? "GPS SPEED  ON" : "GPS SPEED OFF");
+    #endif
     specDisp = 10;
 }
 
@@ -2305,15 +2299,15 @@ void leds_off()
  *
  */
 
-void doCopyAudioFiles()
+void do_install_sp()
 {
     bool delIDfile = false;
 
-    if((!copy_audio_files(delIDfile)) && !FlashROMode) {
+    if((!install_sp(delIDfile)) && !FlashROMode) {
         // If copy fails because of a write error, re-format flash FS
         lt_showTextDirect("FORMATTING");
         reInstallFlashFS();
-        copy_audio_files(delIDfile);  // Retry copy
+        install_sp(delIDfile);  // Retry copy
     }
 
     if(delIDfile) {
@@ -2339,7 +2333,7 @@ void start_file_copy()
     allOn();
     allresetBrightness();
 
-    fcstart = millis();
+    fcstart = millis() - 1000;
 }
 
 void file_copy_progress(uint32_t ts, uint32_t tw)
@@ -2349,7 +2343,7 @@ void file_copy_progress(uint32_t ts, uint32_t tw)
 
     if(perc > 99) perc = 99;
 
-    if(millis() - fcstart >= 1000) {
+    if(millis() - fcstart > 1000) {
         #ifdef ACAR_DISPLAY
         sprintf(prog, "%02d\x7f\x80", perc);
         #else
@@ -2360,26 +2354,63 @@ void file_copy_progress(uint32_t ts, uint32_t tw)
     }
 }
 
-void file_copy_done(int err)
+void file_copy_done(int err, int werr, int werrSD)
 {
-    lt_showTextDirect(err ? "ERROR" : "DONE");
+    static const char * const e[] = {
+        "DONE", 
+        #ifdef ACAR_DISPLAY
+        "SDCARD ERROR",
+        #else
+        "SD CARD ERROR",
+        #endif
+        "WRITE ERROR",
+        "READ ERROR"
+    };
+    int i = 0;
+      
+    if(err) {
+        if(werrSD) {
+            i = 1;
+        } else if(werr) {
+            i = 2;
+        } else {
+            i = 3;
+        }
+    }
+    lt_showTextDirect(e[i]);
 }
 
-void doUploadSpinner(int doStart)
+void doUploadSpinner(int type, int doStart, int progress)
 {
     unsigned long now = millis();
-    char text[14] = "UPLOADING    ";
+    char text[16] = "UPLOADING    ";
+    char prog[16] = { 0 };
     
+    if(type) memcpy(text, "UPDATING ", 9);
+
     if(doStart) {
         uploadSpinner = 0;
+        dt_showTextDirect(text);
+        lt_off();
     } else {
         if(now - lastSpinner < 500) return;
         lastSpinner = now;
         text[DISP_LEN-1] = (char)((uint32_t)0x83 + uploadSpinner);
         uploadSpinner++;
         if(uploadSpinner > 5) uploadSpinner = 0;
+        dt_showTextDirect(text);
+        if(progress >= 0) {
+            #ifdef ACAR_DISPLAY
+            sprintf(prog, "%02d\x7f\x80", progress);
+            #else
+            sprintf(prog, " %02d\x7f\x80", progress);
+            #endif
+            lt_showTextDirect(prog);
+            lt_on();
+        } else {
+            lt_off();
+        }
     }
-    dt_showTextDirect(text);
 }
 
 void prepareReboot()

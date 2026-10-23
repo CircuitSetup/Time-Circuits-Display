@@ -37,7 +37,8 @@
 
 # if defined(__GNUC__) ||  \
     (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901)
-#  define PTR(offs, bits)	{ .ptr   = { 0, bits, offs       } }
+//#  define PTR(offs, bits)	{ .ptr   = { 0, bits, offs } }
+#  define PTR(o, b)	{ .ptr.final = 0, .ptr.bits = b, .ptr.offset = o }
 #  define V(v, w, x, y, hlen)	{ .value = { 1, hlen, v, w, x, y } }
 # else
 #  define PTR(offs, bits)	{ { 0, bits, offs } }
@@ -115,7 +116,8 @@ union huffquad const hufftabB[] PROGMEM = {
 
 # if defined(__GNUC__) ||  \
     (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901)
-#  define PTR(offs, bits)	{ .ptr   = { 0, bits, offs } }
+//#  define PTR(offs, bits)	{ .ptr   = { 0, bits, offs } }
+#  define PTR(o, b)	{ .ptr.final = 0, .ptr.bits = b, .ptr.offset = o }
 #  define V(x, y, hlen)		{ .value = { 1, hlen, x, y } }
 # else
 #  define PTR(offs, bits)	{ { 0, bits, offs } }

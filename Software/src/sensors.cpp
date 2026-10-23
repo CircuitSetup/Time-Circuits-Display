@@ -4,6 +4,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Sensor Class: Temperature/humidty and Light Sensor handling
  *
@@ -81,8 +82,6 @@
  */
 
 #include "tc_global.h"
-
-#if defined(HAVE_TEMP) || defined(HAVE_LIGHT)
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -193,14 +192,9 @@ void tcSensor::write8(uint16_t regno, uint8_t value)
     Wire.endTransmission();
 }
 
-#endif
-
-
 /*****************************************************************
  * tempSensor Class
  ****************************************************************/
-
-#ifdef HAVE_TEMP
 
 #define MCP9808_REG_CONFIG        0x01   // MCP9808 config register
 #define MCP9808_REG_UPPER_TEMP    0x02   // upper alert boundary
@@ -405,7 +399,7 @@ bool tempSensor::begin(void (*myDelay)(unsigned long), bool InCelsius)
                 _st = _addrArr[i+1];
     
                 #ifdef TC_DBG_SENS
-                const char *tpArr[9] = { "MCP9808", "BMx280", "SHT4x", "SI7021", "TMP117", "AHT20/AM2315C", "HTU31D", "MS8607", "HDC302X" };
+                const char * const tpArr[9] = { "MCP9808", "BMx280", "SHT4x", "SI7021", "TMP117", "AHT20/AM2315C", "HTU31D", "MS8607", "HDC302X" };
                 Serial.printf("Temperature sensor: Detected %s\n", tpArr[_st]);
                 #endif
     
@@ -827,8 +821,6 @@ bool tempSensor::readAndCheck6(uint8_t *buf, uint16_t& t, uint16_t& h, uint8_t c
     return false;
 }
 
-#endif // HAVE_TEMP
-
 
 /*****************************************************************
  * lightSensor Class
@@ -840,8 +832,6 @@ bool tempSensor::readAndCheck6(uint8_t *buf, uint16_t& t, uint16_t& h, uint8_t c
  * #defines below. VEML7700/6030 auto-adjust.
  * 
  ****************************************************************/
-
-#ifdef HAVE_LIGHT
 
 #define TSL2561_CTRL    0x80
 #define TSL2561_TIM     0x81
@@ -1031,7 +1021,7 @@ bool lightSensor::begin(bool skipLast, void (*myDelay)(unsigned long))
             _st = _addrArr[i+1];
             
             #ifdef TC_DBG_SENS
-            const char *tpArr[5] = { "TSL2561", "TSL2591", "BH1750", "VEML7700/6030", "LTR303/329" };
+            const char * const tpArr[5] = { "TSL2561", "TSL2591", "BH1750", "VEML7700/6030", "LTR303/329" };
             Serial.printf("Light sensor: Detected %s\n", tpArr[_st]);
             #endif
             
@@ -1434,5 +1424,3 @@ static int32_t TSL2591CalcLux(uint8_t iGain, uint8_t iTime, uint32_t ch0, uint32
     return (int32_t)lux2;
     //return (int32_t)max(lux1, lux2);
 }
-
-#endif // HAVE_LIGHT

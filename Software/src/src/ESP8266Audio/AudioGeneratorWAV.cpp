@@ -44,7 +44,7 @@ AudioGeneratorWAV::~AudioGeneratorWAV()
 
 bool AudioGeneratorWAV::stop()
 {
-  if (!running) return true;
+  //if (!running) return true;
   running = false;
   freeBuf();
   output->stop();

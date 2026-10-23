@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * WiFi and Config Portal handling
  *
@@ -90,11 +91,14 @@ extern bool blockWiFiSTAPS;
 
 extern bool carMode;
 
+extern bool bootAPwithoutStaticIP;
+extern bool bootAPwithoutPW;
+
 extern bool pubMQTT;
 extern bool pubMQTTAl;
 #ifdef HAVE_MQTT
 extern bool useMQTT;
-extern const char *mqttAudioFile[];
+extern const char * const mqttAudioFile[];
 extern bool MQTTvarLead;
 extern bool pubMP;
 #endif

@@ -25,36 +25,46 @@
 // Use ints instead of bitfields. This'll make the structure way larger, but allow
 // for easy direct access w/o any helper functions when placed in PROGMEM
 
+// While the ESP32 supports reading 16bit from flash directly, there is a
+// speed penalty of 10-15% in decoding if we use 16bit all the way.
+# if defined(ESP32)
+# include <stdint.h>
+typedef uint16_t mad_huffval_t;
+# else
+typedef unsigned int mad_huffval_t;
+# endif
+typedef unsigned int mad_huffval_t2;
+
 union huffquad {
   struct {
-    unsigned int final;
-    unsigned int bits;
-    unsigned int offset;
+    mad_huffval_t final;
+    mad_huffval_t bits;
+    mad_huffval_t2 offset;
   } ptr;
   struct {
-    unsigned int final;
-    unsigned int hlen;
-    unsigned int v;
-    unsigned int w;
-    unsigned int x;
-    unsigned int y;
+    mad_huffval_t final;
+    mad_huffval_t hlen;
+    mad_huffval_t v;
+    mad_huffval_t w;
+    mad_huffval_t x;
+    mad_huffval_t y;
   } value;
-  unsigned int final ;
+  mad_huffval_t final;
 };
 
 union huffpair {
   struct {
-    unsigned int final;
-    unsigned int bits;
-    unsigned int offset;
+    mad_huffval_t final;
+    mad_huffval_t bits;
+    mad_huffval_t2 offset;
   } ptr;
   struct {
-    unsigned int final;
-    unsigned int hlen;
-    unsigned int x;
-    unsigned int y;
+    mad_huffval_t final;
+    mad_huffval_t hlen;
+    mad_huffval_t x;
+    mad_huffval_t y;
   } value;
-  unsigned int final;
+  mad_huffval_t final;
 };
 
 struct hufftable {

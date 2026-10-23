@@ -4,6 +4,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * GPS Class: GPS receiver handling and data parsing
  *
@@ -56,8 +57,6 @@
 
 #include "tc_global.h"
 
-#ifdef HAVE_GPS
-
 #include <Arduino.h>
 #include <Wire.h>
 #include "gps.h"
@@ -73,22 +72,67 @@
 
 #ifdef TC_DBG_GPS
 static int DBGloopCnt = 0;
+#ifdef GPS_SPEED_SIMU
+static unsigned long _lastDbgPoll = 0;
+static int           _dbgAdd = 1;
+#endif
 #endif
 
+#define AIDX_BOOTMODE 0
+#define AIDX_NONLIVE  1
 static const struct GPSsetupStruct {
     uint8_t rmc;
     uint8_t vtg;
     uint8_t zda;
+    uint8_t uf;
     const char *cmd2;
-} GPSSetup[7] = {
-    {  1, 0,  1, "5000*1B" }, // Time only: 5000ms, RMC & ZDA every 5th second
-    {  1, 0,  5, "1000*1F" }, // BTTFN-clients, no speedo, slow: 1000ms, RMC 1x/sec, ZDA every 5th second
-    {  1, 0, 20,  "500*2B" }, // BTTFN-clients, no speedo, fast:  500ms, RMC 2x/sec, ZDA every 10th second
-    {  1, 0,  5, "1000*1F" }, // W/speedo, 1000ms: RMC 1x per sec, ZDA every 5th second
-    {  1, 0, 20,  "500*2B" }, // W/speedo, 500ms:  RMC 2x per sec, ZDA every 10th second
-    { 25, 1, 40,  "250*29" }, // W/speedo, 250ms:  VTG 4x per sec, RMC every approx 6th sec, ZDA every 10th second
-    { 31, 1, 50,  "200*2C" }  // W/speedo, 200ms:  VTG 5x per sec, RMC every approx 6th sec, ZDA every 10th second
+} GPSSetup[8] = {
+    {  1, 0,  2, 250/2,  "500*2B" }, // Boot mode for auth time: 500ms, RMC 2x/sec, ZDA 1x/sec (=max, below defaults to 10 secs)
+    {  1, 0,  1, 500/2, "5000*1B" }, // Time only: 5000ms, RMC & ZDA every 5th second
+    {  1, 0,  5, 250/2, "1000*1F" }, // no speedo (only for BTTFN-clients), slow: 1000ms, RMC 1x/sec, ZDA every 5th second
+    {  1, 0, 20, 250/2,  "500*2B" }, // no speedo (only for BTTFN-clients), fast:  500ms, RMC 2x/sec, ZDA every 10th second
+    {  1, 0,  5, 250/2, "1000*1F" }, // W/speedo, 1000ms: RMC 1x per sec, ZDA every 5th second
+    {  1, 0, 20, 250/2,  "500*2B" }, // W/speedo, 500ms:  RMC 2x per sec, ZDA every 10th second
+    { 25, 1, 40, 250/2,  "250*29" }, // W/speedo, 250ms:  VTG 4x per sec, RMC every approx 6th sec, ZDA every 10th second
+    { 31, 1, 50, 200/2,  "200*2C" }  // W/speedo, 200ms:  VTG 5x per sec, RMC every approx 6th sec, ZDA every 10th second
 };
+
+// Update frequency (uf): (/2 to fit into uint8, multiplied when used)
+// Set ms between GPS polls
+// Need more updates if speed is to be displayed
+// RMC is 72-85 chars, so three fit in the 255 byte buffer.
+// VTG is 40+ chars, so six fit into the buffer.
+// We use VTG+RMC+ZDA when displaying speedo on speedo at 200/250ms rates.
+// Otherwise we go with RMC+ZDA.
+// (Must sync readFreq and updFreq for smooth speedo display)
+// Index 1:
+// For time only, the fix update rate is set to 5000ms;
+// We poll every 500ms, so the entire buffer is read every 
+// 2 seconds (64 bytes per poll).
+// Indices 2+3:
+// For GPS speed for BTTFN clients (but no speed display
+// on speedo), the fix update rate is set to 1000ms/500ms,
+// so the buffer fills in 3000/1500ms. We poll every 
+// 250/250ms, hence the entire buffer is read in
+// 1000/1000ms (64 bytes per poll).
+// The max delay to get current speed is therefore 500ms.
+// Index 4:
+// At 1000ms update rate, the buffer fills in 3000ms (with ZDA: 2900)
+// At 500ms readfreq (128 bytes blocks), the entire buffer is read in 1000ms
+// At 250ms readfreq (128 bytes blocks), the entire buffer is read in 500ms
+// We want as little delay as possible with displaying speed, so we go 250.
+// Index 5:
+// At 500ms update rate, the buffer fills in 1500ms (with ZDA: 1400)
+// At 500ms readfreq (128 bytes blocks), the entire buffer is read in 1000ms
+// At 250ms readfreq (128 bytes blocks), the entire buffer is read in 500ms
+// We want as little delay as possible with displaying speed, so we go 250.
+// Index 6:
+// With VTG: At 250ms update rate, the buffer fills in 1500ms (with RMC+ZDA: 1400ms on avg)
+// At 250ms readfreq (128 bytes blocks), the entire buffer is read in 500ms
+// Index 7:
+// With VTG: At 200ms update rate, the buffer fills in 1200ms (with RMC+ZDA: 1100ms on avg)
+// At 200ms readfreq (128 bytes blocks), the entire buffer is read in 400ms
+
 
 /*
  * Helpers
@@ -96,7 +140,7 @@ static const struct GPSsetupStruct {
 
 static void defaultDelay(unsigned long mydelay)
 {
-    delay(mydelay);
+    if(mydelay) delay(mydelay);
 }
 
 static uint8_t parseHex(char c)
@@ -207,20 +251,24 @@ tcGPS::tcGPS(const uint8_t *addrArr)
 }
 
 // Start and init the GPS module
-bool tcGPS::begin(int numTypes, int quickUpdates, int speedRate, void (*myDelay)(unsigned long))
+bool tcGPS::begin(int numTypes, int opMode, int speedRate, int bootMode, 
+                  unsigned long& freqNonLive, unsigned long& freqLive, void (*myDelay)(unsigned long))
 {
-    char cmdbuf[64];
     int i2clen;
-    int idx;
     
     _customDelayFunc = defaultDelay;
 
     speedRate &= 3;
 
-    // Give the receiver some time to boot
+    // Give the receiver some time to boot.
+    // Despite the datasheet mentioning a i2c readiness within 500ms, 
+    // we in reality need to wait 1.5-2 seconds to reliably detect the
+    // receiver when connected to a very long cable.
+    // Make it 2000, to be on the safe side.
+    #define BOOT_WAIT 2000
     unsigned long millisNow = millis();
-    if(millisNow < 1000) {
-        delay(1000 - millisNow);
+    if(millisNow < BOOT_WAIT) {
+        delay(BOOT_WAIT - millisNow);
     }
 
     _type = 0;
@@ -270,28 +318,32 @@ bool tcGPS::begin(int numTypes, int quickUpdates, int speedRate, void (*myDelay)
     _currentline = _line1;
     _lenIdx = 0;
 
+    freqNonLive = GPSSetup[AIDX_NONLIVE].uf * 2;
+
+    if(opMode < 0) {
+        _initIdx = 1;
+    } else if(!opMode) {
+        _initIdx = (!speedRate) ? 2 : 3;
+    } else {
+        _initIdx = speedRate + 4;
+        // For when GPS speed is to be displayed on speedo:
+        // We read 128 byte blocks from the receiver in this case.
+        if(bootMode) {
+            _lenLimit = 1;
+            _lenArr[0] = 128; _lenArr[1] = 127;
+        }
+    }
+
+    freqLive = GPSSetup[_initIdx].uf * 2;
+
+    #ifdef TC_DBG_GPS
+    Serial.printf("GPS: Update rates %d / %d\n", freqNonLive, freqLive);
+    #endif
+
     // Configure receiver
     switch(_type) {
     case GPST_MTK333X:
-        // Send xxRMC and xxZDA only, for high rates also xxVTG
-        // If we use GPS for speed, we need more frequent updates.
-        // The value in PKT 314 is a multiplier for the value of PKT 220.
-        if(quickUpdates < 0) {
-            idx = 0;
-        } else if(!quickUpdates) {
-            idx = (!speedRate) ? 1 : 2;
-        } else {
-            idx = speedRate + 3;
-            // For reading 128 bytes per call:
-            _lenLimit = 0x01;
-            _lenArr[0] = 128; _lenArr[1] = 127;
-        }
-    
-        sprintf(cmdbuf, "$PMTK314,0,%d,%d,0,0,0,0,0,0,0,0,0,0,0,0,0,0,%d,0,0", 
-              GPSSetup[idx].rmc, GPSSetup[idx].vtg, GPSSetup[idx].zda);
-        calcNMEAcheckSum(cmdbuf);
-        sendCommand(NULL, cmdbuf);
-        sendCommand("$PMTK220,", GPSSetup[idx].cmd2);
+        setupGPSRate(bootMode);
     
         #ifdef TC_DBG_PRINT_NMEA
         // Enable leap second indicate; RMC and ZDA are
@@ -311,11 +363,31 @@ bool tcGPS::begin(int numTypes, int quickUpdates, int speedRate, void (*myDelay)
         // Send "hot start" to clear i2c buffer 
         //sendCommand(NULL, "$PMTK101*32");
         //delay(800);
-        // No, might lose fix in the process; empty
-        // buffer by reading it
-        for(int i = 0; i <= _lenLimit; i++) {
+        // No, might lose fix in the process; empty buffer by
+        // reading it. BTW, we are not done by simply reading 
+        // 255 bytes; this thing stores data for several (17+) 
+        // seconds, so we need to read a LOT to come to current
+        // data being transmitted. We read until our PMTK220
+        // command is responded to, which tells us that we have
+        // emptied the buffer.
+        i2clen = (_lenLimit + 1) * 100;
+        millisNow = millis();
+        do {
             readAndParse(false);
-        }
+            if(_initAckd) {
+                #ifdef TC_DBG_GPS
+                Serial.printf("GPS: PMTK220 response after %d iterations\n", ((_lenLimit + 1) * 100) - i2clen);
+                #endif
+                break;
+            } else if(millis() - millisNow > 4000) {
+                #ifdef TC_DBG_GPS
+                Serial.println("GPS: Waiting for PMTK220 response timed out");
+                #endif
+                break;
+            }
+        } while(i2clen--);
+        // The old data is ... old. Start fresh.
+        _haveDateTime = _haveDateTime2 = _haveSpeed = _havePos = fix = false;
         break;
     default:
         return false;
@@ -324,6 +396,39 @@ bool tcGPS::begin(int numTypes, int quickUpdates, int speedRate, void (*myDelay)
     _customDelayFunc = myDelay;
 
     return true;
+}
+
+void tcGPS::setupGPSRate(int opMode)
+{
+    int idx;
+    char cmdbuf[64];
+
+    // The values in PKT 314 are multipliers for the value of PKT 220.
+
+    if(_lastOpMode != opMode) {
+
+        _initAckd = false;
+
+        switch(_type) {
+        case GPST_MTK333X:
+            idx = (opMode > 0) ? _initIdx : (opMode < 0) ? AIDX_BOOTMODE : AIDX_NONLIVE;
+            sprintf(cmdbuf, "$PMTK314,0,%d,%d,0,0,0,0,0,0,0,0,0,0,0,0,0,0,%d,0,0", 
+                      GPSSetup[idx].rmc, GPSSetup[idx].vtg, GPSSetup[idx].zda);
+            calcNMEAcheckSum(cmdbuf);
+            sendCommand(NULL, cmdbuf);
+            sendCommand("$PMTK220,", GPSSetup[idx].cmd2);
+            _newLenLimit = (!idx || idx >= 4) ? 1 : 3;
+            break;
+        default:
+            break;
+        }
+
+        // Invalidate time stamp, we don't know its age after switching rate
+        _haveDateTime = _haveDateTime2 = false;
+
+    }
+
+    _lastOpMode = opMode;
 }
 
 /*
@@ -340,9 +445,8 @@ void tcGPS::loop(bool doDelay)
 
     readAndParse(doDelay);
     // takes (with delay):
-    // 6ms? when reading blocks of 32 bytes
-    // 8ms " " " 64 bytes   (6ms without delay)  (ex: 11 w/o)
-    // 13ms " " " 128 bytes  (12ms without delay) (ex: 17 w/o)
+    // 8ms " " " 64 bytes   (6ms without delay)
+    // 13ms " " " 128 bytes  (12ms without delay)
 
     #ifdef TC_DBG_GPS
     if((DBGloopCnt++) % 10 == 0) {
@@ -357,9 +461,12 @@ void tcGPS::loop(bool doDelay)
     _haveSpeed = true;        
     _curspdTS = myNow;
 
-    //_speed++;
-    //if(_speed > 87) _speed = 0;
-    _speed = 33;
+    if(myNow - _lastDbgPoll > 300) {
+        _lastDbgPoll = myNow;
+        _speed += _dbgAdd;
+        if(_speed == 87) _dbgAdd = -1;
+        else if(_speed == 0) _dbgAdd = +1;
+    }
     #endif
 
     // Expire time/date info after 15 minutes
@@ -385,14 +492,21 @@ void tcGPS::loop(bool doDelay)
     }
 }
 
+void tcGPS::readGPSBuffer(int times, bool doDelay)
+{
+    do {
+        for(int i = 0; i <= _lenLimit; i++) {
+            loop(doDelay);
+        }
+    } while(times--);
+}
+
 /*
  * Return current speed
  *
  */
 int tcGPS::getSpeed()
 {
-    float speedfk;
-    
     if(_haveSpeed) {
       
         #ifdef GPS_SPEED_SIMU
@@ -407,7 +521,7 @@ int tcGPS::getSpeed()
         // low speeds, need to ignore everything below
         // 2.17(=2.5mph) as this much might appear even
         // at stand-still.
-        speedfk = spdFromStr(_sbuf);
+        float speedfk = spdFromStr(_sbuf);
         if(speedfk >= 2.61f) {        // 3.00mph
             _speed = (int)roundf(speedfk * GPS_MPH_PER_KNOT);
             if(_speed > 127) _speed = 127;
@@ -432,8 +546,7 @@ int tcGPS::getSpeed()
  * timeinfo returned is UTC
  */
 bool tcGPS::getDateTime(struct tm *timeinfo, unsigned long *fixAge, unsigned long updInt)
-{
-
+{   
     if(_haveDateTime) {
 
         timeinfo->tm_mday = AToI2(&_curDate[0]);
@@ -446,17 +559,18 @@ bool tcGPS::getDateTime(struct tm *timeinfo, unsigned long *fixAge, unsigned lon
         
         timeinfo->tm_wday = 0;
 
+        *fixAge = (unsigned long)(millis() - _curTS + _curFrac + updInt);
+
         #ifdef TC_DBG_GPS
-        Serial.printf("GPS time: %d %d %d - %d %d %d\n", 
+        Serial.printf("GPS time: %d %d %d - %d %d %d (age %d)\n", 
             timeinfo->tm_mday,
             timeinfo->tm_mon,
             timeinfo->tm_year,
             timeinfo->tm_hour,
             timeinfo->tm_min,
-            timeinfo->tm_sec);
+            timeinfo->tm_sec,
+            *fixAge);
         #endif
-
-        *fixAge = (unsigned long)(millis() - _curTS + _curFrac + updInt);
 
         return true;
 
@@ -479,17 +593,18 @@ bool tcGPS::getDateTime(struct tm *timeinfo, unsigned long *fixAge, unsigned lon
 
         timeinfo->tm_wday = 0;
 
+        *fixAge = (unsigned long)(millis() - _curTS2 + _curFrac2 + updInt);
+
         #ifdef TC_DBG_GPS
-        Serial.printf("GPS time2: %d %d %d - %d %d %d\n", 
+        Serial.printf("GPS time2: %d %d %d - %d %d %d (age %d)\n", 
             timeinfo->tm_mday,
             timeinfo->tm_mon,
             timeinfo->tm_year,
             timeinfo->tm_hour,
             timeinfo->tm_min,
-            timeinfo->tm_sec);
+            timeinfo->tm_sec,
+            *fixAge);
         #endif
-
-        *fixAge = (unsigned long)(millis() - _curTS2 + _curFrac2 + updInt);
 
         return true;
 
@@ -590,19 +705,27 @@ void tcGPS::sendCommand(const char *prefix, const char *str)
     (*_customDelayFunc)(30);
 }
 
-bool tcGPS::readAndParse(bool doDelay)
+void tcGPS::readAndParse(bool doDelay)
 {
     char   curr_char = 0;
     size_t i2clen = 0;
     int    buff_max = 0;
     int    buff_idx = 0;
-    bool   haveParsedSome = false;
+    //bool   haveParsedSome = false;
     unsigned long myNow = millis();
 
     switch(_type) {
     case GPST_MTK333X:
         i2clen = Wire.requestFrom(_address, _lenArr[_lenIdx++]);
-        _lenIdx &= _lenLimit;
+        if(!(_lenIdx &= _lenLimit)) {
+            if(_lenLimit != _newLenLimit) {
+                if((_lenLimit = _newLenLimit) == 1) {
+                    _lenArr[0] = 128; _lenArr[1] = 127;
+                } else {
+                    _lenArr[0] = _lenArr[1] = 64;
+                }
+            }
+        }
     
         if(i2clen) {
     
@@ -616,12 +739,12 @@ bool tcGPS::readAndParse(bool doDelay)
                 _last_char = curr_char;
             }
     
-            if(doDelay) (*_customDelayFunc)(1);
+            if(doDelay) (*_customDelayFunc)(0);
     
         }
         break;
     default:
-        return false;
+        return; // false;
     }
 
     // Form line(s) out of buffer data
@@ -646,7 +769,7 @@ bool tcGPS::readAndParse(bool doDelay)
 
             // parse this line
             parseNMEA(_currentline, _lineidx, _currentTS);
-            haveParsedSome = true;
+            //haveParsedSome = true;
             
             _lineidx = 0;
         }
@@ -655,7 +778,7 @@ bool tcGPS::readAndParse(bool doDelay)
 
     }
 
-    return haveParsedSome;
+    //return haveParsedSome;
 }
 
 #ifdef TC_DBG_PRINT_NMEA
@@ -724,15 +847,17 @@ bool tcGPS::parseNMEA(char *nmea, unsigned int len, unsigned long nmeaTS)
         if(numfields < 12)
             return false;
 
+        rmcZdaCollector |= 1;
+
         fix = (*idx[1] == 'A');
         if(!fix) return true;
 
         // We only use the RMC time if there is no ZDA.
         if(!_haveDateTime) {
             t = idx[0];
-            copy8chars(_curTime2, t); // 6 needed, 8 faster
+            copy8chars(_curTime2, t);       // 6 needed, 8 faster
             _curFrac2 = getFracs(t + 6);
-            copy8chars(_curDate2, idx[8]); // 6 needed, 8 faster
+            copy8chars(_curDate2, idx[8]);  // 6 needed, 8 faster
             _curTS2 = nmeaTS;
             _haveDateTime2 = true;
         }
@@ -768,13 +893,15 @@ bool tcGPS::parseNMEA(char *nmea, unsigned int len, unsigned long nmeaTS)
         if(numfields < 6)
             return false;
 
+        rmcZdaCollector |= 2;
+
         // Only use ZDA if we have a fix, no point in reading back
         // the GPS' own RTC.
         if(fix) {
             t = idx[0];
-            copy8chars(_curTime, t); // 6 needed, 8 faster
+            copy8chars(_curTime, t);        // 6 needed, 8 faster
             _curFrac = getFracs(t + 6);
-            copy12chars(_curDate, idx[1]); // 10 needed, 12 faster
+            copy12chars(_curDate, idx[1]);  // 10 needed, 12 faster
             _curTS = nmeaTS;
             _haveDateTime = true;
             _haveDateTime2 = false;
@@ -823,6 +950,11 @@ bool tcGPS::parseNMEA(char *nmea, unsigned int len, unsigned long nmeaTS)
 
         Serial.printf("GPS receiver Quectel firmware '%s'\n", qfw);
         break;
+
+    case 5:
+        _initAckd = true;
+        rmcZdaCollector = 0;  // Start collecting RMC and ZDA now
+        break;
     }
 
     return true;
@@ -845,7 +977,9 @@ uint32_t tcGPS::checkNMEA(char *nmea, unsigned int len, char **pidx, int& maxfie
         type = 3; // PKTK705 response
     else if(c == 0x4e524556)
         type = 4; // PQVERNO response
-    else
+    else if((c == 0x30304b54) && !strncmp(nmea+7, "1,220", 5)) {  
+        type = 5; // $PMTK001,220,3,500*29
+    } else
         return 1;
     #else
     if(!strncmp(nmea+3, "VTG", 3))
@@ -858,7 +992,9 @@ uint32_t tcGPS::checkNMEA(char *nmea, unsigned int len, char **pidx, int& maxfie
         type = 3;
     else if(!strncmp(nmea+3, "VER", 3))
         type = 4;
-    else
+    else if(!strncmp(nmea+3, "TK001,220", 9)) {
+        type = 5; // $PMTK001,220,3,500*29
+    } else
         return 1;
     #endif
 
@@ -881,5 +1017,3 @@ uint32_t tcGPS::checkNMEA(char *nmea, unsigned int len, char **pidx, int& maxfie
 
     return sum;
 }
-
-#endif

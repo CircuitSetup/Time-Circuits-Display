@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * WiFi and Config Portal handling
  *
@@ -71,10 +72,6 @@
 
 #define STRLEN(x) (sizeof(x)-1)
 
-Settings settings;
-
-IPSettings ipsettings;
-
 WiFiManager wm;
 
 #ifdef HAVE_MQTT
@@ -82,6 +79,8 @@ WiFiClient mqttWClient;
 PubSubClient mqttClient(mqttWClient);
 unsigned long mqttInitialConnectNow = 0;
 #endif
+
+#define CFMAGIC "TCDF"
 
 static const char R_updateacdone[] = "/uac";
 
@@ -92,7 +91,7 @@ static const char acul_part7[]  = " S' id='lc'><strong>Upload complete.</strong>
 static const char acul_part7a[] = "<br>Installation will proceed after reboot.";
 static const char acul_part71[] = " D'><strong>Upload failed.</strong><br>";
 static const char acul_part8[]  = "</div></div></body></html>";
-static const char *acul_errs[]  = { 
+static const char * const acul_errs[]  = { 
     "Can't open file on SD",
     "No SD card found",
     "Write error",
@@ -102,7 +101,7 @@ static const char *acul_errs[]  = {
     "Extraneous .bin file"
 };
 
-static const char *beepCustHTMLSrc[6] = {
+static const char * const beepCustHTMLSrc[6] = {
     "'>Beep mode",
     "bepm",
     ">Off%s1'",
@@ -110,7 +109,7 @@ static const char *beepCustHTMLSrc[6] = {
     ">Auto (30 secs)%s3'",
     ">Auto (60 secs)%s"
 };
-static const char *aintCustHTMLSrc[8] = {
+static const char * const aintCustHTMLSrc[8] = {
     "'>Time-cycling interval",
     "tcint",
     ">Off%s1'",
@@ -121,7 +120,7 @@ static const char *aintCustHTMLSrc[8] = {
     ">60 minutes%s"
 };
 
-static const char *alarmCustHTMLSrc[4] = 
+static const char * const alarmCustHTMLSrc[4] = 
 {
     "'>Alarm function",
     "afu",
@@ -131,9 +130,9 @@ static const char *alarmCustHTMLSrc[4] =
 
 #define WIFI_ANM_PRESETS (1+AUTONM_NUM_PRESETS)
 static const char anmCustHTML1[] = "%s%sanmtim'>Schedule%s%s' name='anmtim' id='anmtim'><option value='10'%s>&#10060; Off%s0'";
-static const char *anmCustHTMLSrc[WIFI_ANM_PRESETS] = {
+static const char * const anmCustHTMLSrc[WIFI_ANM_PRESETS] = {
     "%s>&#128337; Daily, set hours below%s1'",
-    "%s>&#127968; Mo-Th:17-23 Fr:13-1 Sa:9-1 Su:9-23%s2'",
+    "%s>&#127968; M-Th:17-23 F:13-1 S:9-1 Su:9-23%s2'",
     "%s>&#127970; Mo-Fr:9-17%s3'",
     "%s>&#127970; Mo-Th:7-17 Fr:7-14%s4'",
     "%s>&#128722; Mo-We:8-20 Th-Fr:8-21 Sa:8-17%s5'",
@@ -148,7 +147,7 @@ static const char spTyOptP2[] = "'>";
 static const char spTyOptP3[] = "</option>";
 static const struct {
     uint8_t    dispType; 
-    const char *dispName;
+    const char * const dispName;
 } dispTypeNames[SP_NUM_TYPES+1] = {
     { SP_NONE,          "None" },
     { SP_CIRCSETUP,     "CircuitSetup" },
@@ -166,22 +165,21 @@ static const struct {
     { SP_ADAF878L,      "Ada 878 (left tube)" },
 #else
     { SP_ADAF1911_L,    "A10001986 wallclock" },
-    { SP_ADAF878L,      "A10001986 speedo replica" },
+    { SP_ADAF878L,      "A10001986 speedo" },
 #endif
     { SP_BTTFN,         "Wireless (BTTFN)" }
 };
 
-#ifdef HAVE_GPS
-static const char *spdRateCustHTMLSrc[6] = 
+static const char *spdRateCustHTMLSrc[7] = 
 {
-    "'>Update rate",
+    "'>GPS speed",
     "spdrt",
-    ">1Hz%s1'",
-    ">2Hz%s2'",
-    ">4Hz%s3'",
-    ">5Hz%s"
+    ">Disabled%s1'",
+    ">1Hz update rate%s2'",
+    ">2Hz update rate%s3'",
+    ">4Hz update rate%s4'",
+    ">5Hz update rate%s"
 };
-#endif
 
 #ifdef SERVOSPEEDO
 static const char *ttinCustHTMLSrc[6] = {
@@ -202,7 +200,7 @@ static const char *ttoutCustHTMLSrc[6] = {
 };
 #endif
 
-static const char tcdbssid[] = "<div style='margin:0 0 8px 0;padding:0;'>TCD-AP BSSID: %s</div>";
+static const char tcdbssid[] = "<div style='margin:0 0 8px 0;padding:0;'>Your TCD-AP BSSID: %s</div>";
 
 static const char *apChannelCustHTMLSrc[14] = {
     "'>WiFi channel",
@@ -251,9 +249,7 @@ static const char *wmBuildAlm(const char *dest, int op);
 static const char *wmBuildAnmPreset(const char *dest, int op);
 static const char *wmBuildNTPLUF(const char *dest, int op);
 static const char *wmBuildSpeedoType(const char *dest, int op);
-#ifdef HAVE_GPS
 static const char *wmBuildUpdateRate(const char *dest, int op);
-#endif
 static const char *wmBuildHaveSD(const char *dest, int op);
 #ifdef SERVOSPEEDO
 static const char *wmBuildttinp(const char *dest, int op);
@@ -266,6 +262,7 @@ static const char *wmBuildMQTTstate(const char *dest, int op);
 static const char *wmBuildMQTTTM(const char *dest, int op);
 #endif
 
+static const char custHTMLSECTSHdr[] = "</div><div class='ss'>";
 static const char custHTMLHdr1[] = "<div class='cmp0";
 static const char custHTMLHdrI[] = " ml20";
 static const char custHTMLHdr2[] = "'><label class='mp0' for='";
@@ -305,15 +302,15 @@ static const char psttxt[] = "Power save timer<br><span>(10-99[minutes]; 0=off)<
 static const char psthnt[] = "type='number' min='0' max='99' title='WiFi will be shut down after chosen period'";
 
 // WiFi Configuration
-WiFiManagerParameter custom_hostName("Hostname<br><span>Network device ID (Config Portal URL [http://<i>hostname</i>.local], BTTFN)<br>Valid characters: a-z/0-9/-</span>", settings.hostName, 31, "pattern='[A-Za-z0-9\\-]+' placeholder='timecircuits'", WFM_LABEL_BEFORE|WFM_SECTS_HEAD);
-
-WiFiManagerParameter custom_sectstart_wifi("WiFi connection: Other settings", WFM_SECTS|WFM_HL);
+// If first parameter does not have SECTS or SECTS_HEAD set, the WiFi Connection settings section will be left open
 WiFiManagerParameter custom_wifiConRetries("Connection attempts (1-10)", settings.wifiConRetries, 2, "type='number' min='1' max='10'");
 WiFiManagerParameter custom_wifiPRe("Periodic reconnection attempts ", settings.wifiPRetry, "class='mt5 mb10'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
 WiFiManagerParameter custom_wifiOffDelay(psttxt, settings.wifiOffDelay, 2, psthnt);
 // custom_wifihint follows (and is foot; next sect must therefore be SECTS_HEAD)
 
-WiFiManagerParameter custom_sectstart_ap("Access point (AP) mode settings", WFM_SECTS_HEAD|WFM_HL);
+WiFiManagerParameter custom_hostName("Hostname<br><span>Your TCD's ID on the network. Used for the Config Portal URL and BTTFN.<br>Config Portal URL: http://<i>hostname</i>.local<br>Valid characters: a-z/0-9/-</span>", settings.hostName, 31, "pattern='[A-Za-z0-9\\-]+' placeholder='" DEF_HOSTNAME "'", WFM_LABEL_BEFORE|WFM_SECTS_HEAD);
+
+WiFiManagerParameter custom_sectstart_ap("TCD Access Point mode (TCD-AP) settings", WFM_SECTS|WFM_HL);
 WiFiManagerParameter custom_sysID("Network name (SSID) appendix<br><span>Will be appended to \"TCD-AP\" [a-z/0-9/-]</span>", settings.systemID, 7, "pattern='[A-Za-z0-9\\-]+'");
 WiFiManagerParameter custom_appw("Password<br><span>Password to protect TCD-AP. Empty or 8 characters [a-z/0-9/-]</span>", settings.appw, 8, "minlength='8' pattern='[A-Za-z0-9\\-]{8}'");
 WiFiManagerParameter custom_bssid(wmBuildBSSID);
@@ -321,7 +318,7 @@ WiFiManagerParameter custom_apch(wmBuildApChnl);
 WiFiManagerParameter custom_bapch(wmBuildBestApChnl);
 WiFiManagerParameter custom_wifiAPOffDelay(psttxt, settings.wifiAPOffDelay, 2, psthnt);
 
-WiFiManagerParameter custom_wifihint("<div style='margin:0;padding:0;font-size:80%'>Hold '7' to re-enable Wifi when in power save mode.</div>", WFM_FOOT);
+WiFiManagerParameter custom_wifihint("<span style='white-space:normal;font-size:80%'>Hold '7' to re-enable Wifi when in power save mode.</span>", WFM_FOOT);
 
 // Settings
 
@@ -345,9 +342,7 @@ WiFiManagerParameter custom_ttrp("Make time travel persistent", settings.timesPe
 WiFiManagerParameter custom_timeZone("Time zone (in <a href='https://tz.out-a-ti.me' target=_blank>Posix</a> format)", settings.timeZone, 63, "placeholder='Example: CST6CDT,M3.2.0,M11.1.0' list='tzlist'", WFM_LABEL_BEFORE|WFM_SECTS);
 WiFiManagerParameter custom_ntpServer("NTP server", settings.ntpServer, 63, "pattern='[a-zA-Z0-9\\.\\-]+' placeholder='Example: pool.ntp.org'");
 WiFiManagerParameter custom_NTPLUF(wmBuildNTPLUF);
-#ifdef HAVE_GPS
 WiFiManagerParameter custom_gpstime("Use GPS time", settings.useGPSTime, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
-#endif
 
 WiFiManagerParameter custom_sectstart_wc("World Clock mode", WFM_SECTS|WFM_HL);
 WiFiManagerParameter custom_timeZone1("Time zone for Destination Time display", settings.timeZoneDest, 63, "placeholder='Example: CST6CDT,M3.2.0,M11.1.0' list='tzlist'");
@@ -370,10 +365,8 @@ WiFiManagerParameter custom_ltNmOff("Last Time Departed off", settings.ltNmOff, 
 WiFiManagerParameter custom_autoNMTimes(wmBuildAnmPreset);
 WiFiManagerParameter custom_autoNMOn("Daily night-mode start hour (0-23)", settings.autoNMOn, 2, "type='number' min='0' max='23' title='Hour to switch on night-mode'");
 WiFiManagerParameter custom_autoNMOff("Daily night-mode end hour (0-23)", settings.autoNMOff, 2, "type='number' min='0' max='23' title='Hour to switch off night-mode'");
-#ifdef HAVE_LIGHT
 WiFiManagerParameter custom_uLS("Use light sensor", settings.useLight, "title='If checked, TCD will be put in night-mode if lux level is below or equal threshold.' style='margin-top:14px'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
 WiFiManagerParameter custom_lxLim("Lux threshold (0-50000)", settings.luxLimit, 6, "type='number' min='0' max='50000'");
-#endif
 
 WiFiManagerParameter custom_haveSD(wmBuildHaveSD, WFM_SECTS);
 WiFiManagerParameter custom_CfgOnSD("Save secondary settings on SD<br><span>Check this to avoid flash wear</span>", settings.CfgOnSD, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
@@ -390,31 +383,25 @@ WiFiManagerParameter custom_rvapm("Reverse AM/PM like in parts 2/3", settings.re
 
 // Peripherals settings
 
-WiFiManagerParameter custom_fakePwrOn("Use fake power switch", settings.fakePwrOn, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX|WFM_SECTS_HEAD);
+WiFiManagerParameter custom_fakePwrOn("Use fake power switch<br><span>Check this if a switch, eg. a TFC Drive switch, should fake-power up/down the TCD<span>", settings.fakePwrOn, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX|WFM_SECTS_HEAD);
 
 WiFiManagerParameter custom_speedoType(wmBuildSpeedoType, WFM_SECTS);
-WiFiManagerParameter custom_speedoBright("Speed brightness (0-15)", settings.speedoBright, 2, "type='number' min='0' max='15'");
+WiFiManagerParameter custom_speedoBright("Speed display brightness (0-15)", settings.speedoBright, 2, "type='number' min='0' max='15'");
 WiFiManagerParameter custom_spAO("Switch speedo off when idle", settings.speedoAO, "", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
 WiFiManagerParameter custom_sAF("Real-life acceleration figures", settings.speedoAF, "title='If unchecked, movie-like times are used'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
 WiFiManagerParameter custom_speedoFact("Factor for real-life figures (0.5-5.0)", settings.speedoFact, 3, "type='number' min='0.5' max='5.0' step='0.5' title='1.0 means real-world DMC-12 acceleration time.'");
 WiFiManagerParameter custom_sL0("Speedo display like in part 3", settings.speedoP3, "", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
 WiFiManagerParameter custom_sL0R("Gaffer tape covers left-most digit", settings.speedoP3R, "title='CircuitSetup speedo v2 only' class='mt5 ml20'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
 WiFiManagerParameter custom_s3rd("Display '0' after dot like A-car", settings.speedo3rdD, "title='CircuitSetup speedo only'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
-#ifdef HAVE_GPS
-WiFiManagerParameter custom_useGPSS("Display GPS speed", settings.dispGPSSpeed, "", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
-WiFiManagerParameter custom_updrt(wmBuildUpdateRate);
-#endif // HAVE_GPS
-#ifdef HAVE_TEMP
-WiFiManagerParameter custom_useDpTemp("Display temperature", settings.dispTemp, "", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
-WiFiManagerParameter custom_tempBright("Temperature brightness (0-15)", settings.tempBright, 2, "type='number' min='0' max='15'");
+WiFiManagerParameter custom_useDpTemp("Display temperature when idle", settings.dispTemp, "", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
+WiFiManagerParameter custom_tempBright("Temperature display brightness (0-15)", settings.tempBright, 2, "type='number' min='0' max='15'");
 WiFiManagerParameter custom_tempOffNM("Temperature off in night mode", settings.tempOffNM, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
-#endif // HAVE_TEMP
 
-#ifdef HAVE_TEMP
+WiFiManagerParameter custom_updrt(wmBuildUpdateRate);
+
 WiFiManagerParameter custom_sectstart_te("Temperature/humidity sensor", WFM_SECTS|WFM_HL);
 WiFiManagerParameter custom_tempUnit("Show temperature in °Celsius", settings.tempUnit, "class='mt5 mb10'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
 WiFiManagerParameter custom_tempOffs("Temperature offset (-3.0-3.0)", settings.tempOffs, 4, "type='number' min='-3.0' max='3.0' step='0.1'");
-#endif // HAVE_TEMP
 
 #ifdef SERVOSPEEDO
 WiFiManagerParameter custom_ttin(wmBuildttinp, WFM_SECTS);
@@ -435,17 +422,7 @@ WiFiManagerParameter custom_ETTOPUS("Power-up state HIGH", settings.ETTOpus, "cl
 WiFiManagerParameter custom_useETTO("signals time travel", settings.useETTO, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
 WiFiManagerParameter custom_noETTOL("Signal without 5 second lead", settings.noETTOLead, "class='mt5 mb10 ml20'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
 WiFiManagerParameter custom_ETTOalm("signals alarm", settings.ETTOalm, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
-#ifdef HAVE_GPS
-#define TEMP_FOOT 0
-#else
-#define TEMP_FOOT WFM_FOOT
-#endif
-WiFiManagerParameter custom_TTOAlmDur("seconds signal duration (3-99)", settings.ETTOAD, 2, "class='ml20' style='margin-right:5px;width:5em' type='number' min='3' max='99'", WFM_LABEL_AFTER|TEMP_FOOT);
-
-#ifdef HAVE_GPS
-WiFiManagerParameter custom_sectstart_bt("Wireless communication (BTTF-Network)", WFM_SECTS|WFM_HL);
-WiFiManagerParameter custom_qGPS("Provide GPS speed to BTTFN clients", settings.provGPS2BTTFN, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX|WFM_FOOT);
-#endif // HAVE_GPS
+WiFiManagerParameter custom_TTOAlmDur("seconds signal duration (3-99)", settings.ETTOAD, 2, "class='ml20' style='margin-right:5px;width:5em' type='number' min='3' max='99'", WFM_LABEL_AFTER|WFM_FOOT);
 
 // HA/MQTT Settings
 
@@ -461,8 +438,8 @@ WiFiManagerParameter custom_mqttTopicL("Topic to show on Last Time Departed disp
 WiFiManagerParameter custom_pubMQTT("Publish time travel events", settings.pubMQTT, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX|WFM_SECTS);
 WiFiManagerParameter custom_vMQTT("Enhanced Time Travel notification", settings.MQTTvarLead, "class='mt5 ml20' title='Check to send time travel with variable lead.'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
 WiFiManagerParameter custom_pubMQTTAl("Publish alarm events", settings.pubMQTTAl, "class='mb10'", WFM_LABEL_AFTER|WFM_IS_CHKBOX);
-WiFiManagerParameter custom_mqtthint("<div style='margin:0;padding:0;'>Events are published to bttf/tcd/pub</div>");
-WiFiManagerParameter custom_pubMP("Publish Music Player status to bttf/tcd/mpstatus", settings.pubMP, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX|WFM_SECTS);
+WiFiManagerParameter custom_mqtthint("<span style='white-space:normal;font-size:80%'>Events are published to <i>bttf/tcd/pub</i></span>");
+WiFiManagerParameter custom_pubMP("Publish Music Player status to <i>bttf/tcd/mpstatus</i>", settings.pubMP, "class='mt5'", WFM_LABEL_AFTER|WFM_IS_CHKBOX|WFM_SECTS);
 WiFiManagerParameter custom_mqttPwr("HA controls Fake-Power at startup", settings.mqttPwr, "class='mt5' title='Check to have HA control Fake-Power and take precendence over Fake-Power switch at power-up'", WFM_LABEL_AFTER|WFM_IS_CHKBOX|WFM_SECTS);
 WiFiManagerParameter custom_mqttPwrOn("Wait for POWER_ON at startup", settings.mqttPwrOn, "class='mt5 ml20'", WFM_LABEL_AFTER|WFM_IS_CHKBOX|WFM_FOOT);
 WiFiManagerParameter custom_mqtttm(wmBuildMQTTTM);
@@ -552,6 +529,9 @@ bool wifiHaveSTAConf = false;
 
 bool carMode = false;
 
+bool bootAPwithoutStaticIP = false;
+bool bootAPwithoutPW = false;
+
 static unsigned long lastConnect = 0;
 static unsigned long consecutiveAPmodeFB = 0;
 
@@ -591,7 +571,7 @@ static char          *mqttUser = (char *)emptyStr;
 static char          *mqttPass = (char *)emptyStr;
 static char          *mqttServer = (char *)emptyStr;
 uint8_t              haveMQTTaudio = 0;
-const char           *mqttAudioFile[3] = { "/ha-alert.mp3", "/ha-alert-p.mp3", "/ha-alert-l.mp3" };
+const char * const   mqttAudioFile[3] = { "/ha-alert.mp3", "/ha-alert-p.mp3", "/ha-alert-l.mp3" };
 static unsigned long mqttReconnectNow = 0;
 static unsigned long mqttReconnectInt = MQTT_SHORT_INT;
 static uint16_t      mqttReconnFails = 0;
@@ -643,6 +623,12 @@ static void handleUploadDone();
 static void handleUploading();
 static void handleUploadDone();
 
+static bool openDataFileCallback();
+static bool writeDataFileCallback(uint8_t *buf, size_t len);
+static void closeDataFileCallback(bool del);
+static void uploadSpinnerCallback(int doStart, int progress);
+static bool idCFCallback(uint8_t *dbuf, size_t len);
+
 #ifdef HAVE_MQTT
 static void strcpyutf8(char *dst, const char *src, unsigned int len);
 static void handleMQTTTopMsg(int idx);
@@ -673,13 +659,13 @@ void wifi_setup()
 
     WiFiManagerParameter *wifiParmArray[] = {
 
-      &custom_hostName,
-
-      &custom_sectstart_wifi,
+      //&custom_sectstart_wifi,
       &custom_wifiConRetries,
       &custom_wifiPRe,
       &custom_wifiOffDelay,
       &custom_wifihint,
+
+      &custom_hostName,
 
       &custom_sectstart_ap,
       &custom_sysID,
@@ -716,9 +702,7 @@ void wifi_setup()
       &custom_timeZone, 
       &custom_ntpServer,
       &custom_NTPLUF,
-    #ifdef HAVE_GPS
       &custom_gpstime,
-    #endif
 
       &custom_sectstart_wc, 
       &custom_timeZone1, &custom_timeZoneN1,
@@ -736,9 +720,7 @@ void wifi_setup()
       &custom_dtNmOff, &custom_ptNmOff, &custom_ltNmOff,
       &custom_autoNMTimes, 
       &custom_autoNMOn, &custom_autoNMOff,
-    #ifdef HAVE_LIGHT
       &custom_uLS, &custom_lxLim,
-    #endif
 
       &custom_haveSD,
       &custom_CfgOnSD,
@@ -766,21 +748,15 @@ void wifi_setup()
       &custom_sL0,
       &custom_sL0R,
       &custom_s3rd,
-    #ifdef HAVE_GPS
-      &custom_useGPSS,
-      &custom_updrt,
-    #endif
-    #ifdef HAVE_TEMP
       &custom_useDpTemp, 
       &custom_tempBright, 
       &custom_tempOffNM,
-    #endif
 
-    #ifdef HAVE_TEMP
+      &custom_updrt,
+
       &custom_sectstart_te, 
       &custom_tempUnit, 
       &custom_tempOffs,
-    #endif
     
     #ifdef SERVOSPEEDO
       &custom_ttin,
@@ -803,10 +779,6 @@ void wifi_setup()
       &custom_ETTOalm,
       &custom_TTOAlmDur,
 
-    #ifdef HAVE_GPS
-      &custom_sectstart_bt,
-      &custom_qGPS,
-    #endif
       NULL
     };
 
@@ -862,6 +834,11 @@ void wifi_setup()
     wm.setSaveParamsCallback(saveParamsCallback);
     wm.setPreOtaUpdateCallback(preUpdateCallback);
     wm.setPostOtaUpdateCallback(postUpdateCallback);
+    if(haveSD) {
+        wm.setPackedOTACallbacks(openDataFileCallback, writeDataFileCallback, closeDataFileCallback);
+    }
+    wm.setIdDfCallback(idCFCallback, idSpCallback);
+    wm.setUploadSpinnerCallback(uploadSpinnerCallback);
     wm.setWebServerCallback(setupWebServerCallback);
     wm.setMenuOutLenCallback(menuOutLenCallback);
     wm.setMenuOutCallback(menuOutCallback);
@@ -974,7 +951,7 @@ void wifi_setup()
             IPAddress gw = stringToIp(ipsettings.gateway);
             IPAddress sn = stringToIp(ipsettings.netmask);
             IPAddress dns = stringToIp(ipsettings.dns);
-            wm.setSTAStaticIPConfig(ip, gw, sn, dns);
+            wm.setSTAStaticIPConfig(!bootAPwithoutStaticIP, ip, gw, sn, dns);
         }
     }
            
@@ -1231,9 +1208,7 @@ void wifi_loop()
 
             strcpytrim(settings.timeZone, custom_timeZone.getValue());
             strcpytrim(settings.ntpServer, custom_ntpServer.getValue());
-            #ifdef HAVE_GPS
             evalCB(settings.useGPSTime, &custom_gpstime);
-            #endif
 
             strcpytrim(settings.timeZoneDest, custom_timeZone1.getValue());
             strcpytrim(settings.timeZoneDep, custom_timeZone2.getValue());
@@ -1259,10 +1234,8 @@ void wifi_loop()
             evalCB(settings.ltNmOff, &custom_ltNmOff);
             mystrcpy(settings.autoNMOn, &custom_autoNMOn);
             mystrcpy(settings.autoNMOff, &custom_autoNMOff);
-            #ifdef HAVE_LIGHT
             evalCB(settings.useLight, &custom_uLS);
             mystrcpy(settings.luxLimit, &custom_lxLim);
-            #endif
 
             oldCfgOnSD = settings.CfgOnSD[0];
             evalCB(settings.CfgOnSD, &custom_CfgOnSD);
@@ -1289,10 +1262,8 @@ void wifi_loop()
             // Note: Parameters that need to be grabbed from the server directly
             // through getServerParam() must be handled in saveParamsCallback().
 
-            #ifdef HAVE_TEMP
             evalCB(settings.tempUnit, &custom_tempUnit);
             mystrcpy(settings.tempOffs, &custom_tempOffs);
-            #endif
 
             mystrcpy(settings.speedoBright, &custom_speedoBright);
             evalCB(settings.speedoAO, &custom_spAO);
@@ -1301,14 +1272,9 @@ void wifi_loop()
             evalCB(settings.speedoP3, &custom_sL0);
             evalCB(settings.speedoP3R, &custom_sL0R);
             evalCB(settings.speedo3rdD, &custom_s3rd);
-            #ifdef HAVE_GPS
-            evalCB(settings.dispGPSSpeed, &custom_useGPSS);
-            #endif
-            #ifdef HAVE_TEMP
             evalCB(settings.dispTemp, &custom_useDpTemp);
             mystrcpy(settings.tempBright, &custom_tempBright);
             evalCB(settings.tempOffNM, &custom_tempOffNM);
-            #endif
 
             evalCB(settings.fakePwrOn, &custom_fakePwrOn);
 
@@ -1320,10 +1286,6 @@ void wifi_loop()
             evalCB(settings.ETTOpus, &custom_ETTOPUS);
             evalCB(settings.noETTOLead, &custom_noETTOL);
             mystrcpy(settings.ETTOAD, &custom_TTOAlmDur);
-
-            #ifdef HAVE_GPS
-            evalCB(settings.provGPS2BTTFN, &custom_qGPS);
-            #endif
 
         } else if(wifiLoopSaveAction & WLA_SET3) {
 
@@ -1412,6 +1374,7 @@ static void wifiConnect(bool deferConfigPortal)
 {     
     bool doOnlyAP = false;
     char realAPName[16];
+    char *appw = bootAPwithoutPW ? NULL : settings.appw;
 
     strcpy(realAPName, apName);
     if(settings.systemID[0]) {
@@ -1419,13 +1382,13 @@ static void wifiConnect(bool deferConfigPortal)
     }
     
     if(carMode || !settings.ssid[0]) {
-        wm.startAPModeAndPortal(realAPName, settings.appw, settings.ssid, settings.pass, settings.bssid);
+        wm.startAPModeAndPortal(realAPName, appw, settings.ssid, settings.pass, settings.bssid);
         doOnlyAP = true;
     }
     
     // Connect using saved credentials if they exist
     // If connection fails it starts an access point with the specified name
-    if(!doOnlyAP && wm.wifiConnect(settings.ssid, settings.pass, settings.bssid, realAPName, settings.appw)) {
+    if(!doOnlyAP && wm.wifiConnect(settings.ssid, settings.pass, settings.bssid, realAPName, appw)) {
         #ifdef TC_DBG_WIFI
         Serial.println("WiFi connected");
         #endif
@@ -1461,6 +1424,16 @@ static void wifiConnect(bool deferConfigPortal)
         consecutiveAPmodeFB = 0;  // Reset counter of consecutive AP-mode fall-backs
 
         wifi_ntp_setup(true);
+
+        // Now delete static IP if user likely wanted us to.
+        // (Same boot-procedure also clears AP pw, which
+        // does not apply in STA mode. So we're guessing
+        // if connected, user likely wanted us to delete
+        // the static IP.)
+        if(bootAPwithoutStaticIP) {
+            deleteIpSettings();
+            bootAPwithoutStaticIP = false;
+        }
 
     } else {
 
@@ -1963,9 +1936,7 @@ static void saveParamsCallback(int paramspage)
         break;
     case 2:
         getServerParam("spty", settings.speedoType, 2, 0, 99, DEF_SPEEDO_TYPE);
-        #ifdef HAVE_GPS
-        getServerParam("spdrt", settings.spdUpdRate, 1, 0, 3, DEF_SPD_UPD_RATE);
-        #endif
+        getServerParam("spdrt", settings.spdUpdRate, 1, 0, 4, DEF_SPD_UPD_RATE);
         #ifdef SERVOSPEEDO
         getServerParam("tinp", settings.ttinpin, 1, 0, 2, 0);
         getServerParam("toutp", settings.ttoutpin, 1, 0, 2, 0);
@@ -2132,7 +2103,7 @@ static bool preWiFiScanCallback()
 
 static void waitForConnectCallback()
 {
-    audio_loopup_files();
+    audio_lookup_files();
 }
 
 static void wifiDelayReplacement(unsigned int mydel)
@@ -2147,10 +2118,8 @@ static void wifiDelayReplacement(unsigned int mydel)
             delay(20);
             audio_loop();
             ntp_short_loop();
-            #if defined(HAVE_GPS) || defined(HAVE_RE) || defined(HAVE_REMOTE)
             // speedoUpdate_loop(false) => in sync with loops => No RotEnc, no Remote
             speedoUpdate_loop(false);   // does not call any other loops
-            #endif
         }
     } else {
         delay(mydel);
@@ -2194,14 +2163,15 @@ static void updateConfigPortalValues()
     #endif
 }
 
-static unsigned int calcSelectMenu(const char **theHTML, int cnt, char *setting, bool indent = false)
+static unsigned int calcSelectMenu(const char * const *theHTML, int cnt, char *setting, uint32_t flags = 0)
 {
     int sr = atoi(setting);
 
     unsigned int l = 0;
 
+    if(flags & WFM_SECTS) l += STRLEN(custHTMLSECTSHdr);
     l += STRLEN(custHTMLHdr1);
-    if(indent) l += STRLEN(custHTMLHdrI);
+    if(flags & WFMX_INDENT) l += STRLEN(custHTMLHdrI);
     l += STRLEN(custHTMLHdr2);
     l += strlen(theHTML[0]);
     l += STRLEN(custHTMLSHdr);
@@ -2217,12 +2187,14 @@ static unsigned int calcSelectMenu(const char **theHTML, int cnt, char *setting,
     return l + 8;
 }
 
-static void buildSelectMenu(char *target, const char **theHTML, int cnt, char *setting, bool indent = false)
+static void buildSelectMenu(char *target, const char * const *theHTML, int cnt, char *setting, uint32_t flags = 0)
 {
     int sr = atoi(setting);
 
-    strcpy(target, custHTMLHdr1);
-    if(indent) strcat(target, custHTMLHdrI);
+    *target = 0;
+    if(flags & WFM_SECTS) strcpy(target, custHTMLSECTSHdr);
+    strcat(target, custHTMLHdr1);
+    if(flags & WFMX_INDENT) strcat(target, custHTMLHdrI);
     strcat(target, custHTMLHdr2);
     strcat(target, theHTML[1]);
     strcat(target, theHTML[0]);
@@ -2236,14 +2208,14 @@ static void buildSelectMenu(char *target, const char **theHTML, int cnt, char *s
     }
 }
 
-static const char *wmBuildSelect(const char *dest, int op, const char **src, int count, char *setting, bool indent = false)
+static const char *wmBuildSelect(const char *dest, int op, const char * const *src, int count, char *setting, uint32_t flags = 0)
 {
     if(op == WM_CP_DESTROY) {
         if(dest) free((void *)dest);
         return NULL;
     }
 
-    unsigned int l = calcSelectMenu(src, count, setting, indent);
+    unsigned int l = calcSelectMenu(src, count, setting, flags);
 
     if(op == WM_CP_LEN) {
         wmLenBuf = l;
@@ -2252,7 +2224,7 @@ static const char *wmBuildSelect(const char *dest, int op, const char **src, int
     
     char *str = (char *)malloc(l);
 
-    buildSelectMenu(str, src, count, setting, indent);
+    buildSelectMenu(str, src, count, setting, flags);
     
     return str;
 }
@@ -2260,13 +2232,14 @@ static const char *wmBuildSelect(const char *dest, int op, const char **src, int
 #ifdef SERVOSPEEDO
 static unsigned int lengthRadioButtons(const char **theHTML, int cnt, char *setting)
 {
-    unsigned int mysize = STRLEN(rad0) + strlen(theHTML[0]) + strlen(theHTML[1]);
+    unsigned int mysize = STRLEN(rad0) - 2 + strlen(theHTML[0]) + strlen(theHTML[1]);
     int i, j = strlen(theHTML[2]), sr = atoi(setting);
     
     for(i = 0; i < cnt; i++) {
-        mysize += STRLEN(rad1) + (3*j) + (3*2) + ((i==sr) ? STRLEN(radchk) : 0) + strlen(theHTML[3+i]);
+        mysize += STRLEN(rad1) - (8*2) + (3*j) + (3*2) + ((i==sr) ? STRLEN(radchk) : 0) + strlen(theHTML[3+i]);
     }
     mysize += STRLEN(rad99);
+    mysize += 8;  // safety
 
     return mysize;
 }
@@ -2277,7 +2250,7 @@ static void buildRadioButtons(char *target, const char **theHTML, int cnt, char 
     
     sprintf(target, rad0, theHTML[0]);
     strcat(target, theHTML[1]);
-    
+
     for(i = 0; i < cnt; i++) {
         sprintf(target+strlen(target), rad1, theHTML[2], i, theHTML[2], i, (i==sr) ? radchk : "", theHTML[2], i, theHTML[3+i]);
     }
@@ -2427,12 +2400,10 @@ static const char *wmBuildSpeedoType(const char *dest, int op)
     return str;
 }
 
-#ifdef HAVE_GPS
 static const char *wmBuildUpdateRate(const char *dest, int op)
 {
-    return wmBuildSelect(dest, op, spdRateCustHTMLSrc, 6, settings.spdUpdRate, true);
+    return wmBuildSelect(dest, op, spdRateCustHTMLSrc, 7, settings.spdUpdRate, WFM_SECTS);
 }
-#endif
 
 #ifdef SERVOSPEEDO
 static const char *wmBuildttinp(const char *dest, int op)
@@ -2775,7 +2746,7 @@ static void handleUploading()
               if(!numUploads) {
                   allocUplArrays();
                   preUpdateCallback();
-                  doUploadSpinner(1);
+                  doUploadSpinner(0, 1, -1);
               }
     
               haveACFile = openUploadFile(c, acFile, numUploads, haveAC, opType[numUploads], ACULerr[numUploads]);
@@ -2793,7 +2764,7 @@ static void handleUploading()
                   doCloseACFile(numUploads, true);
                   ACULerr[numUploads] = UPL_WRERR;
               } else {
-                  doUploadSpinner(0);
+                  doUploadSpinner(0, 0, -1);
               }
           }
 
@@ -2856,7 +2827,7 @@ static void handleUploadDone()
         if(opType[i] > 0) {
             haveAC = true;
             if(!ACULerr[i]) {
-                if(!check_if_default_audio_present()) {
+                if(!check_for_new_sp()) {
                     haveAC = false;
                     ACULerr[i] = UPL_BADERR;
                     removeACFile(i);
@@ -2897,7 +2868,7 @@ static void handleUploadDone()
     buflen += 8;
 
     if(!(buf = (char *)malloc(buflen))) {
-        buf = (char *)(haveErrs ? ebuf : dbuf);
+        buf = (char *)((!haveSD || haveErrs) ? ebuf : dbuf);
     } else {
         strcpy(buf, wm.getHTTPSTART(titStart));
         if(titStart >= 0) {
@@ -2947,14 +2918,67 @@ static void handleUploadDone()
     }
 
     freeUploadFileNames();
-    
-    String str(buf);
-    wm.server->send(200, "text/html", str);
+
+    wm.server->send(200, "text/html", buf);
 
     // Reboot required even for mp3 upload, because for most files, we check
     // during boot if they exist (to avoid repeatedly failing open() calls)
 
     doReboot();
+}
+
+static bool openDataFileCallback()
+{
+    String fn = ".bin";
+    
+    if(!numUploads) {
+        allocUplArrays();
+    } else {
+        return false;
+    }
+
+    haveACFile = openUploadFile(fn, acFile, numUploads, haveAC, opType[numUploads], ACULerr[numUploads]);
+
+    return haveACFile;
+}
+
+static bool writeDataFileCallback(uint8_t *buf, size_t len)
+{
+    bool ret = false;
+    if(haveACFile) {
+        if(writeACFile(acFile, buf, len) != len) {
+            doCloseACFile(numUploads, true);
+            ACULerr[numUploads] = UPL_WRERR;
+        } else {
+            ret = true;
+        }
+    }
+    return ret;
+}
+
+static void closeDataFileCallback(bool del)
+{
+    doCloseACFile(numUploads, del);
+    
+    if(!del && opType[numUploads] >= 0) {
+        renameUploadFile(numUploads);
+    }
+    
+    numUploads++;
+}
+
+static void uploadSpinnerCallback(int doStart, int progress)
+{
+    doUploadSpinner(1, doStart, progress);
+}
+
+static bool idCFCallback(uint8_t *dbuf, size_t len)
+{
+    if(len > 4) {
+        return !strncmp((char *)dbuf, CFMAGIC, 4);
+    }
+
+    return false;
 }
 
 /*
@@ -3252,10 +3276,8 @@ static void mqttLooper()
 {
     ntp_loop();
     audio_loop();
-    #if defined(HAVE_GPS) || defined(HAVE_RE) || defined(HAVE_REMOTE)
     // We are running in sync with loops => speedoUpdate_loop(false)
     speedoUpdate_loop(false);   // does not call any other loops
-    #endif
 }
 
 static void receiveMQTTMsg(int idx, uint32_t dmask, char *tempBuf)
@@ -3477,9 +3499,7 @@ static void mqttCallback(char *topic, byte *payload, unsigned int length)
                 }
                 if(nv != aud_state.curVolume) {
                     aud_state.curVolume = nv;
-                    #ifdef HAVE_RE
                     re_vol_reset();
-                    #endif
                     #ifdef HAVE_MQTT
                     mp_sendStatus();
                     #endif

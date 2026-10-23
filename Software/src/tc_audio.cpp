@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Sound handling
  *
@@ -56,7 +57,8 @@
 #include "tc_global.h"
 
 #ifdef TC_DBG_AUDIO
-#define TC_DBG_MP     // debug music player
+//#define TC_DBG_MP             // debug music player
+//#define AUDIO_LOOP_PROFILER   // loop profiler
 #endif
 
 #include <Arduino.h>
@@ -94,31 +96,26 @@ class AudioGeneratorWAVP : public AudioGeneratorWAV
       
         // Now set up the buffer or fail
         buff = reinterpret_cast<uint8_t *>(malloc(buffSize));
-        if(!buff) {
-            return false;
-        }
-        buffPtr = 0;
-        buffLen = 0;
+        if(buff) {
+            buffPtr = 0;
+            buffLen = 0;
 
-        sL = sR = 0;
-      
-        if(!output->SetRate(sampleRate)) {
-            return freeBuf();
+            // loop starts by pushing out samples, clear them here
+            sL = sR = 0;
+          
+            if(output->SetRate(sampleRate)) {
+                if(output->SetBitsPerSample(bitsPerSample)) {
+                    if(output->SetChannels(channels)) {
+                        if(output->begin()) {
+                            running = true;
+                            return true;
+                        }
+                    }
+                }
+            }
         }
-        if(!output->SetBitsPerSample(bitsPerSample)) {
-            return freeBuf();
-        }
-        if(!output->SetChannels(channels)) {
-            return freeBuf();
-        }
-      
-        if(!output->begin()) {
-            return freeBuf();
-        }
-      
-        running = true;
-      
-        return true;
+        stop(); // stops i2c, closes file
+        return false;
     };
 };
 
@@ -231,6 +228,12 @@ static uint32_t   haveSpHrSnd = 0;
 char id3artist[16] = { 0 };
 char id3track[16]  = { 0 };
 
+#ifdef AUDIO_LOOP_PROFILER
+static unsigned long aprof[32];
+static float aprof2[32];
+static int profIdx = 0, profIdx2 = 0;
+#endif
+
 static float  getVolume();
 static void   setLineOut(bool doLineOut);
 
@@ -303,7 +306,7 @@ void audio_setup()
     mp_init(true);
 
     // Check for sound files to avoid unsuccessful file-lookups later
-    audio_loopup_files();
+    audio_lookup_files();
 
     audioInitDone = true;
 
@@ -312,7 +315,7 @@ void audio_setup()
     #endif
 }
 
-void audio_loopup_files()
+void audio_lookup_files()
 {
     if(lookupComplete)
         return;
@@ -354,6 +357,10 @@ static int checkAppend()
  */
 void audio_loop()
 {
+    #ifdef AUDIO_LOOP_PROFILER
+    unsigned long now = millis();
+    #endif
+
     if(wav->isRunning()) {
         if(!wav->loop()) {
             wav->stop();
@@ -379,6 +386,25 @@ void audio_loop()
         pwrNeedFullNow();
         mp_next(true);
     }
+
+    #ifdef AUDIO_LOOP_PROFILER
+    unsigned long a = millis() - now;
+    if(a) {
+        aprof[profIdx++] = a;
+        profIdx &= 0x1f;
+        if(!profIdx) {
+            unsigned long b = 0;
+            for(int i = 0; i < 32; i++) b += aprof[i];
+            aprof2[profIdx2++] = ((float)b) / 32.0f;
+            profIdx2 &= 0x1f;
+            if(!profIdx2) {
+                float aa = 0;
+                for(int i = 0; i < 32; i++) aa += aprof2[i];
+                Serial.printf("audio avg %f\n", aa / 32.0f);
+            }
+        }
+    }
+    #endif
 
     #ifdef HAVE_MQTT
     mp_sendStatus();
@@ -427,6 +453,20 @@ static void setupEndPos(AudioFileSourceLoop *src, uint8_t *buf)
     src->setEndPos((buf[0] == 'T' && buf[1] == 'A' && buf[2] == 'G') ? src->getPos() - 3 : 0);
 }
 
+static void audioCancel()
+{
+    key_playing = 0;
+    clear_sig_playing();
+}
+
+static void audioBegin(AudioFileSourceLoop *src, AudioGenerator *gen)
+{
+    if(!gen->begin(src, out)) {
+        gen->stop();  // frees buffers, stops i2c, closes file
+        audioCancel();
+    }
+}
+
 static void setupLoopAndBegin(AudioFileSourceLoop *src, uint32_t flags)
 {
     int32_t pos = 0;
@@ -438,7 +478,7 @@ static void setupLoopAndBegin(AudioFileSourceLoop *src, uint32_t flags)
 
     if(flags & PA_ISWAV) {
         src->setPlayLoop(false);
-        wav->begin(src, out);
+        audioBegin(src, wav); //wav->begin(src, out);
     } else {
         src->setPlayLoop(!!(flags & PA_LOOP));
         if(flags & PA_DOID3TS) {
@@ -450,7 +490,7 @@ static void setupLoopAndBegin(AudioFileSourceLoop *src, uint32_t flags)
             src->seek(pos, SEEK_SET);
         }
         src->setStartPos(pos);
-        mp3->begin(src, out);
+        audioBegin(src, mp3); //mp3->begin(src, out);
     }
 }
 
@@ -529,9 +569,9 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
     if(flags & PA_TCSEGS) {
         if(haveTCC && (mySD0->c = t) && mySD0->open_c(tcc_fn, (const int16_t *)audio_file)) {
             if(flags & PA_ISWAV) {
-                wav->begin(mySD0, out);
+                audioBegin(mySD0, wav); //wav->begin(mySD0, out);
             } else {
-                mp3->begin(mySD0, out);
+                audioBegin(mySD0, mp3); //mp3->begin(mySD0, out);
             }
         /*
          * Should we ever play signals or key sounds through segments, enable this. Not likely.
@@ -554,7 +594,7 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
             setupEndPos(mySD0, id3);
             free(id3);
             mySD0->seek(pos, SEEK_SET);
-            mp3->begin(mySD0, out);
+            audioBegin(mySD0, mp3); //mp3->begin(mySD0, out);
         } else {
             setupLoopAndBegin(mySD0, flags|PA_DOID3TS);
         }
@@ -567,8 +607,7 @@ void play_file(const char *audio_file, uint32_t flags, float volumeFactor)
         Serial.println("Playing from flash FS");
         #endif
     } else {
-        key_playing = 0;
-        clear_sig_playing();
+        audioCancel();
         #ifdef TC_DBG_AUDIO
         Serial.println("Audio file not found");
         #endif
@@ -667,7 +706,9 @@ void play_beep()
     *id3artist = *id3track = 0;
 
     myPM->open(data_beep_wav, data_beep_wav_len);
-    wav->beginQuick(myPM, out, 1, 32000, 44, data_beep_wav_len - 44);
+    if(!wav->beginQuick(myPM, out, 1, 32000, 44, data_beep_wav_len - 44)) {
+        return;
+    }
     beepRunning = true;
 }
 
@@ -1633,9 +1674,7 @@ static void mpren_looper(bool isSetup, bool checking, int fileNum)
         wifi_loop();
         if(!isSetup) {
             ntp_loop();
-            #if defined(HAVE_GPS) || defined(HAVE_RE) || defined(HAVE_REMOTE)
             speedoUpdate_loop(true);
-            #endif
             while(bttfn_loop(BNLP_SK_EXPIRE)) { }
             // audio_loop not required, never
             // called when audio is active

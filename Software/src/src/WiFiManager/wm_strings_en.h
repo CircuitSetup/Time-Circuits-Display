@@ -7,7 +7,7 @@
  * Version 2.0.15
  * License MIT
  *
- * Adapted by Thomas Winischhofer (A10001986)
+ * Adapted/rewritten by Thomas Winischhofer (A10001986)
  */
 
 #ifndef _WM_STRINGS_EN_H_
@@ -18,11 +18,15 @@
 #define HTTP_BLUE "#4f529d"   //"#225a98"
 #define HTTP_YUPD "#ebe74c"
 #define HTTP_BUTTON_TEXT "#fff"
+#define HTTP_GREY "#e4e4e4"
+#define HTTP_DGREY "#ccc"
 #else
-#define HTTP_RED  "#f2bde1"   //"#dc3630"
+#define HTTP_RED  "#f2bde1"
 #define HTTP_BLUE "#d3ac72"
 #define HTTP_YUPD "#be5c9c"
 #define HTTP_BUTTON_TEXT "#000"
+#define HTTP_GREY "#eeeae3"
+#define HTTP_DGREY "#e1d9c2"
 #endif
 
 #define HTTP_HEAD_TITLE_START 203
@@ -129,7 +133,6 @@ static const char HTTP_STYLE_MSG[]  PROGMEM =
 
 // quality icons
 static const char HTTP_STYLE_QI[]   PROGMEM =
-    "button.s{width:initial;line-height:1.3em;margin:0}"
     ".q{height:16px;margin:0;padding:0 5px;text-align:right;min-width:38px;float:right}"
     ".q.q-0::after,.q.q-1::after{background-position-x:0}"
     //".q.q-1::after{background-position-x:0}"
@@ -141,14 +144,16 @@ static const char HTTP_STYLE_QI[]   PROGMEM =
     ".q::after,.q::before{content:'';width:21px;height:16px;display:inline-block;"
     "background-repeat:no-repeat;background-position:21px 0;"
     "background-image:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMQAAAAgCAMAAAB6rSfNAAABJlBMVEUAAAAAAAAAAAAAAADHyckAAADHyckAAADHycnHyckAAADHyckAAADHycnHyckAAAAAAAAAAAAAAADHyckAAADHyckAAAAAAAAAAADHycnHyckAAADHyckAAADHycnHycnHyckAAAAAAADHyckAAAAAAAAAAAAAAADHyckAAAAAAAAAAAAAAADHycnHyckAAADHyckAAADHyckAAADHyckAAADHyckAAADHyckAAAAAAADHyckAAADHycnHycnHycnHyckAAADHycnHycnHycnHyckAAADHycnHycnHycnHycnHycnHyckAAADHycnHycnHycnHyckAAADHyckAAAAAAAAAAADHyckAAADHyckAAAAAAAAAAADHycmXmZmQkpIAAADHycms9KC6AAAAYHRSTlMA3u8J/LxKI+rfBHFFJg359Oa1sHFXOTInHdvTy5eWd1BIE4J3Uywd1rGhTT/3ko+JWDYvF+rSyq2siW1nYUAK49m3tKNoX0Y7Lyry7sysppwhDwalkoJdxnx7beK+jWod6B+WAAADSklEQVRYw9WV21raQBCANyAECFTOQSByEEREUVREEEVEOSlqFbGe2tn3f4nGsJQsSQhNP/jof7PJzn8zu7MziOKpfZr3Re02mz3qW+fOa1Rw7qY5+P6cLTHFIlPKCv4dMzJALXB/gyl2716+Lco0F/puoHCXm4/o7/i+votVWHlwLcJkhVVQYVUIodk5useanKzN28z0QZNyBs3IxviUtnzrG7HYxrrveAWP2J+vORiffCQrDFKpgZCNjG+mMlslhfGQ26u4rF6/WR9sJHDhmp/J1mGIaTsnewPmxHaRBD5mqKkAHnIcV8asURI8m5dZgCGRtNJM9EiwiXR4xRL2c/XwwRa5/vmYbyDB7KibwbpGSbEVi0XgESGPJU5lV+7qHHRlJXA2NK7+xXwM8XwoqTB/PoPEu7bZHBp9RFFlpAKskt9rLBIeNYs1rhHelR6j/TI22jySDi42s8nRZsbvZValZ8t4UxnK/FWVriEzzUxGQCRF5wAi8m0rxpeT1TpZ0ScYBwyauR5QRNKUmQDw6pllgAJdS2JU4NmKuPCju2gM13YYK7ggVX0XM2YGGVDw4ZSbVa++WU4higpAmawCHbnSGEtPYsyo2dcYYA6DJkG8MlaqNABGvr9mJ4PpkrN2XK5Oi/ORwWQT+7kxMzM6XG8qcciymwl/lowwT8iYSRDtJPkwyXs3mUzckaz3nJK5FECGzASZYamkrPe8e0AibcCUJWFSSyJO+vYEG2QoGTJz6h1+QMaXAVPnJtDBCr45UOpd8Yhb4mrIDAK4g0pzswjgNGISeMtXW5YQP3pywWrvSutTfL8RjTby8drwBYRfiKAwHbk9b6nk3UubtcwcE1IzM/WmIZNgAQqT0uBuMeHmFU3FbwKC+82xOFM/CZedav0dpAlLtXXP4aJM/SQCeIJrpEEBJqguyNRPooW/COc5Lr+lbJnKplh/9vv3ItJnYVGmfjl1d7GNtJj2BcZtpMmmG4pO0lo8AMHFmfoPu/X5Z4bVPgNoCk5LEhHMlvQCTWUS/yOzJeHYcZon95bILANFT1ViPWJ6k/1tiUyeoS6CV5V+gEgE0SyhOY1NkNhZdnMqIZDgl92czjaIZJffnIpDcK9um5ffHPMbdfGaiuWnXuoAAAAASUVORK5CYII=');"
-    "background-size:98px 16px}";
+    "background-size:98px 16px}"
+    "a{font-size:90%}";
 
 static const char HTTP_STYLE_SET[]  PROGMEM =
+    "button.s{width:initial;line-height:1.3em;margin:0 5px 0 5px}"
     "label{display:inline-block;vertical-align:text-top;margin:0 10px 0 0;padding:0 10px 0 0;white-space:normal}"
     ".hl{margin:0 0 7px 0;padding:0}"
-    ".ss{background-color:#e4e4e4;border-radius:7px;margin-bottom:20px;padding:7px 10px 7px 10px;white-space:nowrap}"
+    ".ss{background-color:" HTTP_GREY ";border-radius:7px;margin-bottom:20px;padding:7px 10px 7px 10px;white-space:nowrap}"
     "label.mp0{margin:0;padding:0}"
-    ".is{margin:15px 0 0 0;padding:0}";
+    ".is{margin:15px 0 10px 0;padding:10px;background:" HTTP_DGREY ";border-radius:15px}";
 
 static const char HTTP_STYLE_UPL[]  PROGMEM =
     "input[type='file']{background:#fff;border:1px solid " HTTP_BLUE "}"
@@ -156,7 +161,7 @@ static const char HTTP_STYLE_UPL[]  PROGMEM =
     "div.bar{background:#dc3630;color:#fff}"
     "div.bap{background:#fa0}";
 
-static const char HTTP_STYLE_END [] PROGMEM = "</style>";
+static const char HTTP_STYLE_END[]  PROGMEM = "</style>";
 
 static const char HTTP_HEAD_END[]   PROGMEM = "</head><body><div id='wrap'>";
 
@@ -194,21 +199,29 @@ static const char HTTP_DIV_END[]          PROGMEM = "</div>";
 static const char HTTP_FORM_START[]       PROGMEM = "<form method='POST' action='{v}'>";
 static const char HTTP_FORM_LABEL[]       PROGMEM = "<label for='{i}'>{t}</label>";
 static const char HTTP_FORM_PARAM_HEAD[]  PROGMEM = "<hr>";
-static const char HTTP_FORM_PARAM[]       PROGMEM = "<input id='{i}' name='{n}' {l} value='{v}' {c} {f}>";
+static const char HTTP_FORM_PARAM[]       PROGMEM = "<input id='{i}' name='{i}' {l} value='{v}' {c} {f}>";
 static const char HTTP_FORM_END[]         PROGMEM = "<button type='submit'>Save</button></form>";
+static const char HTTP_PAT_IP[]           PROGMEM = "pattern='^((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4}$'";
 
-static const char HTTP_FORM_WIFI[]        PROGMEM = "<div class='ss'><div class='hl'>WiFi connection</div><label for='s'>Network name (SSID)</label><br><input id='s' name='s' maxlength='32' autocorrect='off' autocapitalize='none' placeholder='{V}' oninput='var x=ge(\"fg\");var y=ge(\"p\");y.disabled=false;if(!this.value.length&&this.placeholder.length){if(x&&!y.value.length){x.style.display=\"\"}y.placeholder=y.getAttribute(\"data-ph\")||\"********\";}else{if(x){x.style.display=\"none\"}y.placeholder=\"\"}'><br><label for='p'>Password</label><br><input id='p' name='p' maxlength='64' type='password' placeholder='{p}' data-ph='{p}' oninput='var x=ge(\"fg\");if(x){var y=ge(\"s\");if(!y.value.length&&y.placeholder.length){if(this.value.length){x.style.display=\"none\"}else{x.style.display=\"\"}}}'><br><label><input type='checkbox' onclick='f()' style='margin:0px 5px 10px 0px'>Show password when typing</label><br><label for='s'>BSSID (Access Point MAC)<br><span>Leave this empty unless you have multiple APs with the same SSID and want to select the AP with the best signal: Click 'Scan for Networks', 'Show All' and select AP.</span></label><br><input id='b' name='b' maxlength='17' autocorrect='off' autocomplete='off' value='{h}' pattern='^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$' placeholder='XX:XX:XX:XX:XX:XX'><br>";
+static const char HTTP_FORM_WIFI_HDR[]    PROGMEM = "<div class='ss'><div class='hl'>Connect " DEVNAME " to WiFi network</div>";
+// LIST
+static const char HTTP_SCAN_COMMON[]      PROGMEM = "<div class='c'><button class='s' id='wrefr' form='scan' type='submit'>";   //  name='refresh' value='1'
+static const char HTTP_SCAN_LINK[]        PROGMEM = "Scan for Networks</button></div>";
+static const char HTTP_RESCAN_LINK[]      PROGMEM = "Re-Scan</button></div>";
+static const char HTTP_SCAN_AND_SHOWALL[] PROGMEM = "Re-Scan</button>&nbsp;<button class='s' id='sab' form='saf' type='submit'>Show all APs</button></div>";
+
+static const char HTTP_FORM_WIFI[]        PROGMEM = "<label for='s'>Network name (SSID)</label><br><input id='s' name='s' maxlength='32' autocorrect='off' autocapitalize='none' placeholder='{V}' oninput='var x=ge(\"fg\");var y=ge(\"p\");y.disabled=false;if(!this.value.length&&this.placeholder.length){if(x&&!y.value.length){x.style.display=\"\"}y.placeholder=y.getAttribute(\"data-ph\")||\"********\";}else{if(x){x.style.display=\"none\"}y.placeholder=\"\"}'><br><label for='p'>Password</label><br><input id='p' name='p' maxlength='64' type='password' placeholder='{p}' data-ph='{p}' oninput='var x=ge(\"fg\");if(x){var y=ge(\"s\");if(!y.value.length&&y.placeholder.length){if(this.value.length){x.style.display=\"none\"}else{x.style.display=\"\"}}}'><br><label><input type='checkbox' onclick='f()' style='margin:0px 5px 10px 0px'>Show password when typing</label><br><label for='s'>BSSID (Access Point MAC)<br><span>Leave this empty unless you have multiple access points with the same SSID and want to select the one with the best signal: Click 'Scan for Networks', 'Show All APs' and select access point.</span></label><br><input id='b' name='b' maxlength='17' autocorrect='off' autocomplete='off' value='{h}' pattern='^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$' placeholder='XX:XX:XX:XX:XX:XX'><br>";
 #define           HTTP_FORM_WIFI_END      HTTP_DIV_END
-static const char HTTP_WIFI_ITEM[]        PROGMEM = "<div><a href='#p' onclick='return {t}(this)' data-ssid='{V}' title='{R}'>{v}</a>{c}<div role='img' aria-label='{r}dBm' title='{r}dBm' class='q q-{q} {i}'></div></div>";
+static const char HTTP_WIFI_ITEM[]        PROGMEM = "<div><a href='#p' onclick='return %c(this)' data-ssid='%s' title='%s'>%s</a>%s<div role='img' aria-label='%ddBm' title='%ddBm' class='q q-%d%s'></div></div>";
 static const char HTTP_FORM_SECT_HEAD[]   PROGMEM = "<div class='is'>";
 #define           HTTP_FORM_SECT_FOOT     HTTP_DIV_END
-static const char HTTP_FORM_WIFI_PH[]     PROGMEM = "placeholder='Leave this and next three empty for DHCP'";
+static const char HTTP_FORM_WIFI_PH[]     PROGMEM = "placeholder='Leave this section empty for DHCP'";
 static const char HTTP_MSG_NONETWORKS[]   PROGMEM = "<div class='msg'>No networks found.</div>";
 static const char HTTP_MSG_SCANFAIL[]     PROGMEM = "<div class='msg D'>Scan failed.<br>Click 'Scan for Networks' to retry.</div>";
 static const char HTTP_MSG_NOSCAN[]       PROGMEM = "<div class='msg'>Device busy, WiFi scan prohibited. Try again later.</div>";
-static const char HTTP_SCAN_LINK[]        PROGMEM = "<form action='/wifi?refresh=1' method='POST' onsubmit='if(confirm(\"This will reload the page, changes are not saved. Proceed?\")){return dbpw(\"wrefr\")}return false;'><button id='wrefr' name='refresh' value='1'>Scan for Networks</button></form>";
-static const char HTTP_ERASE_BUTTON[]     PROGMEM = "<div id='fg' class='c' style='border:2px solid " HTTP_RED ";border-radius:7px'><label><input id='fgn' name='fgn' type='checkbox' style='margin-top:0'>Forget saved WiFi network</label></div>";
-static const char HTTP_SHOWALL[]          PROGMEM = "<div class='c'><button class='s' id='sab' form='saf' type='submit'>Show all</button></div>";
+static const char HTTP_ERASE_BUTTON[]     PROGMEM = "<div id='fg' class='c' style='border:2px solid " HTTP_RED ";border-radius:7px'><label><input id='fgn' name='fgn' type='checkbox' style='margin-top:0'>Forget saved WiFi connection</label></div>";
+
+static const char HTTP_SCAN_FORM[]        PROGMEM = "<form id='scan' action='/wifi?refresh=1' method='POST' onsubmit='if(confirm(\"This will reload the page, changes are not saved. Proceed?\")){return dbpw(\"wrefr\")}return false;'></form>";
 static const char HTTP_SHOWALL_FORM[]     PROGMEM = "<form id='saf' action='/wifi?showall=1' method='POST' onsubmit='return dbpw(\"sab\")'></form>";
 
 #ifdef WM_CCM
@@ -235,11 +248,7 @@ static const char HTTP_UPLOAD_LINK1[]     PROGMEM = "<a href='https://";
 static const char HTTP_UPLOAD_LINK2[]     PROGMEM = "' style='color:#fff' target=_blank>Update (";
 static const char HTTP_UPLOAD_LINK3[]     PROGMEM = ") available</a></div>";
 static const char HTTP_UPLOAD_LINKA[]     PROGMEM = "' target=_blank>All releases</a></div>";
-static const char HTTP_UPDATE2[]          PROGMEM = "<input type='file' name='update' accept='.bin,application/octet-stream'><br><button id='upbu' type='submit' class='h D'>Update</button></div></form>";
 #ifdef WM_UPLOAD
-static const char HTTP_UPLOADSND1[]       PROGMEM = "'uac' onsubmit=\"uplsub('uacb','upbu');\" onchange=\"uplchg(this,'uacb');\">";
-static const char HTTP_UPLOADSND1A[]      PROGMEM = "<div class='ss c' style='line-height:140%'>Sound pack (";
-static const char HTTP_UPLOADSND2[]       PROGMEM = ".bin) and/or mp3 file upload<br>";
 static const char HTTP_UPLOAD_SLINK1[]    PROGMEM = "<div class='c ba";
 static const char HTTP_UPLOAD_SLINK1A[]   PROGMEM = " bar";
 static const char HTTP_UPLOAD_SLINK1B[]   PROGMEM = " bap";
@@ -247,19 +256,42 @@ static const char HTTP_UPLOAD_SLINK1C[]   PROGMEM = "'>Required sound-pack: ";
 static const char HTTP_UPLOAD_SLINK2[]    PROGMEM = " [";
 static const char HTTP_UPLOAD_SLINK2A[]   PROGMEM = "<b>not</b> ";
 static const char HTTP_UPLOAD_SLINK2B[]   PROGMEM = "partly ";
-static const char HTTP_UPLOAD_SLINK3[]    PROGMEM = "installed]</div>";
-static const char HTTP_UPLOADSND3[]       PROGMEM = "<input type='file' name='upac' multiple accept='.bin,application/octet-stream,.mp3,audio/mpeg'><br><button id='uacb' type='submit' class='h'>Upload</button></div></form>";
-static const char HTTP_UPLOAD_SDMSG[]     PROGMEM = "<br>SD card required for sound upload</div>";
+static const char HTTP_UPLOAD_SLINK3[]    PROGMEM = "installed]";
 #endif
 
-static const char HTTP_UPDATE_FAIL1[]     PROGMEM = "<div class='msg D'><b>Upload failed.</b><br>";
-#ifdef WM_FWPROT
-static const char HTTP_UPDATE_FAILF[]     PROGMEM = "Filename must contain \"" WM_FWPROT "\"";
-#else
-static const char HTTP_UPDATE_FAILF[]     PROGMEM = "";
+static const char HTTP_UPDATE2[]          PROGMEM = "<input type='file' name='update' accept='.bin,application/octet-stream'><br><button id='upbu' type='submit' class='h D'>Update</button></div></form>";
+#ifdef WM_UPLOAD
+static const char HTTP_UPLOADSND1[]       PROGMEM = "'uac' onsubmit=\"uplsub('uacb','upbu');\" onchange=\"uplchg(this,'uacb');\">";
+static const char HTTP_UPLOADSND1A[]      PROGMEM = "<div class='ss c' style='line-height:140%'>mp3 file upload<br>";
+static const char HTTP_UPLOADSND3[]       PROGMEM = "<input type='file' name='upac' multiple accept='.mp3,audio/mpeg'><br><button id='uacb' type='submit' class='h'>Upload</button></div></form>";
+static const char HTTP_UPLOAD_SDMSG[]     PROGMEM = "<br>SD card required for upload</div>";
 #endif
-#define           HTTP_UPDATE_FAIL2       HTTP_DIV_END
-static const char HTTP_UPDATE_SUCCESS[]   PROGMEM = "<div id='lc' class='msg S'><b>Upload complete.</b><br>Device rebooting.</div>";
+
+static const char HTTP_UPDATE_SUCCESS[]   PROGMEM = "<div id='lc' class='msg S'><b>Update complete.</b><br>Device rebooting.";
+#ifdef WM_UPLOAD
+static const char HTTP_UPDATE_SUCCESS_I[] PROGMEM = "<br>Installation will proceed after reboot.";
+#endif
+#define           HTTP_UPDATE_SUCCESS_TL  HTTP_DIV_END
+
+static const char HTTP_UPDATE_FAIL_HD[]   PROGMEM = "<div class='msg D'><b>Update ";
+static const char HTTP_UPDATE_FAIL_CO[]   PROGMEM = "failed.</b><br>";
+static const char HTTP_UPDATE_FAIL_PA[]   PROGMEM = "partially failed.</b><br>";
+#ifdef WM_FWPROT
+#ifdef WM_UPLOAD
+static const char HTTP_UPDATE_FAIL_FN[]   PROGMEM = "Filename must contain \"" WM_FWPROT "\" or \"" WM_FWPROTSP "\"";
+#else
+static const char HTTP_UPDATE_FAIL_FN[]   PROGMEM = "Filename must contain \"" WM_FWPROT "\"";
+#endif
+#else
+static const char HTTP_UPDATE_FAIL_FN[]   PROGMEM = "";
+#endif
+#ifdef WM_UPLOAD
+static const char HTTP_UPDATE_FAIL_SP[]   PROGMEM = "Sound-pack: ";
+static const char HTTP_UPDATE_FAIL_NOSD[] PROGMEM = "Updating requires SD card";
+static const char HTTP_UPDATE_FAIL_OP[]   PROGMEM = "Failed to open file on SD";
+static const char HTTP_UPDATE_FAIL_WE[]   PROGMEM = "Write Error. Check your SD card.";
+#endif
+#define           HTTP_UPDATE_FAIL_TL     HTTP_DIV_END
 
 static const char HTTP_STATUS_HEAD[]      PROGMEM = "<div class='sta'><span class='{c}'>&#x25CF;</span> ";
 #define           HTTP_STATUS_TAIL        HTTP_DIV_END
@@ -349,7 +381,6 @@ static const char T_v[]            PROGMEM = "{v}"; // @token v
 static const char T_V[]            PROGMEM = "{V}"; // @token v
 static const char T_I[]            PROGMEM = "{I}"; // @token I
 static const char T_i[]            PROGMEM = "{i}"; // @token i
-static const char T_n[]            PROGMEM = "{n}"; // @token n
 static const char T_p[]            PROGMEM = "{p}"; // @token p
 static const char T_t[]            PROGMEM = "{t}"; // @token t
 static const char T_l[]            PROGMEM = "{l}"; // @token l

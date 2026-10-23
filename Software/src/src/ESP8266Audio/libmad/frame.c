@@ -27,6 +27,7 @@
 # include "global.h"
 
 # include <stdlib.h>
+# include <string.h>
 
 # include "bit.h"
 # include "stream.h"
@@ -484,19 +485,23 @@ int mad_frame_decode(struct mad_frame *frame, struct mad_stream *stream)
  */
 void mad_frame_mute(struct mad_frame *frame)
 {
-  unsigned int s, sb;
-
+  //unsigned int s, sb;
+  /*
   for (s = 0; s < 36; ++s) {
     for (sb = 0; sb < 32; ++sb) {
       frame->sbsample[0][s][sb] =
       frame->sbsample[1][s][sb] = 0;
     }
   }
-
+  */
+  memset(frame->sbsample, 0, sizeof(frame->sbsample));
+  /*
   for (s = 0; s < 18; ++s) {
     for (sb = 0; sb < 32; ++sb) {
-	frame->overlap[0][sb][s] =
-	frame->overlap[1][sb][s] = 0;
+	    frame->overlap[0][sb][s] =
+	    frame->overlap[1][sb][s] = 0;
     }
   }
+  */
+  memset(frame->overlap, 0, sizeof(frame->overlap));
 }

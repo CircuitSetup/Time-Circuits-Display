@@ -4,6 +4,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * speedDisplay Class: Speedo Display
  *
@@ -467,7 +468,6 @@ bool speedDisplay::haveSpeedoDisplay()
     #endif
 }
 
-#ifdef HAVE_TEMP
 bool speedDisplay::supportsTemperature()
 {
     if(_i2c)
@@ -477,7 +477,6 @@ bool speedDisplay::supportsTemperature()
 
     return false;
 }
-#endif
 
 // Turn on the display
 void speedDisplay::on()
@@ -572,26 +571,15 @@ void speedDisplay::setSpeed(int speedNum)
         clearBuf();
     
         if(speedNum < 0) {
-            if(_lastPosSpd > 3) {
-                if(!_posSpdNow) _posSpdNow = now;
-                if(now - _posSpdNow < NO_FIX_DASHES) {
-                    b1 = b2 = 37;
-                    b3 = 0;
-                } else {
-                    _lastPosSpd = 0;
-                }
-            }
+            b1 = b2 = 37;
+            b3 = 0;
+        } else if(speedNum > 99) {
+            b1 = 'H' - 'A' + 10;
+            b2 = 'I' - 'A' + 10;
+            b3 = 0;
         } else {
-            _posSpdNow = now;
-            _lastPosSpd = speedNum;
-            if(speedNum > 99) {
-                b1 = 'H' - 'A' + 10;
-                b2 = 'I' - 'A' + 10;
-                b3 = 0;
-            } else {
-                b1 = speedNum / 10;
-                b2 = speedNum % 10;
-            }
+            b1 = speedNum / 10;
+            b2 = speedNum % 10;
         }
         b1 = *(_fontXSeg + b1);
         b2 = *(_fontXSeg + b2);
@@ -615,7 +603,6 @@ void speedDisplay::setSpeed(int speedNum)
     _currBrightness = _normBrightness;
 }
 
-#ifdef HAVE_TEMP
 void speedDisplay::setTemperature(float temp)
 {
     
@@ -680,7 +667,6 @@ void speedDisplay::setTemperature(float temp)
 
     _currBrightness = _tempBrightness;
 }
-#endif
 
 #ifdef SERVOSPEEDO
 void speedDisplay::setCalib(int calib)

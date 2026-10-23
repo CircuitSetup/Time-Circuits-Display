@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Main Controller
  *
@@ -58,13 +59,9 @@
 
 #include "rtc.h"
 #include "tcddisplay.h"
-#ifdef HAVE_GPS
 #include "gps.h"
-#endif
 #include "speeddisplay.h"
-#if defined(HAVE_LIGHT) || defined(HAVE_TEMP)
 #include "sensors.h"
-#endif
 
 void      main_boot();
 void      main_setup();
@@ -135,13 +132,11 @@ void      enableRcMode(bool onOff);
 bool      toggleRcMode();
 bool      isRcMode();
 
-#ifdef HAVE_TEMP
 char      tempUnitChar();
-#endif
 
-#ifdef HAVE_RE
 void      re_vol_reset();
-#endif
+
+bool      switchGPSLive(bool live);
 
 void      triggerDelayedVolSave();
 void      flushDelayedSave();
@@ -153,20 +148,18 @@ void      allOn();
 void      allresetBrightness();
 void      loadUserDLTimes();
 
-#ifdef HAVE_GPS
+bool      setGPStime();
 bool      gpsHaveFix();
+bool      gpsShowFix();
 bool      gpsMakePos(char *lat, char *lon);
 bool      haveNavMode();
 void      enableNavMode(bool onOff);
 bool      toggleNavMode();
 int       gpsGetDM();
 void      setNavDisplayMode(int dm);
-#endif
 bool      isNavMode();
 
-#if defined(HAVE_GPS) || defined(HAVE_RE) || defined(HAVE_REMOTE)
 void      speedoUpdate_loop(bool async);
-#endif
 
 void      mydelay(unsigned long mydel);
 
@@ -197,10 +190,8 @@ bool      bttfn_loop(uint32_t taskMask = 0);
 bool      bttfn_loop_ex();
 int       bttfn_notify_info();
 
-#ifdef HAVE_REMOTE
 void      removeRemote();
 void      removeKPRemote();
-#endif
 
 #define BTTFN_TYPE_ANY     0    // Any, unknown or no device
 #define BTTFN_TYPE_FLUX    1    // Flux Capacitor
@@ -270,29 +261,30 @@ extern unsigned long door2SndNow;
 extern bool playTTsounds;
 
 extern uint32_t sgf;
-#define SGF_USpeedo       0x0001    // useSpeedo
-#define SGF_USpeedoDisp   0x0002    // useSpeedoDisplay
-#define SGF_UTemp         0x0004    // useTemp
-#define SGF_DispTemp      0x0008    // dispTemp
-#define SGF_URotEnc       0x0010    // useRotEnc
-#define SGF_DispRotEnc    0x0020    // dispRotEnc
-#define SGF_SpAlwsOn      0x0040    // speedoAlwaysOn
-#define SGF_UGPS          0x0080    // useGPS
-#define SGF_UGPSTime      0x0100    // useGPSTime
-#define SGF_DispGPSSpd    0x0200    // dispGPSSpeed
-#define SGF_GPS2BTTFN     0x0400    // provGPS2BTTFN
-#define SGF_HaveHum       0x1000    // tempSens.haveHum()
-#define SGF_TempCelsius   0x2000    // tempUnit
-#define SGF_ULightSens    0x4000    // useLight
-#define SGF_URotEncVol    0x8000    // useRotEncVol
+#define SGF_USpeedo       0x000001    // useSpeedo
+#define SGF_USpeedoDisp   0x000002    // useSpeedoDisplay
+#define SGF_UTemp         0x000004    // useTemp
+#define SGF_DispTemp      0x000008    // dispTemp            Cleared while RSM
+#define SGF_URotEnc       0x000010    // useRotEnc           Cleared while RSM
+#define SGF_DispRotEnc    0x000020    // dispRotEnc          Cleared while RSM
+#define SGF_SpAlwsOn      0x000040    // speedoAlwaysOn
+#define SGF_UGPS          0x000080    // useGPS
+#define SGF_UGPSTime      0x000100    // useGPSTime
+#define SGF_DispGPSSpd    0x000200    // dispGPSSpeed        Cleared while RSM
+#define SGF_GPS2BTTFN     0x000400    // provGPS2BTTFN       Cleared while RSM
+#define SGF_HaveHum       0x001000    // tempSens.haveHum()
+#define SGF_TempCelsius   0x002000    // tempUnit
+#define SGF_ULightSens    0x004000    // useLight
+#define SGF_URotEncVol    0x008000    // useRotEncVol
+#define SGF_CanDispGPSSpd 0x010000
+#define SGF_GPSLive       0x020000
+#define SGF_UGPSSpeed     0x040000
+#define SGF_RSM           0x080000    // Mirror of CSF_RSM
+#define SGF_GPSShowFix    0x100000
 
 extern speedDisplay speedo;
-#ifdef HAVE_TEMP
 extern tempSensor tempSens;
-#endif
-#ifdef HAVE_LIGHT
 extern lightSensor lightSens;
-#endif
 
 extern tcRTC rtc;
 

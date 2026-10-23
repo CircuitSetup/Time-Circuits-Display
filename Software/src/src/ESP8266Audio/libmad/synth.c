@@ -22,6 +22,7 @@
 #pragma GCC optimize ("O3")
 
 #include <stddef.h>
+#include <string.h>
 #include <pgmspace.h>
 #  include "config.h"
 
@@ -73,6 +74,7 @@ void mad_synth_mute(struct mad_synth *synth)
   unsigned int ch, s, v;
   stack(__FUNCTION__, __FILE__, __LINE__);
 
+  /*
   for (ch = 0; ch < 2; ++ch) {
     for (s = 0; s < 16; ++s) {
       for (v = 0; v < 8; ++v) {
@@ -81,6 +83,8 @@ void mad_synth_mute(struct mad_synth *synth)
       }
     }
   }
+  */
+  memset(synth->filter, 0, sizeof(synth->filter));
 }
 
 /*
@@ -855,7 +859,7 @@ enum mad_flow synth_half(struct mad_synth *synth, struct mad_frame const *frame,
         pcm1 += 8;
 
         phase = (phase + 1) % 16;
-        
+
       }
     }
     if (output_func) {

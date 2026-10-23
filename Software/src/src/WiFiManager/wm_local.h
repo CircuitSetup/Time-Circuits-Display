@@ -1,20 +1,12 @@
 /**
  * wm_local.h - TCD
  *
- * Based on:
- * WiFiManager, a library for the ESP32/Arduino platform
- * Creator tzapu (tablatronix)
- * Version 2.0.15
- * License MIT
- *
- * Adapted by Thomas Winischhofer (A10001986)
  */
 
 #ifndef wm_local_h
 #define wm_local_h
 
-//#define _A10001986_DBG
-//#define _A10001986_V_DBG
+#define DEVNAME "TCD"
 
 #define WM_MDNS
 
@@ -28,8 +20,6 @@
 #define WM_PARAM3_CAPTION "HA/MQTT Settings"
 #define WM_PARAM3_TITLE "HA/MQTT Settings"
 #endif
-#else
-#undef WM_PARAM3
 #endif
 
 // For display of required firmware version (hardware-dependent)
@@ -39,6 +29,10 @@
 #define WM_UPLOAD
 
 #define WM_FWPROT "CIRCUITS"
+#define WM_FWPROTSP "TCDA"
+
+//#define _A10001986_DBG
+//#define _A10001986_V_DBG
 
 // #define WM_AP_STATIC_IP
 // #define WM_APCALLBACK

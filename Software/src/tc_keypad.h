@@ -5,6 +5,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Keypad handling
  *
@@ -56,10 +57,8 @@
 #ifndef _TC_KEYPAD_H
 #define _TC_KEYPAD_H
 
-#ifdef HAVE_TEMP
 bool showRCDest(bool i);
 bool showRCDep(bool i);
-#endif
 
 void keypad_setup();
 bool scanKeypad();
@@ -71,9 +70,7 @@ void discardKeypadInput();
 bool injectInput(const char *src);
 #endif
 
-#ifdef HAVE_REMOTE
 void injectKeypadKey(char key, int kaction);
-#endif
 
 void keypad_loop();
 
@@ -103,12 +100,12 @@ void displayTmrString();
 void s5(bool b);
 void s2(bool c);
 
-void doCopyAudioFiles();
+void do_install_sp();
 void start_file_copy();
 void file_copy_progress(uint32_t ts, uint32_t tw);
-void file_copy_done(int err);
+void file_copy_done(int err, int werr, int werrSD);
 
-void doUploadSpinner(int doStart);
+void doUploadSpinner(int type, int doStart, int progress);
 
 void prepareReboot();
 void orderlyReboot();

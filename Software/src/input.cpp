@@ -4,6 +4,7 @@
  * (C) 2022-2026 Thomas Winischhofer (A10001986)
  * https://github.com/realA10001986/Time-Circuits-Display
  * https://tcd.out-a-ti.me
+ * This code was written without the use of artificial intelligence.
  *
  * Keypad_I2C Class, TCButton Class: I2C-Keypad and Button handling
  * 
@@ -392,8 +393,6 @@ void TCButton::transitionTo(ButtonState nextState)
 }
 
 
-#ifdef HAVE_RE
-
 /*
  * TCRotEnc class
  */
@@ -548,8 +547,8 @@ bool TCRotEnc::begin(bool forSpeed)
                 _st = _addrArr[i+1];
     
                 #ifdef TC_DBG_BOOT
-                const char *tpArr[6] = { "ADA4991/5880", "DuPPa V2.1", "DFRobot Gravity 360", "CircuitSetup", "", "" };
-                const char *purpose[2] = { "Speed", "Volume" };
+                const char * const tpArr[6] = { "ADA4991/5880", "DuPPa V2.1", "DFRobot Gravity 360", "CircuitSetup", "", "" };
+                const char * const purpose[2] = { "Speed", "Volume" };
                 Serial.printf("Rotary encoder: Detected %s, used for %s\n", tpArr[_st], purpose[_type]);
                 #endif
     
@@ -807,4 +806,3 @@ void TCRotEnc::write(uint16_t base, uint8_t reg, uint8_t *buf, uint8_t num)
     }
     Wire.endTransmission();
 }
-#endif 
